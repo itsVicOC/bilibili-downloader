@@ -3,8 +3,8 @@
 import json
 from pathlib import Path
 
-from src.core.models import AppSettings
-from src.utils.config import ConfigManager
+from bilibili_downloader.core.models import AppSettings
+from bilibili_downloader.utils.config import ConfigManager
 
 
 class TestConfigManager:

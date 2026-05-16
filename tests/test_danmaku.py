@@ -3,8 +3,8 @@
 import tempfile
 from pathlib import Path
 
-from src.core.danmaku import DanmakuDownloader, _seconds_to_ass_time
-from src.core.subtitle import _seconds_to_srt_time
+from bilibili_downloader.core.danmaku import DanmakuDownloader, _seconds_to_ass_time
+from bilibili_downloader.core.subtitle import _seconds_to_srt_time
 
 
 def test_seconds_to_ass_time():
@@ -42,7 +42,7 @@ def test_xml_to_ass_basic():
 
 
 def test_danmaku_mode_mapping():
-    from src.core.danmaku import _mode_to_style, _mode_to_effect
+    from bilibili_downloader.core.danmaku import _mode_to_style, _mode_to_effect
 
     assert _mode_to_style("1") == "Scroll"
     assert _mode_to_style("3") == "Bottom"

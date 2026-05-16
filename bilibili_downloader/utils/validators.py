@@ -71,7 +71,7 @@ def resolve_short_link(text: str) -> Optional[str]:
         if resp.status_code in (301, 302, 307, 308):
             location = resp.headers.get("location", "")
             return extract_bvid(location)
-    except Exception:
+    except httpx.HTTPError:
         pass
     return None
 

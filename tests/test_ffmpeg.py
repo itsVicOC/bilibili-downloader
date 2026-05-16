@@ -3,7 +3,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from src.core.ffmpeg import FFmpegManager
+from bilibili_downloader.core.ffmpeg import FFmpegManager
 
 
 class TestFFmpegFindExecutable:

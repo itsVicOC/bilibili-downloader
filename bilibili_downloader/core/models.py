@@ -132,7 +132,7 @@ class DownloadItem(BaseModel):
 
     @property
     def filename(self) -> str:
-        from src.utils.validators import sanitize_filename
+        from bilibili_downloader.utils.validators import sanitize_filename
 
         info = self.video_info
         safe_title = sanitize_filename(info.title)

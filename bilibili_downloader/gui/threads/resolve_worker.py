@@ -1,0 +1,63 @@
+"""Worker and runner for async video URL resolution."""
+
+import logging
+
+from PySide6.QtCore import QObject, QRunnable, Signal
+
+from bilibili_downloader.api.client import BilibiliAPIClient, BilibiliAPIError
+from bilibili_downloader.core.models import VideoQuality
+
+logger = logging.getLogger(__name__)
+
+
+class ResolveWorker(QObject):
+    """Holds resolution parameters and signals.
+
+    Signals:
+        finished: (VideoInfo, video_streams, audio_streams, playurl_ok)
+        error: (error_message)
+    """
+
+    finished = Signal(object, list, list, bool)
+    error = Signal(str)
+
+    def __init__(self, client: BilibiliAPIClient, bvid: str):
+        super().__init__()
+        self._client = client
+        self._bvid = bvid
+
+
+class ResolveRunner(QRunnable):
+    """Runs ResolveWorker in a thread pool."""
+
+    def __init__(self, worker: ResolveWorker):
+        super().__init__()
+        self._worker = worker
+
+    def run(self):
+        try:
+            info = self._worker._client.get_video_info(self._worker._bvid)
+            # Try to fetch playurl for quality discovery (degraded on failure)
+            video_streams = []
+            audio_streams = []
+            playurl_ok = False
+            try:
+                playurl_data = self._worker._client.get_play_url(
+                    bvid=info.bvid,
+                    cid=info.cid,
+                    quality=VideoQuality.Q1080P,
+                    need_hdr=True,
+                    need_dolby=True,
+                )
+                video_streams = playurl_data.get("video_streams", [])
+                audio_streams = playurl_data.get("audio_streams", [])
+                playurl_ok = True
+            except (BilibiliAPIError, RuntimeError) as e:
+                # playurl failure is non-fatal; show video info anyway
+                logger.warning("Playurl fetch failed for %s: %s", info.bvid, e)
+
+            self._worker.finished.emit(
+                info, video_streams, audio_streams, playurl_ok
+            )
+        except (BilibiliAPIError, RuntimeError) as e:
+            self._worker.error.emit(str(e))

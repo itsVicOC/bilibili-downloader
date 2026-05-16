@@ -7,8 +7,8 @@ from pathlib import Path
 import defusedxml.ElementTree as ET
 import httpx
 
-from src.api import endpoints as ep
-from src.api.endpoints import USER_AGENT
+from bilibili_downloader.api import endpoints as ep
+from bilibili_downloader.api.endpoints import USER_AGENT
 
 logger = logging.getLogger(__name__)
 

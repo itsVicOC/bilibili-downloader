@@ -1,6 +1,6 @@
 """Tests for URL validators."""
 
-from src.utils.validators import extract_bvid, extract_aid, is_bilibili_url, sanitize_filename
+from bilibili_downloader.utils.validators import extract_bvid, extract_aid, is_bilibili_url, sanitize_filename
 
 
 class TestExtractBVID:

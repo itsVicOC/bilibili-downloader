@@ -9,10 +9,10 @@ from typing import Callable, Optional
 
 import httpx
 
-from src.api.client import BilibiliAPIError, BilibiliAPIClient
-from src.api.endpoints import USER_AGENT
-from src.core.ffmpeg import FFmpegManager
-from src.core.models import DownloadItem, StreamInfo, VideoQuality
+from bilibili_downloader.api.client import BilibiliAPIError, BilibiliAPIClient
+from bilibili_downloader.api.endpoints import USER_AGENT
+from bilibili_downloader.core.ffmpeg import FFmpegManager
+from bilibili_downloader.core.models import DownloadItem, StreamInfo, VideoQuality
 
 logger = logging.getLogger(__name__)
 

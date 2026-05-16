@@ -12,8 +12,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.core.batch import BatchResolver
-from src.utils.validators import extract_bvid, is_short_link, resolve_short_link
+from bilibili_downloader.core.batch import BatchResolver
+from bilibili_downloader.utils.validators import extract_bvid, is_short_link, resolve_short_link
 
 
 class BatchDialog(QDialog):

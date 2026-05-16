@@ -8,8 +8,8 @@ import httpx
 import qrcode
 from PIL import Image
 
-from src.api import endpoints as ep
-from src.api.endpoints import USER_AGENT
+from bilibili_downloader.api import endpoints as ep
+from bilibili_downloader.api.endpoints import USER_AGENT
 
 
 class LoginManager:
@@ -96,7 +96,7 @@ class LoginManager:
             resp.raise_for_status()
             data = resp.json()
             return data.get("code") == 0 and bool(data.get("data", {}).get("mid"))
-        except Exception:
+        except httpx.HTTPError:
             return False
         finally:
             client.close()

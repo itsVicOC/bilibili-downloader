@@ -25,7 +25,7 @@ dev = [
 ]
 
 [project.scripts]
-bilibili-downloader = "src.__main__:main"
+bilibili-downloader = "bilibili_downloader.__main__:main"
 
 [tool.setuptools.packages.find]
-include = ["src*"]
+include = ["bilibili_downloader*"]

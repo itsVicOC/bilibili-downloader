@@ -4,7 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from src.core.subtitle import SubtitleDownloader, _seconds_to_srt_time
+from bilibili_downloader.core.subtitle import SubtitleDownloader, _seconds_to_srt_time
 
 
 def test_seconds_to_srt_time():

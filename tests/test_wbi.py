@@ -1,7 +1,7 @@
 """Tests for WBI signature module."""
 
 import pytest
-from src.api.wbi import WBISigner
+from bilibili_downloader.api.wbi import WBISigner
 
 
 class TestWBIKeyExtraction:

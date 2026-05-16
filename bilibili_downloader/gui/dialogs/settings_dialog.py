@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.core.models import AppSettings, VideoQuality
+from bilibili_downloader.core.models import AppSettings, VideoQuality
 
 
 class SettingsDialog(QDialog):

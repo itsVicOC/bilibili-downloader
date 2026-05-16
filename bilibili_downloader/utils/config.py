@@ -6,7 +6,7 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
-from src.core.models import AppSettings
+from bilibili_downloader.core.models import AppSettings
 
 logger = logging.getLogger(__name__)
 DEFAULT_CONFIG_PATH = Path.home() / ".bilibili-downloader" / "config.json"

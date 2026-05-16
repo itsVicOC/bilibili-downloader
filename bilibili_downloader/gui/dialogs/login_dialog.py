@@ -20,8 +20,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.api.login import LoginManager
-from src.gui.widgets.chinese_input import ChineseLineEdit
+from bilibili_downloader.api.login import LoginManager
+from bilibili_downloader.gui.widgets.chinese_input import ChineseLineEdit
 
 
 class LoginDialog(QDialog):
@@ -231,7 +231,7 @@ class LoginDialog(QDialog):
                 self._qr_status.setText("二维码已过期，点击下方刷新")
                 self._poll_timer.stop()
                 self._refresh_btn.show()
-        except Exception as e:
+        except RuntimeError as e:
             self._qr_status.setText(f"状态检查异常：{e}")
 
     def _validate_cookie(self):

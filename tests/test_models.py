@@ -1,7 +1,7 @@
 """Tests for Pydantic data models."""
 
 import pytest
-from src.core.models import (
+from bilibili_downloader.core.models import (
     DownloadItem,
     StreamInfo,
     SubtitleInfo,
@@ -105,7 +105,7 @@ class TestDownloadItem:
 
 class TestAppSettings:
     def test_defaults(self):
-        from src.core.models import AppSettings
+        from bilibili_downloader.core.models import AppSettings
         s = AppSettings()
         assert s.output_dir == "./downloads"
         assert s.default_quality == VideoQuality.Q1080P

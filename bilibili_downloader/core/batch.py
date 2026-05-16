@@ -3,8 +3,8 @@
 import re
 from typing import Optional
 
-from src.api.client import BilibiliAPIClient
-from src.core.models import VideoInfo, VideoPage
+from bilibili_downloader.api.client import BilibiliAPIClient
+from bilibili_downloader.core.models import VideoInfo, VideoPage
 
 # Series/collection URL patterns
 SERIES_URL_PATTERN = re.compile(
@@ -42,7 +42,7 @@ class BatchResolver:
 
     def _resolve_single(self, url: str) -> Optional[VideoInfo]:
         """Resolve a single video URL to VideoInfo."""
-        from src.utils.validators import extract_bvid, extract_aid
+        from bilibili_downloader.utils.validators import extract_bvid, extract_aid
 
         bvid = extract_bvid(url)
         if bvid:

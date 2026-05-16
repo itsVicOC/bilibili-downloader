@@ -5,7 +5,7 @@ from pathlib import Path
 
 import httpx
 
-from src.api.endpoints import USER_AGENT
+from bilibili_downloader.api.endpoints import USER_AGENT
 
 
 class SubtitleDownloader:

@@ -6,10 +6,10 @@ from typing import Optional
 
 import httpx
 
-from src.api import endpoints as ep
-from src.api.endpoints import USER_AGENT
-from src.api.wbi import WBISigner
-from src.core.models import StreamInfo, SubtitleInfo, VideoInfo, VideoPage, VideoQuality
+from bilibili_downloader.api import endpoints as ep
+from bilibili_downloader.api.endpoints import USER_AGENT
+from bilibili_downloader.api.wbi import WBISigner
+from bilibili_downloader.core.models import StreamInfo, SubtitleInfo, VideoInfo, VideoPage, VideoQuality
 
 logger = logging.getLogger(__name__)
 

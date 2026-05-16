@@ -85,5 +85,5 @@ class VideoInfoWidget(QWidget):
                     Qt.SmoothTransformation,
                 )
                 self._cover_label.setPixmap(scaled)
-        except Exception:
+        except httpx.HTTPError:
             pass

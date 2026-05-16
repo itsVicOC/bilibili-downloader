@@ -20,14 +20,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.core.models import AppSettings, VideoInfo
-from src.gui.dialogs.settings_dialog import SettingsDialog
-from src.gui.dialogs.login_dialog import LoginDialog
-from src.gui.widgets.download_list import DownloadListWidget
-from src.gui.widgets.video_info import VideoInfoWidget
-from src.utils.config import ConfigManager
-from src.utils.validators import extract_bvid, is_bilibili_url, SHORT_URL_PATTERN
-from src.gui.widgets.chinese_input import ChineseLineEdit
+from bilibili_downloader.core.models import AppSettings, VideoInfo
+from bilibili_downloader.gui.dialogs.settings_dialog import SettingsDialog
+from bilibili_downloader.gui.dialogs.login_dialog import LoginDialog
+from bilibili_downloader.gui.widgets.download_list import DownloadListWidget
+from bilibili_downloader.gui.widgets.video_info import VideoInfoWidget
+from bilibili_downloader.utils.config import ConfigManager
+from bilibili_downloader.utils.validators import extract_bvid, is_bilibili_url, SHORT_URL_PATTERN
+from bilibili_downloader.gui.widgets.chinese_input import ChineseLineEdit
 
 logger = logging.getLogger(__name__)
 
@@ -375,7 +375,7 @@ class MainWindow(QMainWindow):
 
     def _create_api_client(self):
         """Create API client with current settings."""
-        from src.api.client import BilibiliAPIClient
+        from bilibili_downloader.api.client import BilibiliAPIClient
         return BilibiliAPIClient(sessdata=self._settings.sessdata or None)
 
     def _setup_ui(self):
@@ -472,7 +472,7 @@ class MainWindow(QMainWindow):
 
     def _populate_quality_combo(self):
         """Fill quality combo box with all available qualities."""
-        from src.core.models import VideoQuality
+        from bilibili_downloader.core.models import VideoQuality
         qualities = [
             (VideoQuality.Q8K, "8K"),
             (VideoQuality.Q4K, "4K"),
@@ -559,7 +559,7 @@ class MainWindow(QMainWindow):
             return
 
         # Handle b23.tv short links
-        from src.utils.validators import is_short_link, resolve_short_link
+        from bilibili_downloader.utils.validators import is_short_link, resolve_short_link
         if is_short_link(url):
             self._status_bar.showMessage("正在解析短链...")
             bvid = resolve_short_link(url)
@@ -579,51 +579,7 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage(f"正在解析 {bvid}...")
 
         # Use QThreadPool for async resolve
-        from PySide6.QtCore import QRunnable, Signal
-        from PySide6.QtCore import QObject
-        from src.core.models import VideoQuality
-
-        class ResolveWorker(QObject):
-            finished = Signal(object, list, list, bool)  # info, video_streams, audio_streams, playurl_ok
-            error = Signal(str)
-
-            def __init__(self, client, bvid):
-                super().__init__()
-                self._client = client
-                self._bvid = bvid
-
-        class ResolveRunner(QRunnable):
-            def __init__(self, worker):
-                super().__init__()
-                self._worker = worker
-
-            def run(self):
-                try:
-                    info = self._worker._client.get_video_info(self._worker._bvid)
-                    # Try to fetch playurl for quality discovery (degraded on failure)
-                    video_streams = []
-                    audio_streams = []
-                    playurl_ok = False
-                    try:
-                        playurl_data = self._worker._client.get_play_url(
-                            bvid=info.bvid,
-                            cid=info.cid,
-                            quality=VideoQuality.Q1080P,
-                            need_hdr=True,
-                            need_dolby=True,
-                        )
-                        video_streams = playurl_data.get("video_streams", [])
-                        audio_streams = playurl_data.get("audio_streams", [])
-                        playurl_ok = True
-                    except Exception as e:
-                        # playurl failure is non-fatal; show video info anyway
-                        logger.warning("Playurl fetch failed for %s: %s", info.bvid, e)
-
-                    self._worker.finished.emit(
-                        info, video_streams, audio_streams, playurl_ok
-                    )
-                except Exception as e:
-                    self._worker.error.emit(str(e))
+        from bilibili_downloader.gui.threads.resolve_worker import ResolveRunner, ResolveWorker
 
         self._resolve_worker = ResolveWorker(self._api_client, bvid)
         self._resolve_runner = ResolveRunner(self._resolve_worker)
@@ -642,7 +598,7 @@ class MainWindow(QMainWindow):
         self._current_video.audio_streams = audio_streams
         self._video_info.set_video_info(info)
 
-        from src.core.models import VIDEO_CODEC_MAP, VideoQuality
+        from bilibili_downloader.core.models import VIDEO_CODEC_MAP, VideoQuality
         QUALITY_ID_TO_ENUM = {q.value: q for q in VideoQuality}
 
         if playurl_ok and video_streams:
@@ -682,13 +638,13 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage("解析失败")
         self._show_error(f"解析视频失败：{error}")
 
-    def _on_retry_download(self, row: int):
+    def _on_retry_download(self, download_id: int):
         """Retry a failed download."""
-        item = self._download_list.get_item(row)
+        item = self._download_list.get_item(download_id)
         if item:
             # Reset UI
-            self._download_list.mark_failed_retry_reset(row)
-            self._start_download(item, row)
+            self._download_list.mark_failed_retry_reset(download_id)
+            self._start_download(item, download_id)
             self._status_bar.showMessage(f"重试下载：{item.video_info.title}")
 
     def _on_download_clicked(self):
@@ -700,7 +656,7 @@ class MainWindow(QMainWindow):
         quality = self._quality_combo.currentData()
         codec = self._codec_combo.currentData()
 
-        from src.core.models import DownloadItem
+        from bilibili_downloader.core.models import DownloadItem
         item = DownloadItem(
             video_info=self._current_video,
             selected_quality=quality,
@@ -710,16 +666,15 @@ class MainWindow(QMainWindow):
         )
 
         # Add to download list
-        row = self._download_list.rowCount()
-        self._download_list.add_item(item)
+        download_id = self._download_list.add_item(item)
         self._status_bar.showMessage(f"已加入队列：{item.video_info.title}")
 
         # Start download in background thread
-        self._start_download(item, row)
+        self._start_download(item, download_id)
 
-    def _start_download(self, item, row_index: int):
+    def _start_download(self, item, download_id: int):
         """Start a download in a background thread via thread pool."""
-        from src.gui.threads.download_worker import DownloadRunner, DownloadWorker
+        from bilibili_downloader.gui.threads.download_worker import DownloadRunner, DownloadWorker
 
         worker = DownloadWorker(
             api_client=self._api_client,
@@ -727,7 +682,7 @@ class MainWindow(QMainWindow):
             output_dir=self._settings.output_dir,
             download_danmaku=item.download_danmaku,
             download_subtitle=item.download_subtitle,
-            row_index=row_index,
+            download_id=download_id,
             ffmpeg_path=self._settings.ffmpeg_path or None,
         )
         runner = DownloadRunner(worker)
@@ -742,11 +697,11 @@ class MainWindow(QMainWindow):
         worker.error.connect(self._on_download_error)
 
         self._thread_pool.start(runner)
-        self._download_list.register_worker(row_index, worker)
+        self._download_list.register_worker(download_id, worker)
 
     def _start_batch_download(self, urls: list[str]):
         """Download multiple videos sequentially."""
-        from src.utils.validators import extract_bvid
+        from bilibili_downloader.utils.validators import extract_bvid
 
         for url in urls:
             bvid = extract_bvid(url)
@@ -755,7 +710,7 @@ class MainWindow(QMainWindow):
 
             try:
                 info = self._api_client.get_video_info(bvid)
-                from src.core.models import DownloadItem
+                from bilibili_downloader.core.models import DownloadItem
                 item = DownloadItem(
                     video_info=info,
                     selected_quality=self._quality_combo.currentData(),
@@ -763,20 +718,19 @@ class MainWindow(QMainWindow):
                     download_danmaku=self._danmaku_check.isChecked(),
                     download_subtitle=self._subtitle_check.isChecked(),
                 )
-                row = self._download_list.rowCount()
-                self._download_list.add_item(item)
-                self._start_download(item, row)
-            except Exception as e:
-                self._show_error(f"Failed to queue {bvid}: {e}")
+                download_id = self._download_list.add_item(item)
+                self._start_download(item, download_id)
+            except RuntimeError as e:
+                self._show_error(f"无法加入队列 {bvid}: {e}")
 
-    def _on_download_finished(self, index: int, path: str):
+    def _on_download_finished(self, download_id: int, path: str):
         """Handle download completion."""
-        self._download_list.mark_done(index)
+        self._download_list.mark_done(download_id)
         self._status_bar.showMessage(f"下载完成：{path}")
 
-    def _on_download_error(self, index: int, error: str):
+    def _on_download_error(self, download_id: int, error: str):
         """Handle download error."""
-        self._download_list.mark_failed(index, error)
+        self._download_list.mark_failed(download_id, error)
         self._status_bar.showMessage(f"下载失败：{error}")
 
     def _on_settings_triggered(self):
@@ -820,7 +774,8 @@ class MainWindow(QMainWindow):
                     "QLabel { color: #888; padding: 0 8px; }"
                 )
                 self._login_status_label.setToolTip("")
-        except Exception:
+        except Exception:  # noqa: BLE001
+            # Network or API errors — non-critical, just show unknown state
             self._login_status_label.setText("登录状态未知")
             self._login_status_label.setStyleSheet(
                 "QLabel { color: #888; padding: 0 8px; }"
@@ -828,7 +783,7 @@ class MainWindow(QMainWindow):
 
     def _on_batch_clicked(self):
         """Open batch download dialog."""
-        from src.gui.dialogs.batch_dialog import BatchDialog
+        from bilibili_downloader.gui.dialogs.batch_dialog import BatchDialog
         dialog = BatchDialog(self._api_client, self)
         if dialog.exec():
             urls = dialog.get_urls()
@@ -837,7 +792,7 @@ class MainWindow(QMainWindow):
 
     def _on_check_ffmpeg(self):
         """Check FFmpeg availability."""
-        from src.core.ffmpeg import FFmpegManager
+        from bilibili_downloader.core.ffmpeg import FFmpegManager
         available, msg = FFmpegManager.check_available(self._settings.ffmpeg_path or None)
         if available:
             self._show_info(f"FFmpeg 可用：\n{msg}")
@@ -863,9 +818,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent):
         """Cancel running downloads and close API client on window close."""
         # Cancel all active workers
-        for row, worker in self._download_list._workers.items():
-            if worker and worker.is_running:
-                worker.cancel()
+        self._download_list.cancel_all_workers()
 
         # Close API client
         self._api_client.close()
