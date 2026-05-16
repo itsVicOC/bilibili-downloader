@@ -1,6 +1,6 @@
 """Bilibili login module - QR code login and SESSDATA management."""
 
-import base64
+import logging
 from io import BytesIO
 from typing import Optional
 
@@ -11,6 +11,8 @@ from PIL import Image
 from bilibili_downloader.api import endpoints as ep
 from bilibili_downloader.api.endpoints import USER_AGENT
 
+logger = logging.getLogger(__name__)
+
 
 class LoginManager:
     """Handles Bilibili login via QR code or manual SESSDATA."""
@@ -20,13 +22,14 @@ class LoginManager:
             base_url=ep.PASSPORT_URL,
             headers={"User-Agent": USER_AGENT},
             timeout=30.0,
+            follow_redirects=False,
         )
 
     def generate_qr(self) -> tuple[str, str, Image.Image]:
         """Generate QR code for login.
 
         Returns:
-            (url, oauth_key, qr_image)
+            (url, qrcode_key, qr_image)
         """
         resp = self._client.get(ep.QR_GENERATE_ENDPOINT)
         resp.raise_for_status()
@@ -36,7 +39,7 @@ class LoginManager:
             raise RuntimeError(f"QR generation failed: {data.get('message')}")
 
         url = data["data"]["url"]
-        oauth_key = data["data"]["qrcode_key"]
+        qrcode_key = data["data"]["qrcode_key"]
 
         # Generate QR image
         qr = qrcode.QRCode(version=1, box_size=10, border=2)
@@ -44,9 +47,9 @@ class LoginManager:
         qr.make(fit=True)
         qr_img = qr.make_image(fill_color="black", back_color="white")
 
-        return url, oauth_key, qr_img
+        return url, qrcode_key, qr_img
 
-    def check_qr_status(self, oauth_key: str) -> dict:
+    def check_qr_status(self, qrcode_key: str) -> dict:
         """Poll QR login status.
 
         Returns:
@@ -57,7 +60,7 @@ class LoginManager:
         """
         resp = self._client.get(
             ep.QR_POLL_ENDPOINT,
-            params={"qrcode_key": oauth_key},
+            params={"qrcode_key": qrcode_key},
         )
         resp.raise_for_status()
         data = resp.json()
@@ -66,22 +69,52 @@ class LoginManager:
         result = {"status": poll_code}
 
         if poll_code == 0:
-            # Login successful
+            # Login successful — need to follow SSO URL to get cookies
             result["code"] = 0
-            # Extract SESSDATA from Set-Cookie headers using httpx.Cookies
-            cookies = httpx.Cookies()
-            for cookie_header in resp.headers.get_list("set-cookie"):
-                cookies.extract_cookies(
-                    httpx.Response(200, headers={"Set-Cookie": cookie_header}),
-                    httpx.URL(ep.PASSPORT_URL),
-                )
-            sessdata = cookies.get("SESSDATA")
-            if sessdata:
-                result["cookies"] = {"SESSDATA": sessdata}
-            else:
-                result["cookies"] = {}
+            sso_url = data.get("data", {}).get("url", "")
+            cookies = self._extract_cookies_from_sso(sso_url)
+            result["cookies"] = cookies
 
         return result
+
+    def _extract_cookies_from_sso(self, sso_url: str) -> dict:
+        """Follow SSO URL to extract SESSDATA cookie.
+
+        Bilibili returns cookies via a redirect chain after successful QR login.
+        We follow the SSO URL with cookie tracking to extract SESSDATA.
+        """
+        if not sso_url:
+            logger.warning("SSO URL is empty, cannot extract cookies")
+            return {}
+
+        try:
+            # Use a new client that follows redirects and captures cookies
+            with httpx.Client(
+                headers={
+                    "User-Agent": USER_AGENT,
+                    "Referer": "https://passport.bilibili.com/",
+                },
+                timeout=30.0,
+                follow_redirects=True,
+            ) as sso_client:
+                sso_resp = sso_client.get(sso_url)
+                # Cookies are accumulated in the client during redirects
+                sessdata = sso_client.cookies.get("SESSDATA")
+                if sessdata:
+                    logger.info("SESSDATA extracted from SSO redirect")
+                    return {"SESSDATA": sessdata}
+
+                # Fallback: check response cookies directly
+                sessdata = sso_resp.cookies.get("SESSDATA")
+                if sessdata:
+                    logger.info("SESSDATA extracted from SSO response")
+                    return {"SESSDATA": sessdata}
+
+                logger.warning("SESSDATA not found in SSO cookies")
+                return {}
+        except httpx.HTTPError as e:
+            logger.warning("SSO request failed: %s", e)
+            return {}
 
     def validate_sessdata(self, sessdata: str) -> bool:
         """Validate a SESSDATA cookie by checking user info."""

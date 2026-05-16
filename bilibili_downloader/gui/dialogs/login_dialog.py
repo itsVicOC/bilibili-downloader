@@ -169,12 +169,15 @@ class LoginDialog(QDialog):
 
     def _start_qr_generation(self):
         """Generate QR code and start polling for login, with retry."""
+        import logging
         import time
+        logger = logging.getLogger(__name__)
         max_retries = 3
         for attempt in range(max_retries):
             try:
                 url, oauth_key, qr_img = self._login_manager.generate_qr()
                 self._oauth_key = oauth_key
+                logger.info("QR code generated, key=%s...", oauth_key[:8])
 
                 # Convert PIL to QPixmap
                 buffer = io.BytesIO()
@@ -193,7 +196,8 @@ class LoginDialog(QDialog):
                 self._poll_timer.start(2000)
                 return  # Success
 
-            except Exception:
+            except Exception as e:
+                logger.warning("QR generation attempt %d failed: %s", attempt + 1, e)
                 if attempt < max_retries - 1:
                     time.sleep(1)
                     continue
@@ -205,12 +209,16 @@ class LoginDialog(QDialog):
 
     def _poll_qr_status(self):
         """Check QR login status."""
+        import logging
+        logger = logging.getLogger(__name__)
+
         if self._oauth_key is None:
             return
 
         try:
             result = self._login_manager.check_qr_status(self._oauth_key)
             status = result.get("status", -1)
+            logger.debug("QR poll status: %s", status)
 
             if status == 0:
                 # Login successful
@@ -221,7 +229,10 @@ class LoginDialog(QDialog):
                     self._sessdata = cookies["SESSDATA"]
                     self.accept()
                 else:
-                    QMessageBox.warning(self, "登录", "登录成功但未获取到 SESSDATA")
+                    QMessageBox.warning(
+                        self, "登录",
+                        "登录成功但未获取到 SESSDATA，请使用手动输入 Cookie 方式。",
+                    )
 
             elif status == 86101:
                 self._qr_status.setText("等待扫码...")
@@ -231,7 +242,11 @@ class LoginDialog(QDialog):
                 self._qr_status.setText("二维码已过期，点击下方刷新")
                 self._poll_timer.stop()
                 self._refresh_btn.show()
-        except RuntimeError as e:
+            else:
+                # Unknown status — log for debugging
+                logger.warning("Unknown QR status code: %s", status)
+        except Exception as e:
+            logger.exception("QR status check failed")
             self._qr_status.setText(f"状态检查异常：{e}")
 
     def _validate_cookie(self):
