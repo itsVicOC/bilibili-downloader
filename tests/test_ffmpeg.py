@@ -9,18 +9,18 @@ from bilibili_downloader.core.ffmpeg import FFmpegManager
 class TestFFmpegFindExecutable:
     def test_not_found_no_mock(self):
         # On a clean system, should return None if not in PATH and no winget
-        with patch("src.core.ffmpeg.shutil.which", return_value=None):
+        with patch("bilibili_downloader.core.ffmpeg.shutil.which", return_value=None):
             with patch("pathlib.Path.is_dir", return_value=False):
                 result = FFmpegManager.find_executable()
                 assert result is None
 
     def test_found_in_path(self):
-        with patch("src.core.ffmpeg.shutil.which", return_value="/usr/bin/ffmpeg"):
+        with patch("bilibili_downloader.core.ffmpeg.shutil.which", return_value="/usr/bin/ffmpeg"):
             result = FFmpegManager.find_executable()
             assert result == Path("/usr/bin/ffmpeg")
 
     def test_fallback_location(self):
-        with patch("src.core.ffmpeg.shutil.which", return_value=None):
+        with patch("bilibili_downloader.core.ffmpeg.shutil.which", return_value=None):
             with patch.object(Path, "is_file", return_value=True):
                 # Should find first fallback location
                 result = FFmpegManager.find_executable()
@@ -41,7 +41,7 @@ class TestFFmpegCheckAvailable:
                 "stdout": b"ffmpeg version 6.1.1\nsome other line\n",
                 "stderr": b"",
             })()
-            with patch("src.core.ffmpeg.subprocess.run", return_value=mock_result):
+            with patch("bilibili_downloader.core.ffmpeg.subprocess.run", return_value=mock_result):
                 available, msg = FFmpegManager.check_available()
                 assert available
                 assert "ffmpeg version 6.1.1" in msg
