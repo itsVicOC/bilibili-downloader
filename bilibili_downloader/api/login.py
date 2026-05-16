@@ -87,6 +87,13 @@ class LoginManager:
             logger.warning("SSO URL is empty, cannot extract cookies")
             return {}
 
+        def _find_cookie(cookies, name: str) -> str | None:
+            """Find first cookie by name, avoiding CookieConflict on duplicates."""
+            for cookie in cookies.jar:
+                if cookie.name == name:
+                    return cookie.value
+            return None
+
         try:
             # Use a new client that follows redirects and captures cookies
             with httpx.Client(
@@ -99,13 +106,13 @@ class LoginManager:
             ) as sso_client:
                 sso_resp = sso_client.get(sso_url)
                 # Cookies are accumulated in the client during redirects
-                sessdata = sso_client.cookies.get("SESSDATA")
+                sessdata = _find_cookie(sso_client.cookies, "SESSDATA")
                 if sessdata:
                     logger.info("SESSDATA extracted from SSO redirect")
                     return {"SESSDATA": sessdata}
 
                 # Fallback: check response cookies directly
-                sessdata = sso_resp.cookies.get("SESSDATA")
+                sessdata = _find_cookie(sso_resp.cookies, "SESSDATA")
                 if sessdata:
                     logger.info("SESSDATA extracted from SSO response")
                     return {"SESSDATA": sessdata}
