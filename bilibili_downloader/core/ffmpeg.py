@@ -149,8 +149,8 @@ class FFmpegManager:
         if exe is None:
             return False, "FFmpeg not found"
 
-        # Use absolute paths — no need for cwd workaround
-        safe_output = output_path.parent / "_ffmpeg_out.mp4"
+        # Use a temp file in the same directory for atomic rename
+        safe_output = output_path.with_suffix(".tmp")
         cmd = cls.build_merge_command(video_path, audio_path, safe_output, executable=str(exe))
 
         try:
@@ -169,9 +169,9 @@ class FFmpegManager:
                     return False, "\n".join(error_lines[:5])
                 return False, f"FFmpeg exit code {result.returncode}\n{output[-500:]}"
 
-            # Move from safe temp name to final output (may be on different drive)
+            # Atomic rename within same directory (avoids cross-drive copy+delete)
             if safe_output.exists():
-                shutil.move(str(safe_output), str(output_path))
+                safe_output.replace(output_path)
                 return True, output
             return False, f"FFmpeg succeeded but output file not found: {safe_output.name}"
         except subprocess.TimeoutExpired:

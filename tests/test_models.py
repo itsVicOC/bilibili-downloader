@@ -107,7 +107,8 @@ class TestAppSettings:
     def test_defaults(self):
         from bilibili_downloader.core.models import AppSettings
         s = AppSettings()
-        assert s.output_dir == "./downloads"
+        from pathlib import Path
+        assert s.output_dir == str(Path.home() / "Downloads" / "bilibili")
         assert s.default_quality == VideoQuality.Q1080P
         assert s.max_concurrent_downloads == 3
         assert s.dark_mode is True

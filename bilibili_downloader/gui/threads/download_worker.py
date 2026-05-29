@@ -74,19 +74,31 @@ class DownloadWorker(QObject):
             output_path = self._downloader.download(self._item, progress_cb)
 
             if self._download_danmaku:
-                self.progress.emit(self._download_id, 0.9, "正在下载弹幕...")
-                danmaku_path = Path(output_path).with_suffix(".ass")
-                DanmakuDownloader.download_and_convert(
-                    self._item.video_info.cid, danmaku_path,
-                )
+                try:
+                    self.progress.emit(self._download_id, 0.9, "正在下载弹幕...")
+                    danmaku_path = Path(output_path).with_suffix(".ass")
+                    DanmakuDownloader.download_and_convert(
+                        self._item.video_info.cid, danmaku_path,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Danmaku download failed for %s: %s",
+                        self._item.video_info.title, e,
+                    )
 
             if self._download_subtitle and self._item.video_info.subtitle_list:
-                self.progress.emit(self._download_id, 0.95, "正在下载字幕...")
-                subtitle_info = self._item.video_info.subtitle_list[0]
-                subtitle_path = Path(output_path).with_suffix(".srt")
-                SubtitleDownloader.download_and_convert(
-                    subtitle_info.url, subtitle_path,
-                )
+                try:
+                    self.progress.emit(self._download_id, 0.95, "正在下载字幕...")
+                    subtitle_info = self._item.video_info.subtitle_list[0]
+                    subtitle_path = Path(output_path).with_suffix(".srt")
+                    SubtitleDownloader.download_and_convert(
+                        subtitle_info.url, subtitle_path,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Subtitle download failed for %s: %s",
+                        self._item.video_info.title, e,
+                    )
 
             self.finished.emit(self._download_id, output_path)
 

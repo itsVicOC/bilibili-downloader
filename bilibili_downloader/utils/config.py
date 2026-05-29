@@ -1,5 +1,6 @@
 """Settings persistence for the application."""
 
+import base64
 import json
 import logging
 import shutil
@@ -10,6 +11,26 @@ from bilibili_downloader.core.models import AppSettings
 
 logger = logging.getLogger(__name__)
 DEFAULT_CONFIG_PATH = Path.home() / ".bilibili-downloader" / "config.json"
+
+
+def _obfuscate(data: dict) -> dict:
+    """Base64-encode sessdata before saving to JSON."""
+    if data.get("sessdata"):
+        data = dict(data)
+        data["sessdata"] = base64.b64encode(data["sessdata"].encode()).decode()
+    return data
+
+
+def _deobfuscate(data: dict) -> dict:
+    """Base64-decode sessdata after loading from JSON."""
+    if data.get("sessdata"):
+        data = dict(data)
+        try:
+            decoded = base64.b64decode(data["sessdata"].encode()).decode()
+            data["sessdata"] = decoded
+        except Exception:
+            pass  # Leave as-is if not valid base64 (e.g. plaintext legacy config)
+    return data
 
 
 class ConfigManager:
@@ -27,6 +48,7 @@ class ConfigManager:
         if self._config_path.exists():
             try:
                 data = json.loads(self._config_path.read_text(encoding="utf-8"))
+                data = _deobfuscate(data)
                 self._settings = AppSettings(**data)
                 return self._settings
             except (json.JSONDecodeError, ValueError) as e:
@@ -51,8 +73,10 @@ class ConfigManager:
         """Save settings to disk."""
         self._settings = settings
         self._config_path.parent.mkdir(parents=True, exist_ok=True)
+        data = settings.model_dump()
+        data = _obfuscate(data)
         self._config_path.write_text(
-            settings.model_dump_json(indent=2),
+            json.dumps(data, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
 

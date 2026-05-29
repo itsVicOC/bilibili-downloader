@@ -1,9 +1,25 @@
 """Pydantic data models for Bilibili API responses."""
 
 from enum import IntEnum
+from pathlib import Path
 from typing import Optional
 
 from pydantic import BaseModel, Field
+
+
+_VIDEO_QUALITY_LABELS = {
+    6: "240P",
+    16: "360P",
+    32: "480P",
+    64: "720P",
+    80: "1080P",
+    112: "1080P+",
+    116: "1080P60",
+    120: "4K",
+    125: "HDR",
+    126: "Dolby Vision",
+    127: "8K",
+}
 
 
 class VideoQuality(IntEnum):
@@ -22,19 +38,7 @@ class VideoQuality(IntEnum):
 
     @property
     def label(self) -> str:
-        return {
-            6: "240P",
-            16: "360P",
-            32: "480P",
-            64: "720P",
-            80: "1080P",
-            112: "1080P+",
-            116: "1080P60",
-            120: "4K",
-            125: "HDR",
-            126: "Dolby Vision",
-            127: "8K",
-        }.get(self.value, f"Unknown({self.value})")
+        return _VIDEO_QUALITY_LABELS.get(self.value, f"Unknown({self.value})")
 
 
 VIDEO_CODEC_MAP = {
@@ -136,22 +140,19 @@ class DownloadItem(BaseModel):
 
         info = self.video_info
         safe_title = sanitize_filename(info.title)
-        # Use the selected page's part name
-        selected_part = ""
+        # Use the selected page's part name (O(1) dict lookup)
         if info.is_multi_part:
-            for page in info.pages:
-                if page.cid == info.cid:
-                    selected_part = sanitize_filename(page.part)
-                    break
-        if selected_part:
-            return f"{safe_title}_{selected_part}.mp4"
+            cid_to_part = {p.cid: p.part for p in info.pages}
+            part = cid_to_part.get(info.cid, "")
+            if part:
+                return f"{safe_title}_{sanitize_filename(part)}.mp4"
         # Single-part or fallback: use title only
         return f"{safe_title}.mp4"
 
 
 class AppSettings(BaseModel):
     """Application settings persisted to JSON."""
-    output_dir: str = "./downloads"
+    output_dir: str = Field(default_factory=lambda: str(Path.home() / "Downloads" / "bilibili"))
     default_quality: VideoQuality = VideoQuality.Q1080P
     default_video_codec: int = 12  # HEVC
     download_danmaku: bool = False

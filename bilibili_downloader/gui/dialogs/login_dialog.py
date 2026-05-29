@@ -167,40 +167,40 @@ class LoginDialog(QDialog):
         self._qr_status.setText("")
         self._start_qr_generation()
 
-    def _start_qr_generation(self):
-        """Generate QR code and start polling for login, with retry."""
+    def _start_qr_generation(self, attempt: int = 0):
+        """Generate QR code and start polling for login, with async retry."""
         import logging
-        import time
         logger = logging.getLogger(__name__)
         max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                url, oauth_key, qr_img = self._login_manager.generate_qr()
-                self._oauth_key = oauth_key
-                logger.info("QR code generated, key=%s...", oauth_key[:8])
 
-                # Convert PIL to QPixmap
-                buffer = io.BytesIO()
-                qr_img.save(buffer, format="PNG")
-                pixmap = QPixmap()
-                pixmap.loadFromData(buffer.getvalue())
-                pixmap = pixmap.scaled(
-                    250, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation
-                )
-                self._qr_label.setPixmap(pixmap)
-                self._qr_label.setText("")
+        try:
+            url, oauth_key, qr_img = self._login_manager.generate_qr()
+            self._oauth_key = oauth_key
+            logger.info("QR code generated, key=%s...", oauth_key[:8])
 
-                # Start polling timer
-                self._poll_timer = QTimer()
-                self._poll_timer.timeout.connect(self._poll_qr_status)
-                self._poll_timer.start(2000)
-                return  # Success
+            # Convert PIL to QPixmap
+            buffer = io.BytesIO()
+            qr_img.save(buffer, format="PNG")
+            pixmap = QPixmap()
+            pixmap.loadFromData(buffer.getvalue())
+            pixmap = pixmap.scaled(
+                250, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation
+            )
+            self._qr_label.setPixmap(pixmap)
+            self._qr_label.setText("")
 
-            except Exception as e:
-                logger.warning("QR generation attempt %d failed: %s", attempt + 1, e)
-                if attempt < max_retries - 1:
-                    time.sleep(1)
-                    continue
+            # Start polling timer
+            self._poll_timer = QTimer()
+            self._poll_timer.timeout.connect(self._poll_qr_status)
+            self._poll_timer.start(2000)
+            return  # Success
+
+        except Exception as e:
+            logger.warning("QR generation attempt %d failed: %s", attempt + 1, e)
+            if attempt < max_retries - 1:
+                # Non-blocking retry via QTimer to keep UI responsive
+                QTimer.singleShot(1000, lambda: self._start_qr_generation(attempt + 1))
+                return
 
         # All retries failed
         self._qr_label.setText("二维码生成失败，请检查网络")

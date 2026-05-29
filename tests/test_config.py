@@ -14,7 +14,7 @@ class TestConfigManager:
         manager = ConfigManager(config_path=config_path)
         settings = manager.load()
         assert isinstance(settings, AppSettings)
-        assert settings.output_dir == "./downloads"
+        assert settings.output_dir == str(Path.home() / "Downloads" / "bilibili")
         assert settings.max_concurrent_downloads == 3
 
     def test_save_and_load_roundtrip(self, tmp_path):

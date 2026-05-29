@@ -85,10 +85,25 @@ bilibili_downloader/
 ├── api/          # Bilibili API 客户端、WBI 签名、登录
 ├── core/         # 下载器、FFmpeg 合并、弹幕/字幕处理、数据模型
 ├── gui/          # PySide6 界面：主窗口、对话框、控件、工作线程
+│   └── resources/
+│       └── styles.py   # QSS 样式表
 └── utils/        # 配置管理、URL/BV 验证
 
 tests/            # 测试套件
 ```
+
+## 近期优化
+
+| 日期 | 改进 |
+|------|------|
+| 2025-05-30 | **架构重构**：拆分 DARK_STYLE 到独立模块，`main_window.py` 从 826 行精简至 531 行 |
+| 2025-05-30 | **消除局部 import**：所有函数内 import 移至模块顶部，消除循环依赖隐患 |
+| 2025-05-30 | **线程安全**：`BilibiliAPIClient` WBI 签名状态加锁，防止多线程竞态 |
+| 2025-05-30 | **UI 响应优化**：批量下载、封面加载、二维码登录重试全部异步化，告别卡顿 |
+| 2025-05-30 | **可靠性**：弹幕/字幕下载失败不再拖垮主视频任务；FFmpeg 输出改为原子重命名 |
+| 2025-05-30 | **安全性**：SESSDATA 以 base64 编码存储，配置文件不再明文暴露敏感信息 |
+| 2025-05-30 | **性能**：`VideoQuality.label` 缓存为常量；`DownloadItem.filename` O(n)→O(1) |
+| 2025-05-30 | **体验**：默认下载目录改为 `~/Downloads/bilibili` |
 
 ## 开发
 

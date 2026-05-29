@@ -1,6 +1,7 @@
 """Bilibili API client for video metadata and playback URLs."""
 
 import logging
+import threading
 import time
 from typing import Optional
 
@@ -33,6 +34,7 @@ class BilibiliAPIClient:
         self._wbi_signer = WBISigner()
         self._wbi_mixin_key: Optional[str] = None
         self._wbi_cached_at: Optional[float] = None
+        self._wbi_lock = threading.Lock()
         self._sessdata = sessdata
 
     @property
@@ -53,25 +55,32 @@ class BilibiliAPIClient:
             if now - self._wbi_cached_at < self.WBI_CACHE_TTL:
                 return
 
-        resp = self._client.get(ep.NAV_ENDPOINT)
-        resp.raise_for_status()
-        data = resp.json()
+        with self._wbi_lock:
+            # Double-checked locking: another thread may have refreshed while we waited
+            now = time.time()
+            if self._wbi_mixin_key and self._wbi_cached_at:
+                if now - self._wbi_cached_at < self.WBI_CACHE_TTL:
+                    return
 
-        # Nav may return -101 (not logged in) but still provide WBI keys
-        wbi_img = data.get("data", {}).get("wbi_img", {})
-        if not wbi_img.get("img_url"):
-            raise RuntimeError(f"Failed to fetch WBI keys: {data.get('message')}")
-        img_key = self._wbi_signer.extract_key_from_url(wbi_img["img_url"])
-        sub_key = self._wbi_signer.extract_key_from_url(wbi_img["sub_url"])
-        self._wbi_mixin_key = self._wbi_signer.compute_mixin_key(img_key, sub_key)
-        self._wbi_cached_at = now
+            resp = self._client.get(ep.NAV_ENDPOINT)
+            resp.raise_for_status()
+            data = resp.json()
 
-    def _retry_on_wbi_error(self, action, **kwargs):
+            # Nav may return -101 (not logged in) but still provide WBI keys
+            wbi_img = data.get("data", {}).get("wbi_img", {})
+            if not wbi_img.get("img_url"):
+                raise RuntimeError(f"Failed to fetch WBI keys: {data.get('message')}")
+            img_key = self._wbi_signer.extract_key_from_url(wbi_img["img_url"])
+            sub_key = self._wbi_signer.extract_key_from_url(wbi_img["sub_url"])
+            self._wbi_mixin_key = self._wbi_signer.compute_mixin_key(img_key, sub_key)
+            self._wbi_cached_at = now
+
+    def _retry_on_wbi_error(self, action):
         """Execute an API call, refreshing WBI keys on -352 errors.
 
         Args:
             action: Callable that takes no args and returns parsed data.
-            kwargs: Parameters to re-sign if retry is needed.
+                  Must rebuild signed params internally on each call.
 
         Returns:
             Parsed response data.
@@ -83,10 +92,9 @@ class BilibiliAPIClient:
                 raise
             # WBI signature expired/invalid — refresh keys and retry once
             logger.warning("WBI signature error (-352), refreshing keys")
-            self._wbi_mixin_key = None
-            self._wbi_cached_at = None
-            if kwargs:
-                self._sign_params(kwargs)
+            with self._wbi_lock:
+                self._wbi_mixin_key = None
+                self._wbi_cached_at = None
             return action()
 
     def _sign_params(self, params: dict) -> dict:
@@ -136,21 +144,20 @@ class BilibiliAPIClient:
         if need_dolby:
             fnval |= 64
 
-        params = {
-            "bvid": bvid,
-            "cid": cid,
-            "qn": quality.value,
-            "fnval": fnval,
-            "fourk": 1,
-        }
-
         def _fetch():
+            params = {
+                "bvid": bvid,
+                "cid": cid,
+                "qn": quality.value,
+                "fnval": fnval,
+                "fourk": 1,
+            }
             signed = self._sign_params(params)
             resp = self._client.get(ep.PLAYURL_ENDPOINT, params=signed)
             data = self._parse_response(resp)
             return _parse_playurl(data)
 
-        return self._retry_on_wbi_error(_fetch, **params)
+        return self._retry_on_wbi_error(_fetch)
 
     def get_danmaku_xml(self, cid: int) -> bytes:
         """Download danmaku in XML format."""

@@ -1,6 +1,6 @@
 """Video info display widget."""
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -8,6 +8,42 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+
+class _CoverLoadWorker(QObject):
+    """Signals for async cover image loading."""
+
+    loaded = Signal(object)  # QPixmap
+    failed = Signal()
+
+
+class _CoverLoadRunner(QRunnable):
+    """Downloads cover image in a background thread."""
+
+    def __init__(self, worker: _CoverLoadWorker, url: str):
+        super().__init__()
+        self._worker = worker
+        self._url = url
+        self.setAutoDelete(True)
+
+    def run(self):
+        import httpx
+
+        try:
+            resp = httpx.get(self._url, timeout=10.0)
+            if resp.status_code == 200:
+                pixmap = QPixmap()
+                if pixmap.loadFromData(resp.content):
+                    scaled = pixmap.scaled(
+                        200, 120,
+                        Qt.KeepAspectRatio,
+                        Qt.SmoothTransformation,
+                    )
+                    self._worker.loaded.emit(scaled)
+                    return
+        except httpx.HTTPError:
+            pass
+        self._worker.failed.emit()
 
 
 class VideoInfoWidget(QWidget):
@@ -71,19 +107,8 @@ class VideoInfoWidget(QWidget):
             self._load_cover(info.cover_url)
 
     def _load_cover(self, url: str):
-        """Download and display cover image."""
-        import httpx
-
-        try:
-            resp = httpx.get(url, timeout=10.0)
-            if resp.status_code == 200:
-                pixmap = QPixmap()
-                pixmap.loadFromData(resp.content)
-                scaled = pixmap.scaled(
-                    200, 120,
-                    Qt.KeepAspectRatio,
-                    Qt.SmoothTransformation,
-                )
-                self._cover_label.setPixmap(scaled)
-        except httpx.HTTPError:
-            pass
+        """Download and display cover image asynchronously."""
+        worker = _CoverLoadWorker()
+        worker.loaded.connect(self._cover_label.setPixmap)
+        runner = _CoverLoadRunner(worker, url)
+        QThreadPool.globalInstance().start(runner)

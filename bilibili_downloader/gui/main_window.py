@@ -20,327 +20,37 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from bilibili_downloader.core.models import AppSettings, VideoInfo
-from bilibili_downloader.gui.dialogs.settings_dialog import SettingsDialog
+from PySide6.QtWidgets import QCheckBox
+
+from bilibili_downloader.api.client import BilibiliAPIClient
+from bilibili_downloader.core.ffmpeg import FFmpegManager
+from bilibili_downloader.core.models import (
+    AppSettings,
+    DownloadItem,
+    VIDEO_CODEC_MAP,
+    VideoInfo,
+    VideoQuality,
+)
+from bilibili_downloader.gui.dialogs.batch_dialog import BatchDialog
 from bilibili_downloader.gui.dialogs.login_dialog import LoginDialog
+from bilibili_downloader.gui.dialogs.settings_dialog import SettingsDialog
+from bilibili_downloader.gui.resources import load_stylesheet
+from bilibili_downloader.gui.threads.batch_worker import BatchRunner, BatchWorker
+from bilibili_downloader.gui.threads.download_worker import DownloadRunner, DownloadWorker
+from bilibili_downloader.gui.threads.resolve_worker import ResolveRunner, ResolveWorker
+from bilibili_downloader.gui.widgets.chinese_input import ChineseLineEdit
 from bilibili_downloader.gui.widgets.download_list import DownloadListWidget
 from bilibili_downloader.gui.widgets.video_info import VideoInfoWidget
 from bilibili_downloader.utils.config import ConfigManager
-from bilibili_downloader.utils.validators import extract_bvid, is_bilibili_url, SHORT_URL_PATTERN
-from bilibili_downloader.gui.widgets.chinese_input import ChineseLineEdit
+from bilibili_downloader.utils.validators import (
+    extract_bvid,
+    is_bilibili_url,
+    is_short_link,
+    resolve_short_link,
+    SHORT_URL_PATTERN,
+)
 
 logger = logging.getLogger(__name__)
-
-
-# B站主题 QSS 样式表
-# 配色: 主色 #00A1D6(哔哩蓝), 辅色 #FB7299(哔哩粉), 深色背景 #212121
-DARK_STYLE = """
-    QMainWindow, QWidget {
-        background-color: #212121;
-        color: #e0e0e0;
-        font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
-        font-size: 13px;
-    }
-
-    /* ── GroupBox ── */
-    QGroupBox {
-        font-weight: bold;
-        border: 1px solid #333333;
-        border-radius: 8px;
-        margin-top: 1.2ex;
-        padding-top: 14px;
-        background-color: #262626;
-    }
-    QGroupBox::title {
-        subcontrol-origin: margin;
-        left: 14px;
-        padding: 0 6px;
-        color: #00A1D6;
-        font-size: 13px;
-    }
-
-    /* ── Input Fields ── */
-    QLineEdit, QTextEdit, QPlainTextEdit {
-        background-color: #2a2a2a;
-        border: 1px solid #3a3a3a;
-        border-radius: 6px;
-        padding: 8px 12px;
-        color: #e0e0e0;
-        font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
-        font-size: 13px;
-        selection-background-color: #00A1D6;
-    }
-    QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
-        border: 1px solid #00A1D6;
-        background-color: #2d2d2d;
-    }
-    QLineEdit:disabled, QTextEdit:disabled {
-        background-color: #222222;
-        color: #666;
-    }
-
-    /* ── ComboBox ── */
-    QComboBox {
-        background-color: #2a2a2a;
-        border: 1px solid #3a3a3a;
-        border-radius: 6px;
-        padding: 7px 32px 7px 12px;
-        color: #e0e0e0;
-        min-width: 140px;
-        font-size: 13px;
-    }
-    QComboBox:hover {
-        border-color: #00A1D6;
-        background-color: #2d2d2d;
-    }
-    QComboBox:disabled {
-        background-color: #222222;
-        color: #555;
-        border-color: #303030;
-    }
-    QComboBox::drop-down {
-        border: none;
-        width: 28px;
-        border-left: 1px solid #3a3a3a;
-    }
-    QComboBox:hover::drop-down {
-        border-left-color: #00A1D6;
-    }
-    QComboBox::down-arrow {
-        image: none;
-        border-left: 5px solid transparent;
-        border-right: 5px solid transparent;
-        border-top: 6px solid #999;
-        margin-right: 6px;
-    }
-    QComboBox:pressed::down-arrow {
-        border-top-color: #00A1D6;
-    }
-    QComboBox:on {
-        border-color: #00A1D6;
-    }
-    QComboBox QAbstractItemView {
-        background-color: #2a2a2a;
-        color: #e0e0e0;
-        border: 1px solid #404040;
-        border-radius: 6px;
-        selection-background-color: #00A1D6;
-        selection-color: white;
-        outline: none;
-        padding: 4px 0;
-        font-size: 13px;
-    }
-    QComboBox QAbstractItemView::item {
-        min-height: 32px;
-        padding: 0 12px;
-        border: none;
-    }
-    QComboBox QAbstractItemView::item:hover {
-        background-color: rgba(0, 161, 214, 0.2);
-    }
-    QComboBox QAbstractItemView::item:selected {
-        background-color: #00A1D6;
-        color: white;
-    }
-
-    /* ── Table ── */
-    QTableWidget {
-        background-color: #252525;
-        gridline-color: #2e2e2e;
-        border: 1px solid #333333;
-        border-radius: 6px;
-        color: #e0e0e0;
-        alternate-background-color: #2a2a2a;
-    }
-    QTableWidget::item {
-        padding: 4px;
-    }
-    QTableWidget::item:selected {
-        background-color: rgba(0, 161, 214, 0.3);
-        color: white;
-    }
-    QHeaderView::section {
-        background-color: #2a2a2a;
-        color: #00A1D6;
-        font-weight: bold;
-        border: none;
-        border-bottom: 1px solid #333333;
-        padding: 8px;
-    }
-
-    /* ── Buttons ── */
-    QPushButton {
-        background-color: #333333;
-        border: 1px solid #404040;
-        border-radius: 6px;
-        padding: 7px 18px;
-        color: #e0e0e0;
-        font-size: 13px;
-        font-weight: 500;
-    }
-    QPushButton:hover {
-        background-color: #3d3d3d;
-        border: 1px solid #00A1D6;
-    }
-    QPushButton:pressed {
-        background-color: #1d1d1d;
-        padding-top: 8px;
-        padding-bottom: 6px;
-    }
-    QPushButton:disabled {
-        background-color: #262626;
-        color: #555;
-        border-color: #303030;
-    }
-
-    /* Primary / accent buttons */
-    QPushButton#PrimaryButton {
-        background-color: #00A1D6;
-        border: 1px solid #00A1D6;
-        color: white;
-        font-weight: bold;
-    }
-    QPushButton#PrimaryButton:hover {
-        background-color: #23a2d9;
-    }
-    QPushButton#PrimaryButton:pressed {
-        background-color: #0088b8;
-        padding-top: 9px;
-        padding-bottom: 7px;
-    }
-    QPushButton#PrimaryButton:disabled {
-        background-color: #1a4a5c;
-        border-color: #1a4a5c;
-        color: #557788;
-    }
-
-    QPushButton#DangerButton {
-        background-color: #d32f2f;
-        border: 1px solid #d32f2f;
-        color: white;
-    }
-    QPushButton#DangerButton:hover {
-        background-color: #e03e3e;
-    }
-
-    QPushButton#SuccessButton {
-        background-color: #2e7d32;
-        border: 1px solid #2e7d32;
-        color: white;
-    }
-    QPushButton#SuccessButton:hover {
-        background-color: #3a8f3e;
-    }
-
-    /* ── Menu Bar ── */
-    QMenuBar {
-        background-color: #212121;
-        color: #e0e0e0;
-        border-bottom: 1px solid #333333;
-    }
-    QMenuBar::item {
-        padding: 6px 10px;
-        border-radius: 4px;
-        margin: 2px;
-    }
-    QMenuBar::item:selected {
-        background-color: rgba(0, 161, 214, 0.3);
-    }
-    QMenu {
-        background-color: #2d2d2d;
-        color: #e0e0e0;
-        border: 1px solid #404040;
-        border-radius: 6px;
-        padding: 6px;
-    }
-    QMenu::item {
-        padding: 6px 24px 6px 12px;
-        border-radius: 4px;
-    }
-    QMenu::item:selected {
-        background-color: rgba(0, 161, 214, 0.3);
-    }
-    QMenu::separator {
-        height: 1px;
-        background-color: #404040;
-        margin: 4px 8px;
-    }
-
-    /* ── Status Bar ── */
-    QStatusBar {
-        background-color: #212121;
-        color: #777;
-        border-top: 1px solid #333333;
-    }
-
-    /* ── Progress Bar ── */
-    QProgressBar {
-        border: 1px solid #3a3a3a;
-        border-radius: 6px;
-        text-align: center;
-        color: #e0e0e0;
-        background-color: #333333;
-        font-size: 11px;
-        height: 18px;
-    }
-    QProgressBar::chunk {
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-            stop:0 #00A1D6, stop:1 #0088b8);
-        border-radius: 5px;
-    }
-
-    /* ── CheckBox ── */
-    QCheckBox {
-        color: #e0e0e0;
-        spacing: 6px;
-        padding: 2px;
-    }
-    QCheckBox::indicator {
-        width: 18px;
-        height: 18px;
-        border: 2px solid #404040;
-        border-radius: 4px;
-        background-color: #2a2a2a;
-    }
-    QCheckBox::indicator:hover {
-        border-color: #00A1D6;
-    }
-    QCheckBox::indicator:checked {
-        background-color: #00A1D6;
-        border-color: #00A1D6;
-    }
-
-    /* ── Tab Widget ── */
-    QTabWidget::pane {
-        border: 1px solid #333333;
-        border-radius: 6px;
-        background-color: #262626;
-    }
-    QTabBar::tab {
-        background-color: #2a2a2a;
-        color: #888;
-        padding: 8px 24px;
-        border: 1px solid #333333;
-        border-bottom: none;
-        border-radius: 6px 6px 0 0;
-    }
-    QTabBar::tab:selected {
-        background-color: #00A1D6;
-        color: white;
-    }
-    QTabBar::tab:hover:!selected {
-        color: #00A1D6;
-        background-color: #303030;
-    }
-
-    /* ── Label ── */
-    QLabel { color: #e0e0e0; }
-
-    /* ── Dialog ── */
-    QMessageBox { background-color: #212121; }
-    QMessageBox QLabel { color: #e0e0e0; }
-    QMessageBox QPushButton { min-width: 80px; }
-"""
 
 
 class MainWindow(QMainWindow):
@@ -350,7 +60,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("哔哩哔哩视频下载器")
         self.setMinimumSize(800, 600)
-        self.setStyleSheet(DARK_STYLE)
+        self.setStyleSheet(load_stylesheet())
 
         # Components
         self._config = ConfigManager()
@@ -375,7 +85,6 @@ class MainWindow(QMainWindow):
 
     def _create_api_client(self):
         """Create API client with current settings."""
-        from bilibili_downloader.api.client import BilibiliAPIClient
         return BilibiliAPIClient(sessdata=self._settings.sessdata or None)
 
     def _setup_ui(self):
@@ -465,14 +174,12 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._download_list)
 
     def _create_checkbox(self, text: str, checked: bool):
-        from PySide6.QtWidgets import QCheckBox
         cb = QCheckBox(text)
         cb.setChecked(checked)
         return cb
 
     def _populate_quality_combo(self):
         """Fill quality combo box with all available qualities."""
-        from bilibili_downloader.core.models import VideoQuality
         qualities = [
             (VideoQuality.Q8K, "8K"),
             (VideoQuality.Q4K, "4K"),
@@ -559,7 +266,6 @@ class MainWindow(QMainWindow):
             return
 
         # Handle b23.tv short links
-        from bilibili_downloader.utils.validators import is_short_link, resolve_short_link
         if is_short_link(url):
             self._status_bar.showMessage("正在解析短链...")
             bvid = resolve_short_link(url)
@@ -579,8 +285,6 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage(f"正在解析 {bvid}...")
 
         # Use QThreadPool for async resolve
-        from bilibili_downloader.gui.threads.resolve_worker import ResolveRunner, ResolveWorker
-
         self._resolve_worker = ResolveWorker(self._api_client, bvid)
         self._resolve_runner = ResolveRunner(self._resolve_worker)
         self._resolve_worker.finished.connect(self._on_resolve_success)
@@ -598,7 +302,6 @@ class MainWindow(QMainWindow):
         self._current_video.audio_streams = audio_streams
         self._video_info.set_video_info(info)
 
-        from bilibili_downloader.core.models import VIDEO_CODEC_MAP, VideoQuality
         QUALITY_ID_TO_ENUM = {q.value: q for q in VideoQuality}
 
         if playurl_ok and video_streams:
@@ -656,7 +359,6 @@ class MainWindow(QMainWindow):
         quality = self._quality_combo.currentData()
         codec = self._codec_combo.currentData()
 
-        from bilibili_downloader.core.models import DownloadItem
         item = DownloadItem(
             video_info=self._current_video,
             selected_quality=quality,
@@ -674,8 +376,6 @@ class MainWindow(QMainWindow):
 
     def _start_download(self, item, download_id: int):
         """Start a download in a background thread via thread pool."""
-        from bilibili_downloader.gui.threads.download_worker import DownloadRunner, DownloadWorker
-
         worker = DownloadWorker(
             api_client=self._api_client,
             item=item,
@@ -700,28 +400,35 @@ class MainWindow(QMainWindow):
         self._download_list.register_worker(download_id, worker)
 
     def _start_batch_download(self, urls: list[str]):
-        """Download multiple videos sequentially."""
-        from bilibili_downloader.utils.validators import extract_bvid
+        """Resolve multiple videos in background and add to download queue."""
+        self._status_bar.showMessage(f"正在批量解析 {len(urls)} 个视频...")
+        self._batch_worker = BatchWorker()
+        self._batch_worker.item_ready.connect(self._on_batch_item_ready)
+        self._batch_worker.error.connect(self._on_batch_item_error)
+        self._batch_worker.finished.connect(
+            lambda: self._status_bar.showMessage("批量解析完成")
+        )
 
-        for url in urls:
-            bvid = extract_bvid(url)
-            if not bvid:
-                continue
+        runner = BatchRunner(
+            self._batch_worker,
+            self._api_client,
+            urls,
+            self._quality_combo.currentData(),
+            self._codec_combo.currentData(),
+            self._danmaku_check.isChecked(),
+            self._subtitle_check.isChecked(),
+        )
+        self._thread_pool.start(runner)
 
-            try:
-                info = self._api_client.get_video_info(bvid)
-                from bilibili_downloader.core.models import DownloadItem
-                item = DownloadItem(
-                    video_info=info,
-                    selected_quality=self._quality_combo.currentData(),
-                    selected_video_codec=self._codec_combo.currentData(),
-                    download_danmaku=self._danmaku_check.isChecked(),
-                    download_subtitle=self._subtitle_check.isChecked(),
-                )
-                download_id = self._download_list.add_item(item)
-                self._start_download(item, download_id)
-            except RuntimeError as e:
-                self._show_error(f"无法加入队列 {bvid}: {e}")
+    def _on_batch_item_ready(self, item):
+        """Handle a single resolved video from batch processing."""
+        download_id = self._download_list.add_item(item)
+        self._start_download(item, download_id)
+        self._status_bar.showMessage(f"已加入队列：{item.video_info.title}")
+
+    def _on_batch_item_error(self, error: str):
+        """Handle a single failed resolution from batch processing."""
+        self._show_error(error)
 
     def _on_download_finished(self, download_id: int, path: str):
         """Handle download completion."""
@@ -783,7 +490,6 @@ class MainWindow(QMainWindow):
 
     def _on_batch_clicked(self):
         """Open batch download dialog."""
-        from bilibili_downloader.gui.dialogs.batch_dialog import BatchDialog
         dialog = BatchDialog(self._api_client, self)
         if dialog.exec():
             urls = dialog.get_urls()
@@ -792,7 +498,6 @@ class MainWindow(QMainWindow):
 
     def _on_check_ffmpeg(self):
         """Check FFmpeg availability."""
-        from bilibili_downloader.core.ffmpeg import FFmpegManager
         available, msg = FFmpegManager.check_available(self._settings.ffmpeg_path or None)
         if available:
             self._show_info(f"FFmpeg 可用：\n{msg}")
