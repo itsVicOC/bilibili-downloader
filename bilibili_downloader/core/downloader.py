@@ -115,7 +115,7 @@ class StreamDownloader:
             # Download video stream
             progress_callback(0.0, "正在下载视频流...")
             self._download_stream(
-                video_stream.base_url,
+                video_stream,
                 video_path,
                 lambda p: progress_callback(p * 0.6, "正在下载视频流..."),
             )
@@ -126,7 +126,7 @@ class StreamDownloader:
             # Download audio stream
             progress_callback(0.6, "正在下载音频流...")
             self._download_stream(
-                audio_stream.base_url,
+                audio_stream,
                 audio_path,
                 lambda p: progress_callback(0.6 + p * 0.2, "正在下载音频流..."),
             )
@@ -137,7 +137,11 @@ class StreamDownloader:
             # Merge with FFmpeg
             progress_callback(0.85, "正在合并视频...")
             success, msg = FFmpegManager.merge_streams(
-                video_path, audio_path, output_path, custom_path=self._ffmpeg_path,
+                video_path,
+                audio_path,
+                output_path,
+                custom_path=self._ffmpeg_path,
+                cancel_checker=lambda: self._cancelled,
             )
             if not success:
                 raise RuntimeError(f"FFmpeg merge failed: {msg}")
@@ -196,13 +200,15 @@ class StreamDownloader:
 
     def _download_stream(
         self,
-        url: str,
+        stream: StreamInfo,
         dest: Path,
         progress_callback: Callable[[float], None],
     ) -> None:
         """Download a single .m4s stream with progress tracking and retry."""
         last_error = None
-        last_reported = -1.0  # Throttle progress reports
+        urls = _stream_urls(stream)
+        if not urls:
+            raise RuntimeError("下载失败：流地址为空")
 
         # Reuse a single httpx.Client across all retries for connection pooling
         transport = httpx.HTTPTransport(
@@ -215,45 +221,92 @@ class StreamDownloader:
                 if self._cancelled:
                     raise RuntimeError("Download cancelled")
 
-                try:
-                    with client.stream(
-                        "GET",
-                        url,
-                        headers=STREAM_HEADERS,
-                        timeout=120.0,
-                        follow_redirects=True,
-                    ) as response:
-                        response.raise_for_status()
-                        total = int(response.headers.get("content-length", 0))
-                        downloaded = 0
+                for url in urls:
+                    try:
+                        self._download_url(client, url, dest, progress_callback)
+                        return
+                    except (httpx.HTTPError, ConnectionError, OSError) as e:
+                        last_error = e
+                        logger.debug(
+                            "Download attempt %d failed for %s: %s",
+                            attempt + 1, url, e,
+                        )
 
-                        with open(dest, "wb") as f:
-                            for chunk in response.iter_bytes(chunk_size=65536):
-                                if self._cancelled:
-                                    raise RuntimeError("Download cancelled")
-                                f.write(chunk)
-                                downloaded += len(chunk)
-                                if total > 0:
-                                    pct = downloaded / total
-                                    if pct - last_reported >= 0.05 or pct >= 1.0:
-                                        progress_callback(pct)
-                                        last_reported = pct
-
-                        progress_callback(1.0)
-                        return  # Success
-
-                except (httpx.HTTPError, ConnectionError, OSError) as e:
-                    last_error = e
-                    error_msg = str(e)
-                    logger.debug("Download attempt %d failed: %s", attempt + 1, error_msg)
-                    if "SSL" in error_msg or "UNEXPECTED_EOF" in error_msg:
-                        if attempt < self._max_retries - 1:
-                            time.sleep(3 * (attempt + 1))
-                            continue
-                    elif attempt < self._max_retries - 1:
-                        time.sleep(2 ** attempt)
-                        continue
+                if attempt < self._max_retries - 1:
+                    delay = _retry_delay(attempt, last_error)
+                    time.sleep(delay)
 
         raise RuntimeError(
             f"下载失败：{last_error}"
         )
+
+    def _download_url(
+        self,
+        client: httpx.Client,
+        url: str,
+        dest: Path,
+        progress_callback: Callable[[float], None],
+    ) -> None:
+        """Download one URL, resuming from an existing partial file when possible."""
+        resume_from = dest.stat().st_size if dest.exists() else 0
+        headers = dict(STREAM_HEADERS)
+        if resume_from > 0:
+            headers["Range"] = f"bytes={resume_from}-"
+
+        last_reported = -1.0
+        with client.stream(
+            "GET",
+            url,
+            headers=headers,
+            timeout=120.0,
+            follow_redirects=True,
+        ) as response:
+            response.raise_for_status()
+
+            append = resume_from > 0 and response.status_code == 206
+            downloaded = resume_from if append else 0
+            total = _response_total_size(response, downloaded)
+            mode = "ab" if append else "wb"
+
+            with open(dest, mode) as f:
+                for chunk in response.iter_bytes(chunk_size=65536):
+                    if self._cancelled:
+                        raise RuntimeError("Download cancelled")
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total > 0:
+                        pct = min(downloaded / total, 1.0)
+                        if pct - last_reported >= 0.05 or pct >= 1.0:
+                            progress_callback(pct)
+                            last_reported = pct
+
+        progress_callback(1.0)
+
+
+def _stream_urls(stream: StreamInfo) -> list[str]:
+    """Return base and backup URLs without duplicates."""
+    urls = []
+    for url in [stream.base_url, *stream.backup_url]:
+        if url and url not in urls:
+            urls.append(url)
+    return urls
+
+
+def _response_total_size(response: httpx.Response, downloaded: int) -> int:
+    content_range = response.headers.get("content-range", "")
+    if "/" in content_range:
+        total = content_range.rsplit("/", 1)[-1]
+        if total.isdigit():
+            return int(total)
+
+    content_length = int(response.headers.get("content-length", 0))
+    if response.status_code == 206:
+        return downloaded + content_length
+    return content_length
+
+
+def _retry_delay(attempt: int, error: Optional[BaseException]) -> float:
+    error_msg = str(error or "")
+    if "SSL" in error_msg or "UNEXPECTED_EOF" in error_msg:
+        return 3 * (attempt + 1)
+    return 2 ** attempt

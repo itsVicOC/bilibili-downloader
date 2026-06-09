@@ -36,14 +36,16 @@ class SubtitleDownloader:
     def _write_srt(entries: list[dict], output_path: Path) -> None:
         """Write subtitle entries to SRT file."""
         with open(output_path, "w", encoding="utf-8") as f:
-            for i, entry in enumerate(entries, 1):
+            index = 1
+            for entry in entries:
                 start = _seconds_to_srt_time(entry.get("from", 0))
                 end = _seconds_to_srt_time(entry.get("to", 0))
                 content = entry.get("content", "").strip()
                 if not content:
                     continue
 
-                f.write(f"{i}\n{start} --> {end}\n{content}\n\n")
+                f.write(f"{index}\n{start} --> {end}\n{content}\n\n")
+                index += 1
 
 
 def _seconds_to_srt_time(seconds: float) -> str:

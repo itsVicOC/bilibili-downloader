@@ -11,6 +11,8 @@ from bilibili_downloader.core.models import AppSettings
 
 logger = logging.getLogger(__name__)
 DEFAULT_CONFIG_PATH = Path.home() / ".bilibili-downloader" / "config.json"
+KEYRING_SERVICE = "bilibili-downloader"
+KEYRING_ACCOUNT = "sessdata"
 
 
 def _obfuscate(data: dict) -> dict:
@@ -33,6 +35,43 @@ def _deobfuscate(data: dict) -> dict:
     return data
 
 
+def _get_keyring():
+    try:
+        import keyring
+    except ImportError:
+        return None
+    return keyring
+
+
+def _load_sessdata_from_keyring() -> str:
+    keyring = _get_keyring()
+    if keyring is None:
+        return ""
+    try:
+        return keyring.get_password(KEYRING_SERVICE, KEYRING_ACCOUNT) or ""
+    except Exception as e:  # noqa: BLE001
+        logger.debug("Keyring read failed: %s", e)
+        return ""
+
+
+def _save_sessdata_to_keyring(sessdata: str) -> bool:
+    keyring = _get_keyring()
+    if keyring is None:
+        return False
+    try:
+        if sessdata:
+            keyring.set_password(KEYRING_SERVICE, KEYRING_ACCOUNT, sessdata)
+        else:
+            try:
+                keyring.delete_password(KEYRING_SERVICE, KEYRING_ACCOUNT)
+            except Exception:  # noqa: BLE001
+                pass
+        return True
+    except Exception as e:  # noqa: BLE001
+        logger.debug("Keyring write failed: %s", e)
+        return False
+
+
 class ConfigManager:
     """Load and save application settings to JSON."""
 
@@ -50,6 +89,8 @@ class ConfigManager:
                 data = json.loads(self._config_path.read_text(encoding="utf-8"))
                 data = _deobfuscate(data)
                 self._settings = AppSettings(**data)
+                if not self._settings.sessdata:
+                    self._settings.sessdata = _load_sessdata_from_keyring()
                 return self._settings
             except (json.JSONDecodeError, ValueError) as e:
                 # Backup corrupted config before falling back to defaults
@@ -66,7 +107,7 @@ class ConfigManager:
                         self._config_path, e,
                     )
 
-        self._settings = AppSettings()
+        self._settings = AppSettings(sessdata=_load_sessdata_from_keyring())
         return self._settings
 
     def save(self, settings: AppSettings) -> None:
@@ -74,11 +115,24 @@ class ConfigManager:
         self._settings = settings
         self._config_path.parent.mkdir(parents=True, exist_ok=True)
         data = settings.model_dump()
-        data = _obfuscate(data)
+        sessdata = data.pop("sessdata", "")
+        if sessdata:
+            if _save_sessdata_to_keyring(sessdata):
+                data["sessdata"] = ""
+            else:
+                data["sessdata"] = sessdata
+                data = _obfuscate(data)
+        else:
+            _save_sessdata_to_keyring("")
+            data["sessdata"] = ""
         self._config_path.write_text(
             json.dumps(data, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
+        try:
+            self._config_path.chmod(0o600)
+        except OSError:
+            logger.debug("Failed to chmod config file: %s", self._config_path)
 
     def update(self, **kwargs) -> AppSettings:
         """Update specific settings fields and save."""

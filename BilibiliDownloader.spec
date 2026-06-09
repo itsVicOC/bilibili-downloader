@@ -1,12 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import sys
+
+from PyInstaller.utils.hooks import collect_submodules
+
 
 a = Analysis(
-    ['bilibili_downloader\\__main__.py'],
+    ['bilibili_downloader/__main__.py'],
     pathex=[],
     binaries=[],
     datas=[],
-    hiddenimports=[],
+    hiddenimports=collect_submodules('keyring.backends'),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -42,3 +46,11 @@ coll = COLLECT(
     upx_exclude=[],
     name='BilibiliDownloader',
 )
+
+if sys.platform == 'darwin':
+    app = BUNDLE(
+        coll,
+        name='BilibiliDownloader.app',
+        icon=None,
+        bundle_identifier='com.itsvicoc.bilibili-downloader',
+    )

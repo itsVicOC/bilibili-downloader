@@ -44,5 +44,7 @@ def test_write_srt_empty_content_skipped():
     path.unlink()
 
     assert "Valid" in content
+    assert content.startswith("1\n")
+    assert "\n2\n" not in content
     # Empty content entry should be skipped
     assert content.count("\n\n") <= 2  # Only one valid entry

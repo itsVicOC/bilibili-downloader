@@ -3,6 +3,8 @@
 import re
 from typing import Optional
 
+from bilibili_downloader.api.endpoints import USER_AGENT
+
 
 # BV number pattern: BV followed by 10 alphanumeric characters (case insensitive)
 BV_PATTERN = re.compile(r"[Bb][Vv]([A-Za-z0-9]{10})")
@@ -67,10 +69,18 @@ def resolve_short_link(text: str) -> Optional[str]:
         return None
 
     try:
-        resp = httpx.get(text, timeout=10.0, follow_redirects=False)
-        if resp.status_code in (301, 302, 307, 308):
-            location = resp.headers.get("location", "")
-            return extract_bvid(location)
+        resp = httpx.get(
+            text,
+            headers={"User-Agent": USER_AGENT},
+            timeout=10.0,
+            follow_redirects=True,
+        )
+        bvid = extract_bvid(str(resp.url))
+        if bvid:
+            return bvid
+
+        location = resp.headers.get("location", "")
+        return extract_bvid(location)
     except httpx.HTTPError:
         pass
     return None

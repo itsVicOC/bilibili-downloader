@@ -1,0 +1,92 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            label: macOS
+            artifact_name: BilibiliDownloader-macOS
+            archive_name: BilibiliDownloader-macOS
+          - os: windows-latest
+            label: Windows
+            artifact_name: BilibiliDownloader-Windows
+            archive_name: BilibiliDownloader-Windows
+
+    env:
+      QT_QPA_PLATFORM: offscreen
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Build application
+        run: pyinstaller --noconfirm --clean BilibiliDownloader.spec
+
+      - name: Package macOS app
+        if: runner.os == 'macOS'
+        run: |
+          if [ -d "dist/BilibiliDownloader.app" ]; then
+            ditto -c -k --sequesterRsrc --keepParent "dist/BilibiliDownloader.app" "${{ matrix.archive_name }}-${{ github.ref_name }}.zip"
+          else
+            ditto -c -k --keepParent "dist/BilibiliDownloader" "${{ matrix.archive_name }}-${{ github.ref_name }}.zip"
+          fi
+
+      - name: Package Windows app
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist/BilibiliDownloader" -DestinationPath "${{ matrix.archive_name }}-${{ github.ref_name }}.zip" -Force
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}-${{ github.ref_name }}
+          path: ${{ matrix.archive_name }}-${{ github.ref_name }}.zip
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Bilibili Downloader ${{ github.ref_name }}
+          body_path: CHANGELOG.md
+          files: release-assets/*.zip

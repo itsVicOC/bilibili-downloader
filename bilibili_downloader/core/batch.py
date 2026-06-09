@@ -1,68 +1,67 @@
-"""Batch download resolver for Bilibili collections and series."""
+"""Resolvers for single and batch Bilibili download inputs."""
 
 import re
-from typing import Optional
 
 from bilibili_downloader.api.client import BilibiliAPIClient
-from bilibili_downloader.core.models import VideoInfo, VideoPage
+from bilibili_downloader.core.models import VideoInfo
+from bilibili_downloader.utils.validators import (
+    extract_aid,
+    extract_bvid,
+    is_short_link,
+    resolve_short_link,
+)
 
-# Series/collection URL patterns
+# Series/collection URL patterns. They are detected so the UI can explain that
+# this input is not currently supported instead of silently ignoring it.
 SERIES_URL_PATTERN = re.compile(
-    r"https?://(?:www\.)?bilibili\.com/(?:video/)?(?:series|medialist).*?(?:sid|season_id)=(\d+)",
+    r"https?://(?:www\.)?bilibili\.com/(?:video/)?(?:series|medialist).*?"
+    r"(?:sid|season_id|mlid|media_id)=\d+",
     re.IGNORECASE,
 )
 
 
+class BatchResolveError(RuntimeError):
+    """Raised when a single pasted input cannot be resolved to a video."""
+
+
 class BatchResolver:
-    """Resolve Bilibili collections/series into a list of VideoInfo."""
+    """Resolve pasted Bilibili inputs into video metadata."""
 
     def __init__(self, client: BilibiliAPIClient):
         self._client = client
 
-    def resolve_url(self, url: str) -> list[VideoInfo]:
-        """Resolve a URL to a list of videos for batch download.
-
-        Supports:
-        - Single video URL -> list with one VideoInfo
-        - Series/collection URL -> list of all videos in the collection
-        - Multiple URLs separated by newlines -> combined list
-        """
-        urls = [u.strip() for u in url.strip().split("\n") if u.strip()]
+    def resolve_text(self, text: str) -> list[VideoInfo]:
+        """Resolve one or more newline-separated inputs."""
         results = []
-
-        for u in urls:
-            if SERIES_URL_PATTERN.search(u):
-                results.extend(self._resolve_series(u))
-            else:
-                info = self._resolve_single(u)
-                if info:
-                    results.append(info)
-
+        for line in _split_inputs(text):
+            results.append(self.resolve_one(line))
         return results
 
-    def _resolve_single(self, url: str) -> Optional[VideoInfo]:
-        """Resolve a single video URL to VideoInfo."""
-        from bilibili_downloader.utils.validators import extract_bvid, extract_aid
+    def resolve_one(self, text: str) -> VideoInfo:
+        """Resolve one BV/AV/full URL/b23 short link to ``VideoInfo``."""
+        source = text.strip()
+        if not source:
+            raise BatchResolveError("输入为空")
 
-        bvid = extract_bvid(url)
+        if SERIES_URL_PATTERN.search(source):
+            raise BatchResolveError("暂不支持合集或系列链接，请粘贴其中的视频链接")
+
+        if is_short_link(source):
+            bvid = resolve_short_link(source)
+            if not bvid:
+                raise BatchResolveError("无法展开 b23.tv 短链")
+            return self._client.get_video_info(bvid)
+
+        bvid = extract_bvid(source)
         if bvid:
             return self._client.get_video_info(bvid)
 
-        aid = extract_aid(url)
+        aid = extract_aid(source)
         if aid:
-            # Need to convert AID to BVID - use view endpoint
-            # For now, AID support requires fetching the view endpoint differently
-            return None
+            return self._client.get_video_info_by_aid(aid)
 
-        return None
+        raise BatchResolveError("无法识别 BV 号、AV 号或 B站视频链接")
 
-    def _resolve_series(self, url: str) -> list[VideoInfo]:
-        """Resolve a series URL to all videos.
 
-        Note: The series API is complex and may need updates.
-        This is a simplified implementation.
-        """
-        # Series API details vary; this is a placeholder that should be
-        # expanded based on bilibili-API-collect documentation
-        # For now, return empty list to avoid errors
-        return []
+def _split_inputs(text: str) -> list[str]:
+    return [line.strip() for line in text.strip().splitlines() if line.strip()]

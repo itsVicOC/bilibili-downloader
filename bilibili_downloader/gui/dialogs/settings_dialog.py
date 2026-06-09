@@ -30,7 +30,11 @@ class SettingsDialog(QDialog):
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(14)
         form = QFormLayout()
+        form.setHorizontalSpacing(12)
+        form.setVerticalSpacing(12)
 
         # Output directory
         dir_layout = QHBoxLayout()
@@ -38,6 +42,7 @@ class SettingsDialog(QDialog):
         self._output_dir.setReadOnly(True)
         dir_layout.addWidget(self._output_dir)
         browse_btn = QPushButton("浏览...")
+        browse_btn.setObjectName("SubtleButton")
         browse_btn.clicked.connect(self._browse_output_dir)
         dir_layout.addWidget(browse_btn)
         form.addRow("保存目录：", dir_layout)
@@ -63,6 +68,7 @@ class SettingsDialog(QDialog):
         self._ffmpeg_path.setPlaceholderText("留空自动检测")
         ffmpeg_layout.addWidget(self._ffmpeg_path)
         ffmpeg_browse = QPushButton("浏览...")
+        ffmpeg_browse.setObjectName("SubtleButton")
         ffmpeg_browse.clicked.connect(self._browse_ffmpeg)
         ffmpeg_layout.addWidget(ffmpeg_browse)
         form.addRow("FFmpeg 路径：", ffmpeg_layout)
@@ -84,14 +90,11 @@ class SettingsDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
         cancel_btn = QPushButton("取消")
+        cancel_btn.setObjectName("SubtleButton")
         cancel_btn.clicked.connect(self.reject)
         ok_btn = QPushButton("确定")
+        ok_btn.setObjectName("PrimaryButton")
         ok_btn.clicked.connect(self.accept)
-        ok_btn.setStyleSheet(
-            "QPushButton { background-color: #00A1D6; color: white; "
-            "padding: 6px 16px; font-weight: bold; border-radius: 4px; }"
-            "QPushButton:hover { background-color: #23a2d9; }"
-        )
         btn_layout.addWidget(ok_btn)
         btn_layout.addWidget(cancel_btn)
         layout.addLayout(btn_layout)

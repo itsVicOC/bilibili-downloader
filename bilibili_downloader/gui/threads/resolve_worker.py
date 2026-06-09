@@ -5,6 +5,7 @@ import logging
 from PySide6.QtCore import QObject, QRunnable, Signal
 
 from bilibili_downloader.api.client import BilibiliAPIClient, BilibiliAPIError
+from bilibili_downloader.core.batch import BatchResolver
 from bilibili_downloader.core.models import VideoQuality
 
 logger = logging.getLogger(__name__)
@@ -21,10 +22,10 @@ class ResolveWorker(QObject):
     finished = Signal(object, list, list, bool)
     error = Signal(str)
 
-    def __init__(self, client: BilibiliAPIClient, bvid: str):
+    def __init__(self, client: BilibiliAPIClient, source: str):
         super().__init__()
         self._client = client
-        self._bvid = bvid
+        self._source = source
 
 
 class ResolveRunner(QRunnable):
@@ -36,7 +37,8 @@ class ResolveRunner(QRunnable):
 
     def run(self):
         try:
-            info = self._worker._client.get_video_info(self._worker._bvid)
+            resolver = BatchResolver(self._worker._client)
+            info = resolver.resolve_one(self._worker._source)
             # Try to fetch playurl for quality discovery (degraded on failure)
             video_streams = []
             audio_streams = []

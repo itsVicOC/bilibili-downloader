@@ -106,10 +106,10 @@ class DanmakuDownloader:
                     logger.debug("Skipping malformed danmaku entry: %s", e)
                     continue
 
-                # Convert color from RGB decimal to ASS hex (AABBGGRR)
-                r = color & 0xFF
+                # Convert Bilibili RGB decimal (RRGGBB) to ASS hex (AABBGGRR)
+                r = (color >> 16) & 0xFF
                 g = (color >> 8) & 0xFF
-                b = (color >> 16) & 0xFF
+                b = color & 0xFF
                 color_hex = f"&H00{b:02X}{g:02X}{r:02X}"
 
                 # Map mode to ASS style and position

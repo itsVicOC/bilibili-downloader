@@ -51,3 +51,19 @@ def test_danmaku_mode_mapping():
 
     assert "\\move" in _mode_to_effect("1")
     assert _mode_to_effect("5") == ""
+
+
+def test_xml_to_ass_rgb_color_order():
+    xml = b"""<?xml version="1.0" encoding="UTF-8"?>
+<i>
+  <d p="1.0,1,25,16711680,1234567890,0,abcdef01,Red">Red</d>
+</i>"""
+
+    with tempfile.NamedTemporaryFile(suffix=".ass", delete=False) as f:
+        path = Path(f.name)
+
+    DanmakuDownloader.xml_to_ass(xml, path)
+    content = path.read_text(encoding="utf-8")
+    path.unlink()
+
+    assert "{\\c&H000000FF}" in content

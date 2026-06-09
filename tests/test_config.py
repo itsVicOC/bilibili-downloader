@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from bilibili_downloader.core.models import AppSettings
+from bilibili_downloader.utils import config as config_module
 from bilibili_downloader.utils.config import ConfigManager
 
 
@@ -55,3 +56,40 @@ class TestConfigManager:
         # Should be persisted
         loaded = manager.load()
         assert loaded.output_dir == "/new/dir"
+
+    def test_sessdata_saved_to_keyring_when_available(self, monkeypatch, tmp_path):
+        """SESSDATA should stay out of JSON when keyring storage succeeds."""
+        saved = {}
+        monkeypatch.setattr(
+            config_module,
+            "_save_sessdata_to_keyring",
+            lambda sessdata: saved.setdefault("sessdata", sessdata) is not None,
+        )
+        monkeypatch.setattr(
+            config_module,
+            "_load_sessdata_from_keyring",
+            lambda: saved.get("sessdata", ""),
+        )
+
+        config_path = tmp_path / "config.json"
+        ConfigManager(config_path=config_path).save(AppSettings(sessdata="secret"))
+
+        raw = json.loads(config_path.read_text(encoding="utf-8"))
+        assert raw["sessdata"] == ""
+
+        loaded = ConfigManager(config_path=config_path).load()
+        assert loaded.sessdata == "secret"
+
+    def test_sessdata_falls_back_to_obfuscated_config(self, monkeypatch, tmp_path):
+        """SESSDATA should remain backward-compatible when keyring is unavailable."""
+        monkeypatch.setattr(config_module, "_save_sessdata_to_keyring", lambda sessdata: False)
+        monkeypatch.setattr(config_module, "_load_sessdata_from_keyring", lambda: "")
+
+        config_path = tmp_path / "config.json"
+        ConfigManager(config_path=config_path).save(AppSettings(sessdata="secret"))
+
+        raw = json.loads(config_path.read_text(encoding="utf-8"))
+        assert raw["sessdata"] != "secret"
+
+        loaded = ConfigManager(config_path=config_path).load()
+        assert loaded.sessdata == "secret"

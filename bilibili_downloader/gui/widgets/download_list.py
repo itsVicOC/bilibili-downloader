@@ -2,6 +2,7 @@
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QHBoxLayout,
     QHeaderView,
     QProgressBar,
@@ -12,47 +13,28 @@ from PySide6.QtWidgets import (
 )
 
 # Shared button size (width, height)
-BTN_W = 72
-BTN_H = 30
+BTN_W = 68
+BTN_H = 28
+
+
+def _create_action_btn(text: str, object_name: str, download_id: int, handler):
+    btn = QPushButton(text)
+    btn.setObjectName(object_name)
+    btn.setFixedSize(BTN_W, BTN_H)
+    btn.clicked.connect(lambda checked, d=download_id: handler(d))
+    return btn
 
 
 def _create_cancel_btn(download_id: int, handler):
-    btn = QPushButton("取消")
-    btn.setFixedSize(BTN_W, BTN_H)
-    btn.setStyleSheet(
-        "QPushButton { background-color: #555; color: white; "
-        "border: 1px solid #666; border-radius: 4px; font-size: 12px; "
-        "padding: 0px 4px; }"
-        "QPushButton:hover { background-color: #666; }"
-    )
-    btn.clicked.connect(lambda checked, d=download_id: handler(d))
-    return btn
+    return _create_action_btn("取消", "SubtleButton", download_id, handler)
 
 
 def _create_delete_btn(download_id: int, handler):
-    btn = QPushButton("删除")
-    btn.setFixedSize(BTN_W, BTN_H)
-    btn.setStyleSheet(
-        "QPushButton { background-color: #d32f2f; color: white; "
-        "border: 1px solid #d32f2f; border-radius: 4px; font-size: 12px; "
-        "padding: 0px 4px; }"
-        "QPushButton:hover { background-color: #e03e3e; }"
-    )
-    btn.clicked.connect(lambda checked, d=download_id: handler(d))
-    return btn
+    return _create_action_btn("删除", "DangerButton", download_id, handler)
 
 
 def _create_retry_btn(download_id: int, handler):
-    btn = QPushButton("重试")
-    btn.setFixedSize(BTN_W, BTN_H)
-    btn.setStyleSheet(
-        "QPushButton { background-color: #00A1D6; color: white; "
-        "border: 1px solid #00A1D6; border-radius: 4px; font-size: 12px; "
-        "padding: 0px 4px; }"
-        "QPushButton:hover { background-color: #23a2d9; }"
-    )
-    btn.clicked.connect(lambda checked, d=download_id: handler(d))
-    return btn
+    return _create_action_btn("重试", "PrimaryButton", download_id, handler)
 
 
 def _wrap_btn(widget):
@@ -91,6 +73,7 @@ class DownloadListWidget(QTableWidget):
         self._workers = {}       # download_id -> worker reference
         self._items = {}         # download_id -> DownloadItem snapshot
         self._id_to_row = {}     # download_id -> current row index
+        self._placeholder_active = False
         self._setup_ui()
 
     def _setup_ui(self):
@@ -98,17 +81,25 @@ class DownloadListWidget(QTableWidget):
         self.setHorizontalHeaderLabels(["标题", "画质", "进度", "状态", ""])
         self.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
         self.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.horizontalHeader().resizeSection(2, 220)
         # Button column: fixed width based on BTN_W + padding buffer
         self.horizontalHeader().setSectionResizeMode(4, QHeaderView.Fixed)
-        self.horizontalHeader().resizeSection(4, BTN_W + 16)
+        self.horizontalHeader().resizeSection(4, BTN_W * 2 + 28)
         self.verticalHeader().setVisible(False)
-        self.verticalHeader().setMinimumSectionSize(BTN_H + 12)
+        self.verticalHeader().setDefaultSectionSize(46)
+        self.verticalHeader().setMinimumSectionSize(42)
         self.setAlternatingRowColors(True)
         self.setSelectionBehavior(QTableWidget.SelectRows)
+        self.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.setShowGrid(False)
+        self._show_placeholder()
 
     def add_item(self, item) -> int:
         """Add a download item to the table. Returns a stable download ID."""
+        self._clear_placeholder()
         download_id = self._next_id
         self._next_id += 1
         row = self.rowCount()
@@ -201,6 +192,7 @@ class DownloadListWidget(QTableWidget):
             return
         progress_bar = self.cellWidget(row, 2)
         if progress_bar:
+            _set_progress_state(progress_bar, "")
             progress_bar.setValue(100)
 
         status_item = self.item(row, 3)
@@ -221,7 +213,7 @@ class DownloadListWidget(QTableWidget):
             return
         progress_bar = self.cellWidget(row, 2)
         if progress_bar:
-            progress_bar.setStyleSheet("QProgressBar::chunk { background: #d32f2f; }")
+            _set_progress_state(progress_bar, "ErrorProgress")
 
         status_item = self.item(row, 3)
         if status_item:
@@ -245,7 +237,7 @@ class DownloadListWidget(QTableWidget):
         progress_bar = self.cellWidget(row, 2)
         if progress_bar:
             progress_bar.setValue(0)
-            progress_bar.setStyleSheet("")
+            _set_progress_state(progress_bar, "")
 
         status_item = self.item(row, 3)
         if status_item:
@@ -278,3 +270,35 @@ class DownloadListWidget(QTableWidget):
         if row is not None:
             self.removeRow(row)
             self._rebuild_row_mapping()
+            if not self._items:
+                self._show_placeholder()
+
+    def _show_placeholder(self):
+        """Show a quiet empty-state row when the queue is empty."""
+        if self._placeholder_active or self.rowCount() > 0:
+            return
+        self._placeholder_active = True
+        self.insertRow(0)
+        placeholder = QTableWidgetItem("暂无下载任务")
+        placeholder.setTextAlignment(Qt.AlignCenter)
+        placeholder.setForeground(Qt.gray)
+        self.setItem(0, 0, placeholder)
+        self.setSpan(0, 0, 1, self.columnCount())
+        for col in range(1, self.columnCount()):
+            item = QTableWidgetItem("")
+            item.setFlags(Qt.NoItemFlags)
+            self.setItem(0, col, item)
+
+    def _clear_placeholder(self):
+        """Remove the empty-state row before adding real items."""
+        if self._placeholder_active:
+            self.setSpan(0, 0, 1, 1)
+            self.removeRow(0)
+            self._placeholder_active = False
+
+
+def _set_progress_state(progress_bar: QProgressBar, object_name: str):
+    """Refresh QSS when switching progress bar visual state."""
+    progress_bar.setObjectName(object_name)
+    progress_bar.style().unpolish(progress_bar)
+    progress_bar.style().polish(progress_bar)

@@ -12,8 +12,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from bilibili_downloader.core.batch import BatchResolver
-from bilibili_downloader.utils.validators import extract_bvid, is_short_link, resolve_short_link
+from bilibili_downloader.utils.validators import extract_aid, extract_bvid, is_short_link
 
 
 class BatchDialog(QDialog):
@@ -21,10 +20,7 @@ class BatchDialog(QDialog):
 
     def __init__(self, api_client, parent=None):
         super().__init__(parent)
-        self._api_client = api_client
-        self._resolver = BatchResolver(api_client)
         self._urls = []
-        self._resolved_items = []  # List of (bvid, VideoInfo)
 
         self.setWindowTitle("批量下载")
         self.setMinimumSize(500, 400)
@@ -76,7 +72,6 @@ class BatchDialog(QDialog):
 
         lines = [line.strip() for line in raw.split("\n") if line.strip()]
         self._urls = lines
-        self._resolved_items = []
 
         valid_count = 0
         short_link_count = 0
@@ -86,8 +81,7 @@ class BatchDialog(QDialog):
                 short_link_count += 1
                 continue
 
-            bvid = extract_bvid(line)
-            if bvid:
+            if extract_bvid(line) or extract_aid(line):
                 valid_count += 1
 
         # Try to resolve short links

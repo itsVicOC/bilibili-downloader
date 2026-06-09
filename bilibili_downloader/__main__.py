@@ -25,21 +25,21 @@ def main():
     # --- test subcommand ---
     test_parser = subparsers.add_parser(
         "test",
-        help="Fetch video metadata for a BV number",
+        help="Fetch video metadata for a BV/AV number or URL",
     )
     test_parser.add_argument(
-        "bvid",
-        help="BV number (e.g., BV1GJ411x7h7 or 1GJ411x7h7)",
+        "source",
+        help="BV/AV number, Bilibili URL, or b23.tv short link",
     )
 
     # --- download subcommand ---
     download_parser = subparsers.add_parser(
         "download",
-        help="Download a video by BV number",
+        help="Download a video by BV/AV number or URL",
     )
     download_parser.add_argument(
-        "bvid",
-        help="BV number (e.g., BV1GJ411x7h7 or 1GJ411x7h7)",
+        "source",
+        help="BV/AV number, Bilibili URL, or b23.tv short link",
     )
     download_parser.add_argument(
         "--quality", "-q",
@@ -66,7 +66,7 @@ def main():
     args = parser.parse_args()
 
     if args.command == "test":
-        _cli_test(args.bvid)
+        _cli_test(args.source)
     elif args.command == "download":
         _cli_download(args)
     else:
@@ -74,22 +74,14 @@ def main():
         _launch_gui()
 
 
-def _normalize_bvid(bvid: str) -> str:
-    """Ensure BV number starts with 'BV' prefix."""
-    bvid = bvid.strip()
-    if not bvid.upper().startswith("BV"):
-        bvid = f"BV{bvid}"
-    return bvid
-
-
-def _cli_test(bvid_raw: str):
-    """CLI test: fetch video info for a given BV number."""
-    bvid = _normalize_bvid(bvid_raw)
+def _cli_test(source: str):
+    """CLI test: fetch video info for a given input."""
 
     from bilibili_downloader.api.client import BilibiliAPIClient
+    from bilibili_downloader.core.batch import BatchResolver
     from bilibili_downloader.core.ffmpeg import FFmpegManager
 
-    print(f"Fetching info for {bvid}...")
+    print(f"Fetching info for {source}...")
 
     # Check FFmpeg
     available, msg = FFmpegManager.check_available()
@@ -98,7 +90,7 @@ def _cli_test(bvid_raw: str):
     # Fetch video info
     client = BilibiliAPIClient()
     try:
-        info = client.get_video_info(bvid)
+        info = BatchResolver(client).resolve_one(source)
         print(f"\nTitle:     {info.title}")
         print(f"Author:    {info.author}")
         print(f"Duration:  {info.duration_str}")
@@ -118,13 +110,13 @@ def _cli_test(bvid_raw: str):
 
 
 def _cli_download(args: argparse.Namespace):
-    """CLI download: download a video by BV number."""
+    """CLI download: download a video by BV/AV number or URL."""
     from bilibili_downloader.api.client import BilibiliAPIClient
+    from bilibili_downloader.core.batch import BatchResolver
     from bilibili_downloader.core.downloader import StreamDownloader
     from bilibili_downloader.core.models import DownloadItem
     from bilibili_downloader.utils.config import ConfigManager
 
-    bvid = _normalize_bvid(args.bvid)
     quality = VideoQuality(args.quality)
 
     # Load settings for default output dir and ffmpeg path
@@ -132,11 +124,11 @@ def _cli_download(args: argparse.Namespace):
     settings = config.load()
     output_dir = args.output or settings.output_dir
 
-    print(f"Downloading {bvid} at {quality.label}...")
+    print(f"Downloading {args.source} at {quality.label}...")
 
     client = BilibiliAPIClient()
     try:
-        info = client.get_video_info(bvid)
+        info = BatchResolver(client).resolve_one(args.source)
         print(f"Title: {info.title}")
 
         item = DownloadItem(

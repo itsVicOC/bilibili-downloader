@@ -115,7 +115,7 @@ class BilibiliAPIClient:
     # -- API Methods --
 
     def get_video_info(self, bvid: str) -> VideoInfo:
-        """Fetch video metadata from /x/web-interface/view (WBI-signed)."""
+        """Fetch video metadata by BV number from /x/web-interface/view."""
 
         def _fetch():
             params = self._sign_params({"bvid": bvid})
@@ -124,6 +124,17 @@ class BilibiliAPIClient:
 
         data = self._retry_on_wbi_error(_fetch)
         return _parse_video_info(bvid, data)
+
+    def get_video_info_by_aid(self, aid: int) -> VideoInfo:
+        """Fetch video metadata by AV/AID number from /x/web-interface/view."""
+
+        def _fetch():
+            params = self._sign_params({"aid": aid})
+            resp = self._client.get(ep.VIEW_ENDPOINT, params=params)
+            return self._parse_response(resp)
+
+        data = self._retry_on_wbi_error(_fetch)
+        return _parse_video_info(data.get("bvid", ""), data)
 
     def get_play_url(
         self,
@@ -162,10 +173,7 @@ class BilibiliAPIClient:
     def get_danmaku_xml(self, cid: int) -> bytes:
         """Download danmaku in XML format."""
         url = ep.DANMAKU_XML_URL.format(cid=cid)
-        resp = httpx.get(url, headers={
-            "User-Agent": USER_AGENT,
-            "Referer": "https://www.bilibili.com/",
-        })
+        resp = self._client.get(url)
         resp.raise_for_status()
         return resp.content
 
@@ -174,9 +182,8 @@ class BilibiliAPIClient:
         # Subtitle URLs may be protocol-relative, ensure https
         if subtitle_url.startswith("//"):
             subtitle_url = "https:" + subtitle_url
-        resp = httpx.get(
+        resp = self._client.get(
             subtitle_url,
-            headers={"Referer": "https://www.bilibili.com/"},
         )
         resp.raise_for_status()
         return resp.json()
@@ -236,7 +243,7 @@ def _parse_video_info(bvid: str, data: dict) -> VideoInfo:
 
     owner = data.get("owner", {})
     return VideoInfo(
-        bvid=bvid,
+        bvid=data.get("bvid") or bvid,
         cid=data.get("cid", 0),
         aid=data.get("aid", 0),
         title=data.get("title", ""),
