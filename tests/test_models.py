@@ -102,6 +102,18 @@ class TestDownloadItem:
         assert item.progress == 0.0
         assert item.error is None
 
+    def test_multi_part_filename_stays_within_safe_length(self):
+        info = VideoInfo(
+            title="a" * 200,
+            cid=2,
+            pages=[
+                VideoPage(cid=1, part="first"),
+                VideoPage(cid=2, part="b" * 200),
+            ],
+        )
+
+        assert len(DownloadItem(video_info=info).filename) <= 204
+
 
 class TestAppSettings:
     def test_defaults(self):

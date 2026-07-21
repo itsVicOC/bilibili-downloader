@@ -29,6 +29,7 @@ class TestConfigManager:
         loaded = manager2.load()
         assert loaded.output_dir == "/custom/path"
         assert loaded.max_concurrent_downloads == 5
+        assert not list(tmp_path.glob("*.tmp"))
 
     def test_corrupted_config_backs_up(self, tmp_path):
         """Corrupted JSON should be backed up and defaults returned."""
@@ -44,6 +45,22 @@ class TestConfigManager:
         assert isinstance(settings, AppSettings)
         assert backup_path.exists()
         assert "{ invalid json }" in backup_path.read_text(encoding="utf-8")
+
+    def test_unreadable_config_falls_back_to_defaults(self, monkeypatch, tmp_path):
+        config_path = tmp_path / "config.json"
+        config_path.write_text("{}", encoding="utf-8")
+        original_read_text = Path.read_text
+
+        def fail_for_config(path, *args, **kwargs):
+            if path == config_path:
+                raise PermissionError("denied")
+            return original_read_text(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "read_text", fail_for_config)
+
+        settings = ConfigManager(config_path=config_path).load()
+
+        assert isinstance(settings, AppSettings)
 
     def test_update_sets_field(self, tmp_path):
         """Update should modify and persist a specific field."""

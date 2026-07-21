@@ -4,12 +4,19 @@ import sys
 
 from PyInstaller.utils.hooks import collect_submodules
 
+if sys.platform == 'darwin':
+    app_icon = 'bilibili_downloader/gui/assets/app_icon.icns'
+elif sys.platform == 'win32':
+    app_icon = 'bilibili_downloader/gui/assets/app_icon.ico'
+else:
+    app_icon = 'bilibili_downloader/gui/assets/app_icon.png'
+
 
 a = Analysis(
     ['bilibili_downloader/__main__.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('bilibili_downloader/gui/assets', 'bilibili_downloader/gui/assets')],
     hiddenimports=collect_submodules('keyring.backends'),
     hookspath=[],
     hooksconfig={},
@@ -36,6 +43,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=app_icon,
 )
 coll = COLLECT(
     exe,
@@ -51,6 +59,12 @@ if sys.platform == 'darwin':
     app = BUNDLE(
         coll,
         name='BilibiliDownloader.app',
-        icon=None,
+        icon=app_icon,
         bundle_identifier='com.itsvicoc.bilibili-downloader',
+        info_plist={
+            'CFBundleDisplayName': 'BiliFlow',
+            'CFBundleShortVersionString': '0.3.0',
+            'CFBundleVersion': '0.3.0',
+            'NSHighResolutionCapable': True,
+        },
     )

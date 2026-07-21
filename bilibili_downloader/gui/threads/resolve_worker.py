@@ -4,7 +4,7 @@ import logging
 
 from PySide6.QtCore import QObject, QRunnable, Signal
 
-from bilibili_downloader.api.client import BilibiliAPIClient, BilibiliAPIError
+from bilibili_downloader.api.client import BilibiliAPIClient
 from bilibili_downloader.core.batch import BatchResolver
 from bilibili_downloader.core.models import VideoQuality
 
@@ -54,12 +54,13 @@ class ResolveRunner(QRunnable):
                 video_streams = playurl_data.get("video_streams", [])
                 audio_streams = playurl_data.get("audio_streams", [])
                 playurl_ok = True
-            except (BilibiliAPIError, RuntimeError) as e:
+            except Exception as e:  # noqa: BLE001
                 # playurl failure is non-fatal; show video info anyway
                 logger.warning("Playurl fetch failed for %s: %s", info.bvid, e)
 
             self._worker.finished.emit(
                 info, video_streams, audio_streams, playurl_ok
             )
-        except (BilibiliAPIError, RuntimeError) as e:
+        except Exception as e:  # noqa: BLE001
+            logger.exception("Video resolution failed for %s", self._worker._source)
             self._worker.error.emit(str(e))

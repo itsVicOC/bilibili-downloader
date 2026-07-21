@@ -10,7 +10,8 @@ class TestFFmpegFindExecutable:
     def test_not_found_no_mock(self):
         # On a clean system, should return None if not in PATH and no winget
         with patch("bilibili_downloader.core.ffmpeg.shutil.which", return_value=None):
-            with patch("pathlib.Path.is_dir", return_value=False):
+            with patch.object(Path, "is_dir", return_value=False), \
+                    patch.object(Path, "is_file", return_value=False):
                 result = FFmpegManager.find_executable()
                 assert result is None
 
@@ -46,6 +47,18 @@ class TestFFmpegCheckAvailable:
                 assert available
                 assert "ffmpeg version 6.1.1" in msg
 
+    def test_permission_error_is_reported(self):
+        with patch.object(
+            FFmpegManager, "find_executable", return_value=Path("/not/executable")
+        ), patch(
+            "bilibili_downloader.core.ffmpeg.subprocess.run",
+            side_effect=PermissionError("denied"),
+        ):
+            available, msg = FFmpegManager.check_available()
+
+        assert not available
+        assert "denied" in msg
+
 
 class TestFFmpegBuildCommand:
     def test_basic_merge_command(self):
@@ -72,3 +85,35 @@ class TestFFmpegBuildCommand:
         )
         assert "-vf" in cmd
         assert "scale=1920:1080" in cmd
+
+
+class TestFFmpegMerge:
+    def test_temp_output_keeps_media_suffix(self, monkeypatch, tmp_path):
+        commands = []
+
+        class FakeProcess:
+            returncode = 0
+
+            def __init__(self, cmd, **_kwargs):
+                commands.append(cmd)
+                Path(cmd[-1]).write_bytes(b"merged")
+
+            def poll(self):
+                return 0
+
+            def wait(self):
+                return 0
+
+        monkeypatch.setattr(
+            FFmpegManager, "find_executable", lambda _custom=None: Path("/fake/ffmpeg")
+        )
+        monkeypatch.setattr("bilibili_downloader.core.ffmpeg.subprocess.Popen", FakeProcess)
+
+        output = tmp_path / "episode.mp4"
+        success, _ = FFmpegManager.merge_streams(
+            tmp_path / "video.m4s", tmp_path / "audio.m4s", output
+        )
+
+        assert success
+        assert output.read_bytes() == b"merged"
+        assert commands[0][-1].endswith("episode.part.mp4")

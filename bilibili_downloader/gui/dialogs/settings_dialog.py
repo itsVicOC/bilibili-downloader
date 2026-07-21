@@ -23,15 +23,21 @@ class SettingsDialog(QDialog):
 
     def __init__(self, settings: AppSettings, parent=None):
         super().__init__(parent)
-        self._settings = settings
-        self.setWindowTitle("设置")
-        self.setMinimumWidth(400)
+        self._settings = settings.model_copy(deep=True)
+        self.setWindowTitle("下载设置")
+        self.setMinimumWidth(520)
         self._setup_ui()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 16, 18, 16)
         layout.setSpacing(14)
+        title = QLabel("下载偏好")
+        title.setObjectName("DialogTitle")
+        caption = QLabel("统一管理保存位置、默认规格和并行任务数")
+        caption.setObjectName("DialogCaption")
+        layout.addWidget(title)
+        layout.addWidget(caption)
         form = QFormLayout()
         form.setHorizontalSpacing(12)
         form.setVerticalSpacing(12)

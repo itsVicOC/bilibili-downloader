@@ -46,6 +46,11 @@ class TestIsBilibiliURL:
     def test_short_link(self):
         assert is_bilibili_url("https://b23.tv/abc123") is True
 
+    def test_embedded_short_link_is_rejected(self):
+        assert is_bilibili_url(
+            "https://example.com/?next=https://b23.tv/abc123"
+        ) is False
+
     def test_non_bilibili(self):
         assert is_bilibili_url("https://youtube.com/watch?v=abc") is False
 
@@ -66,6 +71,11 @@ class TestSanitizeFilename:
         name = "a" * 300
         result = sanitize_filename(name)
         assert len(result) <= 200
+
+    def test_cjk_name_is_limited_by_encoded_size(self):
+        result = sanitize_filename("番" * 200)
+
+        assert len(result.encode("utf-8")) <= 200
 
     def test_empty_after_clean(self):
         assert sanitize_filename("   ") == "untitled"

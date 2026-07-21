@@ -1,6 +1,7 @@
 """Download list table widget with cancel and retry support."""
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
@@ -11,6 +12,8 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QWidget,
 )
+
+from bilibili_downloader.gui.resources.paths import asset_path
 
 # Shared button size (width, height)
 BTN_W = 68
@@ -78,7 +81,7 @@ class DownloadListWidget(QTableWidget):
 
     def _setup_ui(self):
         self.setColumnCount(5)
-        self.setHorizontalHeaderLabels(["标题", "画质", "进度", "状态", ""])
+        self.setHorizontalHeaderLabels(["作品", "规格", "传输进度", "任务状态", "操作"])
         self.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
@@ -95,6 +98,7 @@ class DownloadListWidget(QTableWidget):
         self.setSelectionMode(QAbstractItemView.SingleSelection)
         self.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.setShowGrid(False)
+        self.setIconSize(QSize(20, 20))
         self._show_placeholder()
 
     def add_item(self, item) -> int:
@@ -229,6 +233,21 @@ class DownloadListWidget(QTableWidget):
             ),
         )
 
+    def mark_cancelled(self, download_id: int):
+        """Mark a user-cancelled task without presenting it as a failure."""
+        self.unregister_worker(download_id)
+        row = self._row_for(download_id)
+        if row is None:
+            return
+        status_item = self.item(row, 3)
+        if status_item:
+            status_item.setText("已取消")
+            status_item.setForeground(Qt.gray)
+        self.setCellWidget(
+            row, 4,
+            _wrap_btn(_create_delete_btn(download_id, self._on_delete_clicked)),
+        )
+
     def mark_failed_retry_reset(self, download_id: int):
         """Reset a failed download for retry (clear error state)."""
         row = self._row_for(download_id)
@@ -279,7 +298,9 @@ class DownloadListWidget(QTableWidget):
             return
         self._placeholder_active = True
         self.insertRow(0)
-        placeholder = QTableWidgetItem("暂无下载任务")
+        placeholder = QTableWidgetItem("  暂无任务 · 在上方解析作品后加入下载队列")
+        placeholder.setIcon(QIcon(asset_path("sparkle.png")))
+        placeholder.setSizeHint(QSize(0, 54))
         placeholder.setTextAlignment(Qt.AlignCenter)
         placeholder.setForeground(Qt.gray)
         self.setItem(0, 0, placeholder)

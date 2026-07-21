@@ -19,7 +19,10 @@ FULL_URL_PATTERN = re.compile(
 )
 
 # Short link pattern
-SHORT_URL_PATTERN = re.compile(r"https?://b23\.tv/[A-Za-z0-9]+", re.IGNORECASE)
+SHORT_URL_PATTERN = re.compile(
+    r"https?://b23\.tv/[A-Za-z0-9]+(?:[/?#][^\s]*)?",
+    re.IGNORECASE,
+)
 
 
 def extract_bvid(text: str) -> Optional[str]:
@@ -53,7 +56,7 @@ def extract_bvid(text: str) -> Optional[str]:
 
 def is_short_link(text: str) -> bool:
     """Check if text is a b23.tv short link."""
-    return bool(SHORT_URL_PATTERN.search(text.strip()))
+    return bool(SHORT_URL_PATTERN.fullmatch(text.strip()))
 
 
 def resolve_short_link(text: str) -> Optional[str]:
@@ -65,12 +68,13 @@ def resolve_short_link(text: str) -> Optional[str]:
     import httpx
 
     text = text.strip()
-    if not SHORT_URL_PATTERN.search(text):
+    match = SHORT_URL_PATTERN.fullmatch(text)
+    if not match:
         return None
 
     try:
         resp = httpx.get(
-            text,
+            match.group(0),
             headers={"User-Agent": USER_AGENT},
             timeout=10.0,
             follow_redirects=True,
@@ -114,7 +118,7 @@ def is_bilibili_url(text: str) -> bool:
         extract_bvid(text)
         or extract_aid(text)
         or FULL_URL_PATTERN.search(text)
-        or SHORT_URL_PATTERN.search(text)
+        or is_short_link(text)
     )
 
 
@@ -140,7 +144,11 @@ def sanitize_filename(name: str) -> str:
     base = name.split(".")[0].upper()
     if base in reserved:
         name = f"_{name}"
-    # Limit length
+    # Limit encoded length as well as characters. UTF-8 filesystems commonly
+    # cap one filename component at 255 bytes, so character-only truncation is
+    # insufficient for CJK titles.
     if len(name) > 200:
         name = name[:200]
+    if len(name.encode("utf-8")) > 200:
+        name = name.encode("utf-8")[:200].decode("utf-8", errors="ignore")
     return name or "untitled"

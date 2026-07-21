@@ -2,7 +2,11 @@
 
 import pytest
 
-from bilibili_downloader.core.batch import BatchResolveError, BatchResolver
+from bilibili_downloader.core.batch import (
+    BatchResolveError,
+    BatchResolver,
+    classify_batch_inputs,
+)
 from bilibili_downloader.core.models import VideoInfo
 
 
@@ -62,3 +66,15 @@ def test_resolve_text_keeps_order():
     infos = BatchResolver(client).resolve_text("BV1GJ411x7h7\nav123456")
 
     assert [info.bvid for info in infos] == ["BV1GJ411x7h7", "BVfromAid123"]
+
+
+def test_classify_batch_inputs_deduplicates_and_reports_invalid():
+    valid, invalid = classify_batch_inputs(
+        "BV1GJ411x7h7\n"
+        "https://www.bilibili.com/video/BV1GJ411x7h7\n"
+        "av123456\n"
+        "not-a-video"
+    )
+
+    assert valid == ["BV1GJ411x7h7", "av123456"]
+    assert invalid == ["not-a-video"]

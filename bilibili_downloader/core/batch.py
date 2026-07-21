@@ -65,3 +65,27 @@ class BatchResolver:
 
 def _split_inputs(text: str) -> list[str]:
     return [line.strip() for line in text.strip().splitlines() if line.strip()]
+
+
+def classify_batch_inputs(text: str) -> tuple[list[str], list[str]]:
+    """Return unique supported inputs and unrecognized lines."""
+    valid = []
+    invalid = []
+    seen = set()
+    for source in _split_inputs(text):
+        bvid = extract_bvid(source)
+        aid = extract_aid(source)
+        if bvid:
+            identity = ("bvid", bvid.lower())
+        elif aid:
+            identity = ("aid", aid)
+        elif is_short_link(source):
+            identity = ("short", source.lower())
+        else:
+            invalid.append(source)
+            continue
+
+        if identity not in seen:
+            seen.add(identity)
+            valid.append(source)
+    return valid, invalid

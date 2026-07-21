@@ -84,9 +84,13 @@ jobs:
           path: release-assets
           merge-multiple: true
 
+      - name: Prepare release notes
+        shell: bash
+        run: awk '/^## v/{if (found) exit; found=1} found' CHANGELOG.md > release-notes.md
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           name: Bilibili Downloader ${{ github.ref_name }}
-          body_path: CHANGELOG.md
+          body_path: release-notes.md
           files: release-assets/*.zip

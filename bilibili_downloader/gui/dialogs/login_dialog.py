@@ -103,13 +103,20 @@ class LoginDialog(QDialog):
         self._pending_sessdata = ""
 
         self.setWindowTitle("账号登录")
-        self.setMinimumSize(400, 500)
+        self.setMinimumSize(480, 540)
         self._setup_ui()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 16, 18, 16)
         layout.setSpacing(14)
+
+        title = QLabel("连接 B 站账号")
+        title.setObjectName("DialogTitle")
+        caption = QLabel("登录后可解析会员画质与账号专属内容")
+        caption.setObjectName("DialogCaption")
+        layout.addWidget(title)
+        layout.addWidget(caption)
 
         tabs = QTabWidget()
 
@@ -205,13 +212,9 @@ class LoginDialog(QDialog):
         # Buttons
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
-        cancel_btn = QPushButton("取消")
+        cancel_btn = QPushButton("关闭")
         cancel_btn.setObjectName("SubtleButton")
         cancel_btn.clicked.connect(self.reject)
-        ok_btn = QPushButton("确定")
-        ok_btn.setObjectName("PrimaryButton")
-        ok_btn.clicked.connect(self.accept)
-        btn_layout.addWidget(ok_btn)
         btn_layout.addWidget(cancel_btn)
         layout.addLayout(btn_layout)
 

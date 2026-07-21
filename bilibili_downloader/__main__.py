@@ -160,8 +160,11 @@ def _cli_download(args: argparse.Namespace):
 def _launch_gui():
     """Launch the PySide6 GUI application."""
     try:
+        from PySide6.QtGui import QIcon
         from PySide6.QtWidgets import QApplication
         from bilibili_downloader.gui.main_window import MainWindow
+        from bilibili_downloader.gui.resources.paths import asset_path
+        from bilibili_downloader.gui.resources.theme import ThemeManager
     except ImportError:
         print("PySide6 not installed. Install with: pip install PySide6")
         print("Or use CLI mode: python -m bilibili_downloader test <BV_number>")
@@ -170,10 +173,14 @@ def _launch_gui():
     app = QApplication(sys.argv)
     app.setApplicationName("Bilibili Downloader")
     app.setOrganizationName("bilibili-downloader")
+    app.setWindowIcon(QIcon(asset_path("app_icon.png")))
+    theme_manager = ThemeManager(app)
 
     window = MainWindow()
     window.show()
 
+    # Keep the controller alive for system theme change notifications.
+    app._theme_manager = theme_manager
     sys.exit(app.exec())
 
 

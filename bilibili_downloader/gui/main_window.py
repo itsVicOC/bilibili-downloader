@@ -2,10 +2,11 @@
 
 import logging
 
-from PySide6.QtCore import QThreadPool
-from PySide6.QtGui import QAction, QCloseEvent
+from PySide6.QtCore import QSize, QThreadPool
+from PySide6.QtGui import QAction, QCloseEvent, QIcon
 from PySide6.QtWidgets import (
     QComboBox,
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -19,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from PySide6.QtWidgets import QCheckBox
 
+from bilibili_downloader import __version__
 from bilibili_downloader.api.client import BilibiliAPIClient
 from bilibili_downloader.core.ffmpeg import FFmpegManager
 from bilibili_downloader.core.models import (
@@ -29,12 +31,17 @@ from bilibili_downloader.core.models import (
 from bilibili_downloader.gui.dialogs.batch_dialog import BatchDialog
 from bilibili_downloader.gui.dialogs.login_dialog import LoginDialog
 from bilibili_downloader.gui.dialogs.settings_dialog import SettingsDialog
-from bilibili_downloader.gui.resources import load_stylesheet
+from bilibili_downloader.gui.resources.paths import asset_path
 from bilibili_downloader.gui.threads.batch_worker import BatchRunner, BatchWorker
 from bilibili_downloader.gui.threads.download_worker import DownloadRunner, DownloadWorker
+from bilibili_downloader.gui.threads.login_status_worker import (
+    LoginStatusRunner,
+    LoginStatusWorker,
+)
 from bilibili_downloader.gui.threads.resolve_worker import ResolveRunner, ResolveWorker
 from bilibili_downloader.gui.widgets.chinese_input import ChineseLineEdit
 from bilibili_downloader.gui.widgets.download_list import DownloadListWidget
+from bilibili_downloader.gui.widgets.hero_panel import HeroPanel
 from bilibili_downloader.gui.widgets.video_info import VideoInfoWidget
 from bilibili_downloader.utils.config import ConfigManager
 from bilibili_downloader.utils.validators import is_bilibili_url
@@ -47,19 +54,20 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("哔哩哔哩视频下载器")
-        self.setMinimumSize(920, 640)
-        self.setStyleSheet(load_stylesheet())
-
+        self.setWindowTitle("BiliFlow · 星轨下载站")
+        self.setMinimumSize(1180, 760)
+        self.resize(1320, 860)
         # Components
         self._config = ConfigManager()
         self._settings = self._config.load()
         self._api_client = self._create_api_client()
+        self._retired_api_clients = []
         self._thread_pool = QThreadPool()
         self._apply_thread_pool_settings()
 
         # State
         self._current_video: VideoInfo | None = None
+        self._login_status_request_id = 0
         self._setup_ui()
         self._setup_menu()
         self._setup_status_bar()
@@ -78,114 +86,204 @@ class MainWindow(QMainWindow):
         max_downloads = max(1, min(8, self._settings.max_concurrent_downloads))
         self._thread_pool.setMaxThreadCount(max_downloads)
 
+    def _replace_api_client(self):
+        """Swap credentials without invalidating in-flight worker requests."""
+        previous = self._api_client
+        self._api_client = self._create_api_client()
+        self._retired_api_clients.append(previous)
+
     def _setup_ui(self):
         """Build the main UI layout."""
         central = QWidget()
         central.setObjectName("AppSurface")
         self.setCentralWidget(central)
-        layout = QVBoxLayout(central)
-        layout.setContentsMargins(18, 16, 18, 14)
-        layout.setSpacing(12)
+        shell = QHBoxLayout(central)
+        shell.setContentsMargins(0, 0, 0, 0)
+        shell.setSpacing(0)
 
-        # -- Top Section --
-        top_bar = QWidget()
-        top_bar.setObjectName("TopBar")
-        top_layout = QVBoxLayout(top_bar)
-        top_layout.setContentsMargins(16, 14, 16, 16)
-        top_layout.setSpacing(12)
+        sidebar = QFrame()
+        sidebar.setObjectName("Sidebar")
+        sidebar.setFixedWidth(212)
+        side_layout = QVBoxLayout(sidebar)
+        side_layout.setContentsMargins(18, 22, 18, 18)
+        side_layout.setSpacing(10)
 
-        heading_layout = QHBoxLayout()
-        title_block = QVBoxLayout()
-        title_block.setSpacing(2)
-        app_title = QLabel("哔哩哔哩视频下载器")
-        app_title.setObjectName("AppTitle")
-        app_caption = QLabel("视频解析、画质选择与下载队列")
-        app_caption.setObjectName("Caption")
-        title_block.addWidget(app_title)
-        title_block.addWidget(app_caption)
-        heading_layout.addLayout(title_block)
-        heading_layout.addStretch()
-        top_layout.addLayout(heading_layout)
+        brand_row = QHBoxLayout()
+        brand_icon = QLabel()
+        brand_icon.setObjectName("BrandIcon")
+        brand_icon.setPixmap(QIcon(asset_path("clapper.png")).pixmap(QSize(40, 40)))
+        brand_copy = QVBoxLayout()
+        brand_copy.setSpacing(0)
+        brand_title = QLabel("BiliFlow")
+        brand_title.setObjectName("BrandTitle")
+        brand_caption = QLabel("星轨下载站")
+        brand_caption.setObjectName("SidebarCaption")
+        brand_copy.addWidget(brand_title)
+        brand_copy.addWidget(brand_caption)
+        brand_row.addWidget(brand_icon)
+        brand_row.addLayout(brand_copy)
+        brand_row.addStretch()
+        side_layout.addLayout(brand_row)
+        side_layout.addSpacing(20)
+
+        section_label = QLabel("WORKSPACE")
+        section_label.setObjectName("NavSection")
+        side_layout.addWidget(section_label)
+        home_btn = QPushButton("  首页 / HOME")
+        home_btn.setObjectName("NavButtonActive")
+        side_layout.addWidget(home_btn)
+        batch_nav = QPushButton("  批量任务 / BATCH")
+        batch_nav.setObjectName("NavButton")
+        batch_nav.clicked.connect(self._on_batch_clicked)
+        side_layout.addWidget(batch_nav)
+        settings_nav = QPushButton("  下载设置 / CONFIG")
+        settings_nav.setObjectName("NavButton")
+        settings_nav.clicked.connect(self._on_settings_triggered)
+        side_layout.addWidget(settings_nav)
+        side_layout.addStretch()
+
+        mascot_card = QFrame()
+        mascot_card.setObjectName("MascotCard")
+        mascot_layout = QVBoxLayout(mascot_card)
+        mascot_layout.setContentsMargins(14, 14, 14, 14)
+        mascot_layout.setSpacing(5)
+        mascot_icon = QLabel()
+        mascot_icon.setPixmap(QIcon(asset_path("alien.png")).pixmap(QSize(50, 50)))
+        mascot_title = QLabel("次元传送已就绪")
+        mascot_title.setObjectName("MascotTitle")
+        mascot_text = QLabel("支持 8K · HDR · 弹幕 · 字幕")
+        mascot_text.setObjectName("SidebarCaption")
+        mascot_text.setWordWrap(True)
+        mascot_layout.addWidget(mascot_icon)
+        mascot_layout.addWidget(mascot_title)
+        mascot_layout.addWidget(mascot_text)
+        side_layout.addWidget(mascot_card)
+
+        login_btn = QPushButton("登录 B 站账号")
+        login_btn.setObjectName("SidebarAction")
+        login_btn.clicked.connect(self._on_login_triggered)
+        side_layout.addWidget(login_btn)
+        shell.addWidget(sidebar)
+
+        workspace = QWidget()
+        workspace.setObjectName("Workspace")
+        layout = QVBoxLayout(workspace)
+        layout.setContentsMargins(26, 22, 26, 16)
+        layout.setSpacing(16)
+
+        header_row = QHBoxLayout()
+        page_copy = QVBoxLayout()
+        page_copy.setSpacing(2)
+        page_title = QLabel("下载控制台")
+        page_title.setObjectName("PageTitle")
+        page_caption = QLabel("把在线番剧、MAD 与收藏，变成本地永久收藏")
+        page_caption.setObjectName("Caption")
+        page_copy.addWidget(page_title)
+        page_copy.addWidget(page_caption)
+        header_row.addLayout(page_copy)
+        header_row.addStretch()
+        self._header_login = QPushButton("未登录")
+        self._header_login.setObjectName("GhostButton")
+        self._header_login.clicked.connect(self._on_login_triggered)
+        header_row.addWidget(self._header_login)
+        layout.addLayout(header_row)
+
+        hero = HeroPanel()
+        hero_layout = QVBoxLayout(hero)
+        hero_layout.setContentsMargins(28, 24, 28, 26)
+        hero_layout.setSpacing(10)
+        eyebrow = QLabel("ANIME STREAM STUDIO  /  ONLINE")
+        eyebrow.setObjectName("HeroEyebrow")
+        hero_title = QLabel("喜欢的这一集，\n现在就带回本地。")
+        hero_title.setObjectName("HeroTitle")
+        hero_layout.addWidget(eyebrow)
+        hero_layout.addWidget(hero_title)
+        hero_layout.addStretch()
 
         url_layout = QHBoxLayout()
         url_layout.setSpacing(10)
-
         self._url_input = ChineseLineEdit()
         self._url_input.setObjectName("UrlInput")
-        self._url_input.setPlaceholderText(
-            "粘贴视频链接、BV号、AV号或 b23.tv 短链"
-        )
+        self._url_input.setPlaceholderText("粘贴 B 站链接、BV / AV 号或 b23.tv 短链")
+        self._url_input.returnPressed.connect(self._on_resolve_clicked)
         url_layout.addWidget(self._url_input)
-
-        self._resolve_btn = QPushButton("解析")
-        self._resolve_btn.setObjectName("PrimaryButton")
+        self._resolve_btn = QPushButton("开始解析  →")
+        self._resolve_btn.setObjectName("HeroButton")
         self._resolve_btn.clicked.connect(self._on_resolve_clicked)
         url_layout.addWidget(self._resolve_btn)
+        hero_layout.addLayout(url_layout)
+        layout.addWidget(hero)
 
-        top_layout.addLayout(url_layout)
-        layout.addWidget(top_bar)
-
-        # -- Video Info Section --
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(16)
         self._video_info = VideoInfoWidget()
-        layout.addWidget(self._video_info)
+        self._video_info.setMinimumHeight(264)
+        content_layout.addWidget(self._video_info, 5)
 
-        # -- Download Controls --
         controls = QWidget()
-        controls.setObjectName("Toolbar")
+        controls.setObjectName("ControlPanel")
+        controls.setMinimumHeight(264)
         controls_layout = QGridLayout(controls)
-        controls_layout.setContentsMargins(14, 12, 14, 12)
-        controls_layout.setHorizontalSpacing(12)
-        controls_layout.setVerticalSpacing(10)
+        controls_layout.setContentsMargins(16, 14, 16, 14)
+        controls_layout.setHorizontalSpacing(10)
+        controls_layout.setVerticalSpacing(6)
 
-        settings_label = QLabel("下载设置")
+        settings_label = QLabel("输出规格")
         settings_label.setObjectName("SectionTitle")
-        controls_layout.addWidget(settings_label, 0, 0)
+        controls_layout.addWidget(settings_label, 0, 0, 1, 2)
+        settings_hint = QLabel("按收藏场景选择最合适的组合")
+        settings_hint.setObjectName("MetaLabel")
+        controls_layout.addWidget(settings_hint, 1, 0, 1, 2)
 
-        vq_label = QLabel("画质")
-        vq_label.setObjectName("MetaLabel")
-        controls_layout.addWidget(vq_label, 0, 1)
+        vq_label = QLabel("画面质量")
+        vq_label.setObjectName("FieldLabel")
+        controls_layout.addWidget(vq_label, 2, 0)
         self._quality_combo = QComboBox()
         self._populate_quality_combo()
-        controls_layout.addWidget(self._quality_combo, 0, 2)
+        controls_layout.addWidget(self._quality_combo, 2, 1)
 
-        vc_label = QLabel("编码")
-        vc_label.setObjectName("MetaLabel")
-        controls_layout.addWidget(vc_label, 0, 3)
+        vc_label = QLabel("视频编码")
+        vc_label.setObjectName("FieldLabel")
+        controls_layout.addWidget(vc_label, 3, 0)
         self._codec_combo = QComboBox()
-        self._codec_combo.addItem("HEVC/H.265（推荐）", 12)
-        self._codec_combo.addItem("AVC/H.264（兼容性好）", 7)
-        self._codec_combo.addItem("AV1（体积最小）", 13)
-        controls_layout.addWidget(self._codec_combo, 0, 4)
+        self._codec_combo.addItem("H.265 / HEVC", 12)
+        self._codec_combo.addItem("H.264 / AVC", 7)
+        self._codec_combo.addItem("AV1", 13)
+        self._codec_combo.setToolTip("H.265 体积与画质均衡；H.264 兼容性更好；AV1 体积更小")
+        controls_layout.addWidget(self._codec_combo, 3, 1)
 
         self._danmaku_check = self._create_checkbox("下载弹幕", self._settings.download_danmaku)
         self._subtitle_check = self._create_checkbox("下载字幕", self._settings.download_subtitle)
-        controls_layout.addWidget(self._danmaku_check, 1, 1, 1, 2)
-        controls_layout.addWidget(self._subtitle_check, 1, 3, 1, 2)
+        controls_layout.addWidget(self._danmaku_check, 4, 0)
+        controls_layout.addWidget(self._subtitle_check, 4, 1)
 
-        self._download_btn = QPushButton("下载")
-        self._download_btn.setObjectName("PrimaryButton")
+        self._download_btn = QPushButton("加入下载队列")
+        self._download_btn.setObjectName("DownloadButton")
         self._download_btn.clicked.connect(self._on_download_clicked)
-        controls_layout.addWidget(self._download_btn, 0, 6)
+        controls_layout.addWidget(self._download_btn, 5, 0, 1, 2)
 
-        self._batch_btn = QPushButton("批量下载")
-        self._batch_btn.setObjectName("SubtleButton")
+        self._batch_btn = QPushButton("批量导入链接")
+        self._batch_btn.setObjectName("SecondaryButton")
         self._batch_btn.clicked.connect(self._on_batch_clicked)
-        controls_layout.addWidget(self._batch_btn, 1, 6)
-        controls_layout.setColumnStretch(5, 1)
+        controls_layout.addWidget(self._batch_btn, 6, 0, 1, 2)
+        controls_layout.setRowStretch(7, 1)
+        content_layout.addWidget(controls, 3)
+        layout.addLayout(content_layout)
 
-        layout.addWidget(controls)
-
-        # -- Download List --
         queue_header = QHBoxLayout()
-        queue_title = QLabel("下载队列")
+        queue_title = QLabel("任务轨道")
         queue_title.setObjectName("SectionTitle")
         queue_header.addWidget(queue_title)
+        queue_hint = QLabel("实时进度与失败重试")
+        queue_hint.setObjectName("MetaLabel")
+        queue_header.addWidget(queue_hint)
         queue_header.addStretch()
         layout.addLayout(queue_header)
 
         self._download_list = DownloadListWidget()
         self._download_list.retry_requested.connect(self._on_retry_download)
         layout.addWidget(self._download_list)
+        shell.addWidget(workspace, 1)
 
     def _create_checkbox(self, text: str, checked: bool):
         cb = QCheckBox(text)
@@ -218,6 +316,7 @@ class MainWindow(QMainWindow):
     def _setup_menu(self):
         """Create menu bar."""
         menubar = self.menuBar()
+        menubar.hide()
 
         # File menu
         file_menu = menubar.addMenu("文件(&F)")
@@ -269,6 +368,8 @@ class MainWindow(QMainWindow):
         self._login_status_label.setToolTip(tooltip)
         self._login_status_label.style().unpolish(self._login_status_label)
         self._login_status_label.style().polish(self._login_status_label)
+        if hasattr(self, "_header_login"):
+            self._header_login.setText(text)
 
     # -- Event Handlers --
 
@@ -297,7 +398,7 @@ class MainWindow(QMainWindow):
     def _on_resolve_success(self, info, video_streams, audio_streams, playurl_ok):
         """Handle successful URL resolution."""
         self._resolve_btn.setEnabled(True)
-        self._resolve_btn.setText("解析")
+        self._resolve_btn.setText("开始解析  →")
         self._status_bar.showMessage(f"已解析：{info.title}")
 
         self._current_video = info
@@ -323,8 +424,10 @@ class MainWindow(QMainWindow):
                 enum_val = QUALITY_ID_TO_ENUM.get(qid)
                 label = enum_val.label if enum_val else str(qid)
                 self._quality_combo.addItem(label, enum_val)
-            # Auto-select highest (first) quality
-            self._quality_combo.setCurrentIndex(0)
+            if available:
+                self._quality_combo.setCurrentIndex(0)
+            else:
+                self._populate_quality_combo()
         else:
             # playurl failed or no streams — fallback to full list
             self._quality_combo.clear()
@@ -340,7 +443,7 @@ class MainWindow(QMainWindow):
     def _on_resolve_error(self, error: str):
         """Handle resolution error."""
         self._resolve_btn.setEnabled(True)
-        self._resolve_btn.setText("解析")
+        self._resolve_btn.setText("开始解析  →")
         self._status_bar.showMessage("解析失败")
         self._show_error(f"解析视频失败：{error}")
 
@@ -361,6 +464,9 @@ class MainWindow(QMainWindow):
 
         quality = self._quality_combo.currentData()
         codec = self._codec_combo.currentData()
+        if quality is None:
+            self._show_error("当前视频没有可用画质，请重新解析或登录后重试")
+            return
 
         item = DownloadItem(
             video_info=self._current_video,
@@ -398,9 +504,10 @@ class MainWindow(QMainWindow):
         )
         worker.finished.connect(self._on_download_finished)
         worker.error.connect(self._on_download_error)
+        worker.cancelled.connect(self._on_download_cancelled)
 
-        self._thread_pool.start(runner)
         self._download_list.register_worker(download_id, worker)
+        self._thread_pool.start(runner)
 
     def _start_batch_download(self, urls: list[str]):
         """Resolve multiple videos in background and add to download queue."""
@@ -443,51 +550,80 @@ class MainWindow(QMainWindow):
         self._download_list.mark_failed(download_id, error)
         self._status_bar.showMessage(f"下载失败：{error}")
 
+    def _on_download_cancelled(self, download_id: int):
+        """Handle a task cancelled by the user."""
+        self._download_list.mark_cancelled(download_id)
+        self._status_bar.showMessage("下载已取消")
+
     def _on_settings_triggered(self):
         """Open settings dialog."""
         dialog = SettingsDialog(self._settings, self)
         if dialog.exec():
             new_settings = dialog.get_settings()
-            self._config.save(new_settings)
+            try:
+                self._config.save(new_settings)
+            except OSError as e:
+                self._show_error(f"设置保存失败：{e}")
+                return
             self._settings = new_settings
             self._apply_thread_pool_settings()
-            self._api_client = self._create_api_client()
 
     def _on_login_triggered(self):
         """Open login dialog."""
         dialog = LoginDialog(self._settings.sessdata, self)
         if dialog.exec():
             sessdata = dialog.get_sessdata()
-            self._settings.sessdata = sessdata
-            self._config.save(self._settings)
-            self._api_client = self._create_api_client()
+            if not sessdata:
+                self._show_error("登录未返回有效凭据，请重新验证")
+                return
+            new_settings = self._settings.model_copy(
+                update={"sessdata": sessdata}, deep=True
+            )
+            try:
+                self._config.save(new_settings)
+            except OSError as e:
+                self._show_error(f"登录信息保存失败：{e}")
+                return
+            self._settings = new_settings
+            self._replace_api_client()
             # Fetch and display user info
             self._update_login_status()
 
     def _update_login_status(self):
-        """Fetch user info and update the login status display."""
-        try:
-            nav_info = self._api_client.get_nav_info()
-            if nav_info.get("isLogin"):
-                uname = nav_info.get("uname", "未知用户")
-                mid = nav_info.get("mid", "")
-                face_url = nav_info.get("face", "")
-                self._set_login_status_label(
-                    f"已登录：{uname}",
-                    "StatusPill",
-                    f"UID: {mid}",
-                )
-                # Store face URL for potential avatar display
-                self._user_face = face_url
-            else:
-                self._set_login_status_label("未登录", "MutedLabel")
-        except Exception:  # noqa: BLE001
-            # Network or API errors — non-critical, just show unknown state
-            self._set_login_status_label("登录状态未知", "MutedLabel")
+        """Fetch user info without blocking the GUI event loop."""
+        self._login_status_request_id += 1
+        request_id = self._login_status_request_id
+        self._set_login_status_label("正在检查账号...", "MutedLabel")
+        self._login_status_worker = LoginStatusWorker(self._api_client, request_id)
+        self._login_status_worker.finished.connect(self._on_login_status_result)
+        self._login_status_worker.error.connect(self._on_login_status_error)
+        self._login_status_runner = LoginStatusRunner(self._login_status_worker)
+        self._thread_pool.start(self._login_status_runner)
+
+    def _on_login_status_result(self, request_id: int, nav_info: dict):
+        if request_id != self._login_status_request_id:
+            return
+        if nav_info.get("isLogin"):
+            uname = nav_info.get("uname", "未知用户")
+            mid = nav_info.get("mid", "")
+            self._user_face = nav_info.get("face", "")
+            self._set_login_status_label(
+                f"已登录：{uname}",
+                "StatusPill",
+                f"UID: {mid}",
+            )
+        else:
+            self._set_login_status_label("未登录", "MutedLabel")
+
+    def _on_login_status_error(self, request_id: int, error: str):
+        if request_id != self._login_status_request_id:
+            return
+        logger.warning("Login status check failed: %s", error)
+        self._set_login_status_label("登录状态未知", "MutedLabel")
 
     def _on_batch_clicked(self):
         """Open batch download dialog."""
-        dialog = BatchDialog(self._api_client, self)
+        dialog = BatchDialog(self)
         if dialog.exec():
             urls = dialog.get_urls()
             if urls:
@@ -506,23 +642,34 @@ class MainWindow(QMainWindow):
         QMessageBox.about(
             self,
             "关于",
-            "哔哩哔哩视频下载器 v0.2.0\n\n"
+            f"哔哩哔哩视频下载器 v{__version__}\n\n"
             "一款桌面端B站视频下载工具。\n"
             "支持4K、HDR、杜比视界、弹幕和字幕下载。",
         )
 
     def _show_error(self, message: str):
-        QMessageBox.critical(self, "Error", message)
+        QMessageBox.critical(self, "任务出现问题", message)
 
     def _show_info(self, message: str):
-        QMessageBox.information(self, "Info", message)
+        QMessageBox.information(self, "运行信息", message)
 
     def closeEvent(self, event: QCloseEvent):
         """Cancel running downloads and close API client on window close."""
         # Cancel all active workers
         self._download_list.cancel_all_workers()
+        if hasattr(self, "_batch_worker"):
+            self._batch_worker.cancel()
 
-        # Close API client
-        self._api_client.close()
+        # Give workers a short grace period before closing their shared clients.
+        workers_stopped = self._thread_pool.waitForDone(3000)
+        if not workers_stopped:
+            logger.warning("Background tasks did not stop before window shutdown")
+
+        if workers_stopped:
+            for client in [self._api_client, *self._retired_api_clients]:
+                try:
+                    client.close()
+                except Exception:  # noqa: BLE001
+                    logger.debug("Failed to close API client", exc_info=True)
 
         super().closeEvent(event)

@@ -1,142 +1,116 @@
-# Bilibili Downloader
+# BiliFlow / Bilibili Downloader
 
-一款桌面端 B 站视频下载工具，支持 GUI 和 CLI 双模式。它可以解析 BV 号、AV 号、B 站视频链接和 b23.tv 短链，支持画质选择、弹幕、字幕、登录态保存和音视频自动合并。
+[![CI](https://github.com/itsVicOC/bilibili-downloader/actions/workflows/ci.yml/badge.svg)](https://github.com/itsVicOC/bilibili-downloader/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/itsVicOC/bilibili-downloader)](https://github.com/itsVicOC/bilibili-downloader/releases/latest)
+[![License](https://img.shields.io/github/license/itsVicOC/bilibili-downloader)](LICENSE)
 
-## 下载
+一款支持 GUI 和 CLI 的 B 站视频下载工具。可以解析 BV 号、AV 号、视频链接与 b23.tv 短链，选择画质和编码，并下载弹幕、字幕后自动合并音视频。
 
-推荐普通用户直接从 [GitHub Releases](https://github.com/itsVicOC/bilibili-downloader/releases) 下载预构建包：
+![BiliFlow 夜间界面](docs/images/biliflow-dark.png)
 
-- macOS：下载 `BilibiliDownloader-macOS-<version>.zip`
-- Windows：下载 `BilibiliDownloader-Windows-<version>.zip`
+## 下载与安装
 
-应用依赖 FFmpeg 进行音视频合并。如果系统中没有 FFmpeg，请先安装：
+普通用户建议从 [GitHub Releases](https://github.com/itsVicOC/bilibili-downloader/releases/latest) 下载预构建包：
 
-- Windows：`winget install Gyan.FFmpeg`，或从 [ffmpeg.org](https://ffmpeg.org/download.html) 下载
+| 系统 | 下载文件 | 运行方式 |
+|---|---|---|
+| macOS 12+（Apple Silicon） | `BilibiliDownloader-macOS-<version>.zip` | 解压后打开 `BilibiliDownloader.app` |
+| Windows 10/11（x64） | `BilibiliDownloader-Windows-<version>.zip` | 完整解压后运行目录内的 `BilibiliDownloader.exe` |
+| Linux | 暂无预构建包 | 按下方“从源码运行”操作 |
+
+应用需要 FFmpeg 合并音视频：
+
 - macOS：`brew install ffmpeg`
-- Linux：`sudo apt install ffmpeg`
+- Windows：`winget install Gyan.FFmpeg`
+- Ubuntu / Debian：`sudo apt install ffmpeg`
 
-## 功能特性
+如果 FFmpeg 不在系统 PATH 中，可在“下载设置”中直接选择其可执行文件。
 
-- **双模式运行**：提供 PySide6 桌面 GUI，也支持命令行下载。
-- **多格式输入**：支持 BV 号、AV 号、完整 B 站视频链接和 b23.tv 短链。
-- **画质选择**：支持 240P 到 8K，以及 HEVC/H.265、AVC/H.264、AV1 编码切换。
-- **附加内容**：可同时下载弹幕并转换为 ASS，也可下载字幕并转换为 SRT。
-- **批量下载**：粘贴多行链接后统一解析并加入下载队列。
-- **登录支持**：支持 Cookie / SESSDATA 登录，优先使用系统凭据库存储登录态。
-- **可靠下载**：支持备用下载 URL 重试、临时文件续传和取消任务时终止 FFmpeg。
-- **现代 GUI**：重新设计主窗口、视频信息面板、下载列表和设置/登录/批量对话框。
+> macOS 发布包目前未进行 Apple 公证。首次打开被系统拦截时，在“系统设置 → 隐私与安全性”中确认打开。请只从本仓库 Release 页面下载。
+
+## 功能
+
+- 支持 BV、AV、Bilibili 完整 URL 和 b23.tv 短链。
+- 支持 240P 至 8K、HDR、Dolby Vision，以及 AVC、HEVC、AV1 编码选择。
+- 自动选择匹配音轨并通过 FFmpeg 无损封装为 MP4。
+- 支持多 P 视频、批量解析、并发下载、取消、失败重试和临时文件续传。
+- 支持弹幕转 ASS、字幕转 SRT。
+- 支持 SESSDATA 登录；优先保存到系统凭据库。
+- 网络解析、登录检查、封面加载与下载任务均在后台执行，避免阻塞界面。
+- 日间/夜间主题跟随系统设置实时切换，无需重启。
+- 提供二次元风格的 BiliFlow 桌面界面与跨平台应用图标。
+
+日间界面预览：[docs/images/biliflow-light.png](docs/images/biliflow-light.png)。
+
+## 快速使用
+
+1. 安装 FFmpeg 并启动 BiliFlow。
+2. 粘贴 BV/AV 号、视频 URL 或 b23.tv 短链，点击“开始解析”。
+3. 选择画质、编码及弹幕/字幕选项，加入下载队列。
+4. 在“下载设置”中调整输出目录和最大并发数。
+
+部分高画质、会员内容或账号专属视频需要登录。详细操作、画质代码和配置位置见 [用户指南](docs/USER_GUIDE.md)。常见启动、解析、FFmpeg 与登录问题见 [故障排查](docs/TROUBLESHOOTING.md)。
 
 ## 从源码运行
 
-### 环境要求
-
-- Python >= 3.10
-- FFmpeg
-
-### 安装依赖
+需要 Python 3.10+ 与 FFmpeg：
 
 ```bash
 git clone https://github.com/itsVicOC/bilibili-downloader.git
 cd bilibili-downloader
-
 python -m venv .venv
 source .venv/bin/activate
-
-pip install -e ".[dev]"
-```
-
-Windows PowerShell 激活虚拟环境：
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-### GUI 模式
-
-```bash
+python -m pip install -e ".[dev]"
 python -m bilibili_downloader
 ```
 
-安装为可执行命令后也可以使用：
+Windows PowerShell 使用 `.\.venv\Scripts\Activate.ps1` 激活环境。
+
+CLI 示例：
 
 ```bash
-bilibili-downloader
-```
-
-### CLI 模式
-
-```bash
-# 获取视频信息
+# 只解析元数据
 python -m bilibili_downloader test BV1GJ411x7h7
-python -m bilibili_downloader test av170001
-python -m bilibili_downloader test "https://www.bilibili.com/video/BV1GJ411x7h7"
 
-# 下载视频
+# 下载 1080P 视频，同时保存弹幕和字幕
 python -m bilibili_downloader download BV1GJ411x7h7 \
-    --quality 80 \
-    --output ./downloads \
-    --danmaku \
-    --subtitle
+  --quality 80 \
+  --output ./downloads \
+  --danmaku \
+  --subtitle
 ```
 
-CLI 参数：
+运行 `python -m bilibili_downloader --help` 或阅读 [用户指南](docs/USER_GUIDE.md) 查看全部参数。
 
-| 参数 | 说明 |
+## 文档
+
+| 文档 | 内容 |
 |---|---|
-| `source` | BV 号、AV 号、B 站视频链接或 b23.tv 短链 |
-| `-q, --quality` | 画质代码，默认 `80`，表示 1080P |
-| `-o, --output` | 输出目录，未指定时使用设置中的下载目录 |
-| `-d, --danmaku` | 同时下载弹幕并保存为 ASS |
-| `-s, --subtitle` | 同时下载字幕并保存为 SRT |
+| [用户指南](docs/USER_GUIDE.md) | GUI、CLI、登录、配置与数据存储 |
+| [故障排查](docs/TROUBLESHOOTING.md) | 启动、解析、画质、FFmpeg 和网络问题 |
+| [构建与发布](docs/BUILDING.md) | 开发环境、测试、打包和 Release 流程 |
+| [贡献指南](CONTRIBUTING.md) | Issue、分支、代码质量与提交要求 |
+| [安全策略](SECURITY.md) | 漏洞报告渠道与支持版本 |
+| [第三方素材](THIRD_PARTY_NOTICES.md) | 图片、图标来源和许可证 |
+| [更新日志](CHANGELOG.md) | 各版本新增、修改和修复内容 |
 
-## 项目结构
-
-```text
-bilibili_downloader/
-├── api/          # Bilibili API 客户端、WBI 签名、登录
-├── core/         # 下载器、FFmpeg 合并、批量解析、弹幕/字幕处理、数据模型
-├── gui/          # PySide6 界面：主窗口、对话框、控件、工作线程
-└── utils/        # 配置管理、输入解析、URL/BV/AV 验证
-
-tests/            # 测试套件
-```
-
-## 开发
-
-运行测试：
+## 开发验证
 
 ```bash
-pytest
-```
-
-构建本机应用：
-
-```bash
-pip install -e ".[dev]"
+pytest -q
+python -m compileall -q bilibili_downloader tests
 pyinstaller --noconfirm --clean BilibiliDownloader.spec
 ```
 
-构建结果位于 `dist/BilibiliDownloader`。在 macOS 上，spec 也会额外生成 `dist/BilibiliDownloader.app`。
+项目结构与完整构建说明见 [docs/BUILDING.md](docs/BUILDING.md)。
 
-## 发布
+## 隐私与免责声明
 
-项目使用 GitHub Actions 自动发布。推送 `v*` tag 后，流水线会在 macOS 和 Windows runner 上分别构建压缩包，并上传到同一个 GitHub Release。
-
-```bash
-git tag v0.2.0
-git push origin main
-git push origin v0.2.0
-```
-
-发布产物命名：
-
-- `BilibiliDownloader-macOS-v0.2.0.zip`
-- `BilibiliDownloader-Windows-v0.2.0.zip`
-
-## 更新日志
-
-详见 [CHANGELOG.md](CHANGELOG.md)。
+- 应用不会把登录凭据发送到本项目维护者或任何自建服务器；请求只发往 Bilibili 及视频资源域名。
+- SESSDATA 优先存储在系统凭据库。凭据库不可用时会回退到权限受限的本地配置文件。
+- 本项目与哔哩哔哩（Bilibili）无隶属、授权或背书关系。
+- 请仅下载你拥有权限的内容，并遵守当地法律、平台服务条款和内容版权要求。
 
 ## License
 
-MIT
+项目代码使用 [MIT License](LICENSE)。界面素材采用各自的许可证，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

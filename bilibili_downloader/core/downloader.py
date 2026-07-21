@@ -3,7 +3,9 @@
 import logging
 import ssl
 import tempfile
+import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -27,6 +29,8 @@ MAX_RETRIES = 5
 
 # Create an SSL context that works around CDN issues
 SSL_CONTEXT = ssl.create_default_context()
+_OUTPUT_PATH_LOCK = threading.Lock()
+_RESERVED_OUTPUT_PATHS: set[Path] = set()
 
 
 class StreamDownloader:
@@ -42,7 +46,7 @@ class StreamDownloader:
         self._api_client = api_client
         self._output_dir = Path(output_dir)
         self._output_dir.mkdir(parents=True, exist_ok=True)
-        self._max_retries = max_retries
+        self._max_retries = max(1, max_retries)
         self._ffmpeg_path = ffmpeg_path
         self._cancelled = False
 
@@ -106,11 +110,14 @@ class StreamDownloader:
             raise RuntimeError("No matching audio stream found")
 
         # Create temp directory for streams
-        with tempfile.TemporaryDirectory(dir=self._output_dir) as tmpdir:
+        with tempfile.TemporaryDirectory(
+            dir=self._output_dir
+        ) as tmpdir, _reserved_output_path(
+            self._output_dir / item.filename
+        ) as output_path:
             tmp = Path(tmpdir)
             video_path = tmp / "video.m4s"
             audio_path = tmp / "audio.m4s"
-            output_path = (self._output_dir / item.filename).resolve()
 
             # Download video stream
             progress_callback(0.0, "正在下载视频流...")
@@ -234,7 +241,7 @@ class StreamDownloader:
 
                 if attempt < self._max_retries - 1:
                     delay = _retry_delay(attempt, last_error)
-                    time.sleep(delay)
+                    self._wait_for_retry(delay)
 
         raise RuntimeError(
             f"下载失败：{last_error}"
@@ -282,6 +289,14 @@ class StreamDownloader:
 
         progress_callback(1.0)
 
+    def _wait_for_retry(self, delay: float) -> None:
+        """Wait between retries while remaining responsive to cancellation."""
+        deadline = time.monotonic() + delay
+        while time.monotonic() < deadline:
+            if self._cancelled:
+                raise RuntimeError("Download cancelled")
+            time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
+
 
 def _stream_urls(stream: StreamInfo) -> list[str]:
     """Return base and backup URLs without duplicates."""
@@ -299,7 +314,10 @@ def _response_total_size(response: httpx.Response, downloaded: int) -> int:
         if total.isdigit():
             return int(total)
 
-    content_length = int(response.headers.get("content-length", 0))
+    try:
+        content_length = int(response.headers.get("content-length", 0))
+    except (TypeError, ValueError):
+        content_length = 0
     if response.status_code == 206:
         return downloaded + content_length
     return content_length
@@ -310,3 +328,23 @@ def _retry_delay(attempt: int, error: Optional[BaseException]) -> float:
     if "SSL" in error_msg or "UNEXPECTED_EOF" in error_msg:
         return 3 * (attempt + 1)
     return 2 ** attempt
+
+
+@contextmanager
+def _reserved_output_path(requested: Path):
+    """Reserve a non-existing output path across concurrent downloads."""
+    requested = requested.resolve()
+    with _OUTPUT_PATH_LOCK:
+        candidate = requested
+        counter = 2
+        while candidate.exists() or candidate in _RESERVED_OUTPUT_PATHS:
+            candidate = requested.with_name(
+                f"{requested.stem} ({counter}){requested.suffix}"
+            )
+            counter += 1
+        _RESERVED_OUTPUT_PATHS.add(candidate)
+    try:
+        yield candidate
+    finally:
+        with _OUTPUT_PATH_LOCK:
+            _RESERVED_OUTPUT_PATHS.discard(candidate)

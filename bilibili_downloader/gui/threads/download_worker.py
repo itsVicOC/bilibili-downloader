@@ -28,6 +28,7 @@ class DownloadWorker(QObject):
     progress = Signal(int, float, str)
     finished = Signal(int, str)
     error = Signal(int, str)
+    cancelled = Signal(int)
 
     def __init__(
         self,
@@ -73,6 +74,9 @@ class DownloadWorker(QObject):
 
             output_path = self._downloader.download(self._item, progress_cb)
 
+            if self._cancelled:
+                raise RuntimeError("Cancelled")
+
             if self._download_danmaku:
                 try:
                     self.progress.emit(self._download_id, 0.9, "正在下载弹幕...")
@@ -100,11 +104,17 @@ class DownloadWorker(QObject):
                         self._item.video_info.title, e,
                     )
 
+            if self._cancelled:
+                raise RuntimeError("Cancelled")
             self.finished.emit(self._download_id, output_path)
 
         except Exception as e:
-            logger.error("Download error for %s: %s", self._item.video_info.title, e)
-            self.error.emit(self._download_id, str(e))
+            if self._cancelled or "cancel" in str(e).lower():
+                logger.info("Download cancelled for %s", self._item.video_info.title)
+                self.cancelled.emit(self._download_id)
+            else:
+                logger.error("Download error for %s: %s", self._item.video_info.title, e)
+                self.error.emit(self._download_id, str(e))
         finally:
             self._running = False
 

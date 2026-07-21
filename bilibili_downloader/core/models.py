@@ -145,7 +145,10 @@ class DownloadItem(BaseModel):
             cid_to_part = {p.cid: p.part for p in info.pages}
             part = cid_to_part.get(info.cid, "")
             if part:
-                return f"{safe_title}_{sanitize_filename(part)}.mp4"
+                combined = sanitize_filename(
+                    f"{safe_title}_{sanitize_filename(part)}"
+                )
+                return f"{combined}.mp4"
         # Single-part or fallback: use title only
         return f"{safe_title}.mp4"
 

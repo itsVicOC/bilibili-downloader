@@ -1,7 +1,7 @@
 """Video info display widget."""
 
-from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, Signal
+from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -9,12 +9,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from bilibili_downloader.gui.resources.paths import asset_path
+
 
 class _CoverLoadWorker(QObject):
     """Signals for async cover image loading."""
 
-    loaded = Signal(bytes)
-    failed = Signal()
+    loaded = Signal(str, bytes)
+    failed = Signal(str)
 
 
 class _CoverLoadRunner(QRunnable):
@@ -32,11 +34,11 @@ class _CoverLoadRunner(QRunnable):
         try:
             resp = httpx.get(self._url, timeout=10.0)
             if resp.status_code == 200:
-                self._worker.loaded.emit(resp.content)
+                self._worker.loaded.emit(self._url, resp.content)
                 return
         except httpx.HTTPError:
             pass
-        self._worker.failed.emit()
+        self._worker.failed.emit(self._url)
 
 
 class VideoInfoWidget(QWidget):
@@ -44,6 +46,7 @@ class VideoInfoWidget(QWidget):
 
     def __init__(self):
         super().__init__()
+        self._cover_url = ""
         self._setup_ui()
 
     def _setup_ui(self):
@@ -51,10 +54,10 @@ class VideoInfoWidget(QWidget):
         self.setObjectName("Panel")
         self.setAttribute(Qt.WA_StyledBackground, True)
         layout.setContentsMargins(16, 14, 16, 14)
-        layout.setSpacing(12)
+        layout.setSpacing(13)
 
         header_layout = QHBoxLayout()
-        title = QLabel("当前视频")
+        title = QLabel("作品资料卡")
         title.setObjectName("SectionTitle")
         self._state_label = QLabel("等待解析")
         self._state_label.setObjectName("StatusPill")
@@ -67,29 +70,36 @@ class VideoInfoWidget(QWidget):
         self._cover_label = QLabel()
         self._cover_label.setObjectName("EmptyCover")
         self._cover_label.setAlignment(Qt.AlignCenter)
-        self._cover_label.setFixedSize(220, 124)
-        self._cover_label.setText("封面预览")
+        self._cover_label.setFixedSize(300, 169)
+        placeholder = QIcon(asset_path("artist_palette.png")).pixmap(QSize(58, 58))
+        self._cover_label.setPixmap(placeholder)
+        self._cover_label.setToolTip("解析后显示视频封面")
         self._cover_label.setAlignment(Qt.AlignCenter)
 
         # Info labels
-        self._title_label = QLabel("未选择视频")
+        self._title_label = QLabel("等待新的次元旅程")
         self._title_label.setObjectName("VideoTitle")
         self._title_label.setWordWrap(True)
 
-        self._author_label = QLabel("UP主：--")
-        self._duration_label = QLabel("时长：--")
-        self._bvid_label = QLabel("BV号：--")
+        self._author_label = QLabel("UP 主  --")
+        self._duration_label = QLabel("时长  --")
+        self._bvid_label = QLabel("BV 号  --")
         for label in (self._author_label, self._duration_label, self._bvid_label):
-            label.setObjectName("MetaLabel")
+            label.setObjectName("InfoChip")
 
         # Layout
         top_layout = QHBoxLayout()
-        top_layout.setSpacing(14)
+        top_layout.setSpacing(18)
         top_layout.addWidget(self._cover_label)
 
         info_layout = QVBoxLayout()
-        info_layout.setSpacing(7)
+        info_layout.setSpacing(9)
         info_layout.addWidget(self._title_label)
+        subtitle = QLabel("解析完成后，可以在右侧选择画质和编码")
+        subtitle.setObjectName("MetaLabel")
+        subtitle.setWordWrap(True)
+        info_layout.addWidget(subtitle)
+        info_layout.addSpacing(4)
         info_layout.addWidget(self._author_label)
         info_layout.addWidget(self._duration_label)
         info_layout.addWidget(self._bvid_label)
@@ -102,37 +112,45 @@ class VideoInfoWidget(QWidget):
     def set_video_info(self, info):
         """Update display with video info."""
         self._title_label.setText(info.title or "无标题")
-        self._author_label.setText(f"UP主：{info.author or '未知'}")
-        self._duration_label.setText(f"时长：{info.duration_str}")
-        self._bvid_label.setText(f"BV号：{info.bvid}")
-        self._state_label.setText("已解析")
+        self._author_label.setText(f"UP 主  {info.author or '未知'}")
+        self._duration_label.setText(f"时长  {info.duration_str}")
+        self._bvid_label.setText(f"BV 号  {info.bvid}")
+        self._state_label.setText("READY")
 
         # Load cover image
         if info.cover_url:
             self._load_cover(info.cover_url)
         else:
-            self._on_cover_failed()
+            self._cover_url = ""
+            self._on_cover_failed("")
 
     def _load_cover(self, url: str):
         """Download and display cover image asynchronously."""
+        self._cover_url = url
         worker = _CoverLoadWorker()
         worker.loaded.connect(self._on_cover_loaded)
         worker.failed.connect(self._on_cover_failed)
         runner = _CoverLoadRunner(worker, url)
         QThreadPool.globalInstance().start(runner)
 
-    def _on_cover_loaded(self, image_data: bytes):
+    def _on_cover_loaded(self, url: str, image_data: bytes):
         """Create and show the cover pixmap on the GUI thread."""
+        if url != self._cover_url:
+            return
         pixmap = QPixmap()
         if pixmap.loadFromData(image_data):
             scaled = pixmap.scaled(
-                220, 124,
-                Qt.KeepAspectRatio,
+                300, 169,
+                Qt.KeepAspectRatioByExpanding,
                 Qt.SmoothTransformation,
             )
             self._cover_label.setPixmap(scaled)
 
-    def _on_cover_failed(self):
+    def _on_cover_failed(self, url: str):
         """Restore cover placeholder when cover loading fails."""
+        if url and url != self._cover_url:
+            return
         self._cover_label.clear()
-        self._cover_label.setText("封面预览")
+        self._cover_label.setPixmap(
+            QIcon(asset_path("artist_palette.png")).pixmap(QSize(58, 58))
+        )

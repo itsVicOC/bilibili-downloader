@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bilibili-downloader"
-version = "0.2.0"
+version = "0.3.0"
 description = "Bilibili video downloader with desktop GUI and CLI modes"
 requires-python = ">=3.10"
 dependencies = [
@@ -30,3 +30,6 @@ bilibili-downloader = "bilibili_downloader.__main__:main"
 
 [tool.setuptools.packages.find]
 include = ["bilibili_downloader*"]
+
+[tool.setuptools.package-data]
+"bilibili_downloader.gui" = ["assets/*"]

@@ -260,37 +260,49 @@ def _parse_video_info(bvid: str, data: dict) -> VideoInfo:
 
 def _parse_playurl(data: dict) -> dict:
     """Parse /x/player/playurl response into stream info."""
-    dash = data.get("dash", {})
+    dash = data.get("dash") or {}
     video_streams = []
     audio_streams = []
 
-    for s in dash.get("video", []):
-        video_streams.append(StreamInfo(
-            id=s.get("id", 0),
-            base_url=s.get("base_url", ""),
-            backup_url=s.get("backup_url", []) or [],
-            codecid=s.get("codecid", 7),
-            bandwidth=s.get("bandwidth", 0),
-            mime_type=s.get("mime_type", "video/mp4"),
-        ))
+    for stream in dash.get("video") or []:
+        if isinstance(stream, dict):
+            video_streams.append(_parse_stream_info(stream, "video/mp4", 7))
 
-    for s in dash.get("audio", []):
-        audio_streams.append(StreamInfo(
-            id=s.get("id", 0),
-            base_url=s.get("base_url", ""),
-            backup_url=s.get("backup_url", []) or [],
-            codecid=s.get("codecid", 0),
-            bandwidth=s.get("bandwidth", 0),
-            mime_type=s.get("mime_type", "audio/mp4"),
-        ))
+    audio_entries = list(dash.get("audio") or [])
+    dolby_audio = (dash.get("dolby") or {}).get("audio") or []
+    audio_entries.extend(dolby_audio if isinstance(dolby_audio, list) else [dolby_audio])
+    flac_audio = (dash.get("flac") or {}).get("audio") or []
+    audio_entries.extend(flac_audio if isinstance(flac_audio, list) else [flac_audio])
+
+    seen_audio = set()
+    for stream in audio_entries:
+        if not isinstance(stream, dict):
+            continue
+        parsed = _parse_stream_info(stream, "audio/mp4", 0)
+        identity = (parsed.id, parsed.base_url)
+        if identity not in seen_audio:
+            seen_audio.add(identity)
+            audio_streams.append(parsed)
 
     return {
         "video_streams": video_streams,
         "audio_streams": audio_streams,
-        "has_dolby": bool(dash.get("dolby", {}).get("audio", [])),
+        "has_dolby": bool((dash.get("dolby") or {}).get("audio", [])),
         "has_hdr": bool(dash.get("hdr", {})),
         "raw_dash": dash,
     }
+
+
+def _parse_stream_info(data: dict, default_mime: str, default_codec: int) -> StreamInfo:
+    """Parse both snake_case and camelCase DASH response variants."""
+    return StreamInfo(
+        id=data.get("id", 0),
+        base_url=data.get("base_url") or data.get("baseUrl") or "",
+        backup_url=data.get("backup_url") or data.get("backupUrl") or [],
+        codecid=data.get("codecid", default_codec),
+        bandwidth=data.get("bandwidth", 0),
+        mime_type=data.get("mime_type") or data.get("mimeType") or default_mime,
+    )
 
 
 class BilibiliAPIError(Exception):

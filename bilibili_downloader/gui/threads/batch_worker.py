@@ -4,9 +4,9 @@ import logging
 
 from PySide6.QtCore import QObject, QRunnable, Signal
 
-from bilibili_downloader.api.client import BilibiliAPIClient, BilibiliAPIError
-from bilibili_downloader.core.batch import BatchResolver, BatchResolveError
-from bilibili_downloader.core.models import DownloadItem
+from bilibili_downloader.api.client import BilibiliAPIClient
+from bilibili_downloader.core.batch import BatchResolver
+from bilibili_downloader.core.models import DownloadItem, VideoQuality
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,13 @@ class BatchWorker(QObject):
     item_ready = Signal(object)
     error = Signal(str)
     finished = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self.cancelled = False
+
+    def cancel(self):
+        self.cancelled = True
 
 
 class BatchRunner(QRunnable):
@@ -42,27 +49,30 @@ class BatchRunner(QRunnable):
         self._worker = worker
         self._api_client = api_client
         self._urls = urls
-        self._quality = quality
-        self._codec = codec
+        self._quality = quality or VideoQuality.Q1080P
+        self._codec = codec or 12
         self._download_danmaku = download_danmaku
         self._download_subtitle = download_subtitle
         self.setAutoDelete(True)
 
     def run(self):
         resolver = BatchResolver(self._api_client)
-        for url in self._urls:
-            try:
-                info = resolver.resolve_one(url)
-                item = DownloadItem(
-                    video_info=info,
-                    selected_quality=self._quality,
-                    selected_video_codec=self._codec,
-                    download_danmaku=self._download_danmaku,
-                    download_subtitle=self._download_subtitle,
-                )
-                self._worker.item_ready.emit(item)
-            except (BatchResolveError, BilibiliAPIError, RuntimeError) as e:
-                logger.warning("Batch resolve failed for %s: %s", url, e)
-                self._worker.error.emit(f"无法加入队列 {url}: {e}")
-
-        self._worker.finished.emit()
+        try:
+            for url in self._urls:
+                if self._worker.cancelled:
+                    break
+                try:
+                    info = resolver.resolve_one(url)
+                    item = DownloadItem(
+                        video_info=info,
+                        selected_quality=self._quality,
+                        selected_video_codec=self._codec,
+                        download_danmaku=self._download_danmaku,
+                        download_subtitle=self._download_subtitle,
+                    )
+                    self._worker.item_ready.emit(item)
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("Batch resolve failed for %s: %s", url, e)
+                    self._worker.error.emit(f"无法加入队列 {url}: {e}")
+        finally:
+            self._worker.finished.emit()

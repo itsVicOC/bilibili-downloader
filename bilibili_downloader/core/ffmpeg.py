@@ -4,6 +4,7 @@ import logging
 import platform
 import shutil
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 from typing import Callable, Optional
@@ -96,7 +97,7 @@ class FFmpegManager:
                 ).split("\n")[0].strip()
                 return True, version_line
             return False, f"FFmpeg returned error code {result.returncode}"
-        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        except (subprocess.TimeoutExpired, OSError) as e:
             return False, f"FFmpeg check failed: {e}"
 
     @staticmethod
@@ -151,37 +152,50 @@ class FFmpegManager:
         if exe is None:
             return False, "FFmpeg not found"
 
-        # Use a temp file in the same directory for atomic rename
-        safe_output = output_path.with_suffix(".tmp")
+        # Keep the media suffix so FFmpeg can infer the output container.
+        safe_output = output_path.with_name(
+            f"{output_path.stem}.part{output_path.suffix}"
+        )
+        _remove_partial_output(safe_output)
         cmd = cls.build_merge_command(video_path, audio_path, safe_output, executable=str(exe))
 
         try:
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            deadline = time.monotonic() + 300
-            while process.poll() is None:
-                if cancel_checker and cancel_checker():
-                    process.kill()
-                    stdout, stderr = process.communicate()
-                    _remove_partial_output(safe_output)
-                    output = (stdout + stderr).decode("utf-8", errors="replace")
-                    return False, f"FFmpeg merge cancelled\n{output[-500:]}"
+            # A file-backed stderr avoids deadlocking when FFmpeg produces more
+            # output than an unread PIPE buffer can hold.
+            with tempfile.TemporaryFile() as log_file:
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=log_file,
+                )
+                deadline = time.monotonic() + 300
+                cancelled = False
+                timed_out = False
+                while process.poll() is None:
+                    if cancel_checker and cancel_checker():
+                        cancelled = True
+                        process.kill()
+                        break
 
-                if time.monotonic() >= deadline:
-                    process.kill()
-                    stdout, stderr = process.communicate()
-                    _remove_partial_output(safe_output)
-                    output = (stdout + stderr).decode("utf-8", errors="replace")
-                    return False, f"FFmpeg merge timed out (5 min limit)\n{output[-500:]}"
+                    if time.monotonic() >= deadline:
+                        timed_out = True
+                        process.kill()
+                        break
 
-                time.sleep(0.2)
+                    time.sleep(0.2)
 
-            stdout, stderr = process.communicate()
-            output = (stdout + stderr).decode("utf-8", errors="replace")
+                process.wait()
+                log_file.seek(0)
+                output = log_file.read().decode("utf-8", errors="replace")
+
+            if cancelled:
+                _remove_partial_output(safe_output)
+                return False, f"FFmpeg merge cancelled\n{output[-500:]}"
+            if timed_out:
+                _remove_partial_output(safe_output)
+                return False, f"FFmpeg merge timed out (5 min limit)\n{output[-500:]}"
             if process.returncode != 0:
+                _remove_partial_output(safe_output)
                 error_lines = []
                 for line in output.split("\n"):
                     if any(k in line.lower() for k in ["error", "invalid", "failed", "unsupported"]):
@@ -195,8 +209,9 @@ class FFmpegManager:
                 safe_output.replace(output_path)
                 return True, output
             return False, f"FFmpeg succeeded but output file not found: {safe_output.name}"
-        except FileNotFoundError:
-            return False, "FFmpeg executable not found at path"
+        except OSError as e:
+            _remove_partial_output(safe_output)
+            return False, f"FFmpeg could not be started: {e}"
 
 
 def _remove_partial_output(path: Path) -> None:

@@ -3,7 +3,9 @@
 import base64
 import json
 import logging
+import os
 import shutil
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -92,7 +94,7 @@ class ConfigManager:
                 if not self._settings.sessdata:
                     self._settings.sessdata = _load_sessdata_from_keyring()
                 return self._settings
-            except (json.JSONDecodeError, ValueError) as e:
+            except (json.JSONDecodeError, OSError, ValueError) as e:
                 # Backup corrupted config before falling back to defaults
                 backup = self._config_path.with_suffix(".json.bak")
                 try:
@@ -112,7 +114,6 @@ class ConfigManager:
 
     def save(self, settings: AppSettings) -> None:
         """Save settings to disk."""
-        self._settings = settings
         self._config_path.parent.mkdir(parents=True, exist_ok=True)
         data = settings.model_dump()
         sessdata = data.pop("sessdata", "")
@@ -125,14 +126,30 @@ class ConfigManager:
         else:
             _save_sessdata_to_keyring("")
             data["sessdata"] = ""
-        self._config_path.write_text(
-            json.dumps(data, indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        serialized = json.dumps(data, indent=2, ensure_ascii=False)
+        temp_path = None
         try:
-            self._config_path.chmod(0o600)
-        except OSError:
-            logger.debug("Failed to chmod config file: %s", self._config_path)
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=self._config_path.parent,
+                prefix=f".{self._config_path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as temp_file:
+                temp_file.write(serialized)
+                temp_file.flush()
+                os.fsync(temp_file.fileno())
+                temp_path = Path(temp_file.name)
+            try:
+                temp_path.chmod(0o600)
+            except OSError:
+                logger.debug("Failed to chmod temporary config file: %s", temp_path)
+            os.replace(temp_path, self._config_path)
+            self._settings = settings
+        finally:
+            if temp_path is not None and temp_path.exists():
+                temp_path.unlink(missing_ok=True)
 
     def update(self, **kwargs) -> AppSettings:
         """Update specific settings fields and save."""
