@@ -152,7 +152,7 @@ jobs:
           shasum -a 256 *.zip *.cdx.json > SHA256SUMS.txt
 
       - name: Publish release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: Bilibili Downloader ${{ github.ref_name }}
           body_path: release-notes.md
