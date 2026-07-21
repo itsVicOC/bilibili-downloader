@@ -36,7 +36,7 @@ ruff check bilibili_downloader tests packaging_hooks
 git diff --check
 ```
 
-CI 在 Ubuntu 和 Windows 上使用 Python 3.10、3.11、3.12 运行测试，并在 macOS/Python 3.12 做冒烟验证。GUI 测试使用 `QT_QPA_PLATFORM=offscreen`；独立任务使用 `pip-audit` 检查已安装依赖。
+CI 在 Ubuntu 和 Windows 上使用 Python 3.10、3.11、3.12 运行测试，并在 macOS/Python 3.12 做冒烟验证。GUI 测试使用 `QT_QPA_PLATFORM=offscreen`；Ubuntu runner 会先安装 PySide6 需要的 `libegl1` 与 `libgl1`，独立任务使用 `pip-audit` 检查已安装依赖。
 
 `constraints.txt` 固定经过验证的直接运行与开发依赖。修改依赖时，应在三类系统的 CI 通过后同步更新约束版本；平台专属传递依赖由 pip 解析器管理。
 
