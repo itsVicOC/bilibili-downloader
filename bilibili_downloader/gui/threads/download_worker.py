@@ -2,16 +2,13 @@
 
 import logging
 import os
-from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import QObject, QRunnable, Signal
 
 from bilibili_downloader.api.client import BilibiliAPIClient
-from bilibili_downloader.core.danmaku import DanmakuDownloader
-from bilibili_downloader.core.downloader import StreamDownloader
+from bilibili_downloader.core.download_service import DownloadService
 from bilibili_downloader.core.models import DownloadItem
-from bilibili_downloader.core.subtitle import SubtitleDownloader
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +23,7 @@ class DownloadWorker(QObject):
     """
 
     progress = Signal(int, float, str)
-    finished = Signal(int, str)
+    finished = Signal(int, object)
     error = Signal(int, str)
     cancelled = Signal(int)
 
@@ -35,8 +32,6 @@ class DownloadWorker(QObject):
         api_client: BilibiliAPIClient,
         item: DownloadItem,
         output_dir: str,
-        download_danmaku: bool = False,
-        download_subtitle: bool = False,
         download_id: int = 0,
         ffmpeg_path: Optional[str] = None,
     ):
@@ -44,12 +39,10 @@ class DownloadWorker(QObject):
         self._api_client = api_client
         self._item = item
         self._output_dir = output_dir
-        self._download_danmaku = download_danmaku
-        self._download_subtitle = download_subtitle
         self._download_id = download_id
         self._ffmpeg_path = ffmpeg_path
         self._cancelled = False
-        self._downloader: Optional[StreamDownloader] = None
+        self._service: Optional[DownloadService] = None
         self._running = False
 
     @property
@@ -62,51 +55,21 @@ class DownloadWorker(QObject):
         try:
             os.makedirs(self._output_dir, exist_ok=True)
 
-            self._downloader = StreamDownloader(
+            self._service = DownloadService(
                 self._api_client, self._output_dir, ffmpeg_path=self._ffmpeg_path,
             )
 
             def progress_cb(pct: float, text: str):
                 if self._cancelled:
-                    self._downloader.cancel()
+                    self._service.cancel()
                     raise RuntimeError("Cancelled")
                 self.progress.emit(self._download_id, pct, text)
 
-            output_path = self._downloader.download(self._item, progress_cb)
+            outcome = self._service.download(self._item, progress_cb)
 
             if self._cancelled:
                 raise RuntimeError("Cancelled")
-
-            if self._download_danmaku:
-                try:
-                    self.progress.emit(self._download_id, 0.9, "正在下载弹幕...")
-                    danmaku_path = Path(output_path).with_suffix(".ass")
-                    DanmakuDownloader.download_and_convert(
-                        self._item.video_info.cid, danmaku_path,
-                    )
-                except Exception as e:
-                    logger.warning(
-                        "Danmaku download failed for %s: %s",
-                        self._item.video_info.title, e,
-                    )
-
-            if self._download_subtitle and self._item.video_info.subtitle_list:
-                try:
-                    self.progress.emit(self._download_id, 0.95, "正在下载字幕...")
-                    subtitle_info = self._item.video_info.subtitle_list[0]
-                    subtitle_path = Path(output_path).with_suffix(".srt")
-                    SubtitleDownloader.download_and_convert(
-                        subtitle_info.url, subtitle_path,
-                    )
-                except Exception as e:
-                    logger.warning(
-                        "Subtitle download failed for %s: %s",
-                        self._item.video_info.title, e,
-                    )
-
-            if self._cancelled:
-                raise RuntimeError("Cancelled")
-            self.finished.emit(self._download_id, output_path)
+            self.finished.emit(self._download_id, outcome)
 
         except Exception as e:
             if self._cancelled or "cancel" in str(e).lower():
@@ -121,8 +84,8 @@ class DownloadWorker(QObject):
     def cancel(self):
         """Cancel the download."""
         self._cancelled = True
-        if self._downloader:
-            self._downloader.cancel()
+        if self._service:
+            self._service.cancel()
 
 
 class DownloadRunner(QRunnable):

@@ -9,7 +9,7 @@ git clone https://github.com/itsVicOC/bilibili-downloader.git
 cd bilibili-downloader
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -e ".[dev]"
+python -m pip install -c constraints.txt -e ".[dev]"
 pytest -q
 ```
 
@@ -34,13 +34,14 @@ Bug 报告应包含：
 1. 从 `main` 创建用途单一的分支。
 2. 延续现有模块边界和 PySide6 组件风格，避免无关重构。
 3. 行为修改必须添加或更新测试；网络测试应使用 mock，不依赖线上内容长期可用。
-4. GUI 改动至少检查日间、夜间两种系统主题和 1180×760 最小窗口。
+4. GUI 改动至少检查日间、夜间两种系统主题和 900×640 最小窗口。
 5. 新增第三方素材时，同时更新 `THIRD_PARTY_NOTICES.md`，写明文件、作者、原始 URL 和许可证。
 6. 提交前运行完整验证命令。
 
 ```bash
 python -m compileall -q bilibili_downloader tests
 pytest -q
+ruff check bilibili_downloader tests packaging_hooks
 git diff --check
 ```
 

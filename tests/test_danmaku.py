@@ -42,13 +42,13 @@ def test_xml_to_ass_basic():
 
 
 def test_danmaku_mode_mapping():
-    from bilibili_downloader.core.danmaku import _mode_to_style, _mode_to_effect
+    from bilibili_downloader.core.danmaku import _mode_to_effect, _mode_to_style
 
     assert _mode_to_style("1") == "Scroll"
-    assert _mode_to_style("3") == "Bottom"
-    assert _mode_to_style("4") == "Top"
-    assert _mode_to_style("5") == "Fixed"
-
+    assert _mode_to_style("3") == "Scroll"
+    assert _mode_to_style("4") == "Bottom"
+    assert _mode_to_style("5") == "Top"
+    assert _mode_to_style("6") == "Reverse"
     assert "\\move" in _mode_to_effect("1")
     assert _mode_to_effect("5") == ""
 
@@ -66,4 +66,4 @@ def test_xml_to_ass_rgb_color_order():
     content = path.read_text(encoding="utf-8")
     path.unlink()
 
-    assert "{\\c&H000000FF}" in content
+    assert "{\\c&H000000FF\\fs25}" in content

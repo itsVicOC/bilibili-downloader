@@ -10,9 +10,24 @@ import httpx
 from bilibili_downloader.api import endpoints as ep
 from bilibili_downloader.api.endpoints import USER_AGENT
 from bilibili_downloader.api.wbi import WBISigner
-from bilibili_downloader.core.models import StreamInfo, SubtitleInfo, VideoInfo, VideoPage, VideoQuality
+from bilibili_downloader.core.models import (
+    StreamInfo,
+    SubtitleInfo,
+    VideoInfo,
+    VideoPage,
+    VideoQuality,
+)
+from bilibili_downloader.utils.network import BILIBILI_RESOURCE_HOSTS, trusted_https_url
 
 logger = logging.getLogger(__name__)
+
+FNVAL_DASH = 16
+FNVAL_HDR = 64
+FNVAL_4K = 128
+FNVAL_DOLBY_AUDIO = 256
+FNVAL_DOLBY_VIDEO = 512
+FNVAL_8K = 1024
+FNVAL_AV1 = 2048
 
 
 class BilibiliAPIClient:
@@ -143,17 +158,20 @@ class BilibiliAPIClient:
         quality: VideoQuality = VideoQuality.Q1080P,
         need_hdr: bool = False,
         need_dolby: bool = False,
+        preferred_codec: Optional[int] = None,
+        discover_all: bool = False,
     ) -> dict:
         """Fetch playback URLs for video and audio streams.
 
         Returns dict with 'video_streams', 'audio_streams', 'dash' raw data.
         """
-        # Build fnval bitmask
-        fnval = 16  # DASH
-        if need_hdr:
-            fnval |= 128
-        if need_dolby:
-            fnval |= 64
+        fnval = _build_fnval(
+            quality,
+            preferred_codec=preferred_codec,
+            need_hdr=need_hdr,
+            need_dolby=need_dolby,
+            discover_all=discover_all,
+        )
 
         def _fetch():
             params = {
@@ -170,6 +188,26 @@ class BilibiliAPIClient:
 
         return self._retry_on_wbi_error(_fetch)
 
+    def get_subtitle_tracks(self, bvid: str, cid: int) -> list[SubtitleInfo]:
+        """Fetch subtitle tracks for a specific page."""
+
+        def _fetch():
+            params = self._sign_params({"bvid": bvid, "cid": cid})
+            resp = self._client.get(ep.PLAYER_INFO_ENDPOINT, params=params)
+            return self._parse_response(resp)
+
+        data = self._retry_on_wbi_error(_fetch)
+        subtitles = (data.get("subtitle") or {}).get("subtitles") or []
+        return [
+            SubtitleInfo(
+                lan=entry.get("lan", ""),
+                lan_doc=entry.get("lan_doc", ""),
+                url=entry.get("subtitle_url", ""),
+            )
+            for entry in subtitles
+            if isinstance(entry, dict) and entry.get("subtitle_url")
+        ]
+
     def get_danmaku_xml(self, cid: int) -> bytes:
         """Download danmaku in XML format."""
         url = ep.DANMAKU_XML_URL.format(cid=cid)
@@ -179,9 +217,7 @@ class BilibiliAPIClient:
 
     def get_subtitle_json(self, subtitle_url: str) -> dict:
         """Download subtitle JSON from direct URL."""
-        # Subtitle URLs may be protocol-relative, ensure https
-        if subtitle_url.startswith("//"):
-            subtitle_url = "https:" + subtitle_url
+        subtitle_url = trusted_https_url(subtitle_url, BILIBILI_RESOURCE_HOSTS)
         resp = self._client.get(
             subtitle_url,
         )
@@ -288,7 +324,7 @@ def _parse_playurl(data: dict) -> dict:
         "video_streams": video_streams,
         "audio_streams": audio_streams,
         "has_dolby": bool((dash.get("dolby") or {}).get("audio", [])),
-        "has_hdr": bool(dash.get("hdr", {})),
+        "has_hdr": any(stream.id == VideoQuality.QHDR.value for stream in video_streams),
         "raw_dash": dash,
     }
 
@@ -303,6 +339,32 @@ def _parse_stream_info(data: dict, default_mime: str, default_codec: int) -> Str
         bandwidth=data.get("bandwidth", 0),
         mime_type=data.get("mime_type") or data.get("mimeType") or default_mime,
     )
+
+
+def _build_fnval(
+    quality: VideoQuality,
+    preferred_codec: Optional[int] = None,
+    need_hdr: bool = False,
+    need_dolby: bool = False,
+    discover_all: bool = False,
+) -> int:
+    """Build the documented Bilibili DASH capability bitmask."""
+    fnval = FNVAL_DASH
+    if discover_all:
+        return fnval | FNVAL_HDR | FNVAL_4K | FNVAL_DOLBY_AUDIO | FNVAL_DOLBY_VIDEO | FNVAL_8K | FNVAL_AV1
+
+    if quality == VideoQuality.Q4K:
+        fnval |= FNVAL_4K
+    elif quality == VideoQuality.QHDR or need_hdr:
+        fnval |= FNVAL_HDR
+    elif quality == VideoQuality.Q_DOLBY or need_dolby:
+        fnval |= FNVAL_DOLBY_AUDIO | FNVAL_DOLBY_VIDEO
+    elif quality == VideoQuality.Q8K:
+        fnval |= FNVAL_8K
+
+    if preferred_codec == 13:
+        fnval |= FNVAL_AV1
+    return fnval
 
 
 class BilibiliAPIError(Exception):

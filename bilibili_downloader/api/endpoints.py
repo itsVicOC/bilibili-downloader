@@ -16,6 +16,7 @@ VIEW_ENDPOINT = "/x/web-interface/view"
 
 # Video playback URL (no WBI required as of 2026, but may change)
 PLAYURL_ENDPOINT = "/x/player/playurl"
+PLAYER_INFO_ENDPOINT = "/x/player/v2"
 
 # Video page list (multi-part videos)
 PAGELIST_ENDPOINT = "/x/player/pagelist"

@@ -1,5 +1,8 @@
 """Video info display widget."""
 
+import io
+
+from PIL import Image, UnidentifiedImageError
 from PySide6.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, Signal
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
@@ -10,6 +13,10 @@ from PySide6.QtWidgets import (
 )
 
 from bilibili_downloader.gui.resources.paths import asset_path
+from bilibili_downloader.utils.network import BILIBILI_RESOURCE_HOSTS, trusted_https_url
+
+MAX_COVER_BYTES = 10 * 1024 * 1024
+MAX_COVER_PIXELS = 25_000_000
 
 
 class _CoverLoadWorker(QObject):
@@ -32,11 +39,21 @@ class _CoverLoadRunner(QRunnable):
         import httpx
 
         try:
-            resp = httpx.get(self._url, timeout=10.0)
-            if resp.status_code == 200:
-                self._worker.loaded.emit(self._url, resp.content)
-                return
-        except httpx.HTTPError:
+            url = trusted_https_url(self._url, BILIBILI_RESOURCE_HOSTS)
+            content = bytearray()
+            with httpx.stream("GET", url, timeout=10.0) as resp:
+                resp.raise_for_status()
+                for chunk in resp.iter_bytes():
+                    content.extend(chunk)
+                    if len(content) > MAX_COVER_BYTES:
+                        raise ValueError("封面文件过大")
+            with Image.open(io.BytesIO(content)) as image:
+                if image.width * image.height > MAX_COVER_PIXELS:
+                    raise ValueError("封面像素尺寸过大")
+                image.verify()
+            self._worker.loaded.emit(self._url, bytes(content))
+            return
+        except (httpx.HTTPError, UnidentifiedImageError, ValueError, OSError):
             pass
         self._worker.failed.emit(self._url)
 

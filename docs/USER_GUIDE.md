@@ -12,7 +12,7 @@ BiliFlow 支持单个视频或多 P 视频的 BV 号、AV 号、`bilibili.com/vi
 
 1. 在首页输入框粘贴 BV/AV 号、完整视频链接或 b23.tv 短链。
 2. 点击“开始解析”，等待作品资料卡和可用规格更新。
-3. 选择画质与编码。需要时勾选“下载弹幕”或“下载字幕”。
+3. 多 P 视频可选择某一分 P 或全部分 P，再选择画质与编码。需要时勾选“下载弹幕”或“下载字幕”。
 4. 点击“加入下载队列”。队列表格会显示下载、合并、完成、失败或取消状态。
 5. 失败任务可在操作列重试；取消会停止网络传输并终止正在运行的 FFmpeg。
 
@@ -72,6 +72,9 @@ python -m bilibili_downloader download BV1GJ411x7h7 \
 | `-o, --output` | 输出目录；省略时读取应用设置 |
 | `-d, --danmaku` | 下载弹幕并转换为 ASS |
 | `-s, --subtitle` | 下载字幕并转换为 SRT |
+| `-c, --codec` | 视频编码：`7` AVC、`12` HEVC、`13` AV1 |
+| `-p, --page` | 分 P 序号或 `all`；默认 `1` |
+| `--subtitle-language` | 首选字幕语言代码；默认 `zh-Hans` |
 
 画质代码：
 
@@ -88,14 +91,25 @@ python -m bilibili_downloader download BV1GJ411x7h7 \
 
 | 数据 | 默认位置 |
 |---|---|
-| 配置 | `~/.bilibili-downloader/config.json` |
-| 损坏配置备份 | `~/.bilibili-downloader/config.json.bak` |
+| macOS 配置 | `~/Library/Application Support/BiliFlow/config.json` |
+| Windows 配置 | `%APPDATA%\\BiliFlow\\config.json` |
+| Linux 配置 | `$XDG_CONFIG_HOME/biliflow/config.json`，未设置时使用 `~/.config/biliflow/config.json` |
+| 损坏配置备份 | 与配置同目录的 `config.json.bak` |
 | 视频输出 | `~/Downloads/bilibili` |
 | 登录凭据 | 系统凭据库；不可用时回退到配置文件 |
 
-应用采用临时文件下载并支持 HTTP Range 续传。成功合并后会清理中间音视频文件；取消或异常退出后留下的临时文件可用于下次重试。
+旧版 `~/.bilibili-downloader/config.json` 会在首次启动时复制到当前平台的原生配置目录，原文件会保留。
+
+应用在输出目录的 `.biliflow-parts/` 中保存断点数据并支持 HTTP Range 续传。成功合并后会清理对应中间文件；取消、网络中断或异常退出后，下次以相同视频、分 P、画质和编码重试时会继续使用已有数据。该目录可能占用较大空间，确认不再续传后可手动删除。
 
 文件名会移除当前操作系统不允许的字符。多 P 视频会在标题后追加分 P 序号和名称，避免互相覆盖。
+
+## 升级与校验
+
+- 从旧版本升级时可以直接替换应用；配置和登录凭据保存在应用包之外，不会随替换被删除。
+- 首次启动新版本前，建议保留配置文件和未完成下载目录的备份。不要跨设备公开复制包含凭据的配置。
+- Release 提供 `SHA256SUMS.txt`。macOS/Linux 可运行 `shasum -a 256 <安装包>`，Windows PowerShell 可运行 `Get-FileHash <安装包> -Algorithm SHA256`，并与校验文件中的对应记录比较。
+- 跨大版本升级后若界面或设置异常，先退出应用并按“文件与配置”中的路径备份、移走 `config.json`，再重新启动生成默认配置。
 
 ## 限制与合规
 

@@ -62,6 +62,22 @@ def main():
         action="store_true",
         help="Download subtitles (SRT format)",
     )
+    download_parser.add_argument(
+        "--codec", "-c",
+        type=int,
+        choices=[7, 12, 13],
+        help="Video codec code: 7=AVC, 12=HEVC, 13=AV1 (default: settings)",
+    )
+    download_parser.add_argument(
+        "--page", "-p",
+        default="1",
+        help="Multi-part page number, or 'all' (default: 1)",
+    )
+    download_parser.add_argument(
+        "--subtitle-language",
+        default="zh-Hans",
+        help="Preferred Bilibili subtitle language code (default: zh-Hans)",
+    )
 
     args = parser.parse_args()
 
@@ -113,7 +129,7 @@ def _cli_download(args: argparse.Namespace):
     """CLI download: download a video by BV/AV number or URL."""
     from bilibili_downloader.api.client import BilibiliAPIClient
     from bilibili_downloader.core.batch import BatchResolver
-    from bilibili_downloader.core.downloader import StreamDownloader
+    from bilibili_downloader.core.download_service import DownloadService
     from bilibili_downloader.core.models import DownloadItem
     from bilibili_downloader.utils.config import ConfigManager
 
@@ -126,18 +142,22 @@ def _cli_download(args: argparse.Namespace):
 
     print(f"Downloading {args.source} at {quality.label}...")
 
-    client = BilibiliAPIClient()
+    client = BilibiliAPIClient(sessdata=settings.sessdata or None)
+    service = None
     try:
         info = BatchResolver(client).resolve_one(args.source)
         print(f"Title: {info.title}")
 
-        item = DownloadItem(
-            video_info=info,
-            selected_quality=quality,
-            output_path=output_dir,
-            download_danmaku=args.danmaku,
-            download_subtitle=args.subtitle,
-        )
+        if str(args.page).lower() == "all":
+            page_infos = [info.for_page(page) for page in info.pages] or [info]
+        else:
+            try:
+                page_number = int(args.page)
+            except ValueError as exc:
+                raise ValueError("--page must be a positive page number or 'all'") from exc
+            if page_number < 1 or page_number > max(1, len(info.pages)):
+                raise ValueError(f"--page must be between 1 and {max(1, len(info.pages))}")
+            page_infos = [info.for_page(info.pages[page_number - 1])] if info.pages else [info]
 
         def progress(pct, text):
             bar_len = 30
@@ -145,11 +165,31 @@ def _cli_download(args: argparse.Namespace):
             bar = "=" * filled + "-" * (bar_len - filled)
             print(f"\r[{bar}] {pct * 100:5.1f}%  {text}", end="", flush=True)
 
-        downloader = StreamDownloader(
+        service = DownloadService(
             client, output_dir, ffmpeg_path=settings.ffmpeg_path or None,
         )
-        output = downloader.download(item, progress)
-        print(f"\nSaved to: {output}")
+        codec = args.codec or settings.default_video_codec
+        for index, page_info in enumerate(page_infos, start=1):
+            if len(page_infos) > 1:
+                print(f"\n[{index}/{len(page_infos)}] CID {page_info.cid}")
+            item = DownloadItem(
+                video_info=page_info,
+                selected_quality=quality,
+                selected_video_codec=codec,
+                output_path=output_dir,
+                download_danmaku=args.danmaku,
+                download_subtitle=args.subtitle,
+                selected_subtitle_lan=args.subtitle_language,
+            )
+            outcome = service.download(item, progress)
+            print(f"\nSaved to: {outcome.video_path}")
+            for warning in outcome.warnings:
+                print(f"Warning: {warning}")
+    except KeyboardInterrupt:
+        if service is not None:
+            service.cancel()
+        print("\nDownload cancelled")
+        raise SystemExit(130)
     except Exception as e:
         print(f"\nError: {e}")
         sys.exit(1)
@@ -162,6 +202,7 @@ def _launch_gui():
     try:
         from PySide6.QtGui import QIcon
         from PySide6.QtWidgets import QApplication
+
         from bilibili_downloader.gui.main_window import MainWindow
         from bilibili_downloader.gui.resources.paths import asset_path
         from bilibili_downloader.gui.resources.theme import ThemeManager

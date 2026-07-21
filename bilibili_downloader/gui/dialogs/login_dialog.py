@@ -11,10 +11,10 @@ from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QPushButton,
     QTabWidget,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -101,6 +101,7 @@ class LoginDialog(QDialog):
         self._poll_timer = None
         self._poll_in_flight = False
         self._pending_sessdata = ""
+        self._logout_requested = False
 
         self.setWindowTitle("账号登录")
         self.setMinimumSize(480, 540)
@@ -118,7 +119,7 @@ class LoginDialog(QDialog):
         layout.addWidget(title)
         layout.addWidget(caption)
 
-        tabs = QTabWidget()
+        self._tabs = QTabWidget()
 
         # -- Manual Cookie Tab (primary, since QR API is broken) --
         cookie_tab = QWidget()
@@ -131,31 +132,40 @@ class LoginDialog(QDialog):
         steps_label.setObjectName("SectionTitle")
         cookie_layout.addWidget(steps_label)
 
-        steps = QTextEdit()
-        steps.setReadOnly(True)
-        steps.setMaximumHeight(130)
-        steps.setHtml(
+        self._instructions = QLabel()
+        self._instructions.setObjectName("LoginInstructions")
+        self._instructions.setWordWrap(True)
+        self._instructions.setOpenExternalLinks(True)
+        self._instructions.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        self._instructions.setAttribute(Qt.WA_MacShowFocusRect, False)
+        self._instructions.setText(
             '<p style="margin:4px 0;font-size:13px;">'
-            '<b>1.</b> 在浏览器中打开 <a href="https://www.bilibili.com">bilibili.com</a> 并登录</p>'
+            '<b>1.</b> 登录 <a href="https://www.bilibili.com">bilibili.com</a></p>'
             '<p style="margin:4px 0;font-size:13px;">'
-            '<b>2.</b> 按 <code>F12</code> 打开开发者工具</p>'
+            '<b>2.</b> 打开开发者工具：Windows/Linux 按 <code>F12</code>，'
+            'macOS 按 <code>Command+Option+I</code></p>'
             '<p style="margin:4px 0;font-size:13px;">'
-            '<b>3.</b> 切换到 <code>Application</code>（应用）选项卡</p>'
+            '<b>3.</b> 进入 <code>Application</code>（应用）→ '
+            '<code>Cookies</code> → <code>bilibili.com</code></p>'
             '<p style="margin:4px 0;font-size:13px;">'
-            '<b>4.</b> 左侧展开 <code>Cookies</code> → 点击 <code>https://www.bilibili.com</code></p>'
-            '<p style="margin:4px 0;font-size:13px;">'
-            '<b>5.</b> 在右侧列表中找到 <code>SESSDATA</code>，复制其值</p>'
-            '<p style="margin:4px 0;font-size:13px;">'
-            '<b>6.</b> 粘贴到下方输入框并点击"验证登录"</p>'
+            '<b>4.</b> 复制 <code>SESSDATA</code> 的值并粘贴到下方</p>'
         )
-        cookie_layout.addWidget(steps)
+        cookie_layout.addWidget(self._instructions)
 
         input_label = QLabel("粘贴 SESSDATA 值")
         input_label.setObjectName("MetaLabel")
         cookie_layout.addWidget(input_label)
         self._cookie_input = ChineseLineEdit()
         self._cookie_input.setPlaceholderText("在此粘贴你的 SESSDATA 值")
-        cookie_layout.addWidget(self._cookie_input)
+        self._cookie_input.setEchoMode(QLineEdit.Password)
+        cookie_input_row = QHBoxLayout()
+        cookie_input_row.addWidget(self._cookie_input, 1)
+        self._cookie_visibility_btn = QPushButton("显示")
+        self._cookie_visibility_btn.setObjectName("SubtleButton")
+        self._cookie_visibility_btn.setCheckable(True)
+        self._cookie_visibility_btn.toggled.connect(self._toggle_cookie_visibility)
+        cookie_input_row.addWidget(self._cookie_visibility_btn)
+        cookie_layout.addLayout(cookie_input_row)
 
         self._validate_btn = QPushButton("验证登录")
         self._validate_btn.setObjectName("PrimaryButton")
@@ -163,7 +173,7 @@ class LoginDialog(QDialog):
         cookie_layout.addWidget(self._validate_btn)
 
         cookie_layout.addStretch()
-        tabs.addTab(cookie_tab, "手动输入 Cookie")
+        self._tabs.addTab(cookie_tab, "手动输入 Cookie")
 
         # -- QR Code Tab (may not work due to B站 API changes) --
         qr_tab = QWidget()
@@ -173,7 +183,7 @@ class LoginDialog(QDialog):
 
         # Warning banner
         warning = QLabel(
-            "⚠ 扫码登录当前因B站API变更可能不可用，请使用上方手动输入Cookie方式。"
+            "扫码登录受 B 站接口变更影响，暂不可用时请改用手动输入 Cookie。"
         )
         warning.setWordWrap(True)
         warning.setObjectName("WarningBanner")
@@ -183,7 +193,7 @@ class LoginDialog(QDialog):
         self._qr_label.setObjectName("EmptyCover")
         self._qr_label.setAlignment(Qt.AlignCenter)
         self._qr_label.setMinimumSize(250, 250)
-        self._qr_label.setText("点击下方二维码生成二维码")
+        self._qr_label.setText("点击下方按钮生成二维码")
         self._qr_label.setAlignment(Qt.AlignCenter)
         qr_layout.addWidget(self._qr_label)
 
@@ -205,12 +215,17 @@ class LoginDialog(QDialog):
         qr_layout.addWidget(self._refresh_btn, alignment=Qt.AlignCenter)
 
         qr_layout.addStretch()
-        tabs.addTab(qr_tab, "扫码登录（可能不可用）")
+        self._tabs.addTab(qr_tab, "扫码登录")
 
-        layout.addWidget(tabs)
+        layout.addWidget(self._tabs)
 
         # Buttons
         btn_layout = QHBoxLayout()
+        if self._sessdata:
+            logout_btn = QPushButton("退出登录")
+            logout_btn.setObjectName("DangerButton")
+            logout_btn.clicked.connect(self._logout)
+            btn_layout.addWidget(logout_btn)
         btn_layout.addStretch()
         cancel_btn = QPushButton("关闭")
         cancel_btn.setObjectName("SubtleButton")
@@ -245,7 +260,7 @@ class LoginDialog(QDialog):
     def _on_qr_generated(self, _url: str, oauth_key: str, qr_img: Image.Image):
         """Render generated QR code and start polling."""
         self._oauth_key = oauth_key
-        logger.info("QR code generated, key=%s...", oauth_key[:8])
+        logger.info("QR code generated")
 
         buffer = io.BytesIO()
         qr_img.save(buffer, format="PNG")
@@ -340,6 +355,25 @@ class LoginDialog(QDialog):
         self._cookie_runner = _CookieValidateRunner(self._cookie_worker, sessdata)
         QThreadPool.globalInstance().start(self._cookie_runner)
 
+    def _toggle_cookie_visibility(self, visible: bool):
+        self._cookie_input.setEchoMode(
+            QLineEdit.Normal if visible else QLineEdit.Password
+        )
+        self._cookie_visibility_btn.setText("隐藏" if visible else "显示")
+
+    def _logout(self):
+        answer = QMessageBox.question(
+            self,
+            "退出登录",
+            "确认从本机凭据库和配置中清除 B 站登录信息吗？",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer == QMessageBox.Yes:
+            self._sessdata = None
+            self._logout_requested = True
+            self.accept()
+
     def _on_cookie_validated(self, valid: bool):
         """Handle SESSDATA validation result."""
         self._validate_btn.setEnabled(True)
@@ -359,6 +393,10 @@ class LoginDialog(QDialog):
     def get_sessdata(self) -> Optional[str]:
         """Return the SESSDATA from login."""
         return self._sessdata
+
+    @property
+    def logout_requested(self) -> bool:
+        return self._logout_requested
 
     def closeEvent(self, event):
         """Clean up resources."""

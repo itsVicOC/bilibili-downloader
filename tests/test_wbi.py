@@ -1,6 +1,5 @@
 """Tests for WBI signature module."""
 
-import pytest
 from bilibili_downloader.api.wbi import WBISigner
 
 

@@ -4,8 +4,7 @@ from enum import IntEnum
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseModel, Field
-
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 _VIDEO_QUALITY_LABELS = {
     6: "240P",
@@ -50,6 +49,8 @@ VIDEO_CODEC_MAP = {
 AUDIO_CODEC_MAP = {
     0: "M4A",
     30280: "AAC 192kbps",
+    30250: "Dolby Atmos",
+    30251: "Hi-Res FLAC",
     30285: "Dolby Atmos",
     30216: "AAC 64kbps",
 }
@@ -117,6 +118,19 @@ class VideoInfo(BaseModel):
     def is_multi_part(self) -> bool:
         return len(self.pages) > 1
 
+    def for_page(self, page: VideoPage) -> "VideoInfo":
+        """Return an independent video snapshot targeting one page."""
+        return self.model_copy(
+            update={
+                "cid": page.cid,
+                "duration": page.duration or self.duration,
+                "video_streams": [],
+                "audio_streams": [],
+                "subtitle_list": [],
+            },
+            deep=True,
+        )
+
 
 class DownloadItem(BaseModel):
     """Tracks a single download task."""
@@ -153,8 +167,25 @@ class DownloadItem(BaseModel):
         return f"{safe_title}.mp4"
 
 
+class DownloadOutcome(BaseModel):
+    """User-visible result for the complete media download workflow."""
+
+    video_path: str
+    danmaku_path: Optional[str] = None
+    subtitle_paths: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    actual_quality: Optional[int] = None
+    actual_video_codec: Optional[int] = None
+
+    @property
+    def is_partial(self) -> bool:
+        return bool(self.warnings)
+
+
 class AppSettings(BaseModel):
     """Application settings persisted to JSON."""
+    model_config = ConfigDict(validate_assignment=True)
+
     output_dir: str = Field(default_factory=lambda: str(Path.home() / "Downloads" / "bilibili"))
     default_quality: VideoQuality = VideoQuality.Q1080P
     default_video_codec: int = 12  # HEVC
@@ -162,6 +193,20 @@ class AppSettings(BaseModel):
     download_subtitle: bool = False
     sessdata: str = ""
     ffmpeg_path: str = ""
-    max_concurrent_downloads: int = 3
-    dark_mode: bool = True
+    max_concurrent_downloads: int = Field(default=3, ge=1, le=8)
     last_login_at: Optional[str] = None
+
+    @field_validator("output_dir")
+    @classmethod
+    def validate_output_dir(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("output_dir cannot be empty")
+        return value
+
+    @field_validator("default_video_codec")
+    @classmethod
+    def validate_video_codec(cls, value: int) -> int:
+        if value not in VIDEO_CODEC_MAP:
+            raise ValueError("unsupported default_video_codec")
+        return value

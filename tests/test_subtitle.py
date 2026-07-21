@@ -1,6 +1,5 @@
 """Tests for subtitle converter."""
 
-import json
 import tempfile
 from pathlib import Path
 

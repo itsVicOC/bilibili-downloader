@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from bilibili_downloader.core.models import VIDEO_CODEC_MAP, VideoQuality
 from bilibili_downloader.gui.resources.paths import asset_path
 
 # Shared button size (width, height)
@@ -137,6 +138,35 @@ class DownloadListWidget(QTableWidget):
         )
         return download_id
 
+    def add_resolution_error(self, error: str) -> int:
+        """Add a persistent batch-resolution error row without a modal dialog."""
+        self._clear_placeholder()
+        download_id = self._next_id
+        self._next_id += 1
+        row = self.rowCount()
+        self.insertRow(row)
+        self._id_to_row[download_id] = row
+
+        title = QTableWidgetItem(error[:80])
+        title.setToolTip(error)
+        title.setData(Qt.UserRole, download_id)
+        self.setItem(row, 0, title)
+        self.setItem(row, 1, QTableWidgetItem("解析失败"))
+        progress = QProgressBar()
+        progress.setValue(0)
+        _set_progress_state(progress, "ErrorProgress")
+        self.setCellWidget(row, 2, progress)
+        status = QTableWidgetItem("未加入队列")
+        status.setForeground(Qt.red)
+        status.setToolTip(error)
+        self.setItem(row, 3, status)
+        self.setCellWidget(
+            row,
+            4,
+            _wrap_btn(_create_delete_btn(download_id, self._on_delete_clicked)),
+        )
+        return download_id
+
     def _row_for(self, download_id: int) -> int | None:
         """Return the current row index for a download ID."""
         return self._id_to_row.get(download_id)
@@ -188,7 +218,7 @@ class DownloadListWidget(QTableWidget):
         if status_item:
             status_item.setText(status_text)
 
-    def mark_done(self, download_id: int):
+    def mark_done(self, download_id: int, outcome=None):
         """Mark a download as complete."""
         self.unregister_worker(download_id)
         row = self._row_for(download_id)
@@ -201,8 +231,23 @@ class DownloadListWidget(QTableWidget):
 
         status_item = self.item(row, 3)
         if status_item:
-            status_item.setText("完成")
-            status_item.setForeground(Qt.green)
+            warnings = list(getattr(outcome, "warnings", []) or [])
+            status_item.setText("部分完成" if warnings else "完成")
+            status_item.setForeground(Qt.yellow if warnings else Qt.green)
+            status_item.setToolTip("\n".join(warnings))
+
+        if outcome is not None and outcome.actual_quality is not None:
+            quality = next(
+                (entry.label for entry in VideoQuality if entry.value == outcome.actual_quality),
+                str(outcome.actual_quality),
+            )
+            codec = VIDEO_CODEC_MAP.get(
+                outcome.actual_video_codec,
+                str(outcome.actual_video_codec or ""),
+            )
+            spec_item = self.item(row, 1)
+            if spec_item:
+                spec_item.setText(f"{quality} · {codec}")
 
         self.setCellWidget(
             row, 4,
@@ -275,6 +320,10 @@ class DownloadListWidget(QTableWidget):
                 worker.cancel()
 
     @property
+    def has_active_workers(self) -> bool:
+        return bool(self._workers)
+
+    @property
     def running_workers(self):
         """Yield running worker references."""
         for worker in self._workers.values():
@@ -289,7 +338,7 @@ class DownloadListWidget(QTableWidget):
         if row is not None:
             self.removeRow(row)
             self._rebuild_row_mapping()
-            if not self._items:
+            if not self._id_to_row:
                 self._show_placeholder()
 
     def _show_placeholder(self):

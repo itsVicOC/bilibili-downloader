@@ -1,6 +1,7 @@
 """Tests for Pydantic data models."""
 
 import pytest
+
 from bilibili_downloader.core.models import (
     DownloadItem,
     StreamInfo,
@@ -75,6 +76,25 @@ class TestVideoInfo:
         assert info.video_streams == []
         assert not info.is_multi_part
 
+    def test_for_page_resets_page_specific_streams(self):
+        page = VideoPage(cid=22, page=2, part="Second", duration=42)
+        info = VideoInfo(
+            bvid="BV1xx",
+            cid=11,
+            duration=100,
+            pages=[VideoPage(cid=11), page],
+            video_streams=[StreamInfo(id=80)],
+            subtitle_list=[SubtitleInfo(lan="zh-Hans")],
+        )
+
+        selected = info.for_page(page)
+
+        assert selected.cid == 22
+        assert selected.duration == 42
+        assert selected.video_streams == []
+        assert selected.subtitle_list == []
+        assert info.cid == 11
+
 
 class TestDownloadItem:
     def test_filename_single(self):
@@ -123,4 +143,23 @@ class TestAppSettings:
         assert s.output_dir == str(Path.home() / "Downloads" / "bilibili")
         assert s.default_quality == VideoQuality.Q1080P
         assert s.max_concurrent_downloads == 3
-        assert s.dark_mode is True
+        assert s.default_video_codec == 12
+
+    @pytest.mark.parametrize("value", [0, 9])
+    def test_concurrency_bounds_apply_on_assignment(self, value):
+        from pydantic import ValidationError
+
+        from bilibili_downloader.core.models import AppSettings
+
+        settings = AppSettings()
+        with pytest.raises(ValidationError):
+            settings.max_concurrent_downloads = value
+
+    def test_codec_assignment_is_validated(self):
+        from pydantic import ValidationError
+
+        from bilibili_downloader.core.models import AppSettings
+
+        settings = AppSettings()
+        with pytest.raises(ValidationError):
+            settings.default_video_codec = 99

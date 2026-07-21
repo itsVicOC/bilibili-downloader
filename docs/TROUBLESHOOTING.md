@@ -15,7 +15,7 @@
 确认已激活虚拟环境并安装项目依赖：
 
 ```bash
-python -m pip install -e ".[dev]"
+python -m pip install -c constraints.txt -e ".[dev]"
 python -m bilibili_downloader
 ```
 
@@ -66,6 +66,6 @@ ffmpeg -version
 
 ## 配置损坏
 
-应用会把无法解析的配置备份为 `~/.bilibili-downloader/config.json.bak` 并恢复默认设置。若问题持续，关闭应用后移动 `config.json`，再重新启动配置。
+应用会把无法解析的配置备份为同目录的 `config.json.bak` 并恢复默认设置。配置目录在 macOS 为 `~/Library/Application Support/BiliFlow`，Windows 为 `%APPDATA%\\BiliFlow`，Linux 为 `$XDG_CONFIG_HOME/biliflow`（默认 `~/.config/biliflow`）。若问题持续，关闭应用后移动 `config.json`，再重新启动配置。
 
 报告仍未解决的问题时，请按 [CONTRIBUTING.md](../CONTRIBUTING.md) 提供环境、复现步骤和已脱敏日志。

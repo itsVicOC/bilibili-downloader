@@ -1,6 +1,14 @@
 """Tests for URL validators."""
 
-from bilibili_downloader.utils.validators import extract_bvid, extract_aid, is_bilibili_url, sanitize_filename
+import pytest
+
+from bilibili_downloader.utils.network import BILIBILI_RESOURCE_HOSTS, trusted_https_url
+from bilibili_downloader.utils.validators import (
+    extract_aid,
+    extract_bvid,
+    is_bilibili_url,
+    sanitize_filename,
+)
 
 
 class TestExtractBVID:
@@ -23,6 +31,8 @@ class TestExtractBVID:
     def test_invalid_returns_none(self):
         assert extract_bvid("not_a_bv_number") is None
         assert extract_bvid("https://youtube.com/watch?v=abc") is None
+        assert extract_bvid("https://example.com/BV1GJ411x7h7") is None
+        assert extract_bvid("prefix BV1GJ411x7h7 suffix") is None
 
 
 class TestExtractAID:
@@ -34,6 +44,7 @@ class TestExtractAID:
 
     def test_invalid_returns_none(self):
         assert extract_aid("not_an_av_number") is None
+        assert extract_aid("https://example.com/video/av123456") is None
 
 
 class TestIsBilibiliURL:
@@ -53,6 +64,11 @@ class TestIsBilibiliURL:
 
     def test_non_bilibili(self):
         assert is_bilibili_url("https://youtube.com/watch?v=abc") is False
+
+    def test_http_url_is_rejected(self):
+        assert is_bilibili_url(
+            "http://www.bilibili.com/video/BV1GJ411x7h7"
+        ) is False
 
 
 class TestSanitizeFilename:
@@ -92,3 +108,36 @@ class TestSanitizeFilename:
         # Normal names should pass through
         assert sanitize_filename("Content") == "Content"
         assert sanitize_filename("Contact") == "Contact"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://i0.hdslb.com/file.json",
+        "https://user:pass@i0.hdslb.com/file.json",
+        "https://hdslb.com.example.org/file.json",
+        "https://example.org/file.json",
+        "https://i0.hdslb.com:8443/file.json",
+    ],
+)
+def test_trusted_https_url_rejects_unsafe_destinations(url):
+    with pytest.raises(ValueError):
+        trusted_https_url(url, BILIBILI_RESOURCE_HOSTS)
+
+
+def test_trusted_https_url_accepts_protocol_relative_resource_url():
+    assert trusted_https_url(
+        "//i0.hdslb.com/file.json", BILIBILI_RESOURCE_HOSTS
+    ) == "https://i0.hdslb.com/file.json"
+
+
+def test_trusted_https_url_accepts_bilibili_partner_edge_domain():
+    url = "https://node.edge.mountaintoys.cn/video.m4s"
+    assert trusted_https_url(url, BILIBILI_RESOURCE_HOSTS) == url
+
+
+def test_trusted_https_url_does_not_trust_partner_parent_domain():
+    with pytest.raises(ValueError):
+        trusted_https_url(
+            "https://mountaintoys.cn/video.m4s", BILIBILI_RESOURCE_HOSTS
+        )

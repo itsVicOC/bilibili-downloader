@@ -3,7 +3,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from bilibili_downloader.core.ffmpeg import FFmpegManager
+from bilibili_downloader.core.ffmpeg import FFmpegManager, _subprocess_window_kwargs
 
 
 class TestFFmpegFindExecutable:
@@ -26,6 +26,16 @@ class TestFFmpegFindExecutable:
                 # Should find first fallback location
                 result = FFmpegManager.find_executable()
                 assert result is not None
+
+
+def test_windows_subprocesses_hide_console(monkeypatch):
+    monkeypatch.setattr("bilibili_downloader.core.ffmpeg.platform.system", lambda: "Windows")
+    monkeypatch.setattr(
+        "bilibili_downloader.core.ffmpeg.subprocess.CREATE_NO_WINDOW", 0x08000000,
+        raising=False,
+    )
+
+    assert _subprocess_window_kwargs() == {"creationflags": 0x08000000}
 
 
 class TestFFmpegCheckAvailable:
@@ -117,3 +127,45 @@ class TestFFmpegMerge:
         assert success
         assert output.read_bytes() == b"merged"
         assert commands[0][-1].endswith("episode.part.mp4")
+
+    def test_keyboard_interrupt_kills_ffmpeg(self, monkeypatch, tmp_path):
+        state = {"killed": False, "waited": False}
+
+        class FakeProcess:
+            returncode = None
+
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            def poll(self):
+                return None
+
+            def kill(self):
+                state["killed"] = True
+
+            def wait(self):
+                state["waited"] = True
+
+        monkeypatch.setattr(
+            FFmpegManager, "find_executable", lambda _custom=None: Path("/fake/ffmpeg")
+        )
+        monkeypatch.setattr(
+            "bilibili_downloader.core.ffmpeg.subprocess.Popen", FakeProcess
+        )
+        monkeypatch.setattr(
+            "bilibili_downloader.core.ffmpeg.time.sleep",
+            lambda _seconds: (_ for _ in ()).throw(KeyboardInterrupt()),
+        )
+
+        try:
+            FFmpegManager.merge_streams(
+                tmp_path / "video.m4s",
+                tmp_path / "audio.m4s",
+                tmp_path / "output.mp4",
+            )
+        except KeyboardInterrupt:
+            pass
+        else:
+            raise AssertionError("KeyboardInterrupt should propagate")
+
+        assert state == {"killed": True, "waited": True}

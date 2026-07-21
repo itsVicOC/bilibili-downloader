@@ -47,9 +47,8 @@ class ResolveRunner(QRunnable):
                 playurl_data = self._worker._client.get_play_url(
                     bvid=info.bvid,
                     cid=info.cid,
-                    quality=VideoQuality.Q1080P,
-                    need_hdr=True,
-                    need_dolby=True,
+                    quality=VideoQuality.Q8K,
+                    discover_all=True,
                 )
                 video_streams = playurl_data.get("video_streams", [])
                 audio_streams = playurl_data.get("audio_streams", [])

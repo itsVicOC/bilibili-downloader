@@ -63,14 +63,19 @@ class BatchRunner(QRunnable):
                     break
                 try:
                     info = resolver.resolve_one(url)
-                    item = DownloadItem(
-                        video_info=info,
-                        selected_quality=self._quality,
-                        selected_video_codec=self._codec,
-                        download_danmaku=self._download_danmaku,
-                        download_subtitle=self._download_subtitle,
+                    page_infos = (
+                        [info.for_page(page) for page in info.pages]
+                        if info.is_multi_part else [info]
                     )
-                    self._worker.item_ready.emit(item)
+                    for page_info in page_infos:
+                        item = DownloadItem(
+                            video_info=page_info,
+                            selected_quality=self._quality,
+                            selected_video_codec=self._codec,
+                            download_danmaku=self._download_danmaku,
+                            download_subtitle=self._download_subtitle,
+                        )
+                        self._worker.item_ready.emit(item)
                 except Exception as e:  # noqa: BLE001
                     logger.warning("Batch resolve failed for %s: %s", url, e)
                     self._worker.error.emit(f"无法加入队列 {url}: {e}")

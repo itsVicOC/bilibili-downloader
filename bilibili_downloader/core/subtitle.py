@@ -2,10 +2,14 @@
 
 import json
 from pathlib import Path
+from urllib.parse import urljoin
 
 import httpx
 
 from bilibili_downloader.api.endpoints import USER_AGENT
+from bilibili_downloader.utils.network import BILIBILI_RESOURCE_HOSTS, trusted_https_url
+
+MAX_SUBTITLE_BYTES = 10 * 1024 * 1024
 
 
 class SubtitleDownloader:
@@ -14,20 +18,35 @@ class SubtitleDownloader:
     @staticmethod
     def download_and_convert(subtitle_url: str, output_path: Path) -> None:
         """Download subtitle JSON and convert to SRT format."""
-        # Subtitle URLs may be protocol-relative
-        if subtitle_url.startswith("//"):
-            subtitle_url = "https:" + subtitle_url
+        subtitle_url = trusted_https_url(subtitle_url, BILIBILI_RESOURCE_HOSTS)
 
-        resp = httpx.get(
-            subtitle_url,
-            headers={
-                "User-Agent": USER_AGENT,
-                "Referer": "https://www.bilibili.com/",
-            },
-            timeout=30.0,
-        )
-        resp.raise_for_status()
-        data = resp.json()
+        headers = {
+            "User-Agent": USER_AGENT,
+            "Referer": "https://www.bilibili.com/",
+        }
+        with httpx.Client(headers=headers, timeout=30.0, follow_redirects=False) as client:
+            current_url = subtitle_url
+            for _ in range(8):
+                with client.stream("GET", current_url) as resp:
+                    if resp.is_redirect:
+                        location = resp.headers.get("location")
+                        if not location:
+                            resp.raise_for_status()
+                        current_url = trusted_https_url(
+                            urljoin(current_url, location),
+                            BILIBILI_RESOURCE_HOSTS,
+                        )
+                        continue
+                    resp.raise_for_status()
+                    content = bytearray()
+                    for chunk in resp.iter_bytes():
+                        content.extend(chunk)
+                        if len(content) > MAX_SUBTITLE_BYTES:
+                            raise RuntimeError("字幕文件过大")
+                    data = json.loads(content)
+                    break
+            else:
+                raise RuntimeError("字幕地址重定向次数过多")
 
         body = data.get("body", [])
         SubtitleDownloader._write_srt(body, output_path)

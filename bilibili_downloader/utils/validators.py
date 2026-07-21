@@ -2,9 +2,10 @@
 
 import re
 from typing import Optional
+from urllib.parse import urljoin
 
 from bilibili_downloader.api.endpoints import USER_AGENT
-
+from bilibili_downloader.utils.network import BILIBILI_WEB_HOSTS, trusted_https_url
 
 # BV number pattern: BV followed by 10 alphanumeric characters (case insensitive)
 BV_PATTERN = re.compile(r"[Bb][Vv]([A-Za-z0-9]{10})")
@@ -14,13 +15,14 @@ AV_PATTERN = re.compile(r"av(\d+)", re.IGNORECASE)
 
 # Full URL pattern
 FULL_URL_PATTERN = re.compile(
-    r"https?://(?:www\.|m\.)?bilibili\.com/video/(BV[a-zA-Z0-9]+|av\d+)",
+    r"https://(?:www\.|m\.)?bilibili\.com/video/"
+    r"(BV[a-zA-Z0-9]{10}|av\d+)(?:[/?#][^\s]*)?",
     re.IGNORECASE,
 )
 
 # Short link pattern
 SHORT_URL_PATTERN = re.compile(
-    r"https?://b23\.tv/[A-Za-z0-9]+(?:[/?#][^\s]*)?",
+    r"https://b23\.tv/[A-Za-z0-9]+(?:[/?#][^\s]*)?",
     re.IGNORECASE,
 )
 
@@ -40,12 +42,12 @@ def extract_bvid(text: str) -> Optional[str]:
     text = text.strip()
 
     # Direct BV number
-    match = BV_PATTERN.search(text)
+    match = BV_PATTERN.fullmatch(text)
     if match:
         return f"BV{match.group(1)}"
 
     # Full URL with BV
-    match = FULL_URL_PATTERN.search(text)
+    match = FULL_URL_PATTERN.fullmatch(text)
     if match:
         raw = match.group(1)
         if raw.upper().startswith("BV"):
@@ -73,19 +75,26 @@ def resolve_short_link(text: str) -> Optional[str]:
         return None
 
     try:
-        resp = httpx.get(
-            match.group(0),
+        current_url = trusted_https_url(match.group(0), BILIBILI_WEB_HOSTS)
+        with httpx.Client(
             headers={"User-Agent": USER_AGENT},
             timeout=10.0,
-            follow_redirects=True,
-        )
-        bvid = extract_bvid(str(resp.url))
-        if bvid:
-            return bvid
-
-        location = resp.headers.get("location", "")
-        return extract_bvid(location)
-    except httpx.HTTPError:
+            follow_redirects=False,
+        ) as client:
+            for _ in range(8):
+                resp = client.get(current_url)
+                if not resp.is_redirect:
+                    resp.raise_for_status()
+                    return extract_bvid(current_url)
+                location = resp.headers.get("location")
+                if not location:
+                    return None
+                current_url = trusted_https_url(
+                    urljoin(current_url, location),
+                    BILIBILI_WEB_HOSTS,
+                )
+        return None
+    except (httpx.HTTPError, ValueError):
         pass
     return None
 
@@ -98,11 +107,11 @@ def extract_aid(text: str) -> Optional[int]:
     """
     text = text.strip()
 
-    match = AV_PATTERN.search(text)
+    match = AV_PATTERN.fullmatch(text)
     if match:
         return int(match.group(1))
 
-    match = FULL_URL_PATTERN.search(text)
+    match = FULL_URL_PATTERN.fullmatch(text)
     if match:
         raw = match.group(1)
         if raw.lower().startswith("av"):
@@ -117,7 +126,6 @@ def is_bilibili_url(text: str) -> bool:
     return bool(
         extract_bvid(text)
         or extract_aid(text)
-        or FULL_URL_PATTERN.search(text)
         or is_short_link(text)
     )
 

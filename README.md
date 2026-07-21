@@ -18,6 +18,20 @@
 | Windows 10/11（x64） | `BilibiliDownloader-Windows-<version>.zip` | 完整解压后运行目录内的 `BilibiliDownloader.exe` |
 | Linux | 暂无预构建包 | 按下方“从源码运行”操作 |
 
+Release 同时提供 `SHA256SUMS.txt`。下载后可核对安装包完整性：
+
+```bash
+# macOS / Linux；将文件名替换为实际下载的安装包
+shasum -a 256 BilibiliDownloader-macOS-vX.Y.Z.zip
+```
+
+```powershell
+# Windows PowerShell
+Get-FileHash .\BilibiliDownloader-Windows-vX.Y.Z.zip -Algorithm SHA256
+```
+
+将输出与同一 Release 中 `SHA256SUMS.txt` 的对应记录比较。
+
 应用需要 FFmpeg 合并音视频：
 
 - macOS：`brew install ffmpeg`
@@ -33,7 +47,7 @@
 - 支持 BV、AV、Bilibili 完整 URL 和 b23.tv 短链。
 - 支持 240P 至 8K、HDR、Dolby Vision，以及 AVC、HEVC、AV1 编码选择。
 - 自动选择匹配音轨并通过 FFmpeg 无损封装为 MP4。
-- 支持多 P 视频、批量解析、并发下载、取消、失败重试和临时文件续传。
+- 支持多 P 单选或全选、批量解析、并发下载、取消、失败重试和跨重启续传。
 - 支持弹幕转 ASS、字幕转 SRT。
 - 支持 SESSDATA 登录；优先保存到系统凭据库。
 - 网络解析、登录检查、封面加载与下载任务均在后台执行，避免阻塞界面。
@@ -60,7 +74,7 @@ git clone https://github.com/itsVicOC/bilibili-downloader.git
 cd bilibili-downloader
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -e ".[dev]"
+python -m pip install -c constraints.txt -e ".[dev]"
 python -m bilibili_downloader
 ```
 
@@ -77,7 +91,9 @@ python -m bilibili_downloader download BV1GJ411x7h7 \
   --quality 80 \
   --output ./downloads \
   --danmaku \
-  --subtitle
+  --subtitle \
+  --page all \
+  --codec 12
 ```
 
 运行 `python -m bilibili_downloader --help` 或阅读 [用户指南](docs/USER_GUIDE.md) 查看全部参数。

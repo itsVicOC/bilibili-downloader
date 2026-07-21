@@ -90,6 +90,7 @@ class FFmpegManager:
                 [str(exe), "-version"],
                 capture_output=True,
                 timeout=5,
+                **_subprocess_window_kwargs(),
             )
             if result.returncode == 0:
                 version_line = (result.stdout + result.stderr).decode(
@@ -159,6 +160,7 @@ class FFmpegManager:
         _remove_partial_output(safe_output)
         cmd = cls.build_merge_command(video_path, audio_path, safe_output, executable=str(exe))
 
+        process = None
         try:
             # A file-backed stderr avoids deadlocking when FFmpeg produces more
             # output than an unread PIPE buffer can hold.
@@ -167,6 +169,7 @@ class FFmpegManager:
                     cmd,
                     stdout=subprocess.DEVNULL,
                     stderr=log_file,
+                    **_subprocess_window_kwargs(),
                 )
                 deadline = time.monotonic() + 300
                 cancelled = False
@@ -212,6 +215,12 @@ class FFmpegManager:
         except OSError as e:
             _remove_partial_output(safe_output)
             return False, f"FFmpeg could not be started: {e}"
+        except KeyboardInterrupt:
+            if process is not None and process.poll() is None:
+                process.kill()
+                process.wait()
+            _remove_partial_output(safe_output)
+            raise
 
 
 def _remove_partial_output(path: Path) -> None:
@@ -219,3 +228,10 @@ def _remove_partial_output(path: Path) -> None:
         path.unlink(missing_ok=True)
     except OSError:
         logger.debug("Failed to remove partial FFmpeg output: %s", path)
+
+
+def _subprocess_window_kwargs() -> dict:
+    """Prevent console flashes for FFmpeg launched by the Windows GUI build."""
+    if platform.system() == "Windows":
+        return {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)}
+    return {}

@@ -110,3 +110,32 @@ class TestConfigManager:
 
         loaded = ConfigManager(config_path=config_path).load()
         assert loaded.sessdata == "secret"
+
+    def test_default_path_migrates_legacy_config(self, monkeypatch, tmp_path):
+        legacy_path = tmp_path / "legacy" / "config.json"
+        target_path = tmp_path / "native" / "config.json"
+        legacy_path.parent.mkdir()
+        legacy_path.write_text(
+            json.dumps({"output_dir": "/migrated", "max_concurrent_downloads": 2}),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(config_module, "LEGACY_CONFIG_PATH", legacy_path)
+        monkeypatch.setattr(config_module, "DEFAULT_CONFIG_PATH", target_path)
+        monkeypatch.setattr(config_module, "_load_sessdata_from_keyring", lambda: "")
+
+        loaded = ConfigManager().load()
+
+        assert loaded.output_dir == "/migrated"
+        assert target_path.is_file()
+        assert legacy_path.is_file()
+
+    def test_invalid_model_config_is_backed_up(self, tmp_path):
+        config_path = tmp_path / "config.json"
+        config_path.write_text(
+            json.dumps({"max_concurrent_downloads": 100}), encoding="utf-8"
+        )
+
+        loaded = ConfigManager(config_path=config_path).load()
+
+        assert loaded.max_concurrent_downloads == 3
+        assert config_path.with_suffix(".json.bak").is_file()

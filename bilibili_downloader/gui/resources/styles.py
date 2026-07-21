@@ -6,7 +6,6 @@ DARK_STYLE = """
         font-size: 13px;
         letter-spacing: 0px;
         color: #f4f1f7;
-        outline: none;
     }
 
     QMainWindow, QDialog, #AppSurface {
@@ -19,6 +18,72 @@ DARK_STYLE = """
 
     #Workspace {
         background-color: #18181e;
+    }
+
+    QScrollArea#WorkspaceScroll, QScrollArea#WorkspaceScroll > QWidget > QWidget {
+        background-color: #18181e;
+        border: none;
+    }
+
+    QScrollBar:vertical {
+        width: 10px;
+        margin: 4px 1px;
+        background-color: transparent;
+        border: none;
+    }
+
+    QScrollBar::handle:vertical {
+        min-height: 32px;
+        margin: 0 2px;
+        background-color: #4b4852;
+        border: none;
+        border-radius: 3px;
+    }
+
+    QScrollBar::handle:vertical:hover {
+        margin: 0 1px;
+        background-color: #77727d;
+    }
+
+    QScrollBar::handle:vertical:pressed {
+        margin: 0 1px;
+        background-color: #b76589;
+    }
+
+    QScrollBar:horizontal {
+        height: 10px;
+        margin: 1px 4px;
+        background-color: transparent;
+        border: none;
+    }
+
+    QScrollBar::handle:horizontal {
+        min-width: 32px;
+        margin: 2px 0;
+        background-color: #4b4852;
+        border: none;
+        border-radius: 3px;
+    }
+
+    QScrollBar::handle:horizontal:hover {
+        margin: 1px 0;
+        background-color: #77727d;
+    }
+
+    QScrollBar::handle:horizontal:pressed {
+        margin: 1px 0;
+        background-color: #b76589;
+    }
+
+    QScrollBar::add-line, QScrollBar::sub-line {
+        width: 0;
+        height: 0;
+        background-color: transparent;
+        border: none;
+    }
+
+    QScrollBar::add-page, QScrollBar::sub-page {
+        background-color: transparent;
     }
 
     #Sidebar {
@@ -45,7 +110,7 @@ DARK_STYLE = """
     }
 
     QLabel#NavSection {
-        color: #66616d;
+        color: #8f8998;
         font-size: 10px;
         font-weight: 700;
         padding: 0 8px 5px 8px;
@@ -137,7 +202,7 @@ DARK_STYLE = """
 
     QPushButton#GhostButton:hover {
         color: #ffffff;
-        border-color: #62d5ff;
+        border-color: #9c647d;
     }
 
     #HeroPanel {
@@ -173,7 +238,7 @@ DARK_STYLE = """
 
     QLineEdit#UrlInput:focus {
         background-color: rgba(13, 12, 22, 242);
-        border-color: #62d5ff;
+        border-color: #d46f9c;
     }
 
     QPushButton#HeroButton {
@@ -260,6 +325,18 @@ DARK_STYLE = """
         padding: 9px 11px;
     }
 
+    QLabel#LoginInstructions {
+        color: #d1ccd5;
+        background-color: #19191f;
+        border: 1px solid #39363f;
+        border-radius: 7px;
+        padding: 9px 11px;
+    }
+
+    QLabel#LoginInstructions:focus {
+        border-color: #8a6074;
+    }
+
     QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox {
         min-height: 24px;
         padding: 7px 10px;
@@ -276,13 +353,46 @@ DARK_STYLE = """
     }
 
     QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QSpinBox:focus {
-        border-color: #62d5ff;
+        border-color: #c66b93;
         background-color: #1b1b21;
     }
 
     QLineEdit:read-only {
         color: #aaa5b0;
         background-color: #1b1b20;
+    }
+
+    QSpinBox {
+        padding: 7px 10px;
+    }
+
+    QPushButton#StepperButton {
+        min-width: 36px;
+        max-width: 36px;
+        min-height: 38px;
+        max-height: 38px;
+        padding: 0;
+        color: #d9d3dd;
+        background-color: #24232a;
+        border-color: #3a3942;
+        font-size: 17px;
+        font-weight: 600;
+    }
+
+    QPushButton#StepperButton:hover {
+        color: #ffffff;
+        background-color: #3a2b34;
+        border-color: #8a6074;
+    }
+
+    QPushButton#StepperButton:pressed {
+        background-color: #4b3040;
+    }
+
+    QPushButton#StepperButton:disabled {
+        color: #5f5a64;
+        background-color: #1d1c22;
+        border-color: #302e36;
     }
 
     QComboBox {
@@ -296,7 +406,7 @@ DARK_STYLE = """
     }
 
     QComboBox:hover, QComboBox:on {
-        border-color: #62d5ff;
+        border-color: #8a6377;
         background-color: #1c1c22;
     }
 
@@ -330,6 +440,19 @@ DARK_STYLE = """
         border-color: #5d5865;
     }
 
+    QPushButton:focus, QComboBox:focus {
+        border: 1px solid #d46f9c;
+    }
+
+    QCheckBox:focus {
+        color: #ffffff;
+        border: none;
+    }
+
+    QCheckBox::indicator:focus {
+        border: 2px solid #ff9ac5;
+    }
+
     QPushButton:pressed {
         background-color: #222127;
     }
@@ -353,7 +476,6 @@ DARK_STYLE = """
 
     QPushButton#DownloadButton {
         min-height: 36px;
-        margin-top: 2px;
         font-weight: 800;
     }
 
@@ -366,7 +488,7 @@ DARK_STYLE = """
     QPushButton#SecondaryButton:hover, QPushButton#SubtleButton:hover {
         color: #ffffff;
         background-color: #2a2931;
-        border-color: #62d5ff;
+        border-color: #9c647d;
     }
 
     QPushButton#DangerButton {
@@ -382,25 +504,49 @@ DARK_STYLE = """
     }
 
     QCheckBox {
-        spacing: 8px;
+        spacing: 9px;
+        min-height: 24px;
+        padding: 2px 0;
         color: #d1ccd5;
+        background-color: transparent;
+        border: none;
+    }
+
+    QCheckBox:hover {
+        color: #f7f3f8;
     }
 
     QCheckBox::indicator {
-        width: 17px;
-        height: 17px;
+        width: 16px;
+        height: 16px;
         background-color: #17171c;
         border: 1px solid #4b4852;
-        border-radius: 5px;
+        border-radius: 4px;
     }
 
     QCheckBox::indicator:hover {
-        border-color: #62d5ff;
+        background-color: #211f25;
+        border-color: #8a7f8d;
     }
 
     QCheckBox::indicator:checked {
         background-color: #ff5fa2;
-        border-color: #ff7db3;
+        border-color: #ff8fbe;
+        image: url("__CHECKMARK_ICON__");
+    }
+
+    QCheckBox:disabled {
+        color: #716c77;
+    }
+
+    QCheckBox::indicator:disabled {
+        background-color: #1c1c21;
+        border-color: #34323a;
+    }
+
+    QCheckBox::indicator:checked:disabled {
+        background-color: #624051;
+        border-color: #745064;
     }
 
     QTableWidget {
@@ -508,6 +654,22 @@ LIGHT_OVERRIDES = """
         background-color: #f7f7fa;
     }
 
+    QScrollArea#WorkspaceScroll, QScrollArea#WorkspaceScroll > QWidget > QWidget {
+        background-color: #f7f7fa;
+    }
+
+    QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
+        background-color: #c5c0c9;
+    }
+
+    QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover {
+        background-color: #938d99;
+    }
+
+    QScrollBar::handle:vertical:pressed, QScrollBar::handle:horizontal:pressed {
+        background-color: #b6507c;
+    }
+
     #Sidebar {
         background-color: #ffffff;
         border-right: 1px solid #e1dee5;
@@ -529,7 +691,7 @@ LIGHT_OVERRIDES = """
     }
 
     QLabel#NavSection {
-        color: #99929f;
+        color: #756e7d;
     }
 
     QPushButton#NavButton, QPushButton#NavButtonActive {
@@ -571,7 +733,7 @@ LIGHT_OVERRIDES = """
 
     QPushButton#GhostButton:hover {
         color: #211d27;
-        border-color: #159fc5;
+        border-color: #b46b89;
     }
 
     #HeroPanel {
@@ -600,7 +762,7 @@ LIGHT_OVERRIDES = """
     QLineEdit#UrlInput:focus {
         color: #211d27;
         background-color: rgba(255, 255, 255, 250);
-        border-color: #159fc5;
+        border-color: #b84777;
     }
 
     QPushButton#HeroButton, QPushButton#PrimaryButton,
@@ -656,6 +818,16 @@ LIGHT_OVERRIDES = """
         border-color: #ead69b;
     }
 
+    QLabel#LoginInstructions {
+        color: #514a58;
+        background-color: #f8f6f9;
+        border-color: #ddd8e1;
+    }
+
+    QLabel#LoginInstructions:focus {
+        border-color: #b46b89;
+    }
+
     QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox {
         color: #29242f;
         background-color: #ffffff;
@@ -670,12 +842,34 @@ LIGHT_OVERRIDES = """
     QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QSpinBox:focus {
         color: #29242f;
         background-color: #ffffff;
-        border-color: #159fc5;
+        border-color: #b84777;
     }
 
     QLineEdit:read-only {
         color: #726b78;
         background-color: #f3f1f5;
+    }
+
+    QPushButton#StepperButton {
+        color: #5d5563;
+        background-color: #f3f1f5;
+        border-color: #d8d4dc;
+    }
+
+    QPushButton#StepperButton:hover {
+        color: #2f2934;
+        background-color: #fff0f6;
+        border-color: #c9819f;
+    }
+
+    QPushButton#StepperButton:pressed {
+        background-color: #f7d9e6;
+    }
+
+    QPushButton#StepperButton:disabled {
+        color: #c2bdc5;
+        background-color: #f4f2f5;
+        border-color: #e4e0e6;
     }
 
     QComboBox {
@@ -687,7 +881,7 @@ LIGHT_OVERRIDES = """
     QComboBox:hover, QComboBox:on {
         color: #29242f;
         background-color: #ffffff;
-        border-color: #159fc5;
+        border-color: #9b7184;
     }
 
     QComboBox QAbstractItemView {
@@ -710,6 +904,19 @@ LIGHT_OVERRIDES = """
         border-color: #b9b2be;
     }
 
+    QPushButton:focus, QComboBox:focus {
+        border-color: #b84777;
+    }
+
+    QCheckBox:focus {
+        color: #211d27;
+        border: none;
+    }
+
+    QCheckBox::indicator:focus {
+        border-color: #b84777;
+    }
+
     QPushButton:pressed {
         background-color: #ded9e2;
     }
@@ -729,7 +936,7 @@ LIGHT_OVERRIDES = """
     QPushButton#SecondaryButton:hover, QPushButton#SubtleButton:hover {
         color: #211d27;
         background-color: #f4f1f5;
-        border-color: #159fc5;
+        border-color: #b46b89;
     }
 
     QPushButton#DangerButton {
@@ -754,12 +961,27 @@ LIGHT_OVERRIDES = """
     }
 
     QCheckBox::indicator:hover {
-        border-color: #159fc5;
+        background-color: #faf7f9;
+        border-color: #857b89;
     }
 
     QCheckBox::indicator:checked {
         background-color: #ef4f91;
         border-color: #ef4f91;
+    }
+
+    QCheckBox:disabled {
+        color: #a29ca6;
+    }
+
+    QCheckBox::indicator:disabled {
+        background-color: #f0eef2;
+        border-color: #d7d2da;
+    }
+
+    QCheckBox::indicator:checked:disabled {
+        background-color: #d69ab4;
+        border-color: #d08da9;
     }
 
     QTableWidget {

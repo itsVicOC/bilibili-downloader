@@ -1,8 +1,7 @@
 """Bilibili login module - QR code login and SESSDATA management."""
 
 import logging
-from io import BytesIO
-from typing import Optional
+from urllib.parse import urljoin
 
 import httpx
 import qrcode
@@ -10,6 +9,7 @@ from PIL import Image
 
 from bilibili_downloader.api import endpoints as ep
 from bilibili_downloader.api.endpoints import USER_AGENT
+from bilibili_downloader.utils.network import BILIBILI_WEB_HOSTS, trusted_https_url
 
 logger = logging.getLogger(__name__)
 
@@ -95,16 +95,30 @@ class LoginManager:
             return None
 
         try:
-            # Use a new client that follows redirects and captures cookies
+            # Follow only trusted Bilibili redirects while accumulating cookies.
             with httpx.Client(
                 headers={
                     "User-Agent": USER_AGENT,
                     "Referer": "https://passport.bilibili.com/",
                 },
                 timeout=30.0,
-                follow_redirects=True,
+                follow_redirects=False,
             ) as sso_client:
-                sso_resp = sso_client.get(sso_url)
+                current_url = trusted_https_url(sso_url, BILIBILI_WEB_HOSTS)
+                sso_resp = None
+                for _ in range(10):
+                    sso_resp = sso_client.get(current_url)
+                    if not sso_resp.is_redirect:
+                        break
+                    location = sso_resp.headers.get("location")
+                    if not location:
+                        break
+                    current_url = trusted_https_url(
+                        urljoin(current_url, location),
+                        BILIBILI_WEB_HOSTS,
+                    )
+                if sso_resp is None:
+                    return {}
                 # Cookies are accumulated in the client during redirects
                 sessdata = _find_cookie(sso_client.cookies, "SESSDATA")
                 if sessdata:
@@ -119,7 +133,7 @@ class LoginManager:
 
                 logger.warning("SESSDATA not found in SSO cookies")
                 return {}
-        except httpx.HTTPError as e:
+        except (httpx.HTTPError, ValueError) as e:
             logger.warning("SSO request failed: %s", e)
             return {}
 
