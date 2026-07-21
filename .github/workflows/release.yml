@@ -119,7 +119,7 @@ jobs:
           Compress-Archive -Path "dist/BilibiliDownloader" -DestinationPath "${{ matrix.archive_name }}-${{ github.ref_name }}.zip" -Force
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}-${{ github.ref_name }}
           path: |
