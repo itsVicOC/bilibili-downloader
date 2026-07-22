@@ -121,7 +121,7 @@ class LoginDialog(QDialog):
 
         self._tabs = QTabWidget()
 
-        # -- Manual Cookie Tab (primary, since QR API is broken) --
+        # -- Manual Cookie Tab --
         cookie_tab = QWidget()
         cookie_layout = QVBoxLayout(cookie_tab)
         cookie_layout.setContentsMargins(14, 14, 14, 14)
@@ -175,19 +175,16 @@ class LoginDialog(QDialog):
         cookie_layout.addStretch()
         self._tabs.addTab(cookie_tab, "手动输入 Cookie")
 
-        # -- QR Code Tab (may not work due to B站 API changes) --
+        # -- QR Code Tab --
         qr_tab = QWidget()
         qr_layout = QVBoxLayout(qr_tab)
         qr_layout.setContentsMargins(14, 14, 14, 14)
         qr_layout.setSpacing(12)
 
-        # Warning banner
-        warning = QLabel(
-            "扫码登录受 B 站接口变更影响，暂不可用时请改用手动输入 Cookie。"
-        )
-        warning.setWordWrap(True)
-        warning.setObjectName("WarningBanner")
-        qr_layout.addWidget(warning)
+        qr_hint = QLabel("请使用哔哩哔哩客户端扫码，并在手机端确认登录。")
+        qr_hint.setWordWrap(True)
+        qr_hint.setObjectName("WarningBanner")
+        qr_layout.addWidget(qr_hint)
 
         self._qr_label = QLabel()
         self._qr_label.setObjectName("EmptyCover")

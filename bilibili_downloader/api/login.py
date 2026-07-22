@@ -14,6 +14,14 @@ from bilibili_downloader.utils.network import BILIBILI_WEB_HOSTS, trusted_https_
 logger = logging.getLogger(__name__)
 
 
+def _find_cookie(cookies: httpx.Cookies, name: str) -> str | None:
+    """Find a cookie by name without raising on duplicate domains/paths."""
+    for cookie in cookies.jar:
+        if cookie.name == name and cookie.value:
+            return cookie.value
+    return None
+
+
 class LoginManager:
     """Handles Bilibili login via QR code or manual SESSDATA."""
 
@@ -69,11 +77,20 @@ class LoginManager:
         result = {"status": poll_code}
 
         if poll_code == 0:
-            # Login successful — need to follow SSO URL to get cookies
+            # Recent passport responses set SESSDATA directly on the poll
+            # response. Keep the SSO redirect as a compatibility fallback for
+            # older responses that only return a URL.
             result["code"] = 0
+            sessdata = _find_cookie(resp.cookies, "SESSDATA")
+            if not sessdata:
+                sessdata = _find_cookie(self._client.cookies, "SESSDATA")
+            if sessdata:
+                logger.info("SESSDATA extracted from QR poll response")
+                result["cookies"] = {"SESSDATA": sessdata}
+                return result
+
             sso_url = data.get("data", {}).get("url", "")
-            cookies = self._extract_cookies_from_sso(sso_url)
-            result["cookies"] = cookies
+            result["cookies"] = self._extract_cookies_from_sso(sso_url)
 
         return result
 
@@ -86,13 +103,6 @@ class LoginManager:
         if not sso_url:
             logger.warning("SSO URL is empty, cannot extract cookies")
             return {}
-
-        def _find_cookie(cookies, name: str) -> str | None:
-            """Find first cookie by name, avoiding CookieConflict on duplicates."""
-            for cookie in cookies.jar:
-                if cookie.name == name:
-                    return cookie.value
-            return None
 
         try:
             # Follow only trusted Bilibili redirects while accumulating cookies.
