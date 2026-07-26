@@ -11,5 +11,5 @@ pytest==9.1.1
 pytest-qt==4.5.0
 responses==0.26.2
 PyInstaller==6.21.0
-ruff==0.15.22
-cyclonedx-bom==7.3.0
+ruff==0.16.0
+cyclonedx-bom==7.3.1
