@@ -4,13 +4,34 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish a GitHub Release (tag refs only)
+        required: true
+        default: false
+        type: boolean
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  RELEASE_ID: ${{ github.ref_type == 'tag' && github.ref_name || format('dry-run-{0}', github.run_number) }}
 
 jobs:
+  validate:
+    name: Validate release request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject publishing from a branch
+        if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref_type != 'tag'
+        run: |
+          echo "Publishing is only allowed when the workflow is dispatched from a tag." >&2
+          exit 1
+
   build:
     name: Build ${{ matrix.label }}
+    needs: validate
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -30,10 +51,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.12"
 
@@ -44,6 +65,7 @@ jobs:
           pip install -c constraints.txt cyclonedx-bom
 
       - name: Verify tag matches package version
+        if: github.ref_type == 'tag'
         shell: bash
         run: |
           package_tag="v$(python -c 'from bilibili_downloader import __version__; print(__version__)')"
@@ -68,10 +90,10 @@ jobs:
           fi
 
       - name: Generate dependency SBOM
-        run: cyclonedx-py environment --output-format JSON --output-file "${{ matrix.archive_name }}-${{ github.ref_name }}.cdx.json"
+        run: cyclonedx-py environment --output-format JSON --output-file "${{ matrix.archive_name }}-${{ env.RELEASE_ID }}.cdx.json"
 
       - name: Sign and notarize macOS app
-        if: runner.os == 'macOS' && env.MACOS_CERTIFICATE != ''
+        if: runner.os == 'macOS'
         shell: bash
         env:
           MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
@@ -82,6 +104,10 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
+          if [ -z "$MACOS_CERTIFICATE" ]; then
+            echo "macOS signing secrets are not configured; keeping the ad-hoc signature."
+            exit 0
+          fi
           cert_path="$RUNNER_TEMP/biliflow-signing.p12"
           keychain_path="$RUNNER_TEMP/biliflow-signing.keychain-db"
           notarize_zip="$RUNNER_TEMP/BilibiliDownloader-notarize.zip"
@@ -116,43 +142,44 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           if [ -d "dist/BilibiliDownloader.app" ]; then
-            ditto -c -k --sequesterRsrc --keepParent "dist/BilibiliDownloader.app" "${{ matrix.archive_name }}-${{ github.ref_name }}.zip"
+            ditto -c -k --sequesterRsrc --keepParent "dist/BilibiliDownloader.app" "${{ matrix.archive_name }}-${RELEASE_ID}.zip"
           else
-            ditto -c -k --keepParent "dist/BilibiliDownloader" "${{ matrix.archive_name }}-${{ github.ref_name }}.zip"
+            ditto -c -k --keepParent "dist/BilibiliDownloader" "${{ matrix.archive_name }}-${RELEASE_ID}.zip"
           fi
 
       - name: Package Windows app
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Compress-Archive -Path "dist/BilibiliDownloader" -DestinationPath "${{ matrix.archive_name }}-${{ github.ref_name }}.zip" -Force
+          Compress-Archive -Path "dist/BilibiliDownloader" -DestinationPath "${{ matrix.archive_name }}-${env:RELEASE_ID}.zip" -Force
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: ${{ matrix.artifact_name }}-${{ github.ref_name }}
+          name: ${{ matrix.artifact_name }}-${{ env.RELEASE_ID }}
           path: |
-            ${{ matrix.archive_name }}-${{ github.ref_name }}.zip
-            ${{ matrix.archive_name }}-${{ github.ref_name }}.cdx.json
+            ${{ matrix.archive_name }}-${{ env.RELEASE_ID }}.zip
+            ${{ matrix.archive_name }}-${{ env.RELEASE_ID }}.cdx.json
           if-no-files-found: error
+          retention-days: 14
 
-  publish:
-    name: Publish GitHub Release
+  assemble:
+    name: Assemble and verify release bundle
     needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Download artifacts
-        uses: actions/download-artifact@v8
+      - name: Download build artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           path: release-assets
           merge-multiple: true
 
       - name: Prepare release notes
         shell: bash
-        run: awk '/^## v/{if (found) exit; found=1} found' CHANGELOG.md > release-notes.md
+        run: awk '/^## v/{if (found) exit; found=1} found' CHANGELOG.md > release-assets/release-notes.md
 
       - name: Generate SHA-256 checksums
         shell: bash
@@ -160,9 +187,40 @@ jobs:
           cd release-assets
           shasum -a 256 *.zip *.cdx.json > SHA256SUMS.txt
 
+      - name: Verify release bundle
+        run: python3 scripts/verify_release_bundle.py release-assets --release-id "$RELEASE_ID"
+
+      - name: Upload verified release bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: BilibiliDownloader-release-${{ env.RELEASE_ID }}
+          path: release-assets
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish GitHub Release
+    needs: assemble
+    if: >-
+      (github.event_name == 'push' && github.ref_type == 'tag') ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish && github.ref_type == 'tag')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified release bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: BilibiliDownloader-release-${{ env.RELEASE_ID }}
+          path: release-assets
+
       - name: Publish release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
           name: Bilibili Downloader ${{ github.ref_name }}
-          body_path: release-notes.md
-          files: release-assets/*
+          body_path: release-assets/release-notes.md
+          prerelease: ${{ contains(github.ref_name, 'rc') }}
+          files: |
+            release-assets/*.zip
+            release-assets/*.cdx.json
+            release-assets/SHA256SUMS.txt
