@@ -130,6 +130,22 @@ class FFmpegManager:
         cmd.append(str(output_path.resolve()))
         return cmd
 
+    @staticmethod
+    def build_audio_command(
+        audio_path: Path,
+        output_path: Path,
+        executable: str = "ffmpeg",
+    ) -> list[str]:
+        """Build a lossless audio-only remux command."""
+        return [
+            executable,
+            "-y",
+            "-i", str(audio_path.resolve()),
+            "-vn",
+            "-c:a", "copy",
+            str(output_path.resolve()),
+        ]
+
     @classmethod
     def merge_streams(
         cls,
@@ -153,12 +169,36 @@ class FFmpegManager:
         if exe is None:
             return False, "FFmpeg not found"
 
+        cmd = cls.build_merge_command(video_path, audio_path, output_path, executable=str(exe))
+        return cls._execute_command(cmd, output_path, cancel_checker)
+
+    @classmethod
+    def remux_audio(
+        cls,
+        audio_path: Path,
+        output_path: Path,
+        custom_path: Optional[str] = None,
+        cancel_checker: Optional[Callable[[], bool]] = None,
+    ) -> tuple[bool, str]:
+        """Losslessly remux one DASH audio stream into a standalone file."""
+        exe = cls.find_executable(custom_path)
+        if exe is None:
+            return False, "FFmpeg not found"
+        cmd = cls.build_audio_command(audio_path, output_path, executable=str(exe))
+        return cls._execute_command(cmd, output_path, cancel_checker)
+
+    @staticmethod
+    def _execute_command(
+        command: list[str],
+        output_path: Path,
+        cancel_checker: Optional[Callable[[], bool]],
+    ) -> tuple[bool, str]:
         # Keep the media suffix so FFmpeg can infer the output container.
         safe_output = output_path.with_name(
             f"{output_path.stem}.part{output_path.suffix}"
         )
+        command = [*command[:-1], str(safe_output.resolve())]
         _remove_partial_output(safe_output)
-        cmd = cls.build_merge_command(video_path, audio_path, safe_output, executable=str(exe))
 
         process = None
         try:
@@ -166,7 +206,7 @@ class FFmpegManager:
             # output than an unread PIPE buffer can hold.
             with tempfile.TemporaryFile() as log_file:
                 process = subprocess.Popen(
-                    cmd,
+                    command,
                     stdout=subprocess.DEVNULL,
                     stderr=log_file,
                     **_subprocess_window_kwargs(),
@@ -193,10 +233,10 @@ class FFmpegManager:
 
             if cancelled:
                 _remove_partial_output(safe_output)
-                return False, f"FFmpeg merge cancelled\n{output[-500:]}"
+                return False, f"FFmpeg processing cancelled\n{output[-500:]}"
             if timed_out:
                 _remove_partial_output(safe_output)
-                return False, f"FFmpeg merge timed out (5 min limit)\n{output[-500:]}"
+                return False, f"FFmpeg processing timed out (5 min limit)\n{output[-500:]}"
             if process.returncode != 0:
                 _remove_partial_output(safe_output)
                 error_lines = []

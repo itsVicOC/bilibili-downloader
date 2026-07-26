@@ -7,17 +7,27 @@ import ssl
 import threading
 import time
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 
 from bilibili_downloader.api.client import BilibiliAPIClient
 from bilibili_downloader.api.endpoints import USER_AGENT
 from bilibili_downloader.core.ffmpeg import FFmpegManager
-from bilibili_downloader.core.models import DownloadItem, StreamInfo, VideoQuality
-from bilibili_downloader.utils.network import BILIBILI_RESOURCE_HOSTS, trusted_https_url
+from bilibili_downloader.core.models import (
+    DownloadItem,
+    OutputMode,
+    StreamInfo,
+    VideoQuality,
+)
+from bilibili_downloader.utils.network import (
+    BILIBILI_RESOURCE_HOSTS,
+    UntrustedResourceURLError,
+    trusted_https_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +48,14 @@ _CACHE_PATH_LOCK = threading.Lock()
 _RESERVED_CACHE_PATHS: set[Path] = set()
 
 
+@dataclass(frozen=True)
+class TransferMetrics:
+    downloaded_bytes: int = 0
+    total_bytes: int = 0
+    speed_bytes_per_second: float = 0.0
+    eta_seconds: Optional[int] = None
+
+
 class StreamDownloader:
     """Downloads DASH video/audio streams and merges with FFmpeg."""
 
@@ -56,6 +74,11 @@ class StreamDownloader:
         self._cancelled = False
         self.last_video_stream: Optional[StreamInfo] = None
         self.last_audio_stream: Optional[StreamInfo] = None
+        self._transfer_metrics = TransferMetrics()
+
+    @property
+    def transfer_metrics(self) -> TransferMetrics:
+        return self._transfer_metrics
 
     def cancel(self):
         """Signal the downloader to cancel current operation."""
@@ -100,16 +123,6 @@ class StreamDownloader:
             preferred_codec=item.selected_video_codec,
         )
 
-        # Select video stream
-        video_stream = self._select_video_stream(
-            playurl_data["video_streams"],
-            item.selected_quality,
-            item.selected_video_codec,
-        )
-        if not video_stream:
-            raise RuntimeError("No matching video stream found")
-        self.last_video_stream = video_stream
-
         # Select audio stream
         audio_stream = self._select_audio_stream(
             playurl_data["audio_streams"],
@@ -119,46 +132,80 @@ class StreamDownloader:
             raise RuntimeError("No matching audio stream found")
         self.last_audio_stream = audio_stream
 
+        video_stream = None
+        if item.output_mode == OutputMode.VIDEO:
+            video_stream = self._select_video_stream(
+                playurl_data["video_streams"],
+                item.selected_quality,
+                item.selected_video_codec,
+            )
+            if not video_stream:
+                raise RuntimeError("No matching video stream found")
+            self.last_video_stream = video_stream
+        else:
+            self.last_video_stream = None
+
+        self._ensure_disk_space(info.duration, video_stream, audio_stream)
+
+        relative_output_path = item.relative_output_path
+        if item.output_mode == OutputMode.AUDIO and audio_stream.id == 30251:
+            relative_output_path = relative_output_path.with_suffix(".flac")
+
         with _reserved_download_cache(self._output_dir, item) as tmp, _reserved_output_path(
-            self._output_dir / item.filename
+            self._output_dir / relative_output_path
         ) as output_path:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
             video_path = tmp / "video.m4s"
             audio_path = tmp / "audio.m4s"
 
-            # Download video stream
-            progress_callback(0.0, "正在下载视频流...")
-            self._download_stream(
-                video_stream,
-                video_path,
-                lambda p: progress_callback(p * 0.6, "正在下载视频流..."),
-            )
+            if video_stream is not None:
+                progress_callback(0.0, "正在下载视频流...")
+                self._download_stream(
+                    video_stream,
+                    video_path,
+                    lambda p: progress_callback(p * 0.6, "正在下载视频流..."),
+                )
+                if self._cancelled:
+                    raise RuntimeError("Download cancelled by user")
+                audio_start = 0.6
+                audio_weight = 0.2
+            else:
+                audio_start = 0.0
+                audio_weight = 0.85
 
-            if self._cancelled:
-                raise RuntimeError("Download cancelled by user")
-
-            # Download audio stream
-            progress_callback(0.6, "正在下载音频流...")
+            progress_callback(audio_start, "正在下载音频流...")
             self._download_stream(
                 audio_stream,
                 audio_path,
-                lambda p: progress_callback(0.6 + p * 0.2, "正在下载音频流..."),
+                lambda p: progress_callback(
+                    audio_start + p * audio_weight, "正在下载音频流..."
+                ),
             )
 
             if self._cancelled:
                 raise RuntimeError("Download cancelled by user")
 
-            # Merge with FFmpeg
-            progress_callback(0.82, "正在合并视频...")
-            merged_path = tmp / "merged.mp4"
-            success, msg = FFmpegManager.merge_streams(
-                video_path,
-                audio_path,
-                merged_path,
-                custom_path=self._ffmpeg_path,
-                cancel_checker=lambda: self._cancelled,
-            )
+            if video_stream is not None:
+                progress_callback(0.82, "正在合并视频...")
+                merged_path = tmp / f"merged{output_path.suffix}"
+                success, msg = FFmpegManager.merge_streams(
+                    video_path,
+                    audio_path,
+                    merged_path,
+                    custom_path=self._ffmpeg_path,
+                    cancel_checker=lambda: self._cancelled,
+                )
+            else:
+                progress_callback(0.88, "正在封装音频...")
+                merged_path = tmp / f"audio{output_path.suffix}"
+                success, msg = FFmpegManager.remux_audio(
+                    audio_path,
+                    merged_path,
+                    custom_path=self._ffmpeg_path,
+                    cancel_checker=lambda: self._cancelled,
+                )
             if not success:
-                raise RuntimeError(f"FFmpeg merge failed: {msg}")
+                raise RuntimeError(f"FFmpeg processing failed: {msg}")
 
             merged_path.replace(output_path)
             shutil.rmtree(tmp, ignore_errors=True)
@@ -166,6 +213,27 @@ class StreamDownloader:
 
             progress_callback(1.0, "视频下载完成")
             return str(output_path)
+
+    def _ensure_disk_space(
+        self,
+        duration: int,
+        video_stream: Optional[StreamInfo],
+        audio_stream: StreamInfo,
+    ) -> None:
+        streams = [stream for stream in (video_stream, audio_stream) if stream]
+        estimate = sum(
+            stream.size or int(max(0, stream.bandwidth) * max(0, duration) / 8)
+            for stream in streams
+        )
+        if estimate <= 0:
+            return
+        free = shutil.disk_usage(self._output_dir).free
+        # Muxing temporarily keeps both DASH inputs and the final artifact.
+        required = int(estimate * 2.1) + 64 * 1024 * 1024
+        if free < required:
+            raise RuntimeError(
+                f"磁盘空间不足：预计至少需要 {required / 1024 / 1024:.0f} MB"
+            )
 
     def _select_video_stream(
         self,
@@ -224,6 +292,7 @@ class StreamDownloader:
     ) -> None:
         """Download a single .m4s stream with progress tracking and retry."""
         last_error = None
+        self._transfer_metrics = TransferMetrics()
         complete_marker = dest.with_suffix(f"{dest.suffix}.complete")
         if _has_valid_completion_marker(dest, complete_marker):
             progress_callback(1.0)
@@ -243,7 +312,7 @@ class StreamDownloader:
                 if self._cancelled:
                     raise RuntimeError("Download cancelled")
 
-                for url in urls:
+                for candidate_index, url in enumerate(urls, start=1):
                     try:
                         self._download_url(client, url, dest, progress_callback)
                         try:
@@ -259,11 +328,20 @@ class StreamDownloader:
                                 exc_info=True,
                             )
                         return
-                    except (httpx.HTTPError, ConnectionError, OSError) as e:
+                    except (
+                        httpx.HTTPError,
+                        ConnectionError,
+                        OSError,
+                        UntrustedResourceURLError,
+                    ) as e:
                         last_error = e
                         logger.debug(
-                            "Download attempt %d failed for %s: %s",
-                            attempt + 1, url, e,
+                            "Download attempt %d failed for CDN candidate %d "
+                            "(%s): %s",
+                            attempt + 1,
+                            candidate_index,
+                            urlsplit(url).hostname or "unknown-host",
+                            type(e).__name__,
                         )
 
                 if attempt < self._max_retries - 1:
@@ -335,17 +413,39 @@ class StreamDownloader:
         mode = "ab" if append else "wb"
 
         last_reported = -1.0
+        started_at = time.monotonic()
+        last_reported_at = started_at
+        started_bytes = downloaded
         with open(dest, mode) as f:
             for chunk in response.iter_bytes(chunk_size=65536):
                 if self._cancelled:
                     raise RuntimeError("Download cancelled")
                 f.write(chunk)
                 downloaded += len(chunk)
+                elapsed = max(time.monotonic() - started_at, 0.001)
+                speed = max(0.0, (downloaded - started_bytes) / elapsed)
+                eta = (
+                    max(0, int((total - downloaded) / speed))
+                    if total > downloaded and speed > 0
+                    else None
+                )
+                self._transfer_metrics = TransferMetrics(
+                    downloaded_bytes=downloaded,
+                    total_bytes=total,
+                    speed_bytes_per_second=speed,
+                    eta_seconds=eta,
+                )
                 if total > 0:
                     pct = min(downloaded / total, 1.0)
-                    if pct - last_reported >= 0.05 or pct >= 1.0:
+                    now = time.monotonic()
+                    if (
+                        pct - last_reported >= 0.05
+                        or now - last_reported_at >= 0.5
+                        or pct >= 1.0
+                    ):
                         progress_callback(pct)
                         last_reported = pct
+                        last_reported_at = now
 
         progress_callback(1.0)
 
@@ -446,6 +546,7 @@ def _reserved_download_cache(output_dir: Path, item: DownloadItem):
         f"{item.video_info.bvid}:{item.video_info.cid}:"
         f"{item.selected_quality.value}:{item.selected_video_codec}:"
         f"{item.selected_audio_quality}"
+        f":{item.output_mode.value}"
     )
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:20]
     root = (output_dir / ".biliflow-parts").resolve()

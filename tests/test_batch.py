@@ -5,7 +5,9 @@ import pytest
 from bilibili_downloader.core.batch import (
     BatchResolveError,
     BatchResolver,
+    ContentSourceResolver,
     classify_batch_inputs,
+    is_collection_source,
 )
 from bilibili_downloader.core.models import VideoInfo
 
@@ -21,6 +23,26 @@ class FakeClient:
     def get_video_info_by_aid(self, aid):
         self.calls.append(("aid", aid))
         return VideoInfo(bvid="BVfromAid123", aid=aid, title="AV video")
+
+    def get_favorite_collection(self, media_id, source_url=""):
+        from bilibili_downloader.core.models import ContentCollection
+
+        return ContentCollection(
+            title="Favorites",
+            source_type="favorite",
+            source_url=source_url,
+            items=[VideoInfo(bvid="BV1GJ411x7h7", title=str(media_id))],
+        )
+
+    def get_season_collection(self, mid, season_id, source_url=""):
+        from bilibili_downloader.core.models import ContentCollection
+
+        return ContentCollection(
+            title="Season",
+            source_type="season",
+            source_url=source_url,
+            items=[VideoInfo(bvid="BV1GJ411x7h7", title=f"{mid}:{season_id}")],
+        )
 
 
 def test_resolve_bv_url():
@@ -54,10 +76,10 @@ def test_resolve_short_link(monkeypatch):
     assert client.calls == [("bvid", "BV1GJ411x7h7")]
 
 
-def test_rejects_series_urls():
+def test_single_resolver_routes_collections_to_batch_import():
     with pytest.raises(BatchResolveError):
         BatchResolver(FakeClient()).resolve_one(
-            "https://www.bilibili.com/medialist/play/watchlater?sid=123"
+            "https://space.bilibili.com/123/favlist?fid=456"
         )
 
 
@@ -78,3 +100,34 @@ def test_classify_batch_inputs_deduplicates_and_reports_invalid():
 
     assert valid == ["BV1GJ411x7h7", "av123456"]
     assert invalid == ["not-a-video"]
+
+
+def test_resolves_favorite_source():
+    source = "https://space.bilibili.com/123/favlist?fid=456"
+    collection = ContentSourceResolver(FakeClient()).resolve(source)
+
+    assert collection.source_type == "favorite"
+    assert collection.items[0].title == "456"
+
+
+def test_resolves_space_season_source():
+    source = "https://space.bilibili.com/123/lists/456?type=season"
+    collection = ContentSourceResolver(FakeClient()).resolve(source)
+
+    assert collection.source_type == "season"
+    assert collection.items[0].title == "123:456"
+
+
+def test_classification_accepts_collection_sources():
+    source = "https://space.bilibili.com/123/lists/456?type=season"
+
+    assert is_collection_source(source)
+    assert classify_batch_inputs(source) == ([source], [])
+
+
+def test_old_space_collection_link_is_supported():
+    source = "https://space.bilibili.com/123/channel/collectiondetail?sid=456"
+    collection = ContentSourceResolver(FakeClient()).resolve(source)
+
+    assert collection.source_type == "season"
+    assert collection.items[0].title == "123:456"

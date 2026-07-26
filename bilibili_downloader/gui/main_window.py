@@ -1,9 +1,17 @@
 """Main application window for the Bilibili Downloader."""
 
 import logging
+from datetime import datetime, timezone
+from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, QThreadPool
-from PySide6.QtGui import QAction, QCloseEvent, QIcon, QKeySequence
+from PySide6.QtCore import QSize, Qt, QThreadPool, QUrl
+from PySide6.QtGui import (
+    QAction,
+    QCloseEvent,
+    QDesktopServices,
+    QIcon,
+    QKeySequence,
+)
 from PySide6.QtWidgets import (
     QBoxLayout,
     QCheckBox,
@@ -16,6 +24,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QStackedWidget,
     QStatusBar,
     QVBoxLayout,
     QWidget,
@@ -23,16 +32,20 @@ from PySide6.QtWidgets import (
 
 from bilibili_downloader import __version__
 from bilibili_downloader.api.client import BilibiliAPIClient
+from bilibili_downloader.core.cache import clear_download_cache, inspect_download_cache
 from bilibili_downloader.core.models import (
+    AUDIO_CODEC_MAP,
     DownloadItem,
+    OutputMode,
+    TaskStatus,
     VideoInfo,
     VideoQuality,
 )
+from bilibili_downloader.core.task_repository import TaskRepository
 from bilibili_downloader.gui.dialogs.batch_dialog import BatchDialog
 from bilibili_downloader.gui.dialogs.login_dialog import LoginDialog
 from bilibili_downloader.gui.dialogs.settings_dialog import SettingsDialog
 from bilibili_downloader.gui.resources.paths import asset_path
-from bilibili_downloader.gui.threads.batch_worker import BatchRunner, BatchWorker
 from bilibili_downloader.gui.threads.download_worker import (
     DownloadRunner,
     DownloadWorker,
@@ -59,14 +72,17 @@ logger = logging.getLogger(__name__)
 class MainWindow(QMainWindow):
     """Main application window."""
 
-    def __init__(self):
+    def __init__(self, config_manager=None, task_repository=None):
         super().__init__()
         self.setWindowTitle("BiliFlow · 星轨下载站")
         self.setMinimumSize(900, 640)
         self.resize(1320, 860)
         # Components
-        self._config = ConfigManager()
+        self._config = config_manager or ConfigManager()
         self._settings = self._config.load()
+        self._task_repository = task_repository or TaskRepository(
+            self._config.task_database_path
+        )
         self._api_client = self._create_api_client()
         self._retired_api_clients = []
         self._download_pool = QThreadPool()
@@ -77,11 +93,11 @@ class MainWindow(QMainWindow):
         # State
         self._current_video: VideoInfo | None = None
         self._login_status_request_id = 0
-        self._batch_workers: list[BatchWorker] = []
         self._close_confirmed = False
         self._setup_ui()
         self._setup_menu()
         self._setup_status_bar()
+        self._restore_tasks()
 
         # Check login status on startup
         self._user_face = ""
@@ -187,7 +203,7 @@ class MainWindow(QMainWindow):
         page_copy.setSpacing(2)
         page_title = QLabel("下载控制台")
         page_title.setObjectName("PageTitle")
-        page_caption = QLabel("把在线番剧、MAD 与收藏，变成本地永久收藏")
+        page_caption = QLabel("把在线视频、MAD 与收藏，变成本地永久收藏")
         page_caption.setObjectName("Caption")
         page_copy.addWidget(page_title)
         page_copy.addWidget(page_caption)
@@ -244,46 +260,92 @@ class MainWindow(QMainWindow):
         controls_layout.addWidget(settings_label, 0, 0, 1, 2)
         settings_hint = QLabel("按收藏场景选择最合适的组合")
         settings_hint.setObjectName("MetaLabel")
-        controls_layout.addWidget(settings_hint, 1, 0, 1, 2)
+        settings_hint.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        controls_layout.addWidget(settings_hint, 0, 1)
 
         page_label = QLabel("分 P 范围")
         page_label.setObjectName("FieldLabel")
-        controls_layout.addWidget(page_label, 2, 0)
+        controls_layout.addWidget(page_label, 1, 0)
         self._page_combo = QComboBox()
         self._page_combo.addItem("当前视频", "current")
-        controls_layout.addWidget(self._page_combo, 2, 1)
+        controls_layout.addWidget(self._page_combo, 1, 1)
 
         vq_label = QLabel("画面质量")
         vq_label.setObjectName("FieldLabel")
-        controls_layout.addWidget(vq_label, 3, 0)
+        controls_layout.addWidget(vq_label, 2, 0)
         self._quality_combo = QComboBox()
         self._populate_quality_combo()
         self._quality_combo.currentIndexChanged.connect(self._refresh_codec_options)
-        controls_layout.addWidget(self._quality_combo, 3, 1)
+        controls_layout.addWidget(self._quality_combo, 2, 1)
 
-        vc_label = QLabel("视频编码")
-        vc_label.setObjectName("FieldLabel")
-        controls_layout.addWidget(vc_label, 4, 0)
+        self._codec_label = QLabel("视频编码")
+        self._codec_label.setObjectName("FieldLabel")
+        controls_layout.addWidget(self._codec_label, 3, 0)
+        self._codec_stack = QStackedWidget()
         self._codec_combo = QComboBox()
         self._populate_codec_combo()
         self._codec_combo.setToolTip("H.265 体积与画质均衡；H.264 兼容性更好；AV1 体积更小")
-        controls_layout.addWidget(self._codec_combo, 4, 1)
+        self._audio_combo = QComboBox()
+        self._populate_audio_combo()
+        self._codec_stack.addWidget(self._codec_combo)
+        self._codec_stack.addWidget(self._audio_combo)
+        controls_layout.addWidget(self._codec_stack, 3, 1)
+
+        output_label = QLabel("输出类型")
+        output_label.setObjectName("FieldLabel")
+        controls_layout.addWidget(output_label, 4, 0)
+        self._output_mode_combo = QComboBox()
+        self._output_mode_combo.addItem("视频 / MP4", OutputMode.VIDEO)
+        self._output_mode_combo.addItem("仅音频 / M4A 或 FLAC", OutputMode.AUDIO)
+        output_index = self._output_mode_combo.findData(
+            self._settings.default_output_mode
+        )
+        self._output_mode_combo.setCurrentIndex(output_index if output_index >= 0 else 0)
+        self._output_mode_combo.currentIndexChanged.connect(
+            self._sync_output_mode_controls
+        )
+        controls_layout.addWidget(self._output_mode_combo, 4, 1)
 
         self._danmaku_check = self._create_checkbox("下载弹幕", self._settings.download_danmaku)
         self._subtitle_check = self._create_checkbox("下载字幕", self._settings.download_subtitle)
         self._subtitle_check.setEnabled(False)
+        self._all_subtitles_check = self._create_checkbox(
+            "全部字幕", self._settings.download_all_subtitles
+        )
+        self._all_subtitles_check.setEnabled(False)
+        self._cover_check = self._create_checkbox(
+            "保存封面", self._settings.download_cover
+        )
+        self._metadata_check = self._create_checkbox(
+            "保存元数据", self._settings.download_metadata
+        )
+        self._subtitle_check.toggled.connect(
+            lambda checked: self._all_subtitles_check.setEnabled(
+                checked and self._subtitle_check.isEnabled()
+            )
+        )
         controls_layout.addWidget(self._danmaku_check, 5, 0)
         controls_layout.addWidget(self._subtitle_check, 5, 1)
+        archive_options = QHBoxLayout()
+        archive_options.setSpacing(10)
+        archive_options.addWidget(self._all_subtitles_check)
+        archive_options.addWidget(self._cover_check)
+        archive_options.addWidget(self._metadata_check)
+        controls_layout.addLayout(archive_options, 6, 0, 1, 2)
+        self._sync_output_mode_controls()
 
         self._download_btn = QPushButton("加入下载队列")
         self._download_btn.setObjectName("DownloadButton")
         self._download_btn.clicked.connect(self._on_download_clicked)
-        controls_layout.addWidget(self._download_btn, 6, 0, 1, 2)
 
         self._batch_btn = QPushButton("批量导入链接")
         self._batch_btn.setObjectName("SecondaryButton")
         self._batch_btn.clicked.connect(self._on_batch_clicked)
-        controls_layout.addWidget(self._batch_btn, 7, 0, 1, 2)
+        action_layout = QHBoxLayout()
+        action_layout.setSpacing(8)
+        action_layout.addWidget(self._download_btn, 3)
+        action_layout.addWidget(self._batch_btn, 2)
+        controls_layout.addLayout(action_layout, 7, 0, 1, 2)
         controls_layout.setRowStretch(8, 1)
         self._content_layout.addWidget(controls, 3)
         layout.addLayout(self._content_layout)
@@ -296,10 +358,29 @@ class MainWindow(QMainWindow):
         queue_hint.setObjectName("MetaLabel")
         queue_header.addWidget(queue_hint)
         queue_header.addStretch()
+        pause_all = QPushButton("全部暂停")
+        pause_all.setObjectName("SubtleButton")
+        pause_all.clicked.connect(self._on_pause_all)
+        queue_header.addWidget(pause_all)
+        resume_all = QPushButton("全部继续")
+        resume_all.setObjectName("SubtleButton")
+        resume_all.clicked.connect(self._on_resume_all)
+        queue_header.addWidget(resume_all)
+        clear_done = QPushButton("清除完成")
+        clear_done.setObjectName("SubtleButton")
+        clear_done.clicked.connect(self._on_clear_completed)
+        queue_header.addWidget(clear_done)
+        clear_cache = QPushButton("清理缓存")
+        clear_cache.setObjectName("SubtleButton")
+        clear_cache.clicked.connect(self._on_clear_cache)
+        queue_header.addWidget(clear_cache)
         layout.addLayout(queue_header)
 
         self._download_list = DownloadListWidget()
         self._download_list.retry_requested.connect(self._on_retry_download)
+        self._download_list.pause_requested.connect(self._on_pause_requested)
+        self._download_list.delete_requested.connect(self._on_delete_download)
+        self._download_list.open_requested.connect(self._on_open_download)
         layout.addWidget(self._download_list)
         workspace_scroll = QScrollArea()
         workspace_scroll.setObjectName("WorkspaceScroll")
@@ -314,6 +395,14 @@ class MainWindow(QMainWindow):
         cb.setAttribute(Qt.WA_MacShowFocusRect, False)
         cb.setChecked(checked)
         return cb
+
+    def _sync_output_mode_controls(self):
+        video_mode = self._output_mode_combo.currentData() == OutputMode.VIDEO
+        self._quality_combo.setEnabled(video_mode)
+        self._codec_label.setText("视频编码" if video_mode else "音频质量")
+        self._codec_stack.setCurrentWidget(
+            self._codec_combo if video_mode else self._audio_combo
+        )
 
     def _populate_quality_combo(self):
         """Fill quality combo box with all available qualities."""
@@ -355,6 +444,24 @@ class MainWindow(QMainWindow):
         index = self._codec_combo.findData(preferred)
         self._codec_combo.setCurrentIndex(index if index >= 0 else 0)
         self._codec_combo.blockSignals(False)
+
+    def _populate_audio_combo(self, available: set[int] | None = None):
+        previous = self._audio_combo.currentData() if self._audio_combo.count() else None
+        preferred = (
+            previous
+            if previous is not None
+            else self._settings.default_audio_quality
+        )
+        self._audio_combo.blockSignals(True)
+        self._audio_combo.clear()
+        for audio_id in (30251, 30250, 30285, 30280, 30216, 0):
+            if available is None or audio_id in available:
+                self._audio_combo.addItem(
+                    AUDIO_CODEC_MAP.get(audio_id, f"音频 {audio_id}"), audio_id
+                )
+        index = self._audio_combo.findData(preferred)
+        self._audio_combo.setCurrentIndex(index if index >= 0 else 0)
+        self._audio_combo.blockSignals(False)
 
     def _refresh_codec_options(self):
         if not hasattr(self, "_codec_combo"):
@@ -451,6 +558,35 @@ class MainWindow(QMainWindow):
 
     # -- Event Handlers --
 
+    def _restore_tasks(self):
+        recovered = self._task_repository.recover_interrupted()
+        queued = []
+        for record in self._task_repository.list_tasks():
+            item = record.item.model_copy(update={"status": record.status}, deep=True)
+            self._download_list.add_item(
+                item,
+                download_id=record.id,
+                status=record.status,
+                progress=record.progress,
+                status_text=record.status_text,
+                output_path=record.output_path,
+                warnings=record.warnings,
+            )
+            if record.status == TaskStatus.QUEUED:
+                queued.append((item, record.id))
+        for item, task_id in queued:
+            self._start_download(item, task_id)
+        recovered_database = getattr(
+            self._task_repository, "recovered_database_path", None
+        )
+        if recovered_database:
+            self._status_bar.showMessage(
+                "任务数据库损坏，原文件已隔离并建立新任务库："
+                f"{recovered_database.name}"
+            )
+        elif recovered:
+            self._status_bar.showMessage(f"已恢复 {recovered} 个中断任务，可继续下载")
+
     def _on_resolve_clicked(self):
         """Resolve URL and show video info."""
         url = self._url_input.text().strip()
@@ -514,9 +650,12 @@ class MainWindow(QMainWindow):
             self._populate_quality_combo()
 
         self._refresh_codec_options()
+        available_audio = {stream.id for stream in audio_streams}
+        self._populate_audio_combo(available_audio or None)
         self._subtitle_check.setEnabled(True)
         self._subtitle_check.setChecked(self._settings.download_subtitle)
         self._subtitle_check.setToolTip("每个分 P 下载时会单独查询可用字幕轨道")
+        self._all_subtitles_check.setEnabled(self._subtitle_check.isChecked())
 
     def _on_resolve_error(self, error: str):
         """Handle resolution error."""
@@ -529,8 +668,16 @@ class MainWindow(QMainWindow):
         """Retry a failed download."""
         item = self._download_list.get_item(download_id)
         if item:
-            # Reset UI
             self._download_list.mark_failed_retry_reset(download_id)
+            self._task_repository.update(
+                download_id,
+                status=TaskStatus.QUEUED,
+                progress=0.0,
+                status_text="等待继续",
+                error=None,
+                speed_bytes_per_second=0,
+                eta_seconds=None,
+            )
             self._start_download(item, download_id)
             self._status_bar.showMessage(f"重试下载：{item.video_info.title}")
 
@@ -541,7 +688,6 @@ class MainWindow(QMainWindow):
             return
 
         quality = self._quality_combo.currentData()
-        codec = self._codec_combo.currentData()
         if quality is None:
             self._show_error("当前视频没有可用画质，请重新解析或登录后重试")
             return
@@ -554,21 +700,51 @@ class MainWindow(QMainWindow):
         else:
             video_infos = [self._current_video]
 
-        for video_info in video_infos:
-            item = DownloadItem(
-                video_info=video_info,
-                selected_quality=quality,
-                selected_video_codec=codec,
-                download_danmaku=self._danmaku_check.isChecked(),
-                download_subtitle=self._subtitle_check.isChecked(),
+        added = sum(
+            self._enqueue_download(self._make_download_item(video_info))
+            for video_info in video_infos
+        )
+        self._status_bar.showMessage(f"已加入 {added} 个下载任务")
+
+    def _make_download_item(self, video_info: VideoInfo) -> DownloadItem:
+        all_subtitles = (
+            self._subtitle_check.isChecked()
+            and self._all_subtitles_check.isChecked()
+        )
+        return DownloadItem(
+            video_info=video_info,
+            selected_quality=(
+                self._quality_combo.currentData() or self._settings.default_quality
+            ),
+            selected_video_codec=(
+                self._codec_combo.currentData()
+                or self._settings.default_video_codec
+            ),
+            selected_audio_quality=(
+                self._audio_combo.currentData()
+                if self._audio_combo.currentData() is not None
+                else self._settings.default_audio_quality
+            ),
+            output_mode=self._output_mode_combo.currentData(),
+            path_template=self._settings.path_template,
+            download_danmaku=self._danmaku_check.isChecked(),
+            download_subtitle=self._subtitle_check.isChecked(),
+            download_all_subtitles=all_subtitles,
+            download_cover=self._cover_check.isChecked(),
+            download_metadata=self._metadata_check.isChecked(),
+        )
+
+    def _enqueue_download(self, item: DownloadItem) -> bool:
+        duplicate = self._task_repository.find_duplicate(item)
+        if duplicate is not None:
+            self._status_bar.showMessage(
+                f"已跳过重复任务：{item.video_info.title}"
             )
-            self._enqueue_download(item)
-
-        self._status_bar.showMessage(f"已加入 {len(video_infos)} 个下载任务")
-
-    def _enqueue_download(self, item: DownloadItem):
-        download_id = self._download_list.add_item(item)
+            return False
+        download_id = self._task_repository.add(item)
+        self._download_list.add_item(item, download_id=download_id)
         self._start_download(item, download_id)
+        return True
 
     def _start_download(self, item, download_id: int):
         """Start a download in a background thread via thread pool."""
@@ -582,57 +758,38 @@ class MainWindow(QMainWindow):
         runner = DownloadRunner(worker)
 
         # Connect signals
-        worker.progress.connect(
-            lambda idx, pct, text: self._download_list.update_progress(
-                idx, pct, text
-            )
-        )
+        worker.progress.connect(self._on_download_progress)
         worker.finished.connect(self._on_download_finished)
         worker.error.connect(self._on_download_error)
         worker.cancelled.connect(self._on_download_cancelled)
+        worker.paused.connect(self._on_download_paused)
+        worker.metrics.connect(self._on_download_metrics)
 
         self._download_list.register_worker(download_id, worker)
-        self._download_pool.start(runner)
-
-    def _start_batch_download(self, urls: list[str]):
-        """Resolve multiple videos in background and add to download queue."""
-        self._status_bar.showMessage(f"正在批量解析 {len(urls)} 个视频...")
-        worker = BatchWorker()
-        self._batch_workers.append(worker)
-        worker.item_ready.connect(self._on_batch_item_ready)
-        worker.error.connect(self._on_batch_item_error)
-        worker.finished.connect(lambda: self._on_batch_finished(worker))
-
-        runner = BatchRunner(
-            worker,
-            self._api_client,
-            urls,
-            self._quality_combo.currentData(),
-            self._codec_combo.currentData(),
-            self._danmaku_check.isChecked(),
-            self._subtitle_check.isChecked(),
+        self._download_list.mark_downloading(download_id)
+        self._task_repository.update(
+            download_id,
+            status=TaskStatus.DOWNLOADING,
+            status_text="正在启动下载",
+            error=None,
         )
-        self._service_pool.start(runner)
-
-    def _on_batch_item_ready(self, item):
-        """Handle a single resolved video from batch processing."""
-        download_id = self._download_list.add_item(item)
-        self._start_download(item, download_id)
-        self._status_bar.showMessage(f"已加入队列：{item.video_info.title}")
-
-    def _on_batch_item_error(self, error: str):
-        """Handle a single failed resolution from batch processing."""
-        self._download_list.add_resolution_error(error)
-        self._status_bar.showMessage("部分批量项目解析失败，请查看任务列表")
-
-    def _on_batch_finished(self, worker: BatchWorker):
-        if worker in self._batch_workers:
-            self._batch_workers.remove(worker)
-        self._status_bar.showMessage("批量解析完成")
+        self._download_pool.start(runner)
 
     def _on_download_finished(self, download_id: int, outcome):
         """Handle download completion."""
         self._download_list.mark_done(download_id, outcome)
+        self._task_repository.update(
+            download_id,
+            status=TaskStatus.COMPLETED,
+            progress=1.0,
+            status_text="部分完成" if outcome.warnings else "完成",
+            error=None,
+            output_path=outcome.video_path,
+            speed_bytes_per_second=0,
+            eta_seconds=None,
+            completed_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            warnings=outcome.warnings,
+        )
         if outcome.warnings:
             self._status_bar.showMessage(
                 f"视频已保存，但有 {len(outcome.warnings)} 项警告"
@@ -643,12 +800,121 @@ class MainWindow(QMainWindow):
     def _on_download_error(self, download_id: int, error: str):
         """Handle download error."""
         self._download_list.mark_failed(download_id, error)
+        self._task_repository.update(
+            download_id,
+            status=TaskStatus.FAILED,
+            status_text=f"失败：{error[:120]}",
+            error=error,
+            speed_bytes_per_second=0,
+            eta_seconds=None,
+        )
         self._status_bar.showMessage(f"下载失败：{error}")
 
     def _on_download_cancelled(self, download_id: int):
         """Handle a task cancelled by the user."""
         self._download_list.mark_cancelled(download_id)
+        self._task_repository.update(
+            download_id,
+            status=TaskStatus.CANCELLED,
+            status_text="已取消",
+            speed_bytes_per_second=0,
+            eta_seconds=None,
+        )
         self._status_bar.showMessage("下载已取消")
+
+    def _on_download_progress(self, download_id: int, progress: float, text: str):
+        self._download_list.update_progress(download_id, progress, text)
+        state = (
+            TaskStatus.MERGING
+            if "合并" in text or "封装" in text
+            else TaskStatus.DOWNLOADING
+        )
+        self._task_repository.update(
+            download_id,
+            status=state,
+            progress=max(0.0, min(1.0, progress)),
+            status_text=text,
+        )
+
+    def _on_download_metrics(self, download_id: int, speed: float, eta):
+        self._task_repository.update(
+            download_id,
+            speed_bytes_per_second=max(0.0, speed),
+            eta_seconds=eta,
+        )
+
+    def _on_pause_requested(self, download_id: int):
+        self._task_repository.update(
+            download_id,
+            status=TaskStatus.PAUSED,
+            status_text="暂停中",
+            speed_bytes_per_second=0,
+            eta_seconds=None,
+        )
+
+    def _on_download_paused(self, download_id: int):
+        self._download_list.mark_paused(download_id)
+        self._task_repository.update(
+            download_id,
+            status=TaskStatus.PAUSED,
+            status_text="已暂停，可继续",
+            speed_bytes_per_second=0,
+            eta_seconds=None,
+        )
+        self._status_bar.showMessage("任务已暂停，断点数据已保留")
+
+    def _on_delete_download(self, download_id: int):
+        self._task_repository.delete(download_id)
+
+    def _on_open_download(self, download_id: int):
+        record = self._task_repository.get(download_id)
+        if record is None or not record.output_path:
+            self._show_error("找不到该任务的输出文件")
+            return
+        path = Path(record.output_path)
+        if not path.exists():
+            self._show_error(f"文件已经移动或删除：\n{path}")
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.parent)))
+
+    def _on_pause_all(self):
+        self._download_list.pause_all_workers()
+        self._status_bar.showMessage("正在暂停全部任务...")
+
+    def _on_resume_all(self):
+        task_ids = self._download_list.resumable_ids
+        for task_id in task_ids:
+            self._on_retry_download(task_id)
+        self._status_bar.showMessage(f"已继续 {len(task_ids)} 个任务")
+
+    def _on_clear_completed(self):
+        task_ids = self._download_list.completed_ids
+        for task_id in task_ids:
+            self._download_list.remove_item(task_id)
+        deleted = self._task_repository.clear_completed()
+        self._status_bar.showMessage(f"已清除 {deleted} 条完成记录，媒体文件仍保留")
+
+    def _on_clear_cache(self):
+        if self._download_list.has_active_workers:
+            self._show_error("请先暂停全部任务，再清理断点缓存")
+            return
+        summary = inspect_download_cache(self._settings.output_dir)
+        if summary.file_count == 0:
+            self._show_info("当前没有断点缓存")
+            return
+        size = _format_bytes(summary.size_bytes)
+        answer = QMessageBox.question(
+            self,
+            "清理断点缓存",
+            f"将删除 {summary.file_count} 个断点文件（{size}）。\n"
+            "删除后未完成任务需要重新下载，确认继续吗？",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            return
+        cleared = clear_download_cache(self._settings.output_dir)
+        self._status_bar.showMessage(f"已清理 {cleared.file_count} 个断点文件")
 
     def _on_settings_triggered(self):
         """Open settings dialog."""
@@ -662,6 +928,31 @@ class MainWindow(QMainWindow):
                 return
             self._settings = new_settings
             self._apply_thread_pool_settings()
+            self._apply_settings_to_controls()
+
+    def _apply_settings_to_controls(self):
+        quality_index = self._quality_combo.findData(self._settings.default_quality)
+        if quality_index >= 0:
+            self._quality_combo.setCurrentIndex(quality_index)
+        codec_index = self._codec_combo.findData(self._settings.default_video_codec)
+        if codec_index >= 0:
+            self._codec_combo.setCurrentIndex(codec_index)
+        audio_index = self._audio_combo.findData(self._settings.default_audio_quality)
+        if audio_index >= 0:
+            self._audio_combo.setCurrentIndex(audio_index)
+        output_index = self._output_mode_combo.findData(
+            self._settings.default_output_mode
+        )
+        if output_index >= 0:
+            self._output_mode_combo.setCurrentIndex(output_index)
+        self._danmaku_check.setChecked(self._settings.download_danmaku)
+        self._subtitle_check.setChecked(self._settings.download_subtitle)
+        self._all_subtitles_check.setChecked(
+            self._settings.download_all_subtitles
+        )
+        self._cover_check.setChecked(self._settings.download_cover)
+        self._metadata_check.setChecked(self._settings.download_metadata)
+        self._sync_output_mode_controls()
 
     def _on_login_triggered(self):
         """Open login dialog."""
@@ -735,11 +1026,34 @@ class MainWindow(QMainWindow):
 
     def _on_batch_clicked(self):
         """Open batch download dialog."""
-        dialog = BatchDialog(self)
+        dialog = BatchDialog(
+            api_client=self._api_client,
+            existing_bvids=self._task_repository.known_bvids(),
+            parent=self,
+        )
         if dialog.exec():
-            urls = dialog.get_urls()
-            if urls:
-                self._start_batch_download(urls)
+            infos = dialog.get_video_infos()
+            if infos:
+                self._enqueue_batch_infos(infos)
+
+    def _enqueue_batch_infos(self, infos: list[VideoInfo]):
+        added = 0
+        skipped = 0
+        for info in infos:
+            page_infos = (
+                [info.for_page(page) for page in info.pages]
+                if info.is_multi_part
+                else [info]
+            )
+            for page_info in page_infos:
+                item = self._make_download_item(page_info)
+                if self._enqueue_download(item):
+                    added += 1
+                else:
+                    skipped += 1
+        self._status_bar.showMessage(
+            f"已加入 {added} 个任务" + (f"，跳过 {skipped} 个重复项" if skipped else "")
+        )
 
     def _on_check_ffmpeg(self):
         """Check FFmpeg availability."""
@@ -790,11 +1104,8 @@ class MainWindow(QMainWindow):
                 return
             self._close_confirmed = True
 
-        # Cancel all active workers
-        self._download_list.cancel_all_workers()
-        for worker in self._batch_workers:
-            worker.cancel()
-
+        # Pause active workers so their durable tasks remain resumable.
+        self._download_list.pause_all_workers()
         # Give both pools a short grace period before closing their shared clients.
         downloads_stopped = self._download_pool.waitForDone(2000)
         services_stopped = self._service_pool.waitForDone(1000)
@@ -810,3 +1121,12 @@ class MainWindow(QMainWindow):
                     logger.debug("Failed to close API client", exc_info=True)
 
         super().closeEvent(event)
+
+
+def _format_bytes(size: int) -> str:
+    value = float(max(0, size))
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if value < 1024 or unit == "TB":
+            return f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{value:.1f} TB"

@@ -1,6 +1,7 @@
 """URL parsing and validation utilities for Bilibili links."""
 
 import re
+from pathlib import Path, PurePosixPath
 from typing import Optional
 from urllib.parse import urljoin
 
@@ -160,3 +161,33 @@ def sanitize_filename(name: str) -> str:
     if len(name.encode("utf-8")) > 200:
         name = name.encode("utf-8")[:200].decode("utf-8", errors="ignore")
     return name or "untitled"
+
+
+def render_path_template(template: str, values: dict[str, str]) -> Path:
+    """Render a user path template without allowing absolute or parent paths."""
+    normalized = template.strip().replace("\\", "/")
+    if not normalized:
+        raise ValueError("保存模板不能为空")
+    if normalized.startswith("/") or re.match(r"^[A-Za-z]:/", normalized):
+        raise ValueError("保存模板必须是相对路径")
+
+    safe_values = {
+        key: sanitize_filename(str(value)) if value else ""
+        for key, value in values.items()
+    }
+    template_parts = PurePosixPath(normalized).parts
+    if not template_parts or any(
+        part in ("", ".", "..") for part in template_parts
+    ):
+        raise ValueError("保存模板包含无效路径")
+    try:
+        rendered_parts = [
+            template_part.format_map(safe_values)
+            for template_part in template_parts
+        ]
+    except KeyError as exc:
+        raise ValueError(f"不支持的模板字段：{exc.args[0]}") from exc
+    except (ValueError, AttributeError) as exc:
+        raise ValueError("保存模板格式无效") from exc
+    safe_parts = [sanitize_filename(part) for part in rendered_parts]
+    return Path(*safe_parts)

@@ -58,6 +58,15 @@ jobs:
       - name: Build application
         run: pyinstaller --noconfirm --clean BilibiliDownloader.spec
 
+      - name: Verify frozen CLI
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            dist/BilibiliDownloader/BilibiliDownloader.exe --help
+          else
+            dist/BilibiliDownloader/BilibiliDownloader --help
+          fi
+
       - name: Generate dependency SBOM
         run: cyclonedx-py environment --output-format JSON --output-file "${{ matrix.archive_name }}-${{ github.ref_name }}.cdx.json"
 

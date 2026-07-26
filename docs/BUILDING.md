@@ -40,6 +40,28 @@ CI 在 Ubuntu 和 Windows 上使用 Python 3.10、3.11、3.12 运行测试，并
 
 `constraints.txt` 固定经过验证的直接运行与开发依赖。修改依赖时，应在三类系统的 CI 通过后同步更新约束版本；平台专属传递依赖由 pip 解析器管理。
 
+### 发布候选端到端验证
+
+涉及下载、网络边界、FFmpeg 或归档附加项时，发布前还应使用一个无需登录且有权下载的短视频完成真实验证。不要在脚本、命令历史或日志中写入真实 Cookie，也不要把线上网络测试加入常规单元测试。
+
+```bash
+python -m bilibili_downloader test <公开BV号>
+python -m bilibili_downloader download <公开BV号> \
+  --quality 16 \
+  --audio-quality 30216 \
+  --danmaku \
+  --subtitle \
+  --cover \
+  --metadata \
+  --output <临时输出目录>
+python -m bilibili_downloader download <公开BV号> \
+  --audio-only \
+  --audio-quality 30216 \
+  --output <另一个临时输出目录>
+```
+
+验收时确认视频 MP4 与仅音频 M4A 均可被 FFmpeg 完整解码；封面能够被图片解析器打开；元数据是有效 JSON；弹幕/字幕结果与源视频能力一致；成功后对应 `.biliflow-parts/` 缓存已清理。至少中断并继续一次下载，确认已完成的流不会重复传输。线上未提供所选规格或字幕产生的明确回退警告不视为失败。
+
 ## 本地打包
 
 ```bash
@@ -51,6 +73,17 @@ pyinstaller --noconfirm --clean BilibiliDownloader.spec
 - 视觉素材会收集到冻结应用中；运行时路径统一由 `gui/resources/paths.py` 解析。
 - spec 根据平台选择 `app_icon.icns`、`app_icon.ico` 或 `app_icon.png`。
 - `packaging_hooks/hook-keyring.py` 只收集目标系统的凭据库后端，避免携带其他平台实现。
+
+构建后至少验证冻结 CLI 和包版本。macOS 还应验证应用包签名结构：
+
+```bash
+dist/BilibiliDownloader/BilibiliDownloader --help
+codesign --verify --deep --strict dist/BilibiliDownloader.app
+plutil -extract CFBundleShortVersionString raw \
+  dist/BilibiliDownloader.app/Contents/Info.plist
+```
+
+Windows 使用 `dist\BilibiliDownloader\BilibiliDownloader.exe --help`。本地无 Developer ID 时 PyInstaller 生成的是 ad-hoc 签名，只能验证包完整性，不能替代正式签名与 Apple 公证。
 
 重新生成应用图标：
 
@@ -78,7 +111,9 @@ git push origin vX.Y.Z
 
 标签中的 `X.Y.Z` 必须与 `bilibili_downloader.__version__` 完全一致。标签应创建在已推送且通过本地验证的发布提交上。
 
-`.github/workflows/release.yml` 会在 macOS 与 Windows runner 上重新执行测试和 PyInstaller 构建，然后上传：
+涉及 `core/task_repository.py` 时，还必须用上一公开版本创建的真实任务库做一次升级验证。确认升级前备份的 `PRAGMA user_version` 和表结构未变化、升级后任务数量与状态一致、迁移失败不会隔离或覆盖可读的原库。不要用生产任务库作为唯一测试副本。
+
+`.github/workflows/release.yml` 会在 macOS 与 Windows runner 上重新执行测试和 PyInstaller 构建，并对冻结后的命令行程序执行 `--help` 冒烟检查，然后上传：
 
 - `BilibiliDownloader-macOS-vX.Y.Z.zip`
 - `BilibiliDownloader-Windows-vX.Y.Z.zip`

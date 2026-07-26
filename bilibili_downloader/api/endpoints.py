@@ -21,6 +21,11 @@ PLAYER_INFO_ENDPOINT = "/x/player/v2"
 # Video page list (multi-part videos)
 PAGELIST_ENDPOINT = "/x/player/pagelist"
 
+# Collections and personal media lists
+FAVORITE_LIST_ENDPOINT = "/x/v3/fav/resource/list"
+SERIES_ARCHIVES_ENDPOINT = "/x/series/archives"
+SEASON_ARCHIVES_ENDPOINT = "/x/polymer/web-space/seasons_archives_list"
+
 # Navigation / user info (for WBI key extraction)
 NAV_ENDPOINT = "/x/web-interface/nav"
 

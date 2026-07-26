@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFileDialog,
     QFormLayout,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -21,7 +22,13 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from bilibili_downloader.core.models import AppSettings, VideoQuality
+from bilibili_downloader.core.models import (
+    AUDIO_CODEC_MAP,
+    AppSettings,
+    OutputMode,
+    VideoQuality,
+)
+from bilibili_downloader.utils.validators import render_path_template
 
 
 class SettingsDialog(QDialog):
@@ -60,6 +67,14 @@ class SettingsDialog(QDialog):
         dir_layout.addWidget(browse_btn)
         form.addRow("保存目录：", dir_layout)
 
+        self._path_template = QLineEdit(self._settings.path_template)
+        self._path_template.setPlaceholderText("{author}/{title}{part_suffix}")
+        self._path_template.setToolTip(
+            "可用字段：title、author、bvid、page、part、part_suffix、"
+            "collection、quality、codec"
+        )
+        form.addRow("目录模板：", self._path_template)
+
         # Default quality
         self._quality_combo = QComboBox()
         for q in VideoQuality:
@@ -76,6 +91,26 @@ class SettingsDialog(QDialog):
         codec_index = self._codec_combo.findData(self._settings.default_video_codec)
         self._codec_combo.setCurrentIndex(codec_index if codec_index >= 0 else 0)
         form.addRow("默认编码：", self._codec_combo)
+
+        self._audio_combo = QComboBox()
+        for audio_id in (30251, 30250, 30285, 30280, 30216, 0):
+            self._audio_combo.addItem(
+                AUDIO_CODEC_MAP.get(audio_id, f"音频 {audio_id}"), audio_id
+            )
+        audio_index = self._audio_combo.findData(
+            self._settings.default_audio_quality
+        )
+        self._audio_combo.setCurrentIndex(audio_index if audio_index >= 0 else 0)
+        form.addRow("默认音频：", self._audio_combo)
+
+        self._output_mode_combo = QComboBox()
+        self._output_mode_combo.addItem("视频 / MP4", OutputMode.VIDEO)
+        self._output_mode_combo.addItem("仅音频 / M4A 或 FLAC", OutputMode.AUDIO)
+        output_index = self._output_mode_combo.findData(
+            self._settings.default_output_mode
+        )
+        self._output_mode_combo.setCurrentIndex(output_index if output_index >= 0 else 0)
+        form.addRow("默认输出：", self._output_mode_combo)
 
         # Max concurrent downloads
         self._max_concurrent = QSpinBox()
@@ -115,14 +150,23 @@ class SettingsDialog(QDialog):
         layout.addLayout(form)
 
         # Option checkboxes
-        options_layout = QHBoxLayout()
+        options_layout = QGridLayout()
         self._danmaku_check = QCheckBox("默认下载弹幕")
         self._danmaku_check.setChecked(self._settings.download_danmaku)
         self._subtitle_check = QCheckBox("默认下载字幕")
         self._subtitle_check.setChecked(self._settings.download_subtitle)
-        options_layout.addWidget(self._danmaku_check)
-        options_layout.addWidget(self._subtitle_check)
-        options_layout.addStretch()
+        self._all_subtitles_check = QCheckBox("默认下载全部字幕")
+        self._all_subtitles_check.setChecked(self._settings.download_all_subtitles)
+        self._cover_check = QCheckBox("默认保存封面")
+        self._cover_check.setChecked(self._settings.download_cover)
+        self._metadata_check = QCheckBox("默认保存元数据")
+        self._metadata_check.setChecked(self._settings.download_metadata)
+        options_layout.addWidget(self._danmaku_check, 0, 0)
+        options_layout.addWidget(self._subtitle_check, 0, 1)
+        options_layout.addWidget(self._all_subtitles_check, 0, 2)
+        options_layout.addWidget(self._cover_check, 1, 0)
+        options_layout.addWidget(self._metadata_check, 1, 1)
+        options_layout.setColumnStretch(3, 1)
         layout.addLayout(options_layout)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -168,6 +212,24 @@ class SettingsDialog(QDialog):
         if ffmpeg_path and not Path(ffmpeg_path).is_file():
             QMessageBox.warning(self, "下载设置", "FFmpeg 路径不是有效文件")
             return
+        try:
+            render_path_template(
+                self._path_template.text(),
+                {
+                    "title": "title",
+                    "author": "author",
+                    "bvid": "BV1xx",
+                    "page": "1",
+                    "part": "part",
+                    "part_suffix": "_part",
+                    "collection": "collection",
+                    "quality": "1080P",
+                    "codec": "HEVC",
+                },
+            )
+        except ValueError as exc:
+            QMessageBox.warning(self, "下载设置", str(exc))
+            return
         self.accept()
 
     def get_settings(self) -> AppSettings:
@@ -175,8 +237,17 @@ class SettingsDialog(QDialog):
         self._settings.output_dir = self._output_dir.text()
         self._settings.default_quality = self._quality_combo.currentData()
         self._settings.default_video_codec = self._codec_combo.currentData()
+        self._settings.default_audio_quality = self._audio_combo.currentData()
+        self._settings.default_output_mode = self._output_mode_combo.currentData()
+        self._settings.path_template = self._path_template.text().strip()
         self._settings.max_concurrent_downloads = self._max_concurrent.value()
         self._settings.ffmpeg_path = self._ffmpeg_path.text()
         self._settings.download_danmaku = self._danmaku_check.isChecked()
-        self._settings.download_subtitle = self._subtitle_check.isChecked()
+        all_subtitles = self._all_subtitles_check.isChecked()
+        self._settings.download_subtitle = (
+            self._subtitle_check.isChecked() or all_subtitles
+        )
+        self._settings.download_all_subtitles = all_subtitles
+        self._settings.download_cover = self._cover_check.isChecked()
+        self._settings.download_metadata = self._metadata_check.isChecked()
         return self._settings

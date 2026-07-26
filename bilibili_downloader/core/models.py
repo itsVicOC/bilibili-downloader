@@ -1,6 +1,6 @@
 """Pydantic data models for Bilibili API responses."""
 
-from enum import IntEnum
+from enum import Enum, IntEnum
 from pathlib import Path
 from typing import Optional
 
@@ -38,6 +38,25 @@ class VideoQuality(IntEnum):
     @property
     def label(self) -> str:
         return _VIDEO_QUALITY_LABELS.get(self.value, f"Unknown({self.value})")
+
+
+class TaskStatus(str, Enum):
+    """Durable lifecycle states for a download task."""
+
+    QUEUED = "queued"
+    DOWNLOADING = "downloading"
+    PAUSED = "paused"
+    MERGING = "merging"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class OutputMode(str, Enum):
+    """Media artifact produced by a download task."""
+
+    VIDEO = "video"
+    AUDIO = "audio"
 
 
 VIDEO_CODEC_MAP = {
@@ -101,6 +120,9 @@ class VideoInfo(BaseModel):
     pages: list[VideoPage] = Field(default_factory=list)
     subtitle_list: list[SubtitleInfo] = Field(default_factory=list)
     pubdate: int = 0
+    source_url: str = ""
+    source_type: str = "video"
+    collection_title: str = ""
 
     # Stream info (populated after playurl call)
     video_streams: list[StreamInfo] = Field(default_factory=list)
@@ -132,6 +154,15 @@ class VideoInfo(BaseModel):
         )
 
 
+class ContentCollection(BaseModel):
+    """A resolved user-facing source containing one or more videos."""
+
+    title: str = ""
+    source_type: str = "video"
+    source_url: str = ""
+    items: list[VideoInfo] = Field(default_factory=list)
+
+
 class DownloadItem(BaseModel):
     """Tracks a single download task."""
     video_info: VideoInfo
@@ -139,10 +170,15 @@ class DownloadItem(BaseModel):
     selected_video_codec: int = 12  # HEVC default
     selected_audio_quality: int = 30280  # AAC 192kbps
     output_path: str = ""
+    output_mode: OutputMode = OutputMode.VIDEO
+    path_template: str = "{title}{part_suffix}"
     download_danmaku: bool = False
     download_subtitle: bool = False
+    download_all_subtitles: bool = False
+    download_cover: bool = False
+    download_metadata: bool = False
     selected_subtitle_lan: str = "zh-Hans"
-    status: str = "pending"  # pending/downloading/merging/done/failed
+    status: TaskStatus = TaskStatus.QUEUED
     progress: float = 0.0
     status_text: str = ""
     error: Optional[str] = None
@@ -150,21 +186,56 @@ class DownloadItem(BaseModel):
 
     @property
     def filename(self) -> str:
-        from bilibili_downloader.utils.validators import sanitize_filename
+        return self.relative_output_path.name
+
+    @property
+    def relative_output_path(self) -> Path:
+        """Render the configured safe relative path for this task."""
+        from bilibili_downloader.utils.validators import render_path_template
 
         info = self.video_info
-        safe_title = sanitize_filename(info.title)
-        # Use the selected page's part name (O(1) dict lookup)
-        if info.is_multi_part:
-            cid_to_part = {p.cid: p.part for p in info.pages}
-            part = cid_to_part.get(info.cid, "")
-            if part:
-                combined = sanitize_filename(
-                    f"{safe_title}_{sanitize_filename(part)}"
-                )
-                return f"{combined}.mp4"
-        # Single-part or fallback: use title only
-        return f"{safe_title}.mp4"
+        page = next((page for page in info.pages if page.cid == info.cid), None)
+        part = page.part if page else ""
+        page_number = page.page if page else 1
+        suffix = ".m4a" if self.output_mode == OutputMode.AUDIO else ".mp4"
+        stem = render_path_template(
+            self.path_template,
+            {
+                "title": info.title,
+                "author": info.author or info.owner_name,
+                "bvid": info.bvid,
+                "page": str(page_number),
+                "part": part,
+                "part_suffix": f"_{part}" if info.is_multi_part and part else "",
+                "collection": info.collection_title,
+                "quality": self.selected_quality.label,
+                "codec": VIDEO_CODEC_MAP.get(
+                    self.selected_video_codec, str(self.selected_video_codec)
+                ),
+            },
+        )
+        return stem.with_name(f"{stem.name}{suffix}")
+
+    @property
+    def fingerprint(self) -> str:
+        """Return a stable identity used for duplicate detection."""
+        return ":".join(
+            [
+                self.video_info.bvid,
+                str(self.video_info.cid),
+                str(self.selected_quality.value),
+                str(self.selected_video_codec),
+                str(self.selected_audio_quality),
+                self.output_mode.value,
+                self.relative_output_path.as_posix(),
+                str(int(self.download_danmaku)),
+                str(int(self.download_subtitle)),
+                str(int(self.download_all_subtitles)),
+                str(int(self.download_cover)),
+                str(int(self.download_metadata)),
+                self.selected_subtitle_lan,
+            ]
+        )
 
 
 class DownloadOutcome(BaseModel):
@@ -173,9 +244,12 @@ class DownloadOutcome(BaseModel):
     video_path: str
     danmaku_path: Optional[str] = None
     subtitle_paths: list[str] = Field(default_factory=list)
+    cover_path: Optional[str] = None
+    metadata_path: Optional[str] = None
     warnings: list[str] = Field(default_factory=list)
     actual_quality: Optional[int] = None
     actual_video_codec: Optional[int] = None
+    actual_audio_quality: Optional[int] = None
 
     @property
     def is_partial(self) -> bool:
@@ -189,8 +263,14 @@ class AppSettings(BaseModel):
     output_dir: str = Field(default_factory=lambda: str(Path.home() / "Downloads" / "bilibili"))
     default_quality: VideoQuality = VideoQuality.Q1080P
     default_video_codec: int = 12  # HEVC
+    default_audio_quality: int = 30280  # AAC 192kbps
+    default_output_mode: OutputMode = OutputMode.VIDEO
+    path_template: str = "{title}{part_suffix}"
     download_danmaku: bool = False
     download_subtitle: bool = False
+    download_all_subtitles: bool = False
+    download_cover: bool = False
+    download_metadata: bool = False
     sessdata: str = ""
     ffmpeg_path: str = ""
     max_concurrent_downloads: int = Field(default=3, ge=1, le=8)
@@ -209,4 +289,35 @@ class AppSettings(BaseModel):
     def validate_video_codec(cls, value: int) -> int:
         if value not in VIDEO_CODEC_MAP:
             raise ValueError("unsupported default_video_codec")
+        return value
+
+    @field_validator("default_audio_quality")
+    @classmethod
+    def validate_audio_quality(cls, value: int) -> int:
+        if value not in AUDIO_CODEC_MAP:
+            raise ValueError("unsupported default_audio_quality")
+        return value
+
+    @field_validator("path_template")
+    @classmethod
+    def validate_path_template(cls, value: str) -> str:
+        from bilibili_downloader.utils.validators import render_path_template
+
+        value = value.strip()
+        if not value:
+            raise ValueError("path_template cannot be empty")
+        render_path_template(
+            value,
+            {
+                "title": "title",
+                "author": "author",
+                "bvid": "BV1xx",
+                "page": "1",
+                "part": "part",
+                "part_suffix": "_part",
+                "collection": "collection",
+                "quality": "1080P",
+                "codec": "HEVC",
+            },
+        )
         return value

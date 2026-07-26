@@ -11,6 +11,7 @@ from bilibili_downloader.api import endpoints as ep
 from bilibili_downloader.api.endpoints import USER_AGENT
 from bilibili_downloader.api.wbi import WBISigner
 from bilibili_downloader.core.models import (
+    ContentCollection,
     StreamInfo,
     SubtitleInfo,
     VideoInfo,
@@ -125,31 +126,181 @@ class BilibiliAPIClient:
         code = data.get("code", -1)
         if code != 0:
             raise BilibiliAPIError(code, data.get("message", "Unknown error"))
-        return data.get("data", {})
+        return data.get("data") or {}
 
     # -- API Methods --
 
     def get_video_info(self, bvid: str) -> VideoInfo:
         """Fetch video metadata by BV number from /x/web-interface/view."""
 
+        data = self._get_view_data({"bvid": bvid})
+        return _parse_video_info(bvid, data)
+
+    def _get_view_data(self, identity: dict) -> dict:
+        """Fetch raw view data for a BV or AV identity."""
+
         def _fetch():
-            params = self._sign_params({"bvid": bvid})
+            params = self._sign_params(identity)
             resp = self._client.get(ep.VIEW_ENDPOINT, params=params)
             return self._parse_response(resp)
 
-        data = self._retry_on_wbi_error(_fetch)
-        return _parse_video_info(bvid, data)
+        return self._retry_on_wbi_error(_fetch)
 
     def get_video_info_by_aid(self, aid: int) -> VideoInfo:
         """Fetch video metadata by AV/AID number from /x/web-interface/view."""
 
-        def _fetch():
-            params = self._sign_params({"aid": aid})
-            resp = self._client.get(ep.VIEW_ENDPOINT, params=params)
-            return self._parse_response(resp)
-
-        data = self._retry_on_wbi_error(_fetch)
+        data = self._get_view_data({"aid": aid})
         return _parse_video_info(data.get("bvid", ""), data)
+
+    def get_favorite_collection(
+        self,
+        media_id: int,
+        source_url: str = "",
+    ) -> ContentCollection:
+        """Resolve every page of a public or account-accessible favorite list."""
+        entries = []
+        title = f"收藏夹 {media_id}"
+        page = 1
+        while True:
+            response = self._client.get(
+                ep.FAVORITE_LIST_ENDPOINT,
+                params={
+                    "media_id": media_id,
+                    "pn": page,
+                    "ps": 20,
+                    "order": "mtime",
+                    "type": 0,
+                    "platform": "web",
+                },
+            )
+            data = self._parse_response(response)
+            info = data.get("info") or {}
+            title = info.get("title") or title
+            entries.extend(data.get("medias") or [])
+            if not data.get("has_more"):
+                break
+            page += 1
+            if page > 100:
+                raise RuntimeError("收藏夹分页过多，已停止解析")
+        return self._collection_from_entries(
+            title, "favorite", source_url, entries
+        )
+
+    def get_series_collection(
+        self,
+        mid: int,
+        series_id: int,
+        source_url: str = "",
+    ) -> ContentCollection:
+        """Resolve an UP owner's series list."""
+        entries = []
+        page = 1
+        total = None
+        while total is None or len(entries) < total:
+            response = self._client.get(
+                ep.SERIES_ARCHIVES_ENDPOINT,
+                params={
+                    "mid": mid,
+                    "series_id": series_id,
+                    "pn": page,
+                    "ps": 30,
+                    "only_normal": "true",
+                    "sort": "asc",
+                },
+            )
+            data = self._parse_response(response)
+            batch = data.get("archives") or []
+            entries.extend(batch)
+            page_info = data.get("page") or {}
+            total = int(page_info.get("total") or len(entries))
+            if not batch or len(entries) >= total:
+                break
+            page += 1
+            if page > 100:
+                raise RuntimeError("系列分页过多，已停止解析")
+        title = (data.get("meta") or {}).get("name") or f"系列 {series_id}"
+        return self._collection_from_entries(title, "series", source_url, entries)
+
+    def get_season_collection(
+        self,
+        mid: int,
+        season_id: int,
+        source_url: str = "",
+    ) -> ContentCollection:
+        """Resolve an UP owner's UGC season/collection."""
+        entries = []
+        page = 1
+        while True:
+            response = self._client.get(
+                ep.SEASON_ARCHIVES_ENDPOINT,
+                params={
+                    "mid": mid,
+                    "season_id": season_id,
+                    "page_num": page,
+                    "page_size": 30,
+                    "sort_reverse": "false",
+                },
+            )
+            data = self._parse_response(response)
+            batch = data.get("archives") or []
+            entries.extend(batch)
+            page_info = data.get("page") or {}
+            total = int(page_info.get("total") or len(entries))
+            if not batch or len(entries) >= total:
+                break
+            page += 1
+            if page > 100:
+                raise RuntimeError("合集分页过多，已停止解析")
+        title = (data.get("meta") or {}).get("name") or f"合集 {season_id}"
+        return self._collection_from_entries(title, "season", source_url, entries)
+
+    def get_video_season_collection(
+        self,
+        bvid: str,
+        source_url: str = "",
+    ) -> ContentCollection:
+        """Resolve the UGC season embedded in a video detail response."""
+        data = self._get_view_data({"bvid": bvid})
+        season = data.get("ugc_season") or {}
+        entries = []
+        for section in season.get("sections") or []:
+            entries.extend(section.get("episodes") or [])
+        if not entries:
+            raise RuntimeError("该视频没有可解析的合集内容")
+        title = season.get("title") or data.get("title") or "视频合集"
+        return self._collection_from_entries(title, "season", source_url, entries)
+
+    def _collection_from_entries(
+        self,
+        title: str,
+        source_type: str,
+        source_url: str,
+        entries: list[dict],
+    ) -> ContentCollection:
+        items = []
+        seen = set()
+        for entry in entries:
+            bvid = entry.get("bvid") if isinstance(entry, dict) else ""
+            if not bvid or bvid in seen:
+                continue
+            seen.add(bvid)
+            info = self.get_video_info(bvid)
+            items.append(
+                info.model_copy(
+                    update={
+                        "source_url": source_url,
+                        "source_type": source_type,
+                        "collection_title": title,
+                    },
+                    deep=True,
+                )
+            )
+        return ContentCollection(
+            title=title,
+            source_type=source_type,
+            source_url=source_url,
+            items=items,
+        )
 
     def get_play_url(
         self,

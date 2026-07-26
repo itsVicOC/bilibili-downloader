@@ -4,6 +4,7 @@ import pytest
 
 from bilibili_downloader.core.models import (
     DownloadItem,
+    OutputMode,
     StreamInfo,
     SubtitleInfo,
     VideoInfo,
@@ -118,7 +119,7 @@ class TestDownloadItem:
     def test_status_defaults(self):
         info = VideoInfo(title="Test", bvid="BV1xx", cid=1)
         item = DownloadItem(video_info=info)
-        assert item.status == "pending"
+        assert item.status.value == "queued"
         assert item.progress == 0.0
         assert item.error is None
 
@@ -134,6 +135,46 @@ class TestDownloadItem:
 
         assert len(DownloadItem(video_info=info).filename) <= 204
 
+    def test_audio_mode_and_directory_template(self):
+        info = VideoInfo(
+            title="Episode",
+            author="Creator",
+            bvid="BV1GJ411x7h7",
+            cid=1,
+        )
+        item = DownloadItem(
+            video_info=info,
+            output_mode=OutputMode.AUDIO,
+            path_template="{author}/{title}",
+        )
+
+        assert item.relative_output_path.as_posix() == "Creator/Episode.m4a"
+
+    def test_template_sanitizes_each_component(self):
+        info = VideoInfo(title="A/B", author="C:D", bvid="BV1GJ411x7h7", cid=1)
+        item = DownloadItem(video_info=info, path_template="{author}/{title}")
+
+        assert item.relative_output_path.as_posix() == "C_D/A_B.mp4"
+
+    def test_filename_keeps_dotted_title(self):
+        info = VideoInfo(title="Episode.01", bvid="BV1GJ411x7h7", cid=1)
+
+        assert DownloadItem(video_info=info).filename == "Episode.01.mp4"
+
+    def test_fingerprint_includes_output_and_companion_artifacts(self):
+        info = VideoInfo(title="Episode", bvid="BV1GJ411x7h7", cid=1)
+        base = DownloadItem(video_info=info)
+
+        assert base.fingerprint != base.model_copy(
+            update={"path_template": "archive/{title}"}
+        ).fingerprint
+        assert base.fingerprint != base.model_copy(
+            update={"download_metadata": True}
+        ).fingerprint
+        assert base.fingerprint != base.model_copy(
+            update={"download_all_subtitles": True}
+        ).fingerprint
+
 
 class TestAppSettings:
     def test_defaults(self):
@@ -144,6 +185,7 @@ class TestAppSettings:
         assert s.default_quality == VideoQuality.Q1080P
         assert s.max_concurrent_downloads == 3
         assert s.default_video_codec == 12
+        assert s.default_audio_quality == 30280
 
     @pytest.mark.parametrize("value", [0, 9])
     def test_concurrency_bounds_apply_on_assignment(self, value):
@@ -163,3 +205,12 @@ class TestAppSettings:
         settings = AppSettings()
         with pytest.raises(ValidationError):
             settings.default_video_codec = 99
+
+    def test_audio_quality_assignment_is_validated(self):
+        from pydantic import ValidationError
+
+        from bilibili_downloader.core.models import AppSettings
+
+        settings = AppSettings()
+        with pytest.raises(ValidationError):
+            settings.default_audio_quality = 99

@@ -4,7 +4,7 @@ import argparse
 import logging
 import sys
 
-from bilibili_downloader.core.models import VideoQuality
+from bilibili_downloader.core.models import AUDIO_CODEC_MAP, VideoQuality
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ def main():
     )
     download_parser.add_argument(
         "source",
-        help="BV/AV number, Bilibili URL, or b23.tv short link",
+        help="BV/AV number, video/collection/favorite URL, or b23.tv short link",
     )
     download_parser.add_argument(
         "--quality", "-q",
@@ -78,6 +78,36 @@ def main():
         default="zh-Hans",
         help="Preferred Bilibili subtitle language code (default: zh-Hans)",
     )
+    download_parser.add_argument(
+        "--all-subtitles",
+        action="store_true",
+        help="Download every available subtitle language",
+    )
+    download_parser.add_argument(
+        "--audio-only",
+        action="store_true",
+        help="Save only audio (M4A, or FLAC for Hi-Res)",
+    )
+    download_parser.add_argument(
+        "--audio-quality",
+        type=int,
+        choices=list(AUDIO_CODEC_MAP),
+        help="Audio quality code (default: settings)",
+    )
+    download_parser.add_argument(
+        "--cover",
+        action="store_true",
+        help="Save the validated cover image beside the media",
+    )
+    download_parser.add_argument(
+        "--metadata",
+        action="store_true",
+        help="Save a portable JSON metadata manifest",
+    )
+    download_parser.add_argument(
+        "--path-template",
+        help="Relative output template, e.g. '{author}/{title}{part_suffix}'",
+    )
 
     args = parser.parse_args()
 
@@ -95,6 +125,7 @@ def _cli_test(source: str):
 
     from bilibili_downloader.api.client import BilibiliAPIClient
     from bilibili_downloader.core.batch import BatchResolver
+    from bilibili_downloader.core.errors import user_error_message
     from bilibili_downloader.core.ffmpeg import FFmpegManager
 
     print(f"Fetching info for {source}...")
@@ -119,7 +150,7 @@ def _cli_test(source: str):
                 print(f"  - {s.lan}: {s.lan_doc}")
         print("\nSuccess!")
     except Exception as e:
-        print(f"\nError: {e}")
+        print(f"\nError: {user_error_message(e)}")
         sys.exit(1)
     finally:
         client.close()
@@ -128,9 +159,10 @@ def _cli_test(source: str):
 def _cli_download(args: argparse.Namespace):
     """CLI download: download a video by BV/AV number or URL."""
     from bilibili_downloader.api.client import BilibiliAPIClient
-    from bilibili_downloader.core.batch import BatchResolver
+    from bilibili_downloader.core.batch import ContentSourceResolver
     from bilibili_downloader.core.download_service import DownloadService
-    from bilibili_downloader.core.models import DownloadItem
+    from bilibili_downloader.core.errors import user_error_message
+    from bilibili_downloader.core.models import DownloadItem, OutputMode
     from bilibili_downloader.utils.config import ConfigManager
 
     quality = VideoQuality(args.quality)
@@ -145,19 +177,26 @@ def _cli_download(args: argparse.Namespace):
     client = BilibiliAPIClient(sessdata=settings.sessdata or None)
     service = None
     try:
-        info = BatchResolver(client).resolve_one(args.source)
-        print(f"Title: {info.title}")
+        collection = ContentSourceResolver(client).resolve(args.source)
+        print(f"Source: {collection.title} ({len(collection.items)} videos)")
 
-        if str(args.page).lower() == "all":
-            page_infos = [info.for_page(page) for page in info.pages] or [info]
-        else:
+        page_infos = []
+        for info in collection.items:
+            if str(args.page).lower() == "all":
+                page_infos.extend([info.for_page(page) for page in info.pages] or [info])
+                continue
             try:
                 page_number = int(args.page)
             except ValueError as exc:
                 raise ValueError("--page must be a positive page number or 'all'") from exc
             if page_number < 1 or page_number > max(1, len(info.pages)):
-                raise ValueError(f"--page must be between 1 and {max(1, len(info.pages))}")
-            page_infos = [info.for_page(info.pages[page_number - 1])] if info.pages else [info]
+                raise ValueError(
+                    f"--page must be between 1 and {max(1, len(info.pages))} "
+                    f"for {info.title}"
+                )
+            page_infos.append(
+                info.for_page(info.pages[page_number - 1]) if info.pages else info
+            )
 
         def progress(pct, text):
             bar_len = 30
@@ -176,9 +215,25 @@ def _cli_download(args: argparse.Namespace):
                 video_info=page_info,
                 selected_quality=quality,
                 selected_video_codec=codec,
+                selected_audio_quality=(
+                    args.audio_quality
+                    if getattr(args, "audio_quality", None) is not None
+                    else settings.default_audio_quality
+                ),
+                output_mode=(
+                    OutputMode.AUDIO
+                    if getattr(args, "audio_only", False)
+                    else settings.default_output_mode
+                ),
+                path_template=(
+                    getattr(args, "path_template", None) or settings.path_template
+                ),
                 output_path=output_dir,
                 download_danmaku=args.danmaku,
-                download_subtitle=args.subtitle,
+                download_subtitle=args.subtitle or getattr(args, "all_subtitles", False),
+                download_all_subtitles=getattr(args, "all_subtitles", False),
+                download_cover=getattr(args, "cover", False),
+                download_metadata=getattr(args, "metadata", False),
                 selected_subtitle_lan=args.subtitle_language,
             )
             outcome = service.download(item, progress)
@@ -191,7 +246,7 @@ def _cli_download(args: argparse.Namespace):
         print("\nDownload cancelled")
         raise SystemExit(130)
     except Exception as e:
-        print(f"\nError: {e}")
+        print(f"\nError: {user_error_message(e)}")
         sys.exit(1)
     finally:
         client.close()

@@ -24,6 +24,7 @@ class _CoverLoadWorker(QObject):
 
     loaded = Signal(str, bytes)
     failed = Signal(str)
+    finished = Signal(object)
 
 
 class _CoverLoadRunner(QRunnable):
@@ -39,7 +40,11 @@ class _CoverLoadRunner(QRunnable):
         import httpx
 
         try:
-            url = trusted_https_url(self._url, BILIBILI_RESOURCE_HOSTS)
+            url = trusted_https_url(
+                self._url,
+                BILIBILI_RESOURCE_HOSTS,
+                upgrade_http=True,
+            )
             content = bytearray()
             with httpx.stream("GET", url, timeout=10.0) as resp:
                 resp.raise_for_status()
@@ -52,10 +57,10 @@ class _CoverLoadRunner(QRunnable):
                     raise ValueError("封面像素尺寸过大")
                 image.verify()
             self._worker.loaded.emit(self._url, bytes(content))
-            return
         except (httpx.HTTPError, UnidentifiedImageError, ValueError, OSError):
-            pass
-        self._worker.failed.emit(self._url)
+            self._worker.failed.emit(self._url)
+        finally:
+            self._worker.finished.emit(self._worker)
 
 
 class VideoInfoWidget(QWidget):
@@ -64,6 +69,8 @@ class VideoInfoWidget(QWidget):
     def __init__(self):
         super().__init__()
         self._cover_url = ""
+        self._cover_pool = QThreadPool.globalInstance()
+        self._cover_jobs = []
         self._setup_ui()
 
     def _setup_ui(self):
@@ -145,10 +152,18 @@ class VideoInfoWidget(QWidget):
         """Download and display cover image asynchronously."""
         self._cover_url = url
         worker = _CoverLoadWorker()
+        runner = _CoverLoadRunner(worker, url)
+        job = (worker, runner)
+        self._cover_jobs.append(job)
         worker.loaded.connect(self._on_cover_loaded)
         worker.failed.connect(self._on_cover_failed)
-        runner = _CoverLoadRunner(worker, url)
-        QThreadPool.globalInstance().start(runner)
+        worker.finished.connect(self._finish_cover_job)
+        self._cover_pool.start(runner)
+
+    def _finish_cover_job(self, worker):
+        self._cover_jobs = [
+            job for job in self._cover_jobs if job[0] is not worker
+        ]
 
     def _on_cover_loaded(self, url: str, image_data: bytes):
         """Create and show the cover pixmap on the GUI thread."""

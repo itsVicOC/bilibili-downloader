@@ -13,7 +13,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from bilibili_downloader.core.models import VIDEO_CODEC_MAP, VideoQuality
+from bilibili_downloader.core.models import (
+    AUDIO_CODEC_MAP,
+    VIDEO_CODEC_MAP,
+    OutputMode,
+    TaskStatus,
+    VideoQuality,
+)
 from bilibili_downloader.gui.resources.paths import asset_path
 
 # Shared button size (width, height)
@@ -29,8 +35,8 @@ def _create_action_btn(text: str, object_name: str, download_id: int, handler):
     return btn
 
 
-def _create_cancel_btn(download_id: int, handler):
-    return _create_action_btn("取消", "SubtleButton", download_id, handler)
+def _create_pause_btn(download_id: int, handler):
+    return _create_action_btn("暂停", "SubtleButton", download_id, handler)
 
 
 def _create_delete_btn(download_id: int, handler):
@@ -38,7 +44,11 @@ def _create_delete_btn(download_id: int, handler):
 
 
 def _create_retry_btn(download_id: int, handler):
-    return _create_action_btn("重试", "PrimaryButton", download_id, handler)
+    return _create_action_btn("继续", "PrimaryButton", download_id, handler)
+
+
+def _create_open_btn(download_id: int, handler):
+    return _create_action_btn("打开", "SubtleButton", download_id, handler)
 
 
 def _wrap_btn(widget):
@@ -70,6 +80,9 @@ class DownloadListWidget(QTableWidget):
 
     # Signal emitted when user clicks retry (download_id)
     retry_requested = Signal(int)
+    pause_requested = Signal(int)
+    delete_requested = Signal(int)
+    open_requested = Signal(int)
 
     def __init__(self):
         super().__init__()
@@ -77,6 +90,8 @@ class DownloadListWidget(QTableWidget):
         self._workers = {}       # download_id -> worker reference
         self._items = {}         # download_id -> DownloadItem snapshot
         self._id_to_row = {}     # download_id -> current row index
+        self._states = {}        # download_id -> TaskStatus
+        self._output_paths = {}  # download_id -> completed media path
         self._placeholder_active = False
         self._setup_ui()
 
@@ -102,40 +117,61 @@ class DownloadListWidget(QTableWidget):
         self.setIconSize(QSize(20, 20))
         self._show_placeholder()
 
-    def add_item(self, item) -> int:
+    def add_item(
+        self,
+        item,
+        download_id: int | None = None,
+        status: TaskStatus = TaskStatus.QUEUED,
+        progress: float = 0.0,
+        status_text: str = "",
+        output_path: str | None = None,
+        warnings: list[str] | None = None,
+    ) -> int:
         """Add a download item to the table. Returns a stable download ID."""
         self._clear_placeholder()
-        download_id = self._next_id
-        self._next_id += 1
+        if download_id is None:
+            download_id = self._next_id
+        self._next_id = max(self._next_id, download_id + 1)
         row = self.rowCount()
         self.insertRow(row)
 
         self._items[download_id] = item
         self._id_to_row[download_id] = row
+        self._states[download_id] = status
+        if output_path:
+            self._output_paths[download_id] = output_path
 
         title_item = QTableWidgetItem(item.video_info.title[:50])
         title_item.setToolTip(item.video_info.title)
         title_item.setData(Qt.UserRole, download_id)
         self.setItem(row, 0, title_item)
 
-        quality_item = QTableWidgetItem(item.selected_quality.label)
+        quality_label = (
+            AUDIO_CODEC_MAP.get(
+                item.selected_audio_quality, f"音频 {item.selected_audio_quality}"
+            )
+            if item.output_mode == OutputMode.AUDIO
+            else item.selected_quality.label
+        )
+        quality_item = QTableWidgetItem(quality_label)
         quality_item.setData(Qt.UserRole, download_id)
         self.setItem(row, 1, quality_item)
 
         progress_bar = QProgressBar()
         progress_bar.setMinimum(0)
         progress_bar.setMaximum(100)
-        progress_bar.setValue(0)
+        progress_bar.setValue(int(progress * 100))
         self.setCellWidget(row, 2, progress_bar)
 
-        status_item = QTableWidgetItem("等待中")
+        status_item = QTableWidgetItem(status_text or _status_label(status))
         status_item.setData(Qt.UserRole, download_id)
+        if warnings:
+            status_item.setToolTip("\n".join(warnings))
+            if status == TaskStatus.COMPLETED:
+                status_item.setForeground(Qt.yellow)
         self.setItem(row, 3, status_item)
 
-        self.setCellWidget(
-            row, 4,
-            _wrap_btn(_create_cancel_btn(download_id, self._on_cancel_clicked)),
-        )
+        self._set_actions(download_id, status)
         return download_id
 
     def add_resolution_error(self, error: str) -> int:
@@ -181,16 +217,17 @@ class DownloadListWidget(QTableWidget):
                 if download_id is not None:
                     self._id_to_row[download_id] = row
 
-    def _on_cancel_clicked(self, download_id: int):
-        """Handle cancel button click."""
+    def _on_pause_clicked(self, download_id: int):
+        """Request a resumable pause for an active or queued worker."""
         worker = self._workers.get(download_id)
         if worker:
-            worker.cancel()
+            worker.pause()
+            self.pause_requested.emit(download_id)
             row = self._row_for(download_id)
             if row is not None:
                 status_item = self.item(row, 3)
                 if status_item:
-                    status_item.setText("取消中...")
+                    status_item.setText("暂停中...")
                     status_item.setForeground(Qt.yellow)
 
     def register_worker(self, download_id: int, worker):
@@ -218,12 +255,19 @@ class DownloadListWidget(QTableWidget):
         if status_item:
             status_item.setText(status_text)
 
+    def mark_downloading(self, download_id: int):
+        self._states[download_id] = TaskStatus.DOWNLOADING
+        self._set_actions(download_id, TaskStatus.DOWNLOADING)
+
     def mark_done(self, download_id: int, outcome=None):
         """Mark a download as complete."""
         self.unregister_worker(download_id)
         row = self._row_for(download_id)
         if row is None:
             return
+        self._states[download_id] = TaskStatus.COMPLETED
+        if outcome is not None:
+            self._output_paths[download_id] = outcome.video_path
         progress_bar = self.cellWidget(row, 2)
         if progress_bar:
             _set_progress_state(progress_bar, "")
@@ -248,11 +292,16 @@ class DownloadListWidget(QTableWidget):
             spec_item = self.item(row, 1)
             if spec_item:
                 spec_item.setText(f"{quality} · {codec}")
+        elif outcome is not None and outcome.actual_audio_quality is not None:
+            audio = AUDIO_CODEC_MAP.get(
+                outcome.actual_audio_quality,
+                f"音频 {outcome.actual_audio_quality}",
+            )
+            spec_item = self.item(row, 1)
+            if spec_item:
+                spec_item.setText(audio)
 
-        self.setCellWidget(
-            row, 4,
-            _wrap_btn(_create_delete_btn(download_id, self._on_delete_clicked)),
-        )
+        self._set_actions(download_id, TaskStatus.COMPLETED)
 
     def mark_failed(self, download_id: int, error: str):
         """Mark a download as failed."""
@@ -260,6 +309,7 @@ class DownloadListWidget(QTableWidget):
         row = self._row_for(download_id)
         if row is None:
             return
+        self._states[download_id] = TaskStatus.FAILED
         progress_bar = self.cellWidget(row, 2)
         if progress_bar:
             _set_progress_state(progress_bar, "ErrorProgress")
@@ -270,13 +320,7 @@ class DownloadListWidget(QTableWidget):
             status_item.setForeground(Qt.red)
             status_item.setToolTip(error)
 
-        self.setCellWidget(
-            row, 4,
-            _wrap_btns(
-                _create_retry_btn(download_id, self.retry_requested.emit),
-                _create_delete_btn(download_id, self._on_delete_clicked),
-            ),
-        )
+        self._set_actions(download_id, TaskStatus.FAILED)
 
     def mark_cancelled(self, download_id: int):
         """Mark a user-cancelled task without presenting it as a failure."""
@@ -284,14 +328,24 @@ class DownloadListWidget(QTableWidget):
         row = self._row_for(download_id)
         if row is None:
             return
+        self._states[download_id] = TaskStatus.CANCELLED
         status_item = self.item(row, 3)
         if status_item:
             status_item.setText("已取消")
             status_item.setForeground(Qt.gray)
-        self.setCellWidget(
-            row, 4,
-            _wrap_btn(_create_delete_btn(download_id, self._on_delete_clicked)),
-        )
+        self._set_actions(download_id, TaskStatus.CANCELLED)
+
+    def mark_paused(self, download_id: int):
+        self.unregister_worker(download_id)
+        row = self._row_for(download_id)
+        if row is None:
+            return
+        self._states[download_id] = TaskStatus.PAUSED
+        status_item = self.item(row, 3)
+        if status_item:
+            status_item.setText("已暂停，可继续")
+            status_item.setForeground(Qt.gray)
+        self._set_actions(download_id, TaskStatus.PAUSED)
 
     def mark_failed_retry_reset(self, download_id: int):
         """Reset a failed download for retry (clear error state)."""
@@ -308,16 +362,36 @@ class DownloadListWidget(QTableWidget):
             status_item.setText("重试中...")
             status_item.setForeground(Qt.yellow)
 
-        self.setCellWidget(
-            row, 4,
-            _wrap_btn(_create_cancel_btn(download_id, self._on_cancel_clicked)),
-        )
+        self._states[download_id] = TaskStatus.QUEUED
+        self._set_actions(download_id, TaskStatus.QUEUED)
 
     def cancel_all_workers(self):
         """Cancel all active download workers."""
         for worker in self._workers.values():
             if worker is not None:
                 worker.cancel()
+
+    def pause_all_workers(self):
+        for download_id, worker in list(self._workers.items()):
+            if worker is not None:
+                worker.pause()
+                self.pause_requested.emit(download_id)
+
+    @property
+    def resumable_ids(self) -> list[int]:
+        return [
+            task_id
+            for task_id, state in self._states.items()
+            if state in (TaskStatus.PAUSED, TaskStatus.FAILED, TaskStatus.CANCELLED)
+        ]
+
+    @property
+    def completed_ids(self) -> list[int]:
+        return [
+            task_id
+            for task_id, state in self._states.items()
+            if state == TaskStatus.COMPLETED
+        ]
 
     @property
     def has_active_workers(self) -> bool:
@@ -332,14 +406,40 @@ class DownloadListWidget(QTableWidget):
 
     def _on_delete_clicked(self, download_id: int):
         """Remove a download from the table."""
+        self.delete_requested.emit(download_id)
+        self.remove_item(download_id)
+
+    def remove_item(self, download_id: int):
         row = self._row_for(download_id)
         self._items.pop(download_id, None)
         self._workers.pop(download_id, None)
+        self._states.pop(download_id, None)
+        self._output_paths.pop(download_id, None)
         if row is not None:
             self.removeRow(row)
             self._rebuild_row_mapping()
             if not self._id_to_row:
                 self._show_placeholder()
+
+    def _set_actions(self, download_id: int, status: TaskStatus):
+        row = self._row_for(download_id)
+        if row is None:
+            return
+        if status in (TaskStatus.QUEUED, TaskStatus.DOWNLOADING, TaskStatus.MERGING):
+            controls = _wrap_btn(
+                _create_pause_btn(download_id, self._on_pause_clicked)
+            )
+        elif status == TaskStatus.COMPLETED:
+            controls = _wrap_btns(
+                _create_open_btn(download_id, self.open_requested.emit),
+                _create_delete_btn(download_id, self._on_delete_clicked),
+            )
+        else:
+            controls = _wrap_btns(
+                _create_retry_btn(download_id, self.retry_requested.emit),
+                _create_delete_btn(download_id, self._on_delete_clicked),
+            )
+        self.setCellWidget(row, 4, controls)
 
     def _show_placeholder(self):
         """Show a quiet empty-state row when the queue is empty."""
@@ -372,3 +472,15 @@ def _set_progress_state(progress_bar: QProgressBar, object_name: str):
     progress_bar.setObjectName(object_name)
     progress_bar.style().unpolish(progress_bar)
     progress_bar.style().polish(progress_bar)
+
+
+def _status_label(status: TaskStatus) -> str:
+    return {
+        TaskStatus.QUEUED: "等待中",
+        TaskStatus.DOWNLOADING: "下载中",
+        TaskStatus.PAUSED: "已暂停，可继续",
+        TaskStatus.MERGING: "正在合并",
+        TaskStatus.COMPLETED: "完成",
+        TaskStatus.FAILED: "失败",
+        TaskStatus.CANCELLED: "已取消",
+    }[status]

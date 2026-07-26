@@ -131,6 +131,21 @@ def test_trusted_https_url_accepts_protocol_relative_resource_url():
     ) == "https://i0.hdslb.com/file.json"
 
 
+def test_trusted_https_url_can_upgrade_trusted_http_resource():
+    assert trusted_https_url(
+        "http://i1.hdslb.com/file.jpg",
+        BILIBILI_RESOURCE_HOSTS,
+        upgrade_http=True,
+    ) == "https://i1.hdslb.com/file.jpg"
+
+    with pytest.raises(ValueError):
+        trusted_https_url(
+            "http://example.org/file.jpg",
+            BILIBILI_RESOURCE_HOSTS,
+            upgrade_http=True,
+        )
+
+
 def test_trusted_https_url_accepts_bilibili_partner_edge_domain():
     url = "https://node.edge.mountaintoys.cn/video.m4s"
     assert trusted_https_url(url, BILIBILI_RESOURCE_HOSTS) == url

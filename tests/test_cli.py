@@ -61,6 +61,12 @@ def test_cli_download_expands_all_pages_and_forwards_options(monkeypatch, tmp_pa
         codec=7,
         page="all",
         subtitle_language="en-US",
+        all_subtitles=True,
+        audio_only=True,
+        audio_quality=0,
+        cover=True,
+        metadata=True,
+        path_template="{author}/{title}{part_suffix}",
     )
 
     cli._cli_download(args)
@@ -68,4 +74,9 @@ def test_cli_download_expands_all_pages_and_forwards_options(monkeypatch, tmp_pa
     assert [item.video_info.cid for item in captured] == [11, 22]
     assert all(item.selected_video_codec == 7 for item in captured)
     assert all(item.download_danmaku and item.download_subtitle for item in captured)
+    assert all(item.download_all_subtitles for item in captured)
+    assert all(item.download_cover and item.download_metadata for item in captured)
+    assert all(item.output_mode.value == "audio" for item in captured)
+    assert all(item.selected_audio_quality == 0 for item in captured)
+    assert all(item.path_template == "{author}/{title}{part_suffix}" for item in captured)
     assert all(item.selected_subtitle_lan == "en-US" for item in captured)

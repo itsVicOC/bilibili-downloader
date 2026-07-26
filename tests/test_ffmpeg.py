@@ -96,6 +96,15 @@ class TestFFmpegBuildCommand:
         assert "-vf" in cmd
         assert "scale=1920:1080" in cmd
 
+    def test_audio_remux_command_has_no_video(self):
+        cmd = FFmpegManager.build_audio_command(
+            Path("C:/tmp/audio.m4s"), Path("C:/tmp/output.m4a")
+        )
+
+        assert "-vn" in cmd
+        assert cmd[cmd.index("-c:a") + 1] == "copy"
+        assert cmd[-1].endswith("output.m4a")
+
 
 class TestFFmpegMerge:
     def test_temp_output_keeps_media_suffix(self, monkeypatch, tmp_path):

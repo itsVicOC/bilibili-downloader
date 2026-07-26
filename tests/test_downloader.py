@@ -1,5 +1,8 @@
 """Tests for stream downloader retry helpers."""
 
+import logging
+from types import SimpleNamespace
+
 import httpx
 import pytest
 
@@ -10,7 +13,13 @@ from bilibili_downloader.core.downloader import (
     _response_total_size,
     _stream_urls,
 )
-from bilibili_downloader.core.models import DownloadItem, StreamInfo, VideoInfo
+from bilibili_downloader.core.models import (
+    DownloadItem,
+    OutputMode,
+    StreamInfo,
+    VideoInfo,
+)
+from bilibili_downloader.utils.network import UntrustedResourceURLError
 
 
 def test_stream_urls_deduplicates_base_and_backups():
@@ -40,6 +49,61 @@ def test_download_stream_falls_back_to_backup_url(monkeypatch, tmp_path):
     assert calls == ["base", "backup"]
 
 
+def test_download_stream_skips_untrusted_primary_url(monkeypatch, tmp_path):
+    downloader = StreamDownloader(
+        api_client=object(), output_dir=str(tmp_path), max_retries=1
+    )
+    calls = []
+
+    def fake_download_url(client, url, dest, progress_callback):
+        calls.append(url)
+        if url == "https://mcdn.bilivideo.cn:8082/audio.m4s":
+            raise UntrustedResourceURLError("仅允许 HTTPS 443 地址")
+        progress_callback(1.0)
+
+    monkeypatch.setattr(downloader, "_download_url", fake_download_url)
+
+    downloader._download_stream(
+        StreamInfo(
+            base_url="https://mcdn.bilivideo.cn:8082/audio.m4s",
+            backup_url=["https://upos-sz.bilivideo.com/audio.m4s"],
+        ),
+        tmp_path / "audio.m4s",
+        lambda _progress: None,
+    )
+
+    assert calls == [
+        "https://mcdn.bilivideo.cn:8082/audio.m4s",
+        "https://upos-sz.bilivideo.com/audio.m4s",
+    ]
+
+
+def test_download_failure_log_does_not_expose_signed_url(
+    monkeypatch, tmp_path, caplog
+):
+    signed_url = (
+        "https://upos-sz.bilivideo.com/video.m4s?deadline=1&token=secret"
+    )
+    downloader = StreamDownloader(
+        api_client=object(), output_dir=str(tmp_path), max_retries=1
+    )
+
+    def fail(*_args, **_kwargs):
+        raise OSError(f"request failed for {signed_url}")
+
+    monkeypatch.setattr(downloader, "_download_url", fail)
+    with caplog.at_level(logging.DEBUG):
+        with pytest.raises(RuntimeError, match="下载失败"):
+            downloader._download_stream(
+                StreamInfo(base_url=signed_url),
+                tmp_path / "video.m4s",
+                lambda _progress: None,
+            )
+
+    assert "upos-sz.bilivideo.com" in caplog.text
+    assert "token=secret" not in caplog.text
+
+
 def test_download_stream_requires_at_least_one_url(tmp_path):
     downloader = StreamDownloader(api_client=object(), output_dir=str(tmp_path), max_retries=1)
 
@@ -53,6 +117,46 @@ def test_response_total_size_ignores_invalid_content_length():
         headers = {"content-length": "not-a-number"}
 
     assert _response_total_size(Response(), 0) == 0
+
+
+def test_transfer_metrics_report_speed_and_eta_before_completion(tmp_path):
+    request = httpx.Request(
+        "GET", "https://upos-sz.bilivideo.com/video.m4s"
+    )
+    response = httpx.Response(
+        200,
+        headers={"content-length": str(128 * 1024)},
+        content=b"x" * (128 * 1024),
+        request=request,
+    )
+    downloader = StreamDownloader(api_client=object(), output_dir=str(tmp_path))
+    observed = []
+
+    downloader._write_response(
+        response,
+        tmp_path / "video.m4s",
+        0,
+        lambda _progress: observed.append(downloader.transfer_metrics),
+    )
+
+    assert any(metric.speed_bytes_per_second > 0 for metric in observed)
+    assert any(metric.eta_seconds is not None for metric in observed)
+    assert downloader.transfer_metrics.downloaded_bytes == 128 * 1024
+
+
+def test_disk_space_preflight_rejects_insufficient_capacity(monkeypatch, tmp_path):
+    downloader = StreamDownloader(api_client=object(), output_dir=str(tmp_path))
+    monkeypatch.setattr(
+        "bilibili_downloader.core.downloader.shutil.disk_usage",
+        lambda _path: SimpleNamespace(free=1),
+    )
+
+    with pytest.raises(RuntimeError, match="磁盘空间不足"):
+        downloader._ensure_disk_space(
+            60,
+            StreamInfo(bandwidth=8_000_000),
+            StreamInfo(bandwidth=192_000),
+        )
 
 
 def test_retry_wait_is_cancellable(tmp_path):
@@ -174,3 +278,41 @@ def test_download_stream_reuses_only_matching_completion_marker(
         lambda _progress: None,
     )
     assert calls == ["downloaded"]
+
+
+def test_audio_only_download_skips_video_and_remuxes(monkeypatch, tmp_path):
+    class FakeAPI:
+        def get_play_url(self, **_kwargs):
+            return {
+                "video_streams": [StreamInfo(id=80, base_url="video")],
+                "audio_streams": [StreamInfo(id=30251, base_url="audio")],
+            }
+
+    downloader = StreamDownloader(FakeAPI(), str(tmp_path))
+    downloaded = []
+
+    def fake_download(stream, destination, callback):
+        downloaded.append(stream.base_url)
+        destination.write_bytes(b"media")
+        callback(1.0)
+
+    def fake_remux(audio, output, **_kwargs):
+        assert audio.read_bytes() == b"media"
+        output.write_bytes(b"audio-only")
+        return True, "ok"
+
+    monkeypatch.setattr(downloader, "_download_stream", fake_download)
+    monkeypatch.setattr(
+        "bilibili_downloader.core.downloader.FFmpegManager.remux_audio",
+        fake_remux,
+    )
+    item = DownloadItem(
+        video_info=VideoInfo(bvid="BV1GJ411x7h7", cid=1, title="Song"),
+        output_mode=OutputMode.AUDIO,
+    )
+
+    output = downloader.download(item, lambda _progress, _text: None)
+
+    assert downloaded == ["audio"]
+    assert output.endswith("Song.flac")
+    assert (tmp_path / "Song.flac").read_bytes() == b"audio-only"

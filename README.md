@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/itsVicOC/bilibili-downloader)](https://github.com/itsVicOC/bilibili-downloader/releases/latest)
 [![License](https://img.shields.io/github/license/itsVicOC/bilibili-downloader)](LICENSE)
 
-一款支持 GUI 和 CLI 的 B 站视频下载工具。可以解析 BV 号、AV 号、视频链接与 b23.tv 短链，选择画质和编码，并下载弹幕、字幕后自动合并音视频。
+一款支持 GUI 和 CLI 的 B 站内容归档工具。可以解析视频、合集、系列与收藏夹，管理可跨重启恢复的任务，并将视频、音频、字幕、弹幕、封面和元数据保存到本地。
 
 ![BiliFlow 夜间界面](docs/images/biliflow-dark.png)
 
@@ -44,11 +44,13 @@ Get-FileHash .\BilibiliDownloader-Windows-vX.Y.Z.zip -Algorithm SHA256
 
 ## 功能
 
-- 支持 BV、AV、Bilibili 完整 URL 和 b23.tv 短链。
+- 支持 BV、AV、Bilibili 完整 URL、b23.tv 短链、UP 主合集/系列和收藏夹。
 - 支持 240P 至 8K、HDR、Dolby Vision，以及 AVC、HEVC、AV1 编码选择。
-- 自动选择匹配音轨并通过 FFmpeg 无损封装为 MP4。
-- 支持多 P 单选或全选、批量解析、并发下载、取消、失败重试和跨重启续传。
-- 支持弹幕转 ASS、字幕转 SRT。
+- 自动选择匹配音轨，并通过 FFmpeg 无损封装为 MP4、仅音频 M4A 或 Hi-Res FLAC。
+- 任务中心持久保存等待、暂停、失败和完成记录，异常退出后可继续断点下载。
+- 支持多 P 单选或全选、来源预览筛选、规格去重、并发、全部暂停/继续和缓存清理。
+- 支持弹幕转 ASS、首选或全部字幕转 SRT，并可保存封面和 JSON 元数据。
+- 支持 `{author}/{collection}/{title}` 等安全目录模板。
 - 支持 SESSDATA 登录；优先保存到系统凭据库。
 - 网络解析、登录检查、封面加载与下载任务均在后台执行，避免阻塞界面。
 - 日间/夜间主题跟随系统设置实时切换，无需重启。
@@ -60,8 +62,9 @@ Get-FileHash .\BilibiliDownloader-Windows-vX.Y.Z.zip -Algorithm SHA256
 
 1. 安装 FFmpeg 并启动 BiliFlow。
 2. 粘贴 BV/AV 号、视频 URL 或 b23.tv 短链，点击“开始解析”。
-3. 选择画质、编码及弹幕/字幕选项，加入下载队列。
-4. 在“下载设置”中调整输出目录和最大并发数。
+3. 选择画质、编码、视频/音频模式及归档附加项，加入任务中心。
+4. 合集或收藏夹使用“批量导入”，解析后筛选要下载的作品。
+5. 在“下载设置”中调整输出目录、目录模板和最大并发数。
 
 部分高画质、会员内容或账号专属视频需要登录。详细操作、画质代码和配置位置见 [用户指南](docs/USER_GUIDE.md)。常见启动、解析、FFmpeg 与登录问题见 [故障排查](docs/TROUBLESHOOTING.md)。
 
@@ -86,12 +89,16 @@ CLI 示例：
 # 只解析元数据
 python -m bilibili_downloader test BV1GJ411x7h7
 
-# 下载 1080P 视频，同时保存弹幕和字幕
-python -m bilibili_downloader download BV1GJ411x7h7 \
+# 下载整个可访问合集，按 UP 主和标题分目录，同时保存归档信息
+python -m bilibili_downloader download \
+  "https://space.bilibili.com/123/lists/456?type=season" \
   --quality 80 \
   --output ./downloads \
   --danmaku \
   --subtitle \
+  --cover \
+  --metadata \
+  --path-template "{author}/{title}{part_suffix}" \
   --page all \
   --codec 12
 ```
