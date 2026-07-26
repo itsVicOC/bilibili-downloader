@@ -5,9 +5,39 @@ updates:
     schedule:
       interval: weekly
     groups:
-      python-dependencies:
-        patterns: ["*"]
+      runtime-dependencies:
+        patterns:
+          - PySide6
+          - httpx
+          - pydantic
+          - qrcode
+          - Pillow
+          - defusedxml
+          - keyring
+      test-and-packaging-tools:
+        patterns:
+          - pytest
+          - pytest-qt
+          - responses
+          - PyInstaller
+      ruff:
+        patterns:
+          - ruff
+      build-backend:
+        patterns:
+          - setuptools
+          - wheel
+      sbom-tools:
+        patterns:
+          - cyclonedx-bom
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    groups:
+      official-actions:
+        patterns:
+          - actions/*
+      release-actions:
+        patterns:
+          - softprops/action-gh-release

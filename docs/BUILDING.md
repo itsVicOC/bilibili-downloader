@@ -30,9 +30,9 @@ tests/            # 单元与回归测试
 ## 验证
 
 ```bash
-python -m compileall -q bilibili_downloader tests
+python -m compileall -q bilibili_downloader tests scripts
 pytest -q
-ruff check bilibili_downloader tests packaging_hooks
+ruff check bilibili_downloader tests packaging_hooks scripts
 git diff --check
 ```
 
@@ -95,11 +95,34 @@ python scripts/build_app_icons.py
 
 ## 发布流程
 
+### 无发布演练
+
+每次修改发布工作流或依赖后，先从 `main` 手动运行 Release workflow。`publish` 默认值必须保持为 `false`：
+
+```bash
+gh workflow run release.yml --ref main -f publish=false
+gh run list --workflow release.yml --event workflow_dispatch --limit 1
+gh run watch <run-id> --exit-status
+```
+
+该模式会在 GitHub 托管的 macOS 与 Windows runner 上完成测试、PyInstaller 构建、冻结 CLI 冒烟、SBOM 生成、artifact 上传/下载、SHA-256 生成和统一验证，但不会创建 GitHub Release。下载运行产生的 `BilibiliDownloader-release-dry-run-<run-number>` artifact 后可重复执行同一验证器：
+
+```bash
+python scripts/verify_release_bundle.py <解压目录> \
+  --release-id dry-run-<run-number>
+```
+
+验证器要求两个平台 ZIP 中包含预期可执行文件，两个 SBOM 是含组件的 CycloneDX JSON，并逐项核对 `SHA256SUMS.txt`。任何一项缺失、路径不安全或摘要不匹配都会阻止后续发布。
+
+### 候选版与正式版
+
 版本号遵循语义化版本。发布前必须同步更新：
 
 - `bilibili_downloader/__init__.py` 中的 `__version__`；项目元数据、应用包与“关于”窗口均从这里读取。
 - `CHANGELOG.md` 顶部版本、日期与变更。
 - README 中受支持平台或安装方式发生的变化。
+
+候选版使用 Python 兼容的 `X.Y.ZrcN` 版本与 `vX.Y.ZrcN` 标签。Release workflow 会把包含 `rc` 的标签自动标记为 GitHub prerelease。候选版验证完成后，再把版本和 Changelog 更新为 `X.Y.Z` 并发布正式标签。
 
 验证并提交后推送版本标签：
 
@@ -113,14 +136,14 @@ git push origin vX.Y.Z
 
 涉及 `core/task_repository.py` 时，还必须用上一公开版本创建的真实任务库做一次升级验证。确认升级前备份的 `PRAGMA user_version` 和表结构未变化、升级后任务数量与状态一致、迁移失败不会隔离或覆盖可读的原库。不要用生产任务库作为唯一测试副本。
 
-`.github/workflows/release.yml` 会在 macOS 与 Windows runner 上重新执行测试和 PyInstaller 构建，并对冻结后的命令行程序执行 `--help` 冒烟检查，然后上传：
+`.github/workflows/release.yml` 会在 macOS 与 Windows runner 上重新执行测试和 PyInstaller 构建，并对冻结后的命令行程序执行 `--help` 冒烟检查。构建产物会先汇总并通过 `scripts/verify_release_bundle.py`，只有验证成功后才允许发布：
 
 - `BilibiliDownloader-macOS-vX.Y.Z.zip`
 - `BilibiliDownloader-Windows-vX.Y.Z.zip`
 - 每个平台对应的 `*.cdx.json` CycloneDX 依赖清单
 - `SHA256SUMS.txt` 完整性校验文件
 
-发布任务从 `CHANGELOG.md` 提取最上方版本作为 Release 正文。任一平台构建失败时不会创建不完整 Release；应修复后删除远端标签并重新发布新补丁版本，不覆盖已公开的版本资产。
+发布任务从 `CHANGELOG.md` 提取最上方版本作为 Release 正文。工作流默认只有读取仓库内容的权限，只有真正的 publish job 获得 `contents: write`。手动运行时从分支选择 `publish=true` 会被拒绝；只能在 tag ref 上显式发布。任一平台构建或验证失败时不会创建不完整 Release；应修复后发布新补丁版本，不覆盖已公开的版本资产。
 
 发布完成后应确认 Release 不是草稿或预发布版本，两个平台压缩包、两个 SBOM 与 `SHA256SUMS.txt` 均存在，并从校验文件抽查至少一个安装包。最后在干净环境中启动应用，确认“关于”窗口版本与标签一致。
 
@@ -132,3 +155,5 @@ git push origin vX.Y.Z
 - `APPLE_ID`、`APPLE_APP_PASSWORD`、`APPLE_TEAM_ID`：`notarytool` 公证凭据。
 
 未配置 `MACOS_CERTIFICATE` 时该步骤会跳过，保持未签名发布行为。Windows Authenticode 仍需维护者提供独立代码签名证书。所有凭据必须存放在 GitHub Secrets 中，不得提交到仓库。
+
+CI 与 Release workflow 中的第三方 Action 固定到完整提交 SHA，行尾注释记录对应主版本。Dependabot 的 `github-actions` 更新器负责提交 SHA 升级；不要手动改回浮动主版本标签。
