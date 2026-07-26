@@ -5,6 +5,7 @@ import os
 import sqlite3
 import tempfile
 import threading
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -84,9 +85,19 @@ class TaskRepository:
         connection.execute("PRAGMA busy_timeout = 10000")
         return connection
 
+    @contextmanager
+    def _open_connection(self):
+        """Commit or roll back, then release the SQLite file handle."""
+        connection = self._connect()
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
+
     def _initialize(self) -> None:
         with self._lock:
-            with self._connect() as connection:
+            with self._open_connection() as connection:
                 current_version = int(
                     connection.execute("PRAGMA user_version").fetchone()[0]
                 )
@@ -101,7 +112,7 @@ class TaskRepository:
             ):
                 self._backup_before_migration()
 
-            with self._connect() as connection:
+            with self._open_connection() as connection:
                 connection.execute("PRAGMA journal_mode = WAL")
                 connection.execute("BEGIN IMMEDIATE")
                 try:
@@ -123,7 +134,9 @@ class TaskRepository:
     def _assert_integrity(self) -> None:
         if not self._database_path.is_file() or self._database_path.stat().st_size == 0:
             return
-        with sqlite3.connect(self._database_path, timeout=10.0) as connection:
+        with closing(
+            sqlite3.connect(self._database_path, timeout=10.0)
+        ) as connection:
             result = connection.execute("PRAGMA quick_check").fetchone()
         if result is None or result[0] != "ok":
             raise sqlite3.DatabaseError("task database integrity check failed")
@@ -141,9 +154,10 @@ class TaskRepository:
                 delete=False,
             ) as handle:
                 temporary_path = Path(handle.name)
-            with sqlite3.connect(self._database_path) as source:
-                with sqlite3.connect(temporary_path) as destination:
+            with closing(sqlite3.connect(self._database_path)) as source:
+                with closing(sqlite3.connect(temporary_path)) as destination:
                     source.backup(destination)
+                    destination.commit()
             temporary_path.chmod(0o600)
             os.replace(temporary_path, backup_path)
             return backup_path
@@ -179,7 +193,7 @@ class TaskRepository:
         snapshot = _sanitized_item(item).model_copy(
             update={"status": status}, deep=True
         )
-        with self._lock, self._connect() as connection:
+        with self._lock, self._open_connection() as connection:
             cursor = connection.execute(
                 """
                 INSERT INTO tasks (
@@ -200,14 +214,14 @@ class TaskRepository:
             return int(cursor.lastrowid)
 
     def get(self, task_id: int) -> Optional[TaskRecord]:
-        with self._lock, self._connect() as connection:
+        with self._lock, self._open_connection() as connection:
             row = connection.execute(
                 "SELECT * FROM tasks WHERE id = ?", (task_id,)
             ).fetchone()
         return _record_from_row(row) if row is not None else None
 
     def list_tasks(self) -> list[TaskRecord]:
-        with self._lock, self._connect() as connection:
+        with self._lock, self._open_connection() as connection:
             rows = connection.execute(
                 "SELECT * FROM tasks ORDER BY created_at ASC, id ASC"
             ).fetchall()
@@ -237,7 +251,7 @@ class TaskRepository:
         normalized["updated_at"] = _utc_now()
         assignments = ", ".join(f"{column} = ?" for column in normalized)
         values = [normalized[column] for column in normalized]
-        with self._lock, self._connect() as connection:
+        with self._lock, self._open_connection() as connection:
             connection.execute(
                 f"UPDATE tasks SET {assignments} WHERE id = ?",  # noqa: S608
                 [*values, task_id],
@@ -254,7 +268,7 @@ class TaskRepository:
     def recover_interrupted(self) -> int:
         """Convert process-bound states into resumable paused tasks."""
         now = _utc_now()
-        with self._lock, self._connect() as connection:
+        with self._lock, self._open_connection() as connection:
             cursor = connection.execute(
                 """
                 UPDATE tasks
@@ -281,7 +295,7 @@ class TaskRepository:
             TaskStatus.COMPLETED.value,
         )
         placeholders = ",".join("?" for _ in statuses)
-        with self._lock, self._connect() as connection:
+        with self._lock, self._open_connection() as connection:
             row = connection.execute(
                 f"""
                 SELECT * FROM tasks
@@ -293,11 +307,11 @@ class TaskRepository:
         return _record_from_row(row) if row is not None else None
 
     def delete(self, task_id: int) -> None:
-        with self._lock, self._connect() as connection:
+        with self._lock, self._open_connection() as connection:
             connection.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
 
     def clear_completed(self) -> int:
-        with self._lock, self._connect() as connection:
+        with self._lock, self._open_connection() as connection:
             cursor = connection.execute(
                 "DELETE FROM tasks WHERE status = ?", (TaskStatus.COMPLETED.value,)
             )
