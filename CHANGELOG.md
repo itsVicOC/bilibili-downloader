@@ -2,6 +2,20 @@
 
 本项目遵循语义化版本。日期使用 `YYYY-MM-DD` 格式。
 
+## v0.5.10rc1 - 2026-07-27
+
+### Changed
+
+- GitHub Actions 更新到 Node 24 运行时版本，并固定到不可变提交 SHA。
+- Ruff 更新到 0.16.0，CycloneDX SBOM 工具更新到 7.3.1，构建后端最低版本更新到 Setuptools 83。
+- Dependabot 将运行时依赖、测试打包工具、Ruff、构建后端、SBOM 工具和发布 Action 分组更新。
+
+### Security
+
+- 发布工作流默认使用只读权限，仅实际发布任务获得内容写权限。
+- 新增不创建 Release 的跨平台发布演练，以及 ZIP 结构、CycloneDX SBOM 和 SHA-256 完整性验证。
+- 手动发布只允许从标签引用执行，候选标签自动创建为 GitHub prerelease。
+
 ## v0.5.9 - 2026-07-27
 
 ### Added
