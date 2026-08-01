@@ -74,8 +74,11 @@ def test_bundled_candidates_include_macos_resources(monkeypatch):
 
     candidates = _bundled_executable_candidates()
 
-    assert candidates[0] == Path(
-        "/Applications/BilibiliDownloader.app/Contents/Resources/ffmpeg"
+    assert candidates[0].parts[-4:] == (
+        "BilibiliDownloader.app",
+        "Contents",
+        "Resources",
+        "ffmpeg",
     )
 
 

@@ -9,6 +9,8 @@ fi
 
 source_archive=$1
 output_dir=$2
+mkdir -p "$output_dir"
+output_dir=$(cd "$output_dir" && pwd -P)
 build_root=$(mktemp -d "${TMPDIR:-/tmp}/biliflow-ffmpeg-build.XXXXXX")
 
 cleanup() {
@@ -50,7 +52,6 @@ fi
 jobs=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
 make -j"$jobs" ffmpeg
 
-mkdir -p "$output_dir"
 if [[ -f ffmpeg.exe ]]; then
     install -m 755 ffmpeg.exe "$output_dir/ffmpeg.exe"
 else
