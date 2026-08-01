@@ -32,6 +32,7 @@ configure_args=(
     --disable-doc
     --disable-debug
     --disable-network
+    --disable-x86asm
     --disable-ffplay
     --disable-ffprobe
     --enable-ffmpeg
