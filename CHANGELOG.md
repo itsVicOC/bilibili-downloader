@@ -2,6 +2,22 @@
 
 本项目遵循语义化版本。日期使用 `YYYY-MM-DD` 格式。
 
+## v0.6.0 - 2026-08-01
+
+### Added
+
+- macOS 与 Windows Release 同时提供内置最小 LGPL FFmpeg 的 full 包和依赖系统 FFmpeg 的 lite 包。
+- 发布流水线从固定提交源码构建 FFmpeg，并发布对应源码、许可证、构建通知、二进制摘要和区分变体的 CycloneDX SBOM。
+
+### Changed
+
+- FFmpeg 查找顺序调整为自定义路径、full 包内置版本、系统 PATH 和常见安装位置。
+- 发布包验证扩展为检查 full/lite 内容边界、FFmpeg SBOM 组件、固定源码归档和全部发行资产摘要。
+
+### Fixed
+
+- 修复冻结应用下载媒体流时依赖系统 OpenSSL 证书路径，可能触发 `CERTIFICATE_VERIFY_FAILED` 的问题；媒体 CDN 现在使用随应用打包的 CA 证书。
+
 ## v0.5.10 - 2026-07-27
 
 ### Changed

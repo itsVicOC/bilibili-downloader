@@ -41,10 +41,12 @@ jobs:
             label: macOS
             artifact_name: BilibiliDownloader-macOS
             archive_name: BilibiliDownloader-macOS
+            ffmpeg_binary: ffmpeg
           - os: windows-latest
             label: Windows
             artifact_name: BilibiliDownloader-Windows
             archive_name: BilibiliDownloader-Windows
+            ffmpeg_binary: ffmpeg.exe
 
     env:
       QT_QPA_PLATFORM: offscreen
@@ -57,6 +59,16 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.12"
+
+      - name: Set up MSYS2 FFmpeg toolchain
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            base-devel
+            mingw-w64-ucrt-x86_64-toolchain
 
       - name: Install dependencies
         run: |
@@ -89,10 +101,70 @@ jobs:
             dist/BilibiliDownloader/BilibiliDownloader --help
           fi
 
-      - name: Generate dependency SBOM
-        run: cyclonedx-py environment --output-format JSON --output-file "${{ matrix.archive_name }}-${{ env.RELEASE_ID }}.cdx.json"
+      - name: Download pinned FFmpeg source
+        run: >-
+          python scripts/prepare_bundled_ffmpeg.py download-source
+          --output ffmpeg-build/FFmpeg-7.1-source.tar.gz
 
-      - name: Sign and notarize macOS app
+      - name: Build minimal FFmpeg on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: >-
+          bash scripts/build_bundled_ffmpeg.sh
+          ffmpeg-build/FFmpeg-7.1-source.tar.gz
+          ffmpeg-build/output
+
+      - name: Build minimal FFmpeg on Windows
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: >-
+          bash scripts/build_bundled_ffmpeg.sh
+          ffmpeg-build/FFmpeg-7.1-source.tar.gz
+          ffmpeg-build/output
+
+      - name: Generate base dependency SBOM
+        run: >-
+          cyclonedx-py environment --output-format JSON
+          --output-file ffmpeg-build/base.cdx.json
+
+      - name: Prepare FFmpeg notice and variant SBOMs
+        shell: bash
+        run: |
+          python scripts/prepare_bundled_ffmpeg.py prepare \
+            --binary "ffmpeg-build/output/${{ matrix.ffmpeg_binary }}" \
+            --base-sbom ffmpeg-build/base.cdx.json \
+            --lite-sbom "${{ matrix.archive_name }}-lite-${RELEASE_ID}.cdx.json" \
+            --full-sbom "${{ matrix.archive_name }}-full-${RELEASE_ID}.cdx.json" \
+            --notice ffmpeg-build/output/FFMPEG-NOTICE.txt
+
+      - name: Prepare macOS variants
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          mkdir -p dist/variants/lite dist/variants/full
+          ditto dist/BilibiliDownloader.app dist/variants/lite/BilibiliDownloader.app
+          ditto dist/BilibiliDownloader.app dist/variants/full/BilibiliDownloader.app
+          resources=dist/variants/full/BilibiliDownloader.app/Contents/Resources
+          mkdir -p "$resources"
+          install -m 755 ffmpeg-build/output/ffmpeg "$resources/ffmpeg"
+          install -m 644 ffmpeg-build/output/FFMPEG-NOTICE.txt "$resources/FFMPEG-NOTICE.txt"
+          install -m 644 ffmpeg-build/output/COPYING.LGPLv2.1 "$resources/COPYING.LGPLv2.1"
+          install -m 644 ffmpeg-build/output/FFMPEG-LICENSE.md "$resources/FFMPEG-LICENSE.md"
+
+      - name: Prepare Windows variants
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "dist/variants/lite", "dist/variants/full" | Out-Null
+          Copy-Item -Recurse "dist/BilibiliDownloader" "dist/variants/lite/BilibiliDownloader"
+          Copy-Item -Recurse "dist/BilibiliDownloader" "dist/variants/full/BilibiliDownloader"
+          $resources = "dist/variants/full/BilibiliDownloader"
+          Copy-Item "ffmpeg-build/output/ffmpeg.exe" "$resources/ffmpeg.exe"
+          Copy-Item "ffmpeg-build/output/FFMPEG-NOTICE.txt" "$resources/FFMPEG-NOTICE.txt"
+          Copy-Item "ffmpeg-build/output/COPYING.LGPLv2.1" "$resources/COPYING.LGPLv2.1"
+          Copy-Item "ffmpeg-build/output/FFMPEG-LICENSE.md" "$resources/FFMPEG-LICENSE.md"
+
+      - name: Sign and notarize macOS variants
         if: runner.os == 'macOS'
         shell: bash
         env:
@@ -105,16 +177,23 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$MACOS_CERTIFICATE" ]; then
-            echo "macOS signing secrets are not configured; keeping the ad-hoc signature."
+            echo "macOS signing secrets are not configured; applying ad-hoc signatures."
+            for variant in lite full; do
+              app_path="dist/variants/$variant/BilibiliDownloader.app"
+              codesign --force --deep --sign - "$app_path"
+              codesign --verify --deep --strict --verbose=2 "$app_path"
+            done
             exit 0
           fi
           cert_path="$RUNNER_TEMP/biliflow-signing.p12"
           keychain_path="$RUNNER_TEMP/biliflow-signing.keychain-db"
-          notarize_zip="$RUNNER_TEMP/BilibiliDownloader-notarize.zip"
           keychain_password="$(openssl rand -hex 24)"
           cleanup() {
             security delete-keychain "$keychain_path" >/dev/null 2>&1 || true
-            rm -f "$cert_path" "$notarize_zip"
+            rm -f \
+              "$cert_path" \
+              "$RUNNER_TEMP/BilibiliDownloader-lite-notarize.zip" \
+              "$RUNNER_TEMP/BilibiliDownloader-full-notarize.zip"
           }
           trap cleanup EXIT
 
@@ -126,40 +205,51 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain_path"
           security list-keychains -d user -s "$keychain_path"
 
-          codesign --force --deep --options runtime --timestamp \
-            --sign "$MACOS_SIGNING_IDENTITY" "dist/BilibiliDownloader.app"
-          codesign --verify --deep --strict --verbose=2 "dist/BilibiliDownloader.app"
-          ditto -c -k --sequesterRsrc --keepParent \
-            "dist/BilibiliDownloader.app" "$notarize_zip"
-          xcrun notarytool submit "$notarize_zip" \
-            --apple-id "$APPLE_ID" \
-            --password "$APPLE_APP_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" \
-            --wait
-          xcrun stapler staple "dist/BilibiliDownloader.app"
+          for variant in lite full; do
+            app_path="dist/variants/$variant/BilibiliDownloader.app"
+            notarize_zip="$RUNNER_TEMP/BilibiliDownloader-$variant-notarize.zip"
+            codesign --force --deep --options runtime --timestamp \
+              --sign "$MACOS_SIGNING_IDENTITY" "$app_path"
+            codesign --verify --deep --strict --verbose=2 "$app_path"
+            ditto -c -k --sequesterRsrc --keepParent "$app_path" "$notarize_zip"
+            xcrun notarytool submit "$notarize_zip" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_APP_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" \
+              --wait
+            xcrun stapler staple "$app_path"
+          done
 
-      - name: Package macOS app
+      - name: Package macOS variants
         if: runner.os == 'macOS'
+        shell: bash
         run: |
-          if [ -d "dist/BilibiliDownloader.app" ]; then
-            ditto -c -k --sequesterRsrc --keepParent "dist/BilibiliDownloader.app" "${{ matrix.archive_name }}-${RELEASE_ID}.zip"
-          else
-            ditto -c -k --keepParent "dist/BilibiliDownloader" "${{ matrix.archive_name }}-${RELEASE_ID}.zip"
-          fi
+          for variant in lite full; do
+            ditto -c -k --sequesterRsrc --keepParent \
+              "dist/variants/$variant/BilibiliDownloader.app" \
+              "${{ matrix.archive_name }}-$variant-${RELEASE_ID}.zip"
+          done
 
-      - name: Package Windows app
+      - name: Package Windows variants
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Compress-Archive -Path "dist/BilibiliDownloader" -DestinationPath "${{ matrix.archive_name }}-${env:RELEASE_ID}.zip" -Force
+          foreach ($variant in @("lite", "full")) {
+            Compress-Archive `
+              -Path "dist/variants/$variant/BilibiliDownloader" `
+              -DestinationPath "${{ matrix.archive_name }}-$variant-${env:RELEASE_ID}.zip" `
+              -Force
+          }
 
       - name: Upload build artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ matrix.artifact_name }}-${{ env.RELEASE_ID }}
           path: |
-            ${{ matrix.archive_name }}-${{ env.RELEASE_ID }}.zip
-            ${{ matrix.archive_name }}-${{ env.RELEASE_ID }}.cdx.json
+            ${{ matrix.archive_name }}-lite-${{ env.RELEASE_ID }}.zip
+            ${{ matrix.archive_name }}-full-${{ env.RELEASE_ID }}.zip
+            ${{ matrix.archive_name }}-lite-${{ env.RELEASE_ID }}.cdx.json
+            ${{ matrix.archive_name }}-full-${{ env.RELEASE_ID }}.cdx.json
           if-no-files-found: error
           retention-days: 14
 
@@ -181,11 +271,16 @@ jobs:
         shell: bash
         run: awk '/^## v/{if (found) exit; found=1} found' CHANGELOG.md > release-assets/release-notes.md
 
+      - name: Add pinned FFmpeg source
+        run: >-
+          python scripts/prepare_bundled_ffmpeg.py download-source
+          --output release-assets/FFmpeg-7.1-source.tar.gz
+
       - name: Generate SHA-256 checksums
         shell: bash
         run: |
           cd release-assets
-          shasum -a 256 *.zip *.cdx.json > SHA256SUMS.txt
+          shasum -a 256 *.zip *.cdx.json *.tar.gz > SHA256SUMS.txt
 
       - name: Verify release bundle
         run: python3 scripts/verify_release_bundle.py release-assets --release-id "$RELEASE_ID"
@@ -223,4 +318,5 @@ jobs:
           files: |
             release-assets/*.zip
             release-assets/*.cdx.json
+            release-assets/*.tar.gz
             release-assets/SHA256SUMS.txt

@@ -74,6 +74,17 @@ pyinstaller --noconfirm --clean BilibiliDownloader.spec
 - spec 根据平台选择 `app_icon.icns`、`app_icon.ico` 或 `app_icon.png`。
 - `packaging_hooks/hook-keyring.py` 只收集目标系统的凭据库后端，避免携带其他平台实现。
 
+Release 的 full 变体还会从锁定的 FFmpeg 7.1 提交构建最小 LGPL 可执行文件。下载脚本会先核对源码 SHA-256，构建仅启用本地文件协议、MOV/MP4 输入以及 MP4、M4A、FLAC 输出，不包含网络协议、编码器、解码器、GPL 或 nonfree 组件；macOS 编译和链接部署目标固定为 12.0：
+
+```bash
+python scripts/prepare_bundled_ffmpeg.py download-source \
+  --output /tmp/FFmpeg-7.1-source.tar.gz
+bash scripts/build_bundled_ffmpeg.sh \
+  /tmp/FFmpeg-7.1-source.tar.gz /tmp/biliflow-ffmpeg
+```
+
+`prepare_bundled_ffmpeg.py prepare` 会验证版本、构建参数和 LGPL 声明，再生成构建通知及 full/lite SBOM。不要用未经该检查的预编译 FFmpeg 替换发布输入。
+
 构建后至少验证冻结 CLI 和包版本。macOS 还应验证应用包签名结构：
 
 ```bash
@@ -112,7 +123,7 @@ python scripts/verify_release_bundle.py <解压目录> \
   --release-id dry-run-<run-number>
 ```
 
-验证器要求两个平台 ZIP 中包含预期可执行文件，两个 SBOM 是含组件的 CycloneDX JSON，并逐项核对 `SHA256SUMS.txt`。任何一项缺失、路径不安全或摘要不匹配都会阻止后续发布。
+验证器要求两个平台各有 full/lite ZIP 和对应 CycloneDX SBOM。full 必须包含 FFmpeg、构建通知与 LGPL 文件，lite 必须不含 FFmpeg；固定提交的 FFmpeg 源码归档也必须存在。验证器会逐项核对 `SHA256SUMS.txt`，任何一项缺失、路径不安全或摘要不匹配都会阻止后续发布。
 
 ### 候选版与正式版
 
@@ -138,14 +149,15 @@ git push origin vX.Y.Z
 
 `.github/workflows/release.yml` 会在 macOS 与 Windows runner 上重新执行测试和 PyInstaller 构建，并对冻结后的命令行程序执行 `--help` 冒烟检查。构建产物会先汇总并通过 `scripts/verify_release_bundle.py`，只有验证成功后才允许发布：
 
-- `BilibiliDownloader-macOS-vX.Y.Z.zip`
-- `BilibiliDownloader-Windows-vX.Y.Z.zip`
-- 每个平台对应的 `*.cdx.json` CycloneDX 依赖清单
+- `BilibiliDownloader-macOS-{full,lite}-vX.Y.Z.zip`
+- `BilibiliDownloader-Windows-{full,lite}-vX.Y.Z.zip`
+- 每个平台和变体对应的 `*.cdx.json` CycloneDX 依赖清单
+- `FFmpeg-7.1-source.tar.gz` 对应源码归档
 - `SHA256SUMS.txt` 完整性校验文件
 
 发布任务从 `CHANGELOG.md` 提取最上方版本作为 Release 正文。工作流默认只有读取仓库内容的权限，只有真正的 publish job 获得 `contents: write`。手动运行时从分支选择 `publish=true` 会被拒绝；只能在 tag ref 上显式发布。任一平台构建或验证失败时不会创建不完整 Release；应修复后发布新补丁版本，不覆盖已公开的版本资产。
 
-发布完成后应确认 Release 不是草稿或预发布版本，两个平台压缩包、两个 SBOM 与 `SHA256SUMS.txt` 均存在，并从校验文件抽查至少一个安装包。最后在干净环境中启动应用，确认“关于”窗口版本与标签一致。
+发布完成后应确认 Release 不是草稿或预发布版本，四个 full/lite 安装包、四个 SBOM、FFmpeg 源码归档与 `SHA256SUMS.txt` 均存在，并从校验文件抽查至少一个安装包。最后在干净环境中启动应用，确认“关于”窗口版本与标签一致。
 
 默认 macOS/Windows 构建没有商业代码签名。macOS Release 工作流支持可选的 Developer ID 签名与 Apple 公证；在受保护的 GitHub Environment 中配置以下 Secrets 后会自动启用：
 

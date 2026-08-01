@@ -6,8 +6,10 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
+from bilibili_downloader.core import downloader as downloader_module
 from bilibili_downloader.core.downloader import (
     StreamDownloader,
+    _create_ssl_context,
     _reserved_download_cache,
     _reserved_output_path,
     _response_total_size,
@@ -20,6 +22,27 @@ from bilibili_downloader.core.models import (
     VideoInfo,
 )
 from bilibili_downloader.utils.network import UntrustedResourceURLError
+
+
+def test_media_ssl_context_loads_bundled_certifi_ca(monkeypatch, tmp_path):
+    ca_bundle = tmp_path / "cacert.pem"
+    expected_context = object()
+    observed = {}
+
+    monkeypatch.setattr(downloader_module.certifi, "where", lambda: str(ca_bundle))
+
+    def fake_create_default_context(*, cafile=None):
+        observed["cafile"] = cafile
+        return expected_context
+
+    monkeypatch.setattr(
+        downloader_module.ssl,
+        "create_default_context",
+        fake_create_default_context,
+    )
+
+    assert _create_ssl_context() is expected_context
+    assert observed["cafile"] == str(ca_bundle)
 
 
 def test_stream_urls_deduplicates_base_and_backups():

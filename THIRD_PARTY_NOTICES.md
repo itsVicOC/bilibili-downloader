@@ -2,6 +2,17 @@
 
 项目代码使用 MIT License。以下文件来自公共素材库，继续受各自许可证约束。
 
+## FFmpeg
+
+Release 中名称带 `full` 的 macOS 与 Windows 包包含独立的 FFmpeg 7.1 可执行程序，用于本地无损合并或封装下载流。名称带 `lite` 的包不包含 FFmpeg。
+
+- 上游项目：[FFmpeg](https://ffmpeg.org/)
+- 固定提交：`b08d7969c550a804a59511c7b83f2dd8cc0499b8`（`n7.1`）
+- 许可证：LGPL 2.1 or later
+- 对应源码：每个 Release 中的 `FFmpeg-7.1-source.tar.gz`
+
+发布构建禁用 GPL、nonfree、外部库、网络协议、编码器与解码器，只启用本项目需要的本地 MOV/MP4 读取和 MP4/M4A/FLAC 封装。每个 full 包内的 `FFMPEG-NOTICE.txt`、`COPYING.LGPLv2.1` 和 `FFMPEG-LICENSE.md` 分别记录实际构建信息、许可证全文和上游许可说明。FFmpeg 是由 BiliFlow 作为子进程调用的独立程序，不适用本项目的 MIT License。
+
 ## Microsoft Fluent Emoji
 
 应用图标主体：

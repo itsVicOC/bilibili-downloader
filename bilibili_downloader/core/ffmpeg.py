@@ -4,12 +4,32 @@ import logging
 import platform
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
 from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
+
+
+def _bundled_executable_candidates() -> list[Path]:
+    """Return possible FFmpeg locations in a frozen full distribution."""
+    if not getattr(sys, "frozen", False):
+        return []
+
+    executable_name = "ffmpeg.exe" if platform.system() == "Windows" else "ffmpeg"
+    executable_dir = Path(sys.executable).resolve().parent
+    candidates = [executable_dir / executable_name]
+
+    if platform.system() == "Darwin":
+        candidates.insert(0, executable_dir.parent / "Resources" / executable_name)
+
+    bundle_root = getattr(sys, "_MEIPASS", None)
+    if bundle_root:
+        candidates.append(Path(bundle_root) / executable_name)
+
+    return candidates
 
 
 class FFmpegManager:
@@ -24,6 +44,10 @@ class FFmpegManager:
             if p.is_file():
                 return p
             logger.warning("Custom FFmpeg path not found: %s", custom_path)
+
+        for bundled_path in _bundled_executable_candidates():
+            if bundled_path.is_file():
+                return bundled_path
 
         # Check PATH first
         found = shutil.which("ffmpeg")

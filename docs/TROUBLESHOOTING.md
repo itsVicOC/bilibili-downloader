@@ -21,13 +21,15 @@ python -m bilibili_downloader
 
 ## FFmpeg 不可用或合并失败
 
-先检查：
+full 包应直接使用应用内置 FFmpeg。若 full 包仍提示不可用，请重新完整解压、核对 `SHA256SUMS.txt`，并确认安全软件没有隔离应用内的 `ffmpeg` 或 `ffmpeg.exe`。
+
+lite 包和源码运行先检查：
 
 ```bash
 ffmpeg -version
 ```
 
-如果终端可用但应用仍找不到，请在“下载设置”中选择 FFmpeg 可执行文件。Windows 应选择 `ffmpeg.exe`，不要选择安装目录。
+如果终端可用但应用仍找不到，请在“下载设置”中选择 FFmpeg 可执行文件。Windows 应选择 `ffmpeg.exe`，不要选择安装目录。设置中的自定义路径会覆盖 full 包的内置版本；清空该项即可恢复使用内置版本。
 
 合并失败时确认输出目录可写、磁盘空间充足，并避免其他程序占用同名目标文件。HEVC 或 AV1 下载不要求系统播放器能解码，但播放时需要对应解码支持；兼容性优先可选择 AVC/H.264。
 

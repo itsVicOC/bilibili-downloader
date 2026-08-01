@@ -42,7 +42,7 @@ BiliFlow 支持单个/多 P 视频、UP 主合集与系列、收藏夹、BV/AV �
 - **默认音频**：AAC 64/192kbps、Dolby Atmos 或 Hi-Res FLAC；是否可用取决于视频和账号权限。
 - **目录模板**：控制输出目录和文件名，支持 `title`、`author`、`bvid`、`page`、`part`、`part_suffix`、`collection`、`quality`、`codec` 字段。
 - **最大并发**：范围 1–8。网络或磁盘较慢时建议 1–3。
-- **FFmpeg 路径**：留空时从系统 PATH 自动查找，也可以选择自定义可执行文件。
+- **FFmpeg 路径**：自定义文件优先级最高；留空时 full 包使用内置版本，lite 包和源码运行从系统 PATH 与常见安装位置查找。
 - **归档附加项**：控制弹幕、首选/全部字幕、封面和 JSON 元数据的默认状态。
 
 例如 `{author}/{collection}/{title}{part_suffix}` 会按 UP 主和合集建立目录。标题等远端字段会逐段清理，不能通过模板写到输出目录之外。没有合集名称时，对应字段会使用 `untitled`，不需要合集目录时可从模板中移除 `{collection}`。

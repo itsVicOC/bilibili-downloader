@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Callable, Optional
 from urllib.parse import urljoin, urlsplit
 
+import certifi
 import httpx
 
 from bilibili_downloader.api.client import BilibiliAPIClient
@@ -40,8 +41,13 @@ STREAM_HEADERS = {
 CHUNK_SIZE = 8192
 MAX_RETRIES = 5
 
-# Create an SSL context that works around CDN issues
-SSL_CONTEXT = ssl.create_default_context()
+
+def _create_ssl_context() -> ssl.SSLContext:
+    """Create a TLS context backed by the CA bundle shipped with the app."""
+    return ssl.create_default_context(cafile=certifi.where())
+
+
+SSL_CONTEXT = _create_ssl_context()
 _OUTPUT_PATH_LOCK = threading.Lock()
 _RESERVED_OUTPUT_PATHS: set[Path] = set()
 _CACHE_PATH_LOCK = threading.Lock()

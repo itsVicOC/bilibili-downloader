@@ -14,31 +14,35 @@
 
 | 系统 | 下载文件 | 运行方式 |
 |---|---|---|
-| macOS 12+（Apple Silicon） | `BilibiliDownloader-macOS-<version>.zip` | 解压后打开 `BilibiliDownloader.app` |
-| Windows 10/11（x64） | `BilibiliDownloader-Windows-<version>.zip` | 完整解压后运行目录内的 `BilibiliDownloader.exe` |
+| macOS 12+（Apple Silicon） | `BilibiliDownloader-macOS-full-<version>.zip` | 推荐；内置 FFmpeg，解压后打开应用 |
+| macOS 12+（Apple Silicon） | `BilibiliDownloader-macOS-lite-<version>.zip` | 小体积版；需要另行安装 FFmpeg |
+| Windows 10/11（x64） | `BilibiliDownloader-Windows-full-<version>.zip` | 推荐；内置 FFmpeg，完整解压后运行 |
+| Windows 10/11（x64） | `BilibiliDownloader-Windows-lite-<version>.zip` | 小体积版；需要另行安装 FFmpeg |
 | Linux | 暂无预构建包 | 按下方“从源码运行”操作 |
 
 Release 同时提供 `SHA256SUMS.txt`。下载后可核对安装包完整性：
 
 ```bash
 # macOS / Linux；将文件名替换为实际下载的安装包
-shasum -a 256 BilibiliDownloader-macOS-vX.Y.Z.zip
+shasum -a 256 BilibiliDownloader-macOS-full-vX.Y.Z.zip
 ```
 
 ```powershell
 # Windows PowerShell
-Get-FileHash .\BilibiliDownloader-Windows-vX.Y.Z.zip -Algorithm SHA256
+Get-FileHash .\BilibiliDownloader-Windows-full-vX.Y.Z.zip -Algorithm SHA256
 ```
 
 将输出与同一 Release 中 `SHA256SUMS.txt` 的对应记录比较。
 
-应用需要 FFmpeg 合并音视频：
+`full` 包内置一个从固定 FFmpeg 源码构建的最小 LGPL 版本，无需本地安装。`lite` 包、源码运行和 Linux 环境需要自行安装 FFmpeg：
 
 - macOS：`brew install ffmpeg`
 - Windows：`winget install Gyan.FFmpeg`
 - Ubuntu / Debian：`sudo apt install ffmpeg`
 
-如果 FFmpeg 不在系统 PATH 中，可在“下载设置”中直接选择其可执行文件。
+如果 FFmpeg 不在系统 PATH 中，可在“下载设置”中直接选择其可执行文件。自定义路径优先于 full 包内置版本，因此两个版本都可以切换到其他 FFmpeg 构建。
+
+Release 还提供 `FFmpeg-7.1-source.tar.gz`、各安装包的 CycloneDX SBOM 和统一校验文件。full 包内的 `FFMPEG-NOTICE.txt` 记录实际二进制摘要、构建参数与许可证。
 
 > macOS 发布包目前未进行 Apple 公证。首次打开被系统拦截时，在“系统设置 → 隐私与安全性”中确认打开。请只从本仓库 Release 页面下载。
 
@@ -60,7 +64,7 @@ Get-FileHash .\BilibiliDownloader-Windows-vX.Y.Z.zip -Algorithm SHA256
 
 ## 快速使用
 
-1. 安装 FFmpeg 并启动 BiliFlow。
+1. 启动 BiliFlow；lite 包或源码运行时先安装 FFmpeg。
 2. 粘贴 BV/AV 号、视频 URL 或 b23.tv 短链，点击“开始解析”。
 3. 选择画质、编码、视频/音频模式及归档附加项，加入任务中心。
 4. 合集或收藏夹使用“批量导入”，解析后筛选要下载的作品。

@@ -3,7 +3,11 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from bilibili_downloader.core.ffmpeg import FFmpegManager, _subprocess_window_kwargs
+from bilibili_downloader.core.ffmpeg import (
+    FFmpegManager,
+    _bundled_executable_candidates,
+    _subprocess_window_kwargs,
+)
 
 
 class TestFFmpegFindExecutable:
@@ -20,12 +24,73 @@ class TestFFmpegFindExecutable:
             result = FFmpegManager.find_executable()
             assert result == Path("/usr/bin/ffmpeg")
 
+    def test_custom_path_takes_priority_over_bundled(self, tmp_path, monkeypatch):
+        custom = tmp_path / "custom-ffmpeg"
+        bundled = tmp_path / "bundled-ffmpeg"
+        custom.touch()
+        bundled.touch()
+        monkeypatch.setattr(
+            "bilibili_downloader.core.ffmpeg._bundled_executable_candidates",
+            lambda: [bundled],
+        )
+
+        assert FFmpegManager.find_executable(str(custom)) == custom
+
+    def test_bundled_path_takes_priority_over_system_path(self, tmp_path, monkeypatch):
+        bundled = tmp_path / "ffmpeg"
+        bundled.touch()
+        monkeypatch.setattr(
+            "bilibili_downloader.core.ffmpeg._bundled_executable_candidates",
+            lambda: [bundled],
+        )
+        monkeypatch.setattr(
+            "bilibili_downloader.core.ffmpeg.shutil.which",
+            lambda _name: "/usr/bin/ffmpeg",
+        )
+
+        assert FFmpegManager.find_executable() == bundled
+
     def test_fallback_location(self):
         with patch("bilibili_downloader.core.ffmpeg.shutil.which", return_value=None):
             with patch.object(Path, "is_file", return_value=True):
                 # Should find first fallback location
                 result = FFmpegManager.find_executable()
                 assert result is not None
+
+
+def test_bundled_candidates_are_disabled_in_source_build(monkeypatch):
+    monkeypatch.delattr("bilibili_downloader.core.ffmpeg.sys.frozen", raising=False)
+
+    assert _bundled_executable_candidates() == []
+
+
+def test_bundled_candidates_include_macos_resources(monkeypatch):
+    monkeypatch.setattr("bilibili_downloader.core.ffmpeg.sys.frozen", True, raising=False)
+    monkeypatch.setattr(
+        "bilibili_downloader.core.ffmpeg.sys.executable",
+        "/Applications/BilibiliDownloader.app/Contents/MacOS/BilibiliDownloader",
+    )
+    monkeypatch.setattr("bilibili_downloader.core.ffmpeg.platform.system", lambda: "Darwin")
+
+    candidates = _bundled_executable_candidates()
+
+    assert candidates[0] == Path(
+        "/Applications/BilibiliDownloader.app/Contents/Resources/ffmpeg"
+    )
+
+
+def test_bundled_candidates_include_windows_executable_directory(monkeypatch):
+    monkeypatch.setattr("bilibili_downloader.core.ffmpeg.sys.frozen", True, raising=False)
+    monkeypatch.setattr(
+        "bilibili_downloader.core.ffmpeg.sys.executable",
+        "C:/BilibiliDownloader/BilibiliDownloader.exe",
+    )
+    monkeypatch.setattr("bilibili_downloader.core.ffmpeg.platform.system", lambda: "Windows")
+
+    candidates = _bundled_executable_candidates()
+
+    assert candidates[0].name == "ffmpeg.exe"
+    assert candidates[0].parent.name == "BilibiliDownloader"
 
 
 def test_windows_subprocesses_hide_console(monkeypatch):
