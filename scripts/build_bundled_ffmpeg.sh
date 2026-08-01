@@ -51,7 +51,7 @@ fi
 ./configure "${configure_args[@]}"
 
 jobs=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
-make -j"$jobs" ffmpeg
+make -j"$jobs"
 
 if [[ -f ffmpeg.exe ]]; then
     install -m 755 ffmpeg.exe "$output_dir/ffmpeg.exe"
