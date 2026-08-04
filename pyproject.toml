@@ -24,7 +24,7 @@ dev = [
     "pytest-qt>=4.2",
     "responses>=0.24",
     "PyInstaller>=6.0",
-    "ruff>=0.16.0",
+    "ruff>=0.16.1",
 ]
 
 [project.scripts]
