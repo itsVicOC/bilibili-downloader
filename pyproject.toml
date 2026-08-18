@@ -23,7 +23,7 @@ dev = [
     "pytest>=8.0",
     "pytest-qt>=4.2",
     "responses>=0.24",
-    "PyInstaller>=6.0",
+    "PyInstaller>=6.22.0",
     "ruff>=0.16.0",
 ]
 
