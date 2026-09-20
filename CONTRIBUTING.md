@@ -36,8 +36,9 @@ Bug 报告应包含：
 3. 行为修改必须添加或更新测试；网络测试应使用 mock，不依赖线上内容长期可用。
    PGC/番剧测试必须使用脱敏 fixture，不得提交真实 Cookie、签名播放 URL、下载媒体或受版权保护样本。
 4. GUI 改动至少检查日间、夜间两种系统主题和 900×640 最小窗口。
-5. 新增第三方素材时，同时更新 `THIRD_PARTY_NOTICES.md`，写明文件、作者、原始 URL 和许可证。
-6. 提交前运行完整验证命令。
+5. GUI 布局或可见文案变化影响文档截图时，运行 `python scripts/capture_docs_screenshots.py`，人工检查图片后同步更新 README 或用户指南中的说明。截图只能使用演示数据。
+6. 新增第三方素材时，同时更新 `THIRD_PARTY_NOTICES.md`，写明文件、作者、原始 URL 和许可证。
+7. 提交前运行完整验证命令。
 
 ```bash
 python -m compileall -q bilibili_downloader tests

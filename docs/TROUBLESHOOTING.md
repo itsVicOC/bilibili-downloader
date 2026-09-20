@@ -1,5 +1,15 @@
 # 故障排查
 
+## 先确认这几项
+
+1. 在“关于”窗口确认 BiliFlow 版本；源码运行同时记录 `python --version`。
+2. 确认使用的是 full 还是 lite 包。lite 包和源码运行需要系统 FFmpeg；full 包默认使用应用内置版本。
+3. 记录状态栏、任务行或弹窗中的完整错误文字，但先删除账号名、个人路径、Cookie 和带签名的播放 URL。
+4. 用一个无需登录、可以完整播放的短视频区分“应用环境问题”和“特定作品权限或接口问题”。
+5. 暂时把最大并发降到 1，并使用本地磁盘中的新输出目录复现，排除限流、同步盘、权限和同名文件占用。
+
+如果问题出现在升级后，先备份配置目录与 `.biliflow-parts/`，不要直接删除任务数据库或断点文件。
+
 ## 应用无法启动
 
 ### macOS 提示无法验证开发者
@@ -112,4 +122,14 @@ ffmpeg -v error -i "输出文件.mp4" -map 0:v:0 -map 0:a:0 -f null -
 
 应用会把无法解析的配置备份为同目录的 `config.json.bak` 并恢复默认设置。配置目录在 macOS 为 `~/Library/Application Support/BiliFlow`，Windows 为 `%APPDATA%\\BiliFlow`，Linux 为 `$XDG_CONFIG_HOME/biliflow`（默认 `~/.config/biliflow`）。若问题持续，关闭应用后移动 `config.json`，再重新启动配置。
 
-报告仍未解决的问题时，请按 [CONTRIBUTING.md](../CONTRIBUTING.md) 提供环境、复现步骤和已脱敏日志。
+## 报告仍未解决的问题
+
+请按 [CONTRIBUTING.md](../CONTRIBUTING.md) 提供：
+
+- 操作系统、CPU 架构、BiliFlow 版本，以及源码运行时的 Python 版本。
+- full/lite/源码运行方式和 FFmpeg 来源；FFmpeg 问题附 `ffmpeg -version` 输出。
+- 最短复现步骤、预期行为、实际行为和完整错误文字。
+- 问题是否只发生在某类来源、登录状态、画质、编码或输出目录。
+- 已经尝试过的本页条目及结果，避免重复排查。
+
+不要附加真实 Cookie、SESSDATA、账号标识、带鉴权参数的媒体 URL、下载文件或未经授权的媒体样本。安全漏洞请使用[私密漏洞报告渠道](../SECURITY.md)，不要创建公开 Issue。
