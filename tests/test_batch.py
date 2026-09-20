@@ -92,6 +92,10 @@ def test_resolve_av_url():
 def test_resolve_short_link(monkeypatch):
     client = FakeClient()
     monkeypatch.setattr(
+        "bilibili_downloader.core.batch.resolve_short_url",
+        lambda _url: None,
+    )
+    monkeypatch.setattr(
         "bilibili_downloader.core.batch.resolve_short_link",
         lambda url: "BV1GJ411x7h7",
     )
