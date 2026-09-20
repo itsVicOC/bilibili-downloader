@@ -325,6 +325,14 @@ class TaskRepository:
             and record.status != TaskStatus.CANCELLED
         }
 
+    def known_content_identities(self) -> set[str]:
+        """Return generic identities while retaining legacy video semantics."""
+        return {
+            record.item.video_info.content_identity.lower()
+            for record in self.list_tasks()
+            if record.status != TaskStatus.CANCELLED
+        }
+
 
 def _record_from_row(row: sqlite3.Row) -> TaskRecord:
     item = DownloadItem.model_validate_json(row["payload_json"])

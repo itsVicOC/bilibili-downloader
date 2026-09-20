@@ -59,6 +59,13 @@ class OutputMode(str, Enum):
     AUDIO = "audio"
 
 
+class ContentKind(str, Enum):
+    """Origin-specific media identity used by resolvers and downloaders."""
+
+    VIDEO = "video"
+    BANGUMI_EPISODE = "bangumi_episode"
+
+
 VIDEO_CODEC_MAP = {
     7: "AVC/H.264",
     12: "HEVC/H.265",
@@ -123,6 +130,17 @@ class VideoInfo(BaseModel):
     source_url: str = ""
     source_type: str = "video"
     collection_title: str = ""
+    content_kind: ContentKind = ContentKind.VIDEO
+    episode_id: int = 0
+    season_id: int = 0
+    media_id: int = 0
+    series_title: str = ""
+    season_title: str = ""
+    section_title: str = ""
+    episode_title: str = ""
+    episode_number: str = ""
+    episode_index: int = 0
+    is_main_section: bool = True
 
     # Stream info (populated after playurl call)
     video_streams: list[StreamInfo] = Field(default_factory=list)
@@ -139,6 +157,21 @@ class VideoInfo(BaseModel):
     @property
     def is_multi_part(self) -> bool:
         return len(self.pages) > 1
+
+    @property
+    def content_identity(self) -> str:
+        """Return a stable source identity without changing legacy video keys."""
+        if self.content_kind == ContentKind.BANGUMI_EPISODE and self.episode_id:
+            return f"ep:{self.episode_id}:{self.cid}"
+        return f"{self.bvid}:{self.cid}"
+
+    @property
+    def canonical_url(self) -> str:
+        if self.content_kind == ContentKind.BANGUMI_EPISODE and self.episode_id:
+            return f"https://www.bilibili.com/bangumi/play/ep{self.episode_id}"
+        if self.bvid:
+            return f"https://www.bilibili.com/video/{self.bvid}"
+        return self.source_url
 
     def for_page(self, page: VideoPage) -> "VideoInfo":
         """Return an independent video snapshot targeting one page."""
@@ -208,6 +241,11 @@ class DownloadItem(BaseModel):
                 "part": part,
                 "part_suffix": f"_{part}" if info.is_multi_part and part else "",
                 "collection": info.collection_title,
+                "series": info.series_title or info.collection_title,
+                "season": info.season_title or "本季",
+                "section": info.section_title or "正片",
+                "episode": info.episode_title or info.title,
+                "episode_number": info.episode_number or f"{max(1, info.episode_index):02d}",
                 "quality": self.selected_quality.label,
                 "codec": VIDEO_CODEC_MAP.get(
                     self.selected_video_codec, str(self.selected_video_codec)
@@ -219,10 +257,14 @@ class DownloadItem(BaseModel):
     @property
     def fingerprint(self) -> str:
         """Return a stable identity used for duplicate detection."""
+        identity = (
+            [f"ep{self.video_info.episode_id}", str(self.video_info.cid)]
+            if self.video_info.content_kind == ContentKind.BANGUMI_EPISODE
+            else [self.video_info.bvid, str(self.video_info.cid)]
+        )
         return ":".join(
             [
-                self.video_info.bvid,
-                str(self.video_info.cid),
+                *identity,
                 str(self.selected_quality.value),
                 str(self.selected_video_codec),
                 str(self.selected_audio_quality),
@@ -266,6 +308,9 @@ class AppSettings(BaseModel):
     default_audio_quality: int = 30280  # AAC 192kbps
     default_output_mode: OutputMode = OutputMode.VIDEO
     path_template: str = "{title}{part_suffix}"
+    bangumi_path_template: str = (
+        "{series}/{season}/{section}/{episode_number} - {episode}"
+    )
     download_danmaku: bool = False
     download_subtitle: bool = False
     download_all_subtitles: bool = False
@@ -275,6 +320,7 @@ class AppSettings(BaseModel):
     ffmpeg_path: str = ""
     max_concurrent_downloads: int = Field(default=3, ge=1, le=8)
     last_login_at: Optional[str] = None
+    copyright_notice_version: int = Field(default=0, ge=0)
 
     @field_validator("output_dir")
     @classmethod
@@ -298,7 +344,7 @@ class AppSettings(BaseModel):
             raise ValueError("unsupported default_audio_quality")
         return value
 
-    @field_validator("path_template")
+    @field_validator("path_template", "bangumi_path_template")
     @classmethod
     def validate_path_template(cls, value: str) -> str:
         from bilibili_downloader.utils.validators import render_path_template
@@ -316,6 +362,11 @@ class AppSettings(BaseModel):
                 "part": "part",
                 "part_suffix": "_part",
                 "collection": "collection",
+                "series": "series",
+                "season": "season",
+                "section": "section",
+                "episode": "episode",
+                "episode_number": "01",
                 "quality": "1080P",
                 "codec": "HEVC",
             },

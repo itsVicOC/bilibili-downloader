@@ -80,6 +80,30 @@ def test_qr_success_uses_sso_fallback_when_poll_has_no_sessdata(monkeypatch):
     assert result["cookies"] == {"SESSDATA": "sso-secret"}
 
 
+def test_qr_success_collects_only_whitelisted_cookie_bundle():
+    def poll_response(_request):
+        return httpx.Response(
+            200,
+            headers=[
+                ("set-cookie", "SESSDATA=poll-secret; Domain=.bilibili.com; Path=/"),
+                ("set-cookie", "bili_jct=csrf-secret; Domain=.bilibili.com; Path=/"),
+                ("set-cookie", "unrelated=discard; Domain=.bilibili.com; Path=/"),
+            ],
+            json={"code": 0, "data": {"code": 0}},
+        )
+
+    manager = _manager_with_transport(poll_response)
+    try:
+        result = manager.check_qr_status("qr-key")
+    finally:
+        manager.close()
+
+    assert result["cookies"] == {
+        "SESSDATA": "poll-secret",
+        "bili_jct": "csrf-secret",
+    }
+
+
 def test_qr_waiting_status_does_not_attempt_sso(monkeypatch):
     def poll_response(_request):
         return httpx.Response(

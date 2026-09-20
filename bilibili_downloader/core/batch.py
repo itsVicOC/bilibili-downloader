@@ -7,9 +7,11 @@ from bilibili_downloader.api.client import BilibiliAPIClient
 from bilibili_downloader.core.models import ContentCollection, VideoInfo
 from bilibili_downloader.utils.validators import (
     extract_aid,
+    extract_bangumi_id,
     extract_bvid,
     is_short_link,
     resolve_short_link,
+    resolve_short_url,
 )
 
 SPACE_LIST_PATTERN = re.compile(
@@ -44,14 +46,25 @@ class BatchResolver:
         if not source:
             raise BatchResolveError("输入为空")
 
+        if is_short_link(source):
+            resolved = resolve_short_url(source)
+            if not resolved:
+                # Keep the historical BV-only helper as a compatibility path.
+                bvid = resolve_short_link(source)
+                if bvid:
+                    return self._client.get_video_info(bvid)
+                raise BatchResolveError("无法展开 b23.tv 短链")
+            source = resolved
+
         if is_collection_source(source):
             raise BatchResolveError("这是合集或收藏夹链接，请使用批量导入")
 
-        if is_short_link(source):
-            bvid = resolve_short_link(source)
-            if not bvid:
-                raise BatchResolveError("无法展开 b23.tv 短链")
-            return self._client.get_video_info(bvid)
+        bangumi = extract_bangumi_id(source)
+        if bangumi:
+            kind, content_id = bangumi
+            if kind != "ep":
+                raise BatchResolveError("这是番剧季度或媒体页，请使用批量导入")
+            return self._client.get_bangumi_episode(content_id)
 
         bvid = extract_bvid(source)
         if bvid:
@@ -61,7 +74,7 @@ class BatchResolver:
         if aid:
             return self._client.get_video_info_by_aid(aid)
 
-        raise BatchResolveError("无法识别 BV 号、AV 号或 B站视频链接")
+        raise BatchResolveError("无法识别 BV、AV、ep 或受支持的 B站链接")
 
 
 class ContentSourceResolver:
@@ -74,18 +87,39 @@ class ContentSourceResolver:
         source = text.strip()
         if not source:
             raise BatchResolveError("输入为空")
+        if is_short_link(source):
+            resolved = resolve_short_url(source)
+            if not resolved:
+                raise BatchResolveError("无法展开 b23.tv 短链")
+            source = resolved
+
+        bangumi = extract_bangumi_id(source)
+        if bangumi:
+            kind, content_id = bangumi
+            if kind == "ep":
+                info = self._client.get_bangumi_episode(content_id)
+                return ContentCollection(
+                    title=info.title,
+                    source_type="bangumi_episode",
+                    source_url=source,
+                    items=[info],
+                )
+            if kind == "ss":
+                return self._client.get_bangumi_season(content_id)
+            return self._client.get_bangumi_media(content_id)
+
         if not is_collection_source(source):
             info = BatchResolver(self._client).resolve_one(source)
             info = info.model_copy(
                 update={
                     "source_url": source if source.startswith("https://") else "",
-                    "source_type": "video",
+                    "source_type": info.source_type,
                 },
                 deep=True,
             )
             return ContentCollection(
                 title=info.title,
-                source_type="video",
+                source_type=info.source_type,
                 source_url=source,
                 items=[info],
             )
@@ -149,12 +183,15 @@ def classify_batch_inputs(text: str) -> tuple[list[str], list[str]]:
         else:
             bvid = extract_bvid(source)
             aid = extract_aid(source)
+            bangumi = extract_bangumi_id(source)
         if collection_source:
             pass
         elif bvid:
             identity = ("bvid", bvid.lower())
         elif aid:
             identity = ("aid", aid)
+        elif bangumi:
+            identity = bangumi
         elif is_short_link(source):
             identity = ("short", source.lower())
         else:
@@ -169,6 +206,9 @@ def classify_batch_inputs(text: str) -> tuple[list[str], list[str]]:
 
 def is_collection_source(text: str) -> bool:
     source = text.strip()
+    bangumi = extract_bangumi_id(source)
+    if bangumi:
+        return bangumi[0] in {"ss", "md"}
     try:
         parsed = urlparse(source)
     except ValueError:

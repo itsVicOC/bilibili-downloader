@@ -135,6 +135,8 @@ python scripts/verify_release_bundle.py <解压目录> \
 
 候选版使用 Python 兼容的 `X.Y.ZrcN` 版本与 `vX.Y.ZrcN` 标签。Release workflow 会把包含 `rc` 的标签自动标记为 GitHub prerelease。候选版验证完成后，再把版本和 Changelog 更新为 `X.Y.Z` 并发布正式标签。
 
+`v0.7.0` 应先发布 `v0.7.0rc1`。候选版除常规 full/lite 包验证外，还要使用不提交到仓库的测试账号完成两项手工冒烟：一个免费完整单集，以及一个该账号已经获得完整播放权限的会员或已购单集。确认解析、权限判断、DASH 合并和附加项正常后立即删除测试产物；不得保存或上传媒体、Cookie、签名播放 URL、页面初始状态或包含账号标识的日志。另用无权限或试看剧集确认应用在创建 `.biliflow-parts` 媒体文件前拒绝下载。
+
 验证并提交后推送版本标签：
 
 ```bash

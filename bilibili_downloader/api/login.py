@@ -8,6 +8,7 @@ import qrcode
 from PIL import Image
 
 from bilibili_downloader.api import endpoints as ep
+from bilibili_downloader.api.auth import AUTH_COOKIE_NAMES, filter_auth_cookies
 from bilibili_downloader.api.endpoints import USER_AGENT
 from bilibili_downloader.utils.network import BILIBILI_WEB_HOSTS, trusted_https_url
 
@@ -20,6 +21,15 @@ def _find_cookie(cookies: httpx.Cookies, name: str) -> str | None:
         if cookie.name == name and cookie.value:
             return cookie.value
     return None
+
+
+def _collect_cookies(*cookie_jars: httpx.Cookies) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for cookies in cookie_jars:
+        for cookie in cookies.jar:
+            if cookie.name in AUTH_COOKIE_NAMES and cookie.value:
+                values[cookie.name] = cookie.value
+    return filter_auth_cookies(values)
 
 
 class LoginManager:
@@ -81,12 +91,10 @@ class LoginManager:
             # response. Keep the SSO redirect as a compatibility fallback for
             # older responses that only return a URL.
             result["code"] = 0
-            sessdata = _find_cookie(resp.cookies, "SESSDATA")
-            if not sessdata:
-                sessdata = _find_cookie(self._client.cookies, "SESSDATA")
-            if sessdata:
-                logger.info("SESSDATA extracted from QR poll response")
-                result["cookies"] = {"SESSDATA": sessdata}
+            cookies = _collect_cookies(resp.cookies, self._client.cookies)
+            if cookies.get("SESSDATA"):
+                logger.info("Authentication cookies extracted from QR response")
+                result["cookies"] = cookies
                 return result
 
             sso_url = data.get("data", {}).get("url", "")
@@ -130,17 +138,16 @@ class LoginManager:
                 if sso_resp is None:
                     return {}
                 # Cookies are accumulated in the client during redirects
-                sessdata = _find_cookie(sso_client.cookies, "SESSDATA")
-                if sessdata:
-                    logger.info("SESSDATA extracted from SSO redirect")
-                    return {"SESSDATA": sessdata}
+                cookies = _collect_cookies(
+                    sso_client.cookies,
+                    sso_resp.cookies,
+                    self._client.cookies,
+                )
+                if cookies.get("SESSDATA"):
+                    logger.info("Authentication cookies extracted from SSO redirect")
+                    return cookies
 
                 # Fallback: check response cookies directly
-                sessdata = _find_cookie(sso_resp.cookies, "SESSDATA")
-                if sessdata:
-                    logger.info("SESSDATA extracted from SSO response")
-                    return {"SESSDATA": sessdata}
-
                 logger.warning("SESSDATA not found in SSO cookies")
                 return {}
         except (httpx.HTTPError, ValueError) as e:
@@ -149,9 +156,16 @@ class LoginManager:
 
     def validate_sessdata(self, sessdata: str) -> bool:
         """Validate a SESSDATA cookie by checking user info."""
+        return bool(self.validate_cookies({"SESSDATA": sessdata}))
+
+    def validate_cookies(self, cookies: dict[str, str]) -> dict:
+        """Validate an allow-listed cookie bundle and return account metadata."""
+        cookies = filter_auth_cookies(cookies)
+        if not cookies.get("SESSDATA"):
+            return {}
         client = httpx.Client(
             base_url=ep.BASE_URL,
-            cookies={"SESSDATA": sessdata},
+            cookies=cookies,
             headers={"User-Agent": USER_AGENT, "Referer": "https://www.bilibili.com/"},
             timeout=10.0,
         )
@@ -159,9 +173,10 @@ class LoginManager:
             resp = client.get(ep.NAV_ENDPOINT)
             resp.raise_for_status()
             data = resp.json()
-            return data.get("code") == 0 and bool(data.get("data", {}).get("mid"))
+            nav = data.get("data") or {}
+            return nav if data.get("code") == 0 and nav.get("mid") else {}
         except httpx.HTTPError:
-            return False
+            return {}
         finally:
             client.close()
 

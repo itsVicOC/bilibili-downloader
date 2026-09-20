@@ -27,6 +27,13 @@ SHORT_URL_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+BANGUMI_URL_PATTERN = re.compile(
+    r"https://(?:www\.|m\.)?bilibili\.com/bangumi/"
+    r"(?:(?:play/(?P<play_type>ep|ss)(?P<play_id>\d+))|"
+    r"(?:media/md(?P<media_id>\d+)))/?(?:\?[^\s#]*)?(?:#[^\s]*)?",
+    re.IGNORECASE,
+)
+
 
 def extract_bvid(text: str) -> Optional[str]:
     """Extract BV number from various URL formats.
@@ -62,18 +69,28 @@ def is_short_link(text: str) -> bool:
     return bool(SHORT_URL_PATTERN.fullmatch(text.strip()))
 
 
-def resolve_short_link(text: str) -> Optional[str]:
-    """Resolve a b23.tv short link to a BV number via HTTP redirect.
+def extract_bangumi_id(text: str) -> Optional[tuple[str, int]]:
+    """Return ``(ep|ss|md, id)`` for a trusted mainland bangumi URL."""
+    value = text.strip()
+    direct = re.fullmatch(r"(ep|ss|md)(\d+)", value, re.IGNORECASE)
+    if direct:
+        return direct.group(1).lower(), int(direct.group(2))
+    match = BANGUMI_URL_PATTERN.fullmatch(value)
+    if not match:
+        return None
+    if match.group("media_id"):
+        return "md", int(match.group("media_id"))
+    return match.group("play_type").lower(), int(match.group("play_id"))
 
-    Returns:
-        BV number or None if resolution fails.
-    """
-    import httpx
 
+def resolve_short_url(text: str) -> Optional[str]:
+    """Resolve a b23.tv URL to a final trusted Bilibili HTTPS URL."""
     text = text.strip()
     match = SHORT_URL_PATTERN.fullmatch(text)
     if not match:
         return None
+
+    import httpx
 
     try:
         current_url = trusted_https_url(match.group(0), BILIBILI_WEB_HOSTS)
@@ -86,7 +103,7 @@ def resolve_short_link(text: str) -> Optional[str]:
                 resp = client.get(current_url)
                 if not resp.is_redirect:
                     resp.raise_for_status()
-                    return extract_bvid(current_url)
+                    return current_url
                 location = resp.headers.get("location")
                 if not location:
                     return None
@@ -96,8 +113,17 @@ def resolve_short_link(text: str) -> Optional[str]:
                 )
         return None
     except (httpx.HTTPError, ValueError):
-        pass
-    return None
+        return None
+
+
+def resolve_short_link(text: str) -> Optional[str]:
+    """Resolve a b23.tv short link to a BV number via HTTP redirect.
+
+    Returns:
+        BV number or None if resolution fails.
+    """
+    final_url = resolve_short_url(text)
+    return extract_bvid(final_url) if final_url else None
 
 
 def extract_aid(text: str) -> Optional[int]:
@@ -127,6 +153,7 @@ def is_bilibili_url(text: str) -> bool:
     return bool(
         extract_bvid(text)
         or extract_aid(text)
+        or extract_bangumi_id(text)
         or is_short_link(text)
     )
 

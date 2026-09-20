@@ -18,28 +18,28 @@ def main():
 
     parser = argparse.ArgumentParser(
         prog="bilibili-downloader",
-        description="Bilibili video downloader — CLI and GUI modes.",
+        description="Bilibili video and bangumi downloader — CLI and GUI modes.",
     )
     subparsers = parser.add_subparsers(dest="command")
 
     # --- test subcommand ---
     test_parser = subparsers.add_parser(
         "test",
-        help="Fetch video metadata for a BV/AV number or URL",
+        help="Fetch metadata for a BV/AV/ep number or supported URL",
     )
     test_parser.add_argument(
         "source",
-        help="BV/AV number, Bilibili URL, or b23.tv short link",
+        help="BV/AV/ep number, Bilibili URL, or b23.tv short link",
     )
 
     # --- download subcommand ---
     download_parser = subparsers.add_parser(
         "download",
-        help="Download a video by BV/AV number or URL",
+        help="Download a video or bangumi source",
     )
     download_parser.add_argument(
         "source",
-        help="BV/AV number, video/collection/favorite URL, or b23.tv short link",
+        help="BV/AV/ep/ss/md, supported URL, or b23.tv short link",
     )
     download_parser.add_argument(
         "--quality", "-q",
@@ -108,6 +108,16 @@ def main():
         "--path-template",
         help="Relative output template, e.g. '{author}/{title}{part_suffix}'",
     )
+    download_parser.add_argument(
+        "--include-extras",
+        action="store_true",
+        help="Include PV, specials and other non-main bangumi sections",
+    )
+    download_parser.add_argument(
+        "--acknowledge-copyright",
+        action="store_true",
+        help="Acknowledge the copyright notice in non-interactive environments",
+    )
 
     args = parser.parse_args()
 
@@ -158,10 +168,14 @@ def _cli_test(source: str):
 
 def _cli_download(args: argparse.Namespace):
     """CLI download: download a video by BV/AV number or URL."""
+    from collections import Counter
+
     from bilibili_downloader.api.client import BilibiliAPIClient
+    from bilibili_downloader.api.pgc import BangumiAccessError
     from bilibili_downloader.core.batch import ContentSourceResolver
+    from bilibili_downloader.core.copyright import COPYRIGHT_NOTICE_VERSION
     from bilibili_downloader.core.download_service import DownloadService
-    from bilibili_downloader.core.errors import user_error_message
+    from bilibili_downloader.core.errors import classify_error, user_error_message
     from bilibili_downloader.core.models import DownloadItem, OutputMode
     from bilibili_downloader.utils.config import ConfigManager
 
@@ -170,11 +184,24 @@ def _cli_download(args: argparse.Namespace):
     # Load settings for default output dir and ffmpeg path
     config = ConfigManager()
     settings = config.load()
+    if settings.copyright_notice_version < COPYRIGHT_NOTICE_VERSION:
+        if not _confirm_cli_copyright(
+            bool(getattr(args, "acknowledge_copyright", False))
+        ):
+            raise SystemExit(2)
+        settings.copyright_notice_version = COPYRIGHT_NOTICE_VERSION
+        config.save(settings)
     output_dir = args.output or settings.output_dir
 
     print(f"Downloading {args.source} at {quality.label}...")
 
-    client = BilibiliAPIClient(sessdata=settings.sessdata or None)
+    try:
+        client = BilibiliAPIClient(
+            sessdata=settings.sessdata or None,
+            auth_cookies=config.auth_cookies,
+        )
+    except TypeError:  # Compatibility with external/test client adapters.
+        client = BilibiliAPIClient(sessdata=settings.sessdata or None)
     service = None
     try:
         collection = ContentSourceResolver(client).resolve(args.source)
@@ -182,6 +209,12 @@ def _cli_download(args: argparse.Namespace):
 
         page_infos = []
         for info in collection.items:
+            if (
+                collection.source_type == "bangumi_season"
+                and not info.is_main_section
+                and not getattr(args, "include_extras", False)
+            ):
+                continue
             if str(args.page).lower() == "all":
                 page_infos.extend([info.for_page(page) for page in info.pages] or [info])
                 continue
@@ -197,6 +230,11 @@ def _cli_download(args: argparse.Namespace):
             page_infos.append(
                 info.for_page(info.pages[page_number - 1]) if info.pages else info
             )
+        if not page_infos:
+            raise ValueError(
+                "该番剧季度没有默认选中的正片；如需附加章节请传入 "
+                "--include-extras"
+            )
 
         def progress(pct, text):
             bar_len = 30
@@ -208,6 +246,8 @@ def _cli_download(args: argparse.Namespace):
             client, output_dir, ffmpeg_path=settings.ffmpeg_path or None,
         )
         codec = args.codec or settings.default_video_codec
+        failures = Counter()
+        completed = 0
         for index, page_info in enumerate(page_infos, start=1):
             if len(page_infos) > 1:
                 print(f"\n[{index}/{len(page_infos)}] CID {page_info.cid}")
@@ -226,7 +266,12 @@ def _cli_download(args: argparse.Namespace):
                     else settings.default_output_mode
                 ),
                 path_template=(
-                    getattr(args, "path_template", None) or settings.path_template
+                    getattr(args, "path_template", None)
+                    or (
+                        settings.bangumi_path_template
+                        if page_info.episode_id
+                        else settings.path_template
+                    )
                 ),
                 output_path=output_dir,
                 download_danmaku=args.danmaku,
@@ -236,10 +281,28 @@ def _cli_download(args: argparse.Namespace):
                 download_metadata=getattr(args, "metadata", False),
                 selected_subtitle_lan=args.subtitle_language,
             )
-            outcome = service.download(item, progress)
-            print(f"\nSaved to: {outcome.video_path}")
-            for warning in outcome.warnings:
-                print(f"Warning: {warning}")
+            try:
+                outcome = service.download(item, progress)
+                completed += 1
+                print(f"\nSaved to: {outcome.video_path}")
+                for warning in outcome.warnings:
+                    print(f"Warning: {warning}")
+            except Exception as exc:  # noqa: BLE001
+                details = classify_error(exc)
+                failure_kind = (
+                    exc.reason.value
+                    if isinstance(exc, BangumiAccessError)
+                    else details.category.value
+                )
+                failures[failure_kind] += 1
+                print(f"\nSkipped: {page_info.title}: {details.user_message}")
+        if failures:
+            summary = ", ".join(
+                f"{category}={count}" for category, count in sorted(failures.items())
+            )
+            print(f"Batch result: completed={completed}, failed={sum(failures.values())} ({summary})")
+            if not completed:
+                raise SystemExit(1)
     except KeyboardInterrupt:
         if service is not None:
             service.cancel()
@@ -250,6 +313,31 @@ def _cli_download(args: argparse.Namespace):
         sys.exit(1)
     finally:
         client.close()
+
+
+def _confirm_cli_copyright(flag_acknowledged: bool) -> bool:
+    """Obtain the versioned acknowledgement without accepting piped input."""
+    from bilibili_downloader.core.copyright import (
+        BILIBILI_TERMS_URL,
+        COPYRIGHT_DOCUMENT_URL,
+        COPYRIGHT_NOTICE_SUMMARY,
+        COPYRIGHT_NOTICE_TITLE,
+    )
+
+    if flag_acknowledged:
+        return True
+    if not sys.stdin.isatty():
+        print(
+            "首次下载需要确认版权提示；非交互环境请传入 "
+            "--acknowledge-copyright。",
+            file=sys.stderr,
+        )
+        return False
+    print(f"\n{COPYRIGHT_NOTICE_TITLE}\n{COPYRIGHT_NOTICE_SUMMARY}")
+    print(f"项目版权说明：{COPYRIGHT_DOCUMENT_URL}")
+    print(f"Bilibili 服务协议：{BILIBILI_TERMS_URL}")
+    answer = input("输入 yes 表示已了解并继续：").strip().lower()
+    return answer in {"yes", "y"}
 
 
 def _launch_gui():

@@ -120,14 +120,24 @@ class StreamDownloader:
         need_hdr = item.selected_quality in (VideoQuality.QHDR,)
         need_dolby = item.selected_quality in (VideoQuality.Q_DOLBY,)
 
-        playurl_data = self._api_client.get_play_url(
-            bvid=info.bvid,
-            cid=info.cid,
-            quality=item.selected_quality,
-            need_hdr=need_hdr,
-            need_dolby=need_dolby,
-            preferred_codec=item.selected_video_codec,
-        )
+        play_url_for = getattr(self._api_client, "get_play_url_for", None)
+        if play_url_for is not None:
+            playurl_data = play_url_for(
+                info,
+                quality=item.selected_quality,
+                need_hdr=need_hdr,
+                need_dolby=need_dolby,
+                preferred_codec=item.selected_video_codec,
+            )
+        else:  # Compatibility for third-party API client adapters.
+            playurl_data = self._api_client.get_play_url(
+                bvid=info.bvid,
+                cid=info.cid,
+                quality=item.selected_quality,
+                need_hdr=need_hdr,
+                need_dolby=need_dolby,
+                preferred_codec=item.selected_video_codec,
+            )
 
         # Select audio stream
         audio_stream = self._select_audio_stream(
@@ -163,14 +173,22 @@ class StreamDownloader:
             output_path.parent.mkdir(parents=True, exist_ok=True)
             video_path = tmp / "video.m4s"
             audio_path = tmp / "audio.m4s"
+            referer = (
+                info.canonical_url
+                if info.episode_id
+                else "https://www.bilibili.com/"
+            )
 
             if video_stream is not None:
                 progress_callback(0.0, "正在下载视频流...")
-                self._download_stream(
-                    video_stream,
-                    video_path,
-                    lambda p: progress_callback(p * 0.6, "正在下载视频流..."),
-                )
+                def video_progress(p):
+                    progress_callback(p * 0.6, "正在下载视频流...")
+                if info.episode_id:
+                    self._download_stream(
+                        video_stream, video_path, video_progress, referer=referer
+                    )
+                else:
+                    self._download_stream(video_stream, video_path, video_progress)
                 if self._cancelled:
                     raise RuntimeError("Download cancelled by user")
                 audio_start = 0.6
@@ -180,13 +198,16 @@ class StreamDownloader:
                 audio_weight = 0.85
 
             progress_callback(audio_start, "正在下载音频流...")
-            self._download_stream(
-                audio_stream,
-                audio_path,
-                lambda p: progress_callback(
+            def audio_progress(p):
+                progress_callback(
                     audio_start + p * audio_weight, "正在下载音频流..."
-                ),
-            )
+                )
+            if info.episode_id:
+                self._download_stream(
+                    audio_stream, audio_path, audio_progress, referer=referer
+                )
+            else:
+                self._download_stream(audio_stream, audio_path, audio_progress)
 
             if self._cancelled:
                 raise RuntimeError("Download cancelled by user")
@@ -295,6 +316,7 @@ class StreamDownloader:
         stream: StreamInfo,
         dest: Path,
         progress_callback: Callable[[float], None],
+        referer: str = "https://www.bilibili.com/",
     ) -> None:
         """Download a single .m4s stream with progress tracking and retry."""
         last_error = None
@@ -320,7 +342,18 @@ class StreamDownloader:
 
                 for candidate_index, url in enumerate(urls, start=1):
                     try:
-                        self._download_url(client, url, dest, progress_callback)
+                        if referer == STREAM_HEADERS["Referer"]:
+                            self._download_url(
+                                client, url, dest, progress_callback
+                            )
+                        else:
+                            self._download_url(
+                                client,
+                                url,
+                                dest,
+                                progress_callback,
+                                referer=referer,
+                            )
                         try:
                             complete_marker.write_text(
                                 str(dest.stat().st_size), encoding="ascii"
@@ -364,10 +397,12 @@ class StreamDownloader:
         url: str,
         dest: Path,
         progress_callback: Callable[[float], None],
+        referer: str = "https://www.bilibili.com/",
     ) -> None:
         """Download one URL, resuming from an existing partial file when possible."""
         resume_from = dest.stat().st_size if dest.exists() else 0
         headers = dict(STREAM_HEADERS)
+        headers["Referer"] = referer
         if resume_from > 0:
             headers["Range"] = f"bytes={resume_from}-"
 
@@ -549,7 +584,7 @@ def _reserved_output_path(requested: Path):
 def _reserved_download_cache(output_dir: Path, item: DownloadItem):
     """Reserve a stable cache directory so failed downloads can resume later."""
     identity = (
-        f"{item.video_info.bvid}:{item.video_info.cid}:"
+        f"{item.video_info.content_identity}:"
         f"{item.selected_quality.value}:{item.selected_video_codec}:"
         f"{item.selected_audio_quality}"
         f":{item.output_mode.value}"

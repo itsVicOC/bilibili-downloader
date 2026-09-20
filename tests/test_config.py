@@ -74,18 +74,18 @@ class TestConfigManager:
         loaded = manager.load()
         assert loaded.output_dir == "/new/dir"
 
-    def test_sessdata_saved_to_keyring_when_available(self, monkeypatch, tmp_path):
-        """SESSDATA should stay out of JSON when keyring storage succeeds."""
+    def test_auth_bundle_saved_to_keyring_when_available(self, monkeypatch, tmp_path):
+        """The filtered bundle should stay out of JSON when keyring succeeds."""
         saved = {}
         monkeypatch.setattr(
             config_module,
-            "_save_sessdata_to_keyring",
-            lambda sessdata: saved.setdefault("sessdata", sessdata) is not None,
+            "_save_auth_cookie_bundle",
+            lambda bundle: saved.setdefault("bundle", bundle) is not None,
         )
         monkeypatch.setattr(
             config_module,
-            "_load_sessdata_from_keyring",
-            lambda: saved.get("sessdata", ""),
+            "_load_auth_cookie_bundle",
+            lambda: saved.get("bundle"),
         )
 
         config_path = tmp_path / "config.json"
@@ -96,20 +96,25 @@ class TestConfigManager:
 
         loaded = ConfigManager(config_path=config_path).load()
         assert loaded.sessdata == "secret"
+        assert saved["bundle"].cookies == {"SESSDATA": "secret"}
 
-    def test_sessdata_falls_back_to_obfuscated_config(self, monkeypatch, tmp_path):
-        """SESSDATA should remain backward-compatible when keyring is unavailable."""
-        monkeypatch.setattr(config_module, "_save_sessdata_to_keyring", lambda sessdata: False)
+    def test_sessdata_is_session_only_when_keyring_unavailable(self, monkeypatch, tmp_path):
+        """New secrets must not fall back to the JSON config."""
+        monkeypatch.setattr(config_module, "_save_auth_cookie_bundle", lambda bundle: False)
+        monkeypatch.setattr(config_module, "_load_auth_cookie_bundle", lambda: None)
         monkeypatch.setattr(config_module, "_load_sessdata_from_keyring", lambda: "")
 
         config_path = tmp_path / "config.json"
-        ConfigManager(config_path=config_path).save(AppSettings(sessdata="secret"))
+        manager = ConfigManager(config_path=config_path)
+        manager.save(AppSettings(sessdata="secret"))
 
         raw = json.loads(config_path.read_text(encoding="utf-8"))
-        assert raw["sessdata"] != "secret"
+        assert raw["sessdata"] == ""
+        assert manager.auth_cookies == {"SESSDATA": "secret"}
+        assert manager.credentials_persistent is False
 
         loaded = ConfigManager(config_path=config_path).load()
-        assert loaded.sessdata == "secret"
+        assert loaded.sessdata == ""
 
     def test_default_path_migrates_legacy_config(self, monkeypatch, tmp_path):
         legacy_path = tmp_path / "legacy" / "config.json"
@@ -128,6 +133,29 @@ class TestConfigManager:
         assert loaded.output_dir == "/migrated"
         assert target_path.is_file()
         assert legacy_path.is_file()
+
+    def test_legacy_sessdata_migration_is_session_only_when_keyring_fails(
+        self, monkeypatch, tmp_path
+    ):
+        config_path = tmp_path / "config.json"
+        config_path.write_text(
+            json.dumps({"sessdata": "legacy-secret"}), encoding="utf-8"
+        )
+        monkeypatch.setattr(config_module, "_load_auth_cookie_bundle", lambda: None)
+        monkeypatch.setattr(config_module, "_load_sessdata_from_keyring", lambda: "")
+        monkeypatch.setattr(
+            config_module, "_save_auth_cookie_bundle", lambda _bundle: False
+        )
+
+        manager = ConfigManager(config_path=config_path)
+        settings = manager.load()
+
+        assert settings.sessdata == "legacy-secret"
+        assert manager.auth_cookies == {"SESSDATA": "legacy-secret"}
+        assert manager.credentials_persistent is False
+
+        manager.save(settings)
+        assert json.loads(config_path.read_text(encoding="utf-8"))["sessdata"] == ""
 
     def test_invalid_model_config_is_backed_up(self, tmp_path):
         config_path = tmp_path / "config.json"

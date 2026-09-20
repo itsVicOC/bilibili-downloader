@@ -176,6 +176,7 @@ def test_service_writes_metadata_manifest(monkeypatch, tmp_path):
 
     assert outcome.metadata_path == str(tmp_path / "video.info.json")
     payload = json.loads((tmp_path / "video.info.json").read_text(encoding="utf-8"))
+    assert payload["schema_version"] == 2
     assert payload["video"]["title"] == "Example"
     assert payload["video"]["author"] == "Creator"
     assert payload["artifact"]["requested_audio_quality"] == 30280

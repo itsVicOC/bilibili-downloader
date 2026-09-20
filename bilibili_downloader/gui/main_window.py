@@ -33,6 +33,13 @@ from PySide6.QtWidgets import (
 from bilibili_downloader import __version__
 from bilibili_downloader.api.client import BilibiliAPIClient
 from bilibili_downloader.core.cache import clear_download_cache, inspect_download_cache
+from bilibili_downloader.core.copyright import (
+    BILIBILI_TERMS_URL,
+    COPYRIGHT_DOCUMENT_URL,
+    COPYRIGHT_NOTICE_SUMMARY,
+    COPYRIGHT_NOTICE_TITLE,
+    COPYRIGHT_NOTICE_VERSION,
+)
 from bilibili_downloader.core.models import (
     AUDIO_CODEC_MAP,
     DownloadItem,
@@ -101,12 +108,20 @@ class MainWindow(QMainWindow):
 
         # Check login status on startup
         self._user_face = ""
-        if self._settings.sessdata:
+        if getattr(self._config, "auth_cookies", None) or self._settings.sessdata:
+            if not getattr(self._config, "credentials_persistent", True):
+                self._status_bar.showMessage(
+                    "系统凭据库不可用：登录仅在本次运行有效，重启后需重新登录"
+                )
             self._update_login_status()
 
     def _create_api_client(self):
         """Create API client with current settings."""
-        return BilibiliAPIClient(sessdata=self._settings.sessdata or None)
+        auth_cookies = getattr(self._config, "auth_cookies", {})
+        return BilibiliAPIClient(
+            sessdata=self._settings.sessdata or None,
+            auth_cookies=auth_cookies,
+        )
 
     def _apply_thread_pool_settings(self):
         """Apply user-configured concurrency limits."""
@@ -234,7 +249,9 @@ class MainWindow(QMainWindow):
         url_layout.setSpacing(10)
         self._url_input = ChineseLineEdit()
         self._url_input.setObjectName("UrlInput")
-        self._url_input.setPlaceholderText("粘贴 B 站链接、BV / AV 号或 b23.tv 短链")
+        self._url_input.setPlaceholderText(
+            "粘贴 B 站链接、BV / AV / ep 号或 b23.tv 短链"
+        )
         self._url_input.returnPressed.connect(self._on_resolve_clicked)
         url_layout.addWidget(self._url_input)
         self._resolve_btn = QPushButton("开始解析")
@@ -772,6 +789,8 @@ class MainWindow(QMainWindow):
         if quality is None:
             self._show_error("当前视频没有可用画质，请重新解析或登录后重试")
             return
+        if not self._confirm_copyright_acknowledgement():
+            return
 
         page_selection = self._page_combo.currentData()
         if page_selection == "all":
@@ -807,7 +826,11 @@ class MainWindow(QMainWindow):
                 else self._settings.default_audio_quality
             ),
             output_mode=self._output_mode_combo.currentData(),
-            path_template=self._settings.path_template,
+            path_template=(
+                self._settings.bangumi_path_template
+                if video_info.episode_id
+                else self._settings.path_template
+            ),
             download_danmaku=self._danmaku_check.isChecked(),
             download_subtitle=self._subtitle_check.isChecked(),
             download_all_subtitles=all_subtitles,
@@ -1037,7 +1060,8 @@ class MainWindow(QMainWindow):
 
     def _on_login_triggered(self):
         """Open login dialog."""
-        dialog = LoginDialog(self._settings.sessdata, self)
+        current_cookies = getattr(self._config, "auth_cookies", {})
+        dialog = LoginDialog(current_cookies or self._settings.sessdata, self)
         if dialog.exec():
             if dialog.logout_requested:
                 new_settings = self._settings.model_copy(
@@ -1045,6 +1069,8 @@ class MainWindow(QMainWindow):
                     deep=True,
                 )
                 try:
+                    if hasattr(self._config, "clear_auth_cookies"):
+                        self._config.clear_auth_cookies()
                     self._config.save(new_settings)
                 except OSError as e:
                     self._show_error(f"退出登录失败：{e}")
@@ -1056,20 +1082,30 @@ class MainWindow(QMainWindow):
                 self._status_bar.showMessage("已退出登录并清除本机凭据")
                 return
 
-            sessdata = dialog.get_sessdata()
-            if not sessdata:
+            cookies = dialog.get_auth_cookies()
+            if not cookies.get("SESSDATA"):
                 self._show_error("登录未返回有效凭据，请重新验证")
                 return
             new_settings = self._settings.model_copy(
-                update={"sessdata": sessdata}, deep=True
+                update={"sessdata": cookies["SESSDATA"]}, deep=True
             )
             try:
+                persistent = True
+                if hasattr(self._config, "save_auth_cookies"):
+                    persistent = self._config.save_auth_cookies(cookies)
                 self._config.save(new_settings)
             except OSError as e:
                 self._show_error(f"登录信息保存失败：{e}")
                 return
             self._settings = new_settings
             self._replace_api_client()
+            if not persistent:
+                QMessageBox.warning(
+                    self,
+                    "登录仅在本次运行有效",
+                    "系统凭据库不可用，Cookie 仅保存在当前进程内存中；"
+                    "重启 BiliFlow 后需要重新登录。",
+                )
             # Fetch and display user info
             self._update_login_status()
 
@@ -1091,8 +1127,11 @@ class MainWindow(QMainWindow):
             uname = nav_info.get("uname", "未知用户")
             mid = nav_info.get("mid", "")
             self._user_face = nav_info.get("face", "")
+            vip = nav_info.get("vip") or {}
+            is_vip = bool(nav_info.get("vipStatus") or vip.get("status"))
+            member = "大会员" if is_vip else "普通会员"
             self._set_login_status_label(
-                f"已登录：{uname}",
+                f"已登录：{uname} · {member}",
                 "StatusPill",
                 f"UID: {mid}",
             )
@@ -1109,13 +1148,45 @@ class MainWindow(QMainWindow):
         """Open batch download dialog."""
         dialog = BatchDialog(
             api_client=self._api_client,
-            existing_bvids=self._task_repository.known_bvids(),
+            existing_content_identities=(
+                self._task_repository.known_content_identities()
+            ),
             parent=self,
         )
         if dialog.exec():
             infos = dialog.get_video_infos()
-            if infos:
+            if infos and self._confirm_copyright_acknowledgement():
                 self._enqueue_batch_infos(infos)
+
+    def _confirm_copyright_acknowledgement(self) -> bool:
+        if self._settings.copyright_notice_version >= COPYRIGHT_NOTICE_VERSION:
+            return True
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle(COPYRIGHT_NOTICE_TITLE)
+        box.setText(COPYRIGHT_NOTICE_SUMMARY.replace("\n", "<br>"))
+        box.setInformativeText(
+            f'<a href="{COPYRIGHT_DOCUMENT_URL}">项目版权说明</a> · '
+            f'<a href="{BILIBILI_TERMS_URL}">Bilibili 服务协议</a>'
+        )
+        box.setTextFormat(Qt.RichText)
+        box.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
+        box.button(QMessageBox.Yes).setText("我已了解并继续")
+        box.button(QMessageBox.Cancel).setText("取消")
+        box.setDefaultButton(QMessageBox.Cancel)
+        if box.exec() != QMessageBox.Yes:
+            return False
+        updated = self._settings.model_copy(
+            update={"copyright_notice_version": COPYRIGHT_NOTICE_VERSION},
+            deep=True,
+        )
+        try:
+            self._config.save(updated)
+        except OSError as exc:
+            self._show_error(f"无法保存版权确认：{exc}")
+            return False
+        self._settings = updated
+        return True
 
     def _enqueue_batch_infos(self, infos: list[VideoInfo]):
         added = 0

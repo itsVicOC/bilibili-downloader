@@ -34,11 +34,15 @@ class BatchDialog(QDialog):
         self,
         api_client=None,
         existing_bvids: set[str] | None = None,
+        existing_content_identities: set[str] | None = None,
         parent=None,
     ):
         super().__init__(parent)
         self._api_client = api_client
-        self._existing_bvids = {value.lower() for value in (existing_bvids or set())}
+        existing = existing_content_identities
+        if existing is None:
+            existing = existing_bvids or set()
+        self._existing_content_identities = {value.lower() for value in existing}
         self._inputs = []
         self._resolved_items = []
         self._selectors = []
@@ -57,7 +61,7 @@ class BatchDialog(QDialog):
 
         title = QLabel("导入作品与合集")
         title.setObjectName("DialogTitle")
-        caption = QLabel("支持视频、合集、系列、收藏夹和 b23.tv 短链，每行一个来源")
+        caption = QLabel("支持视频、番剧 ep/ss/md、合集、收藏夹和 b23.tv 短链")
         caption.setObjectName("DialogCaption")
         layout.addWidget(title)
         layout.addWidget(caption)
@@ -76,6 +80,7 @@ class BatchDialog(QDialog):
         self._url_text.setMaximumHeight(130)
         self._url_text.setPlaceholderText(
             "https://www.bilibili.com/video/BV1xxx\n"
+            "https://www.bilibili.com/bangumi/play/ss123\n"
             "https://space.bilibili.com/123/lists/456?type=season\n"
             "https://space.bilibili.com/123/favlist?fid=456"
         )
@@ -178,8 +183,11 @@ class BatchDialog(QDialog):
         duplicate_count = 0
         for row, info in enumerate(items):
             selector = QCheckBox()
-            duplicate = info.bvid.lower() in self._existing_bvids
-            selector.setChecked(True)
+            duplicate = (
+                info.content_identity.lower()
+                in self._existing_content_identities
+            )
+            selector.setChecked(info.is_main_section)
             if duplicate:
                 duplicate_count += 1
                 selector.setToolTip("任务中心已有同源作品，将按当前规格进一步去重")
@@ -194,7 +202,18 @@ class BatchDialog(QDialog):
             author_item = QTableWidgetItem(info.author)
             author_item.setToolTip(info.author)
             self._preview.setItem(row, 2, author_item)
-            source = info.collection_title or "单个视频"
+            if info.episode_id:
+                source = " · ".join(
+                    value
+                    for value in (
+                        info.series_title,
+                        info.season_title,
+                        info.section_title or "正片",
+                    )
+                    if value
+                )
+            else:
+                source = info.collection_title or "单个视频"
             if duplicate:
                 source = f"{source} · 已有同源任务"
             source_item = QTableWidgetItem(source)

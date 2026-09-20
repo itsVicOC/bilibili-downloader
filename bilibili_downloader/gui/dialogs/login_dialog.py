@@ -21,7 +21,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from bilibili_downloader.api.auth import filter_auth_cookies, parse_cookie_input
 from bilibili_downloader.api.login import LoginManager
+from bilibili_downloader.core.errors import redact_sensitive_text
 from bilibili_downloader.gui.widgets.chinese_input import ChineseLineEdit
 
 logger = logging.getLogger(__name__)
@@ -44,7 +46,7 @@ class _QRGenerateRunner(QRunnable):
             url, qrcode_key, qr_img = manager.generate_qr()
             self._worker.finished.emit(url, qrcode_key, qr_img)
         except Exception as e:  # noqa: BLE001
-            self._worker.error.emit(str(e))
+            self._worker.error.emit(redact_sensitive_text(e))
         finally:
             manager.close()
 
@@ -66,7 +68,7 @@ class _QRPollRunner(QRunnable):
         try:
             self._worker.finished.emit(manager.check_qr_status(self._qrcode_key))
         except Exception as e:  # noqa: BLE001
-            self._worker.error.emit(str(e))
+            self._worker.error.emit(redact_sensitive_text(e))
         finally:
             manager.close()
 
@@ -77,18 +79,18 @@ class _CookieValidateWorker(QObject):
 
 
 class _CookieValidateRunner(QRunnable):
-    def __init__(self, worker: _CookieValidateWorker, sessdata: str):
+    def __init__(self, worker: _CookieValidateWorker, cookies: dict[str, str]):
         super().__init__()
         self._worker = worker
-        self._sessdata = sessdata
+        self._cookies = cookies
         self.setAutoDelete(True)
 
     def run(self):
         manager = LoginManager()
         try:
-            self._worker.finished.emit(manager.validate_sessdata(self._sessdata))
+            self._worker.finished.emit(bool(manager.validate_cookies(self._cookies)))
         except Exception as e:  # noqa: BLE001
-            self._worker.error.emit(str(e))
+            self._worker.error.emit(redact_sensitive_text(e))
         finally:
             manager.close()
 
@@ -96,13 +98,20 @@ class _CookieValidateRunner(QRunnable):
 class LoginDialog(QDialog):
     """Dialog for Bilibili login via QR code or manual SESSDATA."""
 
-    def __init__(self, current_sessdata: Optional[str], parent=None):
+    def __init__(self, current_sessdata: Optional[str] | dict[str, str], parent=None):
         super().__init__(parent)
-        self._sessdata = current_sessdata
+        if isinstance(current_sessdata, dict):
+            self._auth_cookies = filter_auth_cookies(current_sessdata)
+        else:
+            self._auth_cookies = (
+                {"SESSDATA": current_sessdata} if current_sessdata else {}
+            )
+        self._sessdata = self._auth_cookies.get("SESSDATA")
         self._oauth_key = None
         self._poll_timer = None
         self._poll_in_flight = False
-        self._pending_sessdata = ""
+        self._pending_cookies: dict[str, str] = {}
+        self._validation_source = "manual"
         self._logout_requested = False
 
         self.setWindowTitle("账号登录")
@@ -117,10 +126,16 @@ class LoginDialog(QDialog):
 
         title = QLabel("连接 B 站账号")
         title.setObjectName("DialogTitle")
-        caption = QLabel("登录后可解析会员画质与账号专属内容")
+        caption = QLabel("登录后可解析当前账号已获完整播放权限的内容")
         caption.setObjectName("DialogCaption")
         layout.addWidget(title)
         layout.addWidget(caption)
+        rights_notice = QLabel(
+            "账号可观看不等于获得永久复制、传播或商业使用授权。"
+        )
+        rights_notice.setObjectName("WarningBanner")
+        rights_notice.setWordWrap(True)
+        layout.addWidget(rights_notice)
 
         self._tabs = QTabWidget()
 
@@ -155,11 +170,11 @@ class LoginDialog(QDialog):
         )
         cookie_layout.addWidget(self._instructions)
 
-        input_label = QLabel("粘贴 SESSDATA 值")
+        input_label = QLabel("粘贴 SESSDATA 值或完整 Cookie 字符串")
         input_label.setObjectName("MetaLabel")
         cookie_layout.addWidget(input_label)
         self._cookie_input = ChineseLineEdit()
-        self._cookie_input.setPlaceholderText("在此粘贴你的 SESSDATA 值")
+        self._cookie_input.setPlaceholderText("SESSDATA 值，或浏览器 Cookie 字符串")
         self._cookie_input.setEchoMode(QLineEdit.Password)
         cookie_input_row = QHBoxLayout()
         cookie_input_row.addWidget(self._cookie_input, 1)
@@ -322,8 +337,8 @@ class LoginDialog(QDialog):
             self._qr_status.setText("登录成功！")
             cookies = result.get("cookies", {})
             if "SESSDATA" in cookies:
-                self._sessdata = cookies["SESSDATA"]
-                self.accept()
+                self._qr_status.setText("正在验证账号...")
+                self._begin_cookie_validation(cookies, source="qr")
             else:
                 QMessageBox.warning(
                     self, "登录",
@@ -350,18 +365,27 @@ class LoginDialog(QDialog):
 
     def _validate_cookie(self):
         """Validate the manually entered SESSDATA."""
-        sessdata = self._cookie_input.text().strip()
-        if not sessdata:
+        bundle = parse_cookie_input(self._cookie_input.text())
+        if not bundle.is_authenticated:
             QMessageBox.warning(self, "验证", "请输入 SESSDATA 值")
             return
 
-        self._pending_sessdata = sessdata
-        self._validate_btn.setEnabled(False)
-        self._validate_btn.setText("验证中...")
+        self._begin_cookie_validation(bundle.cookies, source="manual")
+
+    def _begin_cookie_validation(
+        self, cookies: dict[str, str], *, source: str
+    ) -> None:
+        self._pending_cookies = filter_auth_cookies(cookies)
+        self._validation_source = source
+        if source == "manual":
+            self._validate_btn.setEnabled(False)
+            self._validate_btn.setText("验证中...")
         self._cookie_worker = _CookieValidateWorker()
         self._cookie_worker.finished.connect(self._on_cookie_validated)
         self._cookie_worker.error.connect(self._on_cookie_validate_error)
-        self._cookie_runner = _CookieValidateRunner(self._cookie_worker, sessdata)
+        self._cookie_runner = _CookieValidateRunner(
+            self._cookie_worker, self._pending_cookies
+        )
         QThreadPool.globalInstance().start(self._cookie_runner)
 
     def _toggle_cookie_visibility(self, visible: bool):
@@ -380,6 +404,7 @@ class LoginDialog(QDialog):
         )
         if answer == QMessageBox.Yes:
             self._sessdata = None
+            self._auth_cookies = {}
             self._logout_requested = True
             self.accept()
 
@@ -388,20 +413,34 @@ class LoginDialog(QDialog):
         self._validate_btn.setEnabled(True)
         self._validate_btn.setText("验证登录")
         if valid:
-            self._sessdata = self._pending_sessdata
-            QMessageBox.information(self, "验证", "Cookie 有效！")
+            self._auth_cookies = self._pending_cookies
+            self._sessdata = self._auth_cookies.get("SESSDATA")
+            if self._validation_source == "manual":
+                QMessageBox.information(self, "验证", "Cookie 有效！")
+            else:
+                self._qr_status.setText("登录成功！")
             self.accept()
         else:
+            if self._validation_source == "qr":
+                self._qr_status.setText("登录验证失败，请重新生成二维码")
+                self._refresh_btn.show()
             QMessageBox.warning(self, "验证", "Cookie 无效或已过期")
 
     def _on_cookie_validate_error(self, error: str):
         self._validate_btn.setEnabled(True)
         self._validate_btn.setText("验证登录")
+        if self._validation_source == "qr":
+            self._qr_status.setText("登录验证异常，请重试")
+            self._refresh_btn.show()
         QMessageBox.warning(self, "验证", f"验证失败：{error}")
 
     def get_sessdata(self) -> Optional[str]:
         """Return the SESSDATA from login."""
         return self._sessdata
+
+    def get_auth_cookies(self) -> dict[str, str]:
+        """Return only allow-listed cookies from the completed login."""
+        return dict(self._auth_cookies)
 
     @property
     def logout_requested(self) -> bool:

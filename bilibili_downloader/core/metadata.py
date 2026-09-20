@@ -74,11 +74,12 @@ def write_metadata(
     info = item.video_info
     page = next((entry for entry in info.pages if entry.cid == info.cid), None)
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "downloaded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "source": {
-            "url": info.source_url or f"https://www.bilibili.com/video/{info.bvid}",
+            "url": info.canonical_url,
             "type": info.source_type,
+            "content_kind": info.content_kind.value,
             "collection": info.collection_title or None,
         },
         "video": {
@@ -94,6 +95,17 @@ def write_metadata(
             "page": page.page if page else 1,
             "part": page.part if page else "",
         },
+        "bangumi": {
+            "episode_id": info.episode_id or None,
+            "season_id": info.season_id or None,
+            "media_id": info.media_id or None,
+            "series": info.series_title or None,
+            "season": info.season_title or None,
+            "section": info.section_title or None,
+            "episode": info.episode_title or None,
+            "episode_number": info.episode_number or None,
+            "episode_index": info.episode_index or None,
+        } if info.episode_id else None,
         "artifact": {
             "file": media_path.name,
             "mode": item.output_mode.value,

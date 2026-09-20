@@ -3,15 +3,25 @@
 import logging
 import threading
 import time
-from typing import Optional
+from typing import Mapping, Optional
 
 import httpx
 
 from bilibili_downloader.api import endpoints as ep
+from bilibili_downloader.api.auth import AuthCookieBundle, filter_auth_cookies
 from bilibili_downloader.api.endpoints import USER_AGENT
+from bilibili_downloader.api.pgc import (
+    BangumiAccessError,
+    BangumiAccessReason,
+    extract_assigned_json,
+    find_bangumi_episode,
+    normalize_pgc_playurl,
+    parse_bangumi_collection,
+)
 from bilibili_downloader.api.wbi import WBISigner
 from bilibili_downloader.core.models import (
     ContentCollection,
+    ContentKind,
     StreamInfo,
     SubtitleInfo,
     VideoInfo,
@@ -36,14 +46,25 @@ class BilibiliAPIClient:
 
     WBI_CACHE_TTL = 24 * 3600  # 24 hours
 
-    def __init__(self, sessdata: Optional[str] = None):
+    def __init__(
+        self,
+        sessdata: Optional[str] = None,
+        auth_cookies: Optional[Mapping[str, str] | AuthCookieBundle] = None,
+    ):
+        cookies = filter_auth_cookies(
+            auth_cookies.cookies
+            if isinstance(auth_cookies, AuthCookieBundle)
+            else auth_cookies
+        )
+        if sessdata and "SESSDATA" not in cookies:
+            cookies["SESSDATA"] = sessdata
         self._client = httpx.Client(
             base_url=ep.BASE_URL,
             headers={
                 "User-Agent": USER_AGENT,
                 "Referer": "https://www.bilibili.com/",
             },
-            cookies={"SESSDATA": sessdata} if sessdata else {},
+            cookies=cookies,
             timeout=30.0,
             http2=True,
         )
@@ -51,16 +72,31 @@ class BilibiliAPIClient:
         self._wbi_mixin_key: Optional[str] = None
         self._wbi_cached_at: Optional[float] = None
         self._wbi_lock = threading.Lock()
-        self._sessdata = sessdata
+        self._auth_cookies = cookies
 
     @property
     def sessdata(self) -> Optional[str]:
-        return self._sessdata
+        return self._auth_cookies.get("SESSDATA")
 
     @sessdata.setter
     def sessdata(self, value: str):
-        self._sessdata = value
+        self._auth_cookies["SESSDATA"] = value
         self._client.cookies.set("SESSDATA", value)
+
+    @property
+    def auth_cookies(self) -> dict[str, str]:
+        """Return a defensive copy of the allow-listed authentication bundle."""
+        return dict(self._auth_cookies)
+
+    @auth_cookies.setter
+    def auth_cookies(self, value: Mapping[str, str] | AuthCookieBundle):
+        cookies = filter_auth_cookies(
+            value.cookies if isinstance(value, AuthCookieBundle) else value
+        )
+        self._auth_cookies = cookies
+        self._client.cookies.clear()
+        for name, cookie_value in cookies.items():
+            self._client.cookies.set(name, cookie_value)
 
     # -- WBI Management --
 
@@ -151,6 +187,68 @@ class BilibiliAPIClient:
 
         data = self._get_view_data({"aid": aid})
         return _parse_video_info(data.get("bvid", ""), data)
+
+    def get_bangumi_episode(self, ep_id: int) -> VideoInfo:
+        """Resolve one mainland PGC episode using its canonical season data."""
+        source_url = f"https://www.bilibili.com/bangumi/play/ep{ep_id}"
+        data = self._get_pgc_season_data({"ep_id": ep_id})
+        return find_bangumi_episode(
+            parse_bangumi_collection(data, source_url), ep_id
+        )
+
+    def get_bangumi_season(self, season_id: int) -> ContentCollection:
+        """Resolve main and extra sections for one PGC season."""
+        source_url = f"https://www.bilibili.com/bangumi/play/ss{season_id}"
+        data = self._get_pgc_season_data({"season_id": season_id})
+        if not data.get("section"):
+            try:
+                response = self._client.get(
+                    ep.PGC_SECTION_ENDPOINT,
+                    params={"season_id": season_id},
+                )
+                section_data = self._parse_pgc_response(response)
+                sections = section_data.get("section") or section_data.get("sections")
+                main_section = section_data.get("main_section") or {}
+                if not data.get("episodes") and main_section.get("episodes"):
+                    data = {**data, "episodes": main_section["episodes"]}
+                if sections:
+                    data = {**data, "section": sections}
+            except (httpx.HTTPError, BilibiliAPIError):
+                logger.info("PGC section fallback unavailable for ss%s", season_id)
+        return parse_bangumi_collection(data, source_url)
+
+    def get_bangumi_media(self, media_id: int) -> ContentCollection:
+        """Resolve an md page without executing remote page scripts."""
+        page_url = f"https://www.bilibili.com/bangumi/media/md{media_id}"
+        response = self._client.get(page_url)
+        response.raise_for_status()
+        if len(response.content) > 2 * 1024 * 1024:
+            raise RuntimeError("番剧媒体页超过安全解析大小限制")
+        initial = extract_assigned_json(response.text, "window.__INITIAL_STATE__") or {}
+        media_info = initial.get("mediaInfo") or initial.get("media_info") or {}
+        season_id = int(
+            media_info.get("season_id")
+            or initial.get("season_id")
+            or initial.get("seasonId")
+            or 0
+        )
+        if not season_id:
+            raise RuntimeError(f"无法从 md{media_id} 页面识别季度")
+        collection = self.get_bangumi_season(season_id)
+        return collection.model_copy(update={"source_url": page_url}, deep=True)
+
+    def _get_pgc_season_data(self, params: dict) -> dict:
+        response = self._client.get(ep.PGC_SEASON_ENDPOINT, params=params)
+        return self._parse_pgc_response(response)
+
+    def _parse_pgc_response(self, response: httpx.Response) -> dict:
+        response.raise_for_status()
+        payload = response.json()
+        code = int(payload.get("code", -1))
+        if code != 0:
+            raise BilibiliAPIError(code, payload.get("message", "Unknown error"))
+        data = payload.get("result") or payload.get("data") or {}
+        return data if isinstance(data, dict) else {}
 
     def get_favorite_collection(
         self,
@@ -339,11 +437,112 @@ class BilibiliAPIClient:
 
         return self._retry_on_wbi_error(_fetch)
 
-    def get_subtitle_tracks(self, bvid: str, cid: int) -> list[SubtitleInfo]:
+    def get_play_url_for(
+        self,
+        info: VideoInfo,
+        quality: VideoQuality = VideoQuality.Q1080P,
+        need_hdr: bool = False,
+        need_dolby: bool = False,
+        preferred_codec: Optional[int] = None,
+        discover_all: bool = False,
+    ) -> dict:
+        """Dispatch playback lookup while keeping UGC callers compatible."""
+        if info.content_kind == ContentKind.BANGUMI_EPISODE:
+            return self.get_pgc_play_url(
+                info,
+                quality=quality,
+                need_hdr=need_hdr,
+                need_dolby=need_dolby,
+                preferred_codec=preferred_codec,
+                discover_all=discover_all,
+            )
+        return self.get_play_url(
+            info.bvid,
+            info.cid,
+            quality=quality,
+            need_hdr=need_hdr,
+            need_dolby=need_dolby,
+            preferred_codec=preferred_codec,
+            discover_all=discover_all,
+        )
+
+    def get_pgc_play_url(
+        self,
+        info: VideoInfo,
+        quality: VideoQuality = VideoQuality.Q1080P,
+        need_hdr: bool = False,
+        need_dolby: bool = False,
+        preferred_codec: Optional[int] = None,
+        discover_all: bool = False,
+    ) -> dict:
+        """Fetch a fresh authorized PGC DASH URL and reject previews."""
+        if not info.episode_id:
+            raise ValueError("番剧播放请求缺少 episode_id")
+        fnval = _build_fnval(
+            quality,
+            preferred_codec=preferred_codec,
+            need_hdr=need_hdr,
+            need_dolby=need_dolby,
+            discover_all=discover_all,
+        )
+        params = {
+            "ep_id": info.episode_id,
+            "cid": info.cid,
+            "qn": quality.value,
+            "fnval": fnval,
+            "fourk": 1,
+        }
+        response = self._client.get(
+            ep.PGC_PLAYURL_ENDPOINT,
+            params=params,
+            headers={"Referer": info.canonical_url},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        try:
+            video_info, _ = normalize_pgc_playurl(payload)
+        except BangumiAccessError as exc:
+            if exc.reason != BangumiAccessReason.UNAVAILABLE:
+                raise
+            video_info = self._get_pgc_page_playurl(info)
+        return _parse_playurl(video_info)
+
+    def _get_pgc_page_playurl(self, info: VideoInfo) -> dict:
+        response = self._client.get(
+            info.canonical_url,
+            headers={"Referer": info.canonical_url},
+        )
+        response.raise_for_status()
+        if len(response.content) > 3 * 1024 * 1024:
+            raise BangumiAccessError(
+                BangumiAccessReason.UNAVAILABLE,
+                "番剧页面超过安全解析大小限制。",
+            )
+        for marker in (
+            "window.__playurlSSRData__",
+            "window.__playurlSSRData",
+            '"playurlSSRData"',
+        ):
+            payload = extract_assigned_json(response.text, marker)
+            if payload:
+                video_info, _ = normalize_pgc_playurl(payload)
+                return video_info
+        raise BangumiAccessError(
+            BangumiAccessReason.UNAVAILABLE,
+            "平台未提供可下载的完整、未加密媒体流。",
+        )
+
+    def get_subtitle_tracks(
+        self,
+        bvid: str,
+        cid: int,
+        aid: int = 0,
+    ) -> list[SubtitleInfo]:
         """Fetch subtitle tracks for a specific page."""
 
         def _fetch():
-            params = self._sign_params({"bvid": bvid, "cid": cid})
+            identity = {"bvid": bvid} if bvid else {"aid": aid}
+            params = self._sign_params({**identity, "cid": cid})
             resp = self._client.get(ep.PLAYER_INFO_ENDPOINT, params=params)
             return self._parse_response(resp)
 
@@ -369,11 +568,15 @@ class BilibiliAPIClient:
     def get_subtitle_json(self, subtitle_url: str) -> dict:
         """Download subtitle JSON from direct URL."""
         subtitle_url = trusted_https_url(subtitle_url, BILIBILI_RESOURCE_HOSTS)
-        resp = self._client.get(
-            subtitle_url,
-        )
-        resp.raise_for_status()
-        return resp.json()
+        # Authentication cookies are intentionally never sent to resource/CDN
+        # hosts. Subtitle URLs are fetched through an isolated cookie-less client.
+        with httpx.Client(
+            headers={"User-Agent": USER_AGENT, "Referer": "https://www.bilibili.com/"},
+            timeout=30.0,
+        ) as resource_client:
+            resp = resource_client.get(subtitle_url)
+            resp.raise_for_status()
+            return resp.json()
 
     def get_nav_info(self) -> dict:
         """Get user navigation info from /x/web-interface/nav.

@@ -5,6 +5,7 @@ import pytest
 from bilibili_downloader.utils.network import BILIBILI_RESOURCE_HOSTS, trusted_https_url
 from bilibili_downloader.utils.validators import (
     extract_aid,
+    extract_bangumi_id,
     extract_bvid,
     is_bilibili_url,
     sanitize_filename,
@@ -45,6 +46,33 @@ class TestExtractAID:
     def test_invalid_returns_none(self):
         assert extract_aid("not_an_av_number") is None
         assert extract_aid("https://example.com/video/av123456") is None
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("ep123", ("ep", 123)),
+        ("https://www.bilibili.com/bangumi/play/ep123", ("ep", 123)),
+        ("https://m.bilibili.com/bangumi/play/ss456?from=search", ("ss", 456)),
+        ("https://www.bilibili.com/bangumi/media/md789", ("md", 789)),
+    ],
+)
+def test_extract_bangumi_id(source, expected):
+    assert extract_bangumi_id(source) == expected
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "http://www.bilibili.com/bangumi/play/ep123",
+        "https://www.bilibili.com.example.org/bangumi/play/ep123",
+        "https://www.bilibili.com/cheese/play/ep123",
+        "https://www.bilibili.com/bangumi/play/ep123/extra",
+        "prefix https://www.bilibili.com/bangumi/play/ep123",
+    ],
+)
+def test_extract_bangumi_id_rejects_untrusted_or_unsupported_urls(source):
+    assert extract_bangumi_id(source) is None
 
 
 class TestIsBilibiliURL:

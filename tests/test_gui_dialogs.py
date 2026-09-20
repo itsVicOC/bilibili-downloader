@@ -3,18 +3,21 @@
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QLineEdit,
+    QMessageBox,
     QSizePolicy,
     QWidget,
 )
 
 from bilibili_downloader.core.models import (
     AppSettings,
+    ContentKind,
     DownloadItem,
     OutputMode,
     TaskStatus,
     VideoInfo,
 )
 from bilibili_downloader.core.task_repository import TaskRepository
+from bilibili_downloader.gui.dialogs.batch_dialog import BatchDialog
 from bilibili_downloader.gui.dialogs.login_dialog import LoginDialog
 from bilibili_downloader.gui.dialogs.settings_dialog import SettingsDialog
 from bilibili_downloader.gui.main_window import MainWindow
@@ -47,6 +50,7 @@ def test_settings_dialog_keeps_long_path_in_tooltip(qtbot):
     )
     assert dialog._concurrency_down.toolTip() == "减少并发数"
     assert dialog._concurrency_up.toolTip() == "增加并发数"
+    assert dialog._bangumi_path_template.text().startswith("{series}/{season}")
 
     dialog._max_concurrent.setValue(1)
     assert not dialog._concurrency_down.isEnabled()
@@ -113,3 +117,46 @@ def test_main_window_recovers_interrupted_task_as_paused(qtbot, tmp_path):
 
     assert repository.get(task_id).status == TaskStatus.PAUSED
     assert window._download_list._states[task_id] == TaskStatus.PAUSED
+
+
+def test_batch_dialog_selects_only_main_bangumi_episodes_by_default(qtbot):
+    dialog = BatchDialog()
+    qtbot.addWidget(dialog)
+    main = VideoInfo(
+        content_kind=ContentKind.BANGUMI_EPISODE,
+        episode_id=1,
+        cid=11,
+        title="正片",
+        series_title="系列",
+        season_title="季度",
+        section_title="正片",
+        is_main_section=True,
+    )
+    extra = main.model_copy(
+        update={
+            "episode_id": 2,
+            "cid": 22,
+            "title": "PV",
+            "section_title": "PV",
+            "is_main_section": False,
+        }
+    )
+
+    dialog._on_resolved([main, extra], [])
+
+    assert dialog._selectors[0].isChecked()
+    assert not dialog._selectors[1].isChecked()
+    assert dialog._preview.item(1, 3).text() == "系列 · 季度 · PV"
+
+
+def test_cancelling_copyright_notice_does_not_acknowledge(qtbot, tmp_path, monkeypatch):
+    config = ConfigManager(tmp_path / "config.json")
+    config.save(AppSettings(output_dir=str(tmp_path / "downloads")))
+    repository = TaskRepository(tmp_path / "tasks.sqlite3")
+    window = MainWindow(config_manager=config, task_repository=repository)
+    qtbot.addWidget(window)
+    monkeypatch.setattr(QMessageBox, "exec", lambda _self: QMessageBox.Cancel)
+
+    assert window._confirm_copyright_acknowledgement() is False
+    assert window._settings.copyright_notice_version == 0
+    assert repository.list_tasks() == []

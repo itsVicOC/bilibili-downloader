@@ -210,9 +210,22 @@ class VideoInfoWidget(QWidget):
         """Update display with video info."""
         self._title_label.setText(info.title or "无标题")
         self._title_label.setToolTip(info.title or "无标题")
-        self._author_label.set_full_text(f"UP 主  {info.author or '未知'}")
+        if info.episode_id:
+            context = " · ".join(
+                value
+                for value in (
+                    info.series_title,
+                    info.season_title,
+                    info.section_title,
+                )
+                if value
+            )
+            self._author_label.set_full_text(f"番剧  {context or '未知'}")
+        else:
+            self._author_label.set_full_text(f"UP 主  {info.author or '未知'}")
         self._duration_label.set_full_text(f"时长  {info.duration_str}")
-        self._bvid_label.set_full_text(f"BV 号  {info.bvid}")
+        identity = f"ep{info.episode_id}" if info.episode_id else info.bvid
+        self._bvid_label.set_full_text(f"作品号  {identity}")
         self._state_label.setText("READY")
 
         # Load cover image

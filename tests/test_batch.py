@@ -9,7 +9,7 @@ from bilibili_downloader.core.batch import (
     classify_batch_inputs,
     is_collection_source,
 )
-from bilibili_downloader.core.models import VideoInfo
+from bilibili_downloader.core.models import ContentCollection, ContentKind, VideoInfo
 
 
 class FakeClient:
@@ -44,6 +44,32 @@ class FakeClient:
             items=[VideoInfo(bvid="BV1GJ411x7h7", title=f"{mid}:{season_id}")],
         )
 
+    def get_bangumi_episode(self, episode_id):
+        self.calls.append(("ep", episode_id))
+        return VideoInfo(
+            content_kind=ContentKind.BANGUMI_EPISODE,
+            episode_id=episode_id,
+            cid=episode_id + 1,
+            title=f"ep{episode_id}",
+            source_type="bangumi_episode",
+        )
+
+    def get_bangumi_season(self, season_id):
+        self.calls.append(("ss", season_id))
+        return ContentCollection(
+            title=f"ss{season_id}",
+            source_type="bangumi_season",
+            items=[self.get_bangumi_episode(101)],
+        )
+
+    def get_bangumi_media(self, media_id):
+        self.calls.append(("md", media_id))
+        return ContentCollection(
+            title=f"md{media_id}",
+            source_type="bangumi_season",
+            items=[self.get_bangumi_episode(102)],
+        )
+
 
 def test_resolve_bv_url():
     client = FakeClient()
@@ -76,11 +102,53 @@ def test_resolve_short_link(monkeypatch):
     assert client.calls == [("bvid", "BV1GJ411x7h7")]
 
 
+def test_resolve_short_link_dispatches_to_bangumi(monkeypatch):
+    client = FakeClient()
+    monkeypatch.setattr(
+        "bilibili_downloader.core.batch.resolve_short_url",
+        lambda _url: "https://www.bilibili.com/bangumi/play/ep321",
+    )
+
+    info = BatchResolver(client).resolve_one("https://b23.tv/ep123")
+
+    assert info.episode_id == 321
+    assert client.calls == [("ep", 321)]
+
+
 def test_single_resolver_routes_collections_to_batch_import():
     with pytest.raises(BatchResolveError):
         BatchResolver(FakeClient()).resolve_one(
             "https://space.bilibili.com/123/favlist?fid=456"
         )
+
+
+def test_single_resolver_accepts_bangumi_episode():
+    client = FakeClient()
+    info = BatchResolver(client).resolve_one(
+        "https://www.bilibili.com/bangumi/play/ep123"
+    )
+    assert info.episode_id == 123
+    assert client.calls == [("ep", 123)]
+
+
+@pytest.mark.parametrize(
+    ("source", "source_type", "call"),
+    [
+        ("ss22", "bangumi_season", ("ss", 22)),
+        (
+            "https://www.bilibili.com/bangumi/media/md33",
+            "bangumi_season",
+            ("md", 33),
+        ),
+    ],
+)
+def test_collection_resolver_accepts_bangumi_season_and_media(
+    source, source_type, call
+):
+    client = FakeClient()
+    collection = ContentSourceResolver(client).resolve(source)
+    assert collection.source_type == source_type
+    assert client.calls[0] == call
 
 
 def test_resolve_text_keeps_order():

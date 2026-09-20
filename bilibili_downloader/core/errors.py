@@ -8,7 +8,9 @@ from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
+from bilibili_downloader.api.auth import AUTH_COOKIE_NAMES
 from bilibili_downloader.api.client import BilibiliAPIError
+from bilibili_downloader.api.pgc import BangumiAccessError, BangumiAccessReason
 
 
 class ErrorCategory(str, Enum):
@@ -40,12 +42,27 @@ class ErrorDetails:
 
 _URL_PATTERN = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
 _COOKIE_PATTERN = re.compile(
-    r"(?i)(SESSDATA|bili_jct|DedeUserID|refresh_token)\s*[=:]\s*[^\s;,]+"
+    rf"(?i)({'|'.join(re.escape(name) for name in sorted(AUTH_COOKIE_NAMES))}"
+    r"|refresh_token)\s*[=:]\s*[^\s;,]+"
 )
 
 
 def classify_error(error: BaseException) -> ErrorDetails:
     """Classify an exception without exposing credentials or signed URLs."""
+    if isinstance(error, BangumiAccessError):
+        category = (
+            ErrorCategory.AUTHENTICATION
+            if error.reason == BangumiAccessReason.LOGIN_REQUIRED
+            else ErrorCategory.PERMISSION
+        )
+        suggestions = {
+            BangumiAccessReason.LOGIN_REQUIRED: "登录有播放权限的账号后重新解析。",
+            BangumiAccessReason.FULL_ACCESS_REQUIRED: "确认会员或购买状态；BiliFlow 不会绕过播放权限。",
+            BangumiAccessReason.PREVIEW_ONLY: "使用官方渠道观看；试看流不会被保存为完整剧集。",
+            BangumiAccessReason.GEO_BLOCKED: "该地区限制无法在 BiliFlow 中绕过。",
+            BangumiAccessReason.UNAVAILABLE: "在官方页面确认内容仍可播放；DRM 内容不受支持。",
+        }
+        return ErrorDetails(category, str(error), suggestions[error.reason])
     if isinstance(error, BilibiliAPIError):
         if error.code == -101:
             return ErrorDetails(

@@ -18,6 +18,11 @@ VIEW_ENDPOINT = "/x/web-interface/view"
 PLAYURL_ENDPOINT = "/x/player/playurl"
 PLAYER_INFO_ENDPOINT = "/x/player/v2"
 
+# Professionally generated content (bangumi / PGC)
+PGC_SEASON_ENDPOINT = "/pgc/view/web/season"
+PGC_SECTION_ENDPOINT = "/pgc/web/season/section"
+PGC_PLAYURL_ENDPOINT = "/pgc/player/web/v2/playurl"
+
 # Video page list (multi-part videos)
 PAGELIST_ENDPOINT = "/x/player/pagelist"
 

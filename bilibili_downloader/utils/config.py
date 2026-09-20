@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
+from bilibili_downloader.api.auth import AuthCookieBundle, filter_auth_cookies
 from bilibili_downloader.core.models import AppSettings
 
 logger = logging.getLogger(__name__)
@@ -28,15 +29,8 @@ def _default_config_path() -> Path:
 
 DEFAULT_CONFIG_PATH = _default_config_path()
 KEYRING_SERVICE = "bilibili-downloader"
-KEYRING_ACCOUNT = "sessdata"
-
-
-def _obfuscate(data: dict) -> dict:
-    """Base64-encode sessdata before saving to JSON."""
-    if data.get("sessdata"):
-        data = dict(data)
-        data["sessdata"] = base64.b64encode(data["sessdata"].encode()).decode()
-    return data
+KEYRING_ACCOUNT = "auth-cookie-bundle-v1"
+LEGACY_KEYRING_ACCOUNT = "sessdata"
 
 
 def _deobfuscate(data: dict) -> dict:
@@ -64,28 +58,60 @@ def _load_sessdata_from_keyring() -> str:
     if keyring is None:
         return ""
     try:
-        return keyring.get_password(KEYRING_SERVICE, KEYRING_ACCOUNT) or ""
+        return keyring.get_password(KEYRING_SERVICE, LEGACY_KEYRING_ACCOUNT) or ""
     except Exception as e:  # noqa: BLE001
         logger.debug("Keyring read failed: %s", e)
         return ""
 
 
-def _save_sessdata_to_keyring(sessdata: str) -> bool:
+def _load_auth_cookie_bundle() -> AuthCookieBundle | None:
+    keyring = _get_keyring()
+    if keyring is None:
+        return None
+    try:
+        raw = keyring.get_password(KEYRING_SERVICE, KEYRING_ACCOUNT)
+        return AuthCookieBundle.model_validate_json(raw) if raw else None
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Authentication bundle read failed: %s", exc)
+        return None
+
+
+def _save_auth_cookie_bundle(bundle: AuthCookieBundle) -> bool:
     keyring = _get_keyring()
     if keyring is None:
         return False
     try:
-        if sessdata:
-            keyring.set_password(KEYRING_SERVICE, KEYRING_ACCOUNT, sessdata)
+        if bundle.cookies:
+            serialized = bundle.model_dump_json()
+            keyring.set_password(
+                KEYRING_SERVICE,
+                KEYRING_ACCOUNT,
+                serialized,
+            )
+            stored = keyring.get_password(KEYRING_SERVICE, KEYRING_ACCOUNT)
+            if not stored:
+                return False
+            verified = AuthCookieBundle.model_validate_json(stored)
+            return verified.cookies == bundle.cookies
         else:
             try:
                 keyring.delete_password(KEYRING_SERVICE, KEYRING_ACCOUNT)
             except Exception:  # noqa: BLE001
                 pass
         return True
-    except Exception as e:  # noqa: BLE001
-        logger.debug("Keyring write failed: %s", e)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Authentication bundle write failed: %s", exc)
         return False
+
+
+def _delete_legacy_keyring_secret() -> None:
+    keyring = _get_keyring()
+    if keyring is None:
+        return
+    try:
+        keyring.delete_password(KEYRING_SERVICE, LEGACY_KEYRING_ACCOUNT)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 class ConfigManager:
@@ -95,6 +121,8 @@ class ConfigManager:
         self._config_path = config_path or DEFAULT_CONFIG_PATH
         self._uses_default_path = config_path is None
         self._settings: Optional[AppSettings] = None
+        self._auth_cookies: dict[str, str] = {}
+        self._credentials_persistent = False
 
     @property
     def data_dir(self) -> Path:
@@ -103,6 +131,31 @@ class ConfigManager:
     @property
     def task_database_path(self) -> Path:
         return self.data_dir / "tasks.sqlite3"
+
+    @property
+    def auth_cookies(self) -> dict[str, str]:
+        return dict(self._auth_cookies)
+
+    @property
+    def credentials_persistent(self) -> bool:
+        return self._credentials_persistent
+
+    def save_auth_cookies(self, cookies: dict[str, str]) -> bool:
+        """Keep a filtered bundle in memory and persist only to the keyring."""
+        self._auth_cookies = filter_auth_cookies(cookies)
+        bundle = AuthCookieBundle(cookies=self._auth_cookies)
+        self._credentials_persistent = _save_auth_cookie_bundle(bundle)
+        if self._settings is not None:
+            self._settings.sessdata = self._auth_cookies.get("SESSDATA", "")
+        return self._credentials_persistent
+
+    def clear_auth_cookies(self) -> bool:
+        self._auth_cookies = {}
+        self._credentials_persistent = _save_auth_cookie_bundle(AuthCookieBundle())
+        _delete_legacy_keyring_secret()
+        if self._settings is not None:
+            self._settings.sessdata = ""
+        return self._credentials_persistent
 
     def load(self) -> AppSettings:
         """Load settings from disk, or return defaults."""
@@ -116,8 +169,7 @@ class ConfigManager:
                 data = json.loads(self._config_path.read_text(encoding="utf-8"))
                 data = _deobfuscate(data)
                 self._settings = AppSettings(**data)
-                if not self._settings.sessdata:
-                    self._settings.sessdata = _load_sessdata_from_keyring()
+                self._load_and_migrate_credentials(self._settings)
                 return self._settings
             except (json.JSONDecodeError, OSError, ValueError) as e:
                 # Backup corrupted config before falling back to defaults
@@ -134,7 +186,8 @@ class ConfigManager:
                         self._config_path, e,
                     )
 
-        self._settings = AppSettings(sessdata=_load_sessdata_from_keyring())
+        self._settings = AppSettings()
+        self._load_and_migrate_credentials(self._settings)
         return self._settings
 
     def save(self, settings: AppSettings) -> None:
@@ -146,15 +199,9 @@ class ConfigManager:
             logger.debug("Failed to restrict config directory: %s", self._config_path.parent)
         data = settings.model_dump()
         sessdata = data.pop("sessdata", "")
-        if sessdata:
-            if _save_sessdata_to_keyring(sessdata):
-                data["sessdata"] = ""
-            else:
-                data["sessdata"] = sessdata
-                data = _obfuscate(data)
-        else:
-            _save_sessdata_to_keyring("")
-            data["sessdata"] = ""
+        if sessdata and not self._auth_cookies:
+            self.save_auth_cookies({"SESSDATA": sessdata})
+        data["sessdata"] = ""
         serialized = json.dumps(data, indent=2, ensure_ascii=False)
         temp_path = None
         try:
@@ -179,6 +226,30 @@ class ConfigManager:
         finally:
             if temp_path is not None and temp_path.exists():
                 temp_path.unlink(missing_ok=True)
+
+    def _load_and_migrate_credentials(self, settings: AppSettings) -> None:
+        bundle = _load_auth_cookie_bundle()
+        if bundle and bundle.is_authenticated:
+            self._auth_cookies = bundle.cookies
+            self._credentials_persistent = True
+            settings.sessdata = bundle.cookies.get("SESSDATA", "")
+            return
+
+        legacy_sessdata = settings.sessdata or _load_sessdata_from_keyring()
+        settings.sessdata = ""
+        if not legacy_sessdata:
+            return
+        self._auth_cookies = {"SESSDATA": legacy_sessdata}
+        settings.sessdata = legacy_sessdata
+        self._credentials_persistent = _save_auth_cookie_bundle(
+            AuthCookieBundle(cookies=self._auth_cookies)
+        )
+        if self._credentials_persistent:
+            _delete_legacy_keyring_secret()
+            try:
+                self.save(settings)
+            except OSError as exc:
+                logger.warning("Unable to remove migrated secret from config: %s", exc)
 
     def _migrate_legacy_config(self) -> None:
         if (

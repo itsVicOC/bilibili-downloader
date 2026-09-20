@@ -7,6 +7,7 @@ from typing import Callable, Optional
 from bilibili_downloader.api.client import BilibiliAPIClient
 from bilibili_downloader.core.danmaku import DanmakuDownloader
 from bilibili_downloader.core.downloader import StreamDownloader
+from bilibili_downloader.core.errors import redact_sensitive_text
 from bilibili_downloader.core.metadata import download_cover, write_metadata
 from bilibili_downloader.core.models import (
     DownloadItem,
@@ -104,7 +105,11 @@ class DownloadService:
                 DanmakuDownloader.download_and_convert(item.video_info.cid, danmaku_path)
                 outcome.danmaku_path = str(danmaku_path)
             except Exception as exc:  # noqa: BLE001
-                logger.warning("Danmaku download failed for %s: %s", item.video_info.bvid, exc)
+                logger.warning(
+                    "Danmaku download failed for %s: %s",
+                    item.video_info.content_identity,
+                    redact_sensitive_text(exc),
+                )
                 outcome.warnings.append(f"弹幕下载失败：{exc}")
 
         if item.download_subtitle or item.download_all_subtitles:
@@ -125,7 +130,11 @@ class DownloadService:
                     SubtitleDownloader.download_and_convert(subtitle.url, subtitle_path)
                     outcome.subtitle_paths.append(str(subtitle_path))
                 except Exception as exc:  # noqa: BLE001
-                    logger.warning("Subtitle download failed for %s: %s", item.video_info.bvid, exc)
+                    logger.warning(
+                        "Subtitle download failed for %s: %s",
+                        item.video_info.content_identity,
+                        redact_sensitive_text(exc),
+                    )
                     label = subtitle.lan_doc or subtitle.lan or str(index + 1)
                     outcome.warnings.append(f"字幕 {label} 下载失败：{exc}")
 
@@ -138,7 +147,11 @@ class DownloadService:
                     download_cover(item.video_info.cover_url, media_path)
                 )
             except Exception as exc:  # noqa: BLE001
-                logger.warning("Cover download failed for %s: %s", item.video_info.bvid, exc)
+                logger.warning(
+                    "Cover download failed for %s: %s",
+                    item.video_info.content_identity,
+                    redact_sensitive_text(exc),
+                )
                 outcome.warnings.append(f"封面保存失败：{exc}")
 
         if item.download_metadata:
@@ -147,7 +160,11 @@ class DownloadService:
             try:
                 outcome.metadata_path = str(write_metadata(item, outcome, media_path))
             except Exception as exc:  # noqa: BLE001
-                logger.warning("Metadata write failed for %s: %s", item.video_info.bvid, exc)
+                logger.warning(
+                    "Metadata write failed for %s: %s",
+                    item.video_info.content_identity,
+                    redact_sensitive_text(exc),
+                )
                 outcome.warnings.append(f"元数据保存失败：{exc}")
 
         self._raise_if_cancelled()
@@ -162,12 +179,23 @@ class DownloadService:
     ) -> list[SubtitleInfo]:
         tracks = []
         try:
-            tracks = self._api_client.get_subtitle_tracks(
-                item.video_info.bvid,
-                item.video_info.cid,
-            )
+            if item.video_info.bvid:
+                tracks = self._api_client.get_subtitle_tracks(
+                    item.video_info.bvid,
+                    item.video_info.cid,
+                )
+            else:
+                tracks = self._api_client.get_subtitle_tracks(
+                    "",
+                    item.video_info.cid,
+                    aid=item.video_info.aid,
+                )
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Subtitle discovery failed for %s: %s", item.video_info.bvid, exc)
+            logger.warning(
+                "Subtitle discovery failed for %s: %s",
+                item.video_info.content_identity,
+                redact_sensitive_text(exc),
+            )
             tracks = item.video_info.subtitle_list
             if not tracks:
                 outcome.warnings.append(f"字幕轨道查询失败：{exc}")

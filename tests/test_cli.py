@@ -50,7 +50,9 @@ def test_cli_download_expands_all_pages_and_forwards_options(monkeypatch, tmp_pa
     )
     monkeypatch.setattr(
         "bilibili_downloader.utils.config.ConfigManager.load",
-        lambda self: AppSettings(output_dir=str(tmp_path)),
+        lambda self: AppSettings(
+            output_dir=str(tmp_path), copyright_notice_version=1
+        ),
     )
     args = argparse.Namespace(
         source="BV1GJ411x7h7",
@@ -80,3 +82,8 @@ def test_cli_download_expands_all_pages_and_forwards_options(monkeypatch, tmp_pa
     assert all(item.selected_audio_quality == 0 for item in captured)
     assert all(item.path_template == "{author}/{title}{part_suffix}" for item in captured)
     assert all(item.selected_subtitle_lan == "en-US" for item in captured)
+
+
+def test_noninteractive_copyright_requires_explicit_flag():
+    assert cli._confirm_cli_copyright(True) is True
+    assert cli._confirm_cli_copyright(False) is False

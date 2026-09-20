@@ -175,6 +175,35 @@ class TestDownloadItem:
             update={"download_all_subtitles": True}
         ).fingerprint
 
+        assert base.fingerprint == (
+            "BV1GJ411x7h7:1:80:12:30280:video:Episode.mp4:"
+            "0:0:0:0:0:zh-Hans"
+        )
+
+    def test_bangumi_identity_path_and_fingerprint_are_episode_specific(self):
+        from bilibili_downloader.core.models import ContentKind
+
+        info = VideoInfo(
+            content_kind=ContentKind.BANGUMI_EPISODE,
+            episode_id=12,
+            cid=34,
+            series_title="系列",
+            season_title="季度",
+            section_title="正片",
+            episode_title="启程",
+            episode_number="01",
+        )
+        item = DownloadItem(
+            video_info=info,
+            path_template=(
+                "{series}/{season}/{section}/{episode_number} - {episode}"
+            ),
+        )
+
+        assert info.content_identity == "ep:12:34"
+        assert item.relative_output_path.as_posix() == "系列/季度/正片/01 - 启程.mp4"
+        assert item.fingerprint.startswith("ep12:34:")
+
 
 class TestAppSettings:
     def test_defaults(self):

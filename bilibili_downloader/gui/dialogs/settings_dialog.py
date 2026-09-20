@@ -104,6 +104,18 @@ class SettingsDialog(QDialog):
         )
         paths_form.addRow("目录模板", self._path_template)
 
+        self._bangumi_path_template = QLineEdit(
+            self._settings.bangumi_path_template
+        )
+        self._bangumi_path_template.setPlaceholderText(
+            "{series}/{season}/{section}/{episode_number} - {episode}"
+        )
+        self._bangumi_path_template.setToolTip(
+            "番剧字段：series、season、section、episode、episode_number；"
+            "也可使用 quality、codec"
+        )
+        paths_form.addRow("番剧目录模板", self._bangumi_path_template)
+
         ffmpeg_layout = QHBoxLayout()
         self._ffmpeg_path = QLineEdit(self._settings.ffmpeg_path)
         self._ffmpeg_path.setPlaceholderText("留空自动检测")
@@ -266,9 +278,7 @@ class SettingsDialog(QDialog):
             QMessageBox.warning(self, "下载设置", "FFmpeg 路径不是有效文件")
             return
         try:
-            render_path_template(
-                self._path_template.text(),
-                {
+            values = {
                     "title": "title",
                     "author": "author",
                     "bvid": "BV1xx",
@@ -276,10 +286,16 @@ class SettingsDialog(QDialog):
                     "part": "part",
                     "part_suffix": "_part",
                     "collection": "collection",
+                    "series": "series",
+                    "season": "season",
+                    "section": "section",
+                    "episode": "episode",
+                    "episode_number": "01",
                     "quality": "1080P",
                     "codec": "HEVC",
-                },
-            )
+                }
+            render_path_template(self._path_template.text(), values)
+            render_path_template(self._bangumi_path_template.text(), values)
         except ValueError as exc:
             QMessageBox.warning(self, "下载设置", str(exc))
             return
@@ -293,6 +309,9 @@ class SettingsDialog(QDialog):
         self._settings.default_audio_quality = self._audio_combo.currentData()
         self._settings.default_output_mode = self._output_mode_combo.currentData()
         self._settings.path_template = self._path_template.text().strip()
+        self._settings.bangumi_path_template = (
+            self._bangumi_path_template.text().strip()
+        )
         self._settings.max_concurrent_downloads = self._max_concurrent.value()
         self._settings.ffmpeg_path = self._ffmpeg_path.text()
         self._settings.download_danmaku = self._danmaku_check.isChecked()

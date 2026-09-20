@@ -33,7 +33,7 @@ class SourceResolveRunner(QRunnable):
         self.setAutoDelete(True)
 
     def run(self):
-        client = BilibiliAPIClient(sessdata=self._api_client.sessdata)
+        client = BilibiliAPIClient(auth_cookies=self._api_client.auth_cookies)
         resolver = ContentSourceResolver(client)
         items = []
         errors = []
@@ -43,7 +43,7 @@ class SourceResolveRunner(QRunnable):
                 try:
                     collection = resolver.resolve(source)
                     for info in collection.items:
-                        identity = info.bvid.lower()
+                        identity = info.content_identity.lower()
                         if identity not in seen:
                             seen.add(identity)
                             items.append(info)

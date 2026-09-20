@@ -2,6 +2,8 @@
 
 from PySide6.QtCore import QObject, QRunnable, Signal
 
+from bilibili_downloader.core.errors import redact_sensitive_text
+
 
 class LoginStatusWorker(QObject):
     finished = Signal(int, object)
@@ -24,4 +26,6 @@ class LoginStatusRunner(QRunnable):
             info = self._worker.client.get_nav_info()
             self._worker.finished.emit(self._worker.request_id, info)
         except Exception as e:  # noqa: BLE001
-            self._worker.error.emit(self._worker.request_id, str(e))
+            self._worker.error.emit(
+                self._worker.request_id, redact_sensitive_text(e)
+            )

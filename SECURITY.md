@@ -14,7 +14,10 @@
 
 ## 凭据与本地数据
 
-- SESSDATA 优先写入 macOS Keychain、Windows Credential Locker 或 Linux Secret Service 等系统凭据库。
-- 系统凭据库不可用时，本地配置仅进行兼容性混淆，不应视为加密保险箱。请保护当前系统账号和平台原生配置目录；具体路径见 [用户指南](docs/USER_GUIDE.md)。
+- 应用只保留 `SESSDATA`、`DedeUserID`、`DedeUserID__ckMd5`、`bili_jct`、`sid`、`b_nut`、`buvid3`、`buvid4`、`buvid_fp` 和 `_uuid`；其他 Cookie 在解析后立即丢弃。
+- 白名单 Cookie 以版本化 `auth-cookie-bundle-v1` 记录写入 macOS Keychain、Windows Credential Locker 或 Linux Secret Service 等系统凭据库。
+- 系统凭据库不可用时，Cookie 仅保留在当前进程内存中，不写入配置、任务数据库、元数据或错误报告；界面会提示重启后需重新登录。
+- 旧配置或旧凭据库中的 SESSDATA 会尝试迁入新记录。迁入失败时仅用于当前会话，并从后续配置保存中移除。
+- 日志脱敏覆盖全部白名单 Cookie、PGC 播放 URL 及签名查询参数。Cookie 只发送给受信任的 Bilibili API/网页域名，不发送给媒体 CDN。
 - 日志、Issue、截图和终端输出中不得包含有效 Cookie 或带鉴权参数的媒体 URL。
 - 仅从本仓库 Release 页面下载构建产物，并在发布页面核对文件名称。
