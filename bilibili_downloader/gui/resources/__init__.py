@@ -1,12 +1,17 @@
 """GUI resources package."""
 
 from bilibili_downloader.gui.resources.paths import asset_path
-from bilibili_downloader.gui.resources.styles import DARK_STYLE, LIGHT_OVERRIDES
+from bilibili_downloader.gui.resources.styles import (
+    DARK_STYLE,
+    LIGHT_OVERRIDES,
+    build_component_overrides,
+)
 
 
 def load_stylesheet(is_dark: bool = True) -> str:
     """Return the complete stylesheet for the requested system theme."""
     stylesheet = DARK_STYLE if is_dark else DARK_STYLE + LIGHT_OVERRIDES
+    stylesheet += build_component_overrides(is_dark)
     assets = {
         "__CHECKMARK_ICON__": "checkmark.svg",
     }

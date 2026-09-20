@@ -9,11 +9,13 @@ from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -104,13 +106,14 @@ class LoginDialog(QDialog):
         self._logout_requested = False
 
         self.setWindowTitle("账号登录")
-        self.setMinimumSize(480, 540)
+        self.setMinimumSize(480, 560)
+        self.resize(500, 600)
         self._setup_ui()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 16, 18, 16)
-        layout.setSpacing(14)
+        layout.setContentsMargins(22, 20, 22, 18)
+        layout.setSpacing(12)
 
         title = QLabel("连接 B 站账号")
         title.setObjectName("DialogTitle")
@@ -139,15 +142,15 @@ class LoginDialog(QDialog):
         self._instructions.setTextInteractionFlags(Qt.TextBrowserInteraction)
         self._instructions.setAttribute(Qt.WA_MacShowFocusRect, False)
         self._instructions.setText(
-            '<p style="margin:4px 0;font-size:13px;">'
+            '<p style="margin:4px 0;font-size:10pt;">'
             '<b>1.</b> 登录 <a href="https://www.bilibili.com">bilibili.com</a></p>'
-            '<p style="margin:4px 0;font-size:13px;">'
+            '<p style="margin:4px 0;font-size:10pt;">'
             '<b>2.</b> 打开开发者工具：Windows/Linux 按 <code>F12</code>，'
             'macOS 按 <code>Command+Option+I</code></p>'
-            '<p style="margin:4px 0;font-size:13px;">'
+            '<p style="margin:4px 0;font-size:10pt;">'
             '<b>3.</b> 进入 <code>Application</code>（应用）→ '
             '<code>Cookies</code> → <code>bilibili.com</code></p>'
-            '<p style="margin:4px 0;font-size:13px;">'
+            '<p style="margin:4px 0;font-size:10pt;">'
             '<b>4.</b> 复制 <code>SESSDATA</code> 的值并粘贴到下方</p>'
         )
         cookie_layout.addWidget(self._instructions)
@@ -173,7 +176,7 @@ class LoginDialog(QDialog):
         cookie_layout.addWidget(self._validate_btn)
 
         cookie_layout.addStretch()
-        self._tabs.addTab(cookie_tab, "手动输入 Cookie")
+        self._tabs.addTab(self._make_scroll_tab(cookie_tab), "手动输入 Cookie")
 
         # -- QR Code Tab --
         qr_tab = QWidget()
@@ -189,10 +192,9 @@ class LoginDialog(QDialog):
         self._qr_label = QLabel()
         self._qr_label.setObjectName("EmptyCover")
         self._qr_label.setAlignment(Qt.AlignCenter)
-        self._qr_label.setMinimumSize(250, 250)
+        self._qr_label.setFixedSize(220, 220)
         self._qr_label.setText("点击下方按钮生成二维码")
-        self._qr_label.setAlignment(Qt.AlignCenter)
-        qr_layout.addWidget(self._qr_label)
+        qr_layout.addWidget(self._qr_label, alignment=Qt.AlignCenter)
 
         self._qr_status = QLabel("")
         self._qr_status.setAlignment(Qt.AlignCenter)
@@ -212,7 +214,7 @@ class LoginDialog(QDialog):
         qr_layout.addWidget(self._refresh_btn, alignment=Qt.AlignCenter)
 
         qr_layout.addStretch()
-        self._tabs.addTab(qr_tab, "扫码登录")
+        self._tabs.addTab(self._make_scroll_tab(qr_tab), "扫码登录")
 
         layout.addWidget(self._tabs)
 
@@ -229,6 +231,16 @@ class LoginDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
         layout.addLayout(btn_layout)
+
+    @staticmethod
+    def _make_scroll_tab(content: QWidget) -> QScrollArea:
+        scroll = QScrollArea()
+        scroll.setObjectName("DialogScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setWidget(content)
+        return scroll
 
     def _on_generate(self):
         """Generate QR code."""
@@ -264,7 +276,7 @@ class LoginDialog(QDialog):
         pixmap = QPixmap()
         pixmap.loadFromData(buffer.getvalue())
         pixmap = pixmap.scaled(
-            250, 250, Qt.KeepAspectRatio, Qt.SmoothTransformation
+            220, 220, Qt.KeepAspectRatio, Qt.SmoothTransformation
         )
         self._qr_label.setPixmap(pixmap)
         self._qr_label.setText("")

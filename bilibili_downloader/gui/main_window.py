@@ -153,17 +153,17 @@ class MainWindow(QMainWindow):
         side_layout.addLayout(brand_row)
         side_layout.addSpacing(20)
 
-        section_label = QLabel("WORKSPACE")
+        section_label = QLabel("工作区")
         section_label.setObjectName("NavSection")
         side_layout.addWidget(section_label)
-        home_btn = QPushButton("  首页 / HOME")
+        home_btn = QPushButton("首页")
         home_btn.setObjectName("NavButtonActive")
         side_layout.addWidget(home_btn)
-        batch_nav = QPushButton("  批量任务 / BATCH")
+        batch_nav = QPushButton("批量导入")
         batch_nav.setObjectName("NavButton")
         batch_nav.clicked.connect(self._on_batch_clicked)
         side_layout.addWidget(batch_nav)
-        settings_nav = QPushButton("  下载设置 / CONFIG")
+        settings_nav = QPushButton("下载设置")
         settings_nav.setObjectName("NavButton")
         settings_nav.clicked.connect(self._on_settings_triggered)
         side_layout.addWidget(settings_nav)
@@ -195,6 +195,7 @@ class MainWindow(QMainWindow):
         workspace = QWidget()
         workspace.setObjectName("Workspace")
         layout = QVBoxLayout(workspace)
+        self._workspace_layout = layout
         layout.setContentsMargins(26, 22, 26, 16)
         layout.setSpacing(16)
 
@@ -211,21 +212,23 @@ class MainWindow(QMainWindow):
         header_row.addStretch()
         self._header_login = QPushButton("未登录")
         self._header_login.setObjectName("GhostButton")
+        self._header_login.setMinimumWidth(136)
+        self._header_login.setMaximumWidth(180)
         self._header_login.clicked.connect(self._on_login_triggered)
         header_row.addWidget(self._header_login)
         layout.addLayout(header_row)
 
-        hero = HeroPanel()
-        hero_layout = QVBoxLayout(hero)
-        hero_layout.setContentsMargins(28, 24, 28, 26)
-        hero_layout.setSpacing(10)
-        eyebrow = QLabel("ANIME STREAM STUDIO  /  ONLINE")
-        eyebrow.setObjectName("HeroEyebrow")
-        hero_title = QLabel("喜欢的这一集，\n现在就带回本地。")
-        hero_title.setObjectName("HeroTitle")
-        hero_layout.addWidget(eyebrow)
-        hero_layout.addWidget(hero_title)
-        hero_layout.addStretch()
+        self._hero = HeroPanel()
+        self._hero_layout = QVBoxLayout(self._hero)
+        self._hero_layout.setContentsMargins(28, 24, 28, 26)
+        self._hero_layout.setSpacing(10)
+        self._hero_eyebrow = QLabel("ANIME STREAM STUDIO  /  ONLINE")
+        self._hero_eyebrow.setObjectName("HeroEyebrow")
+        self._hero_title = QLabel("喜欢的这一集，\n现在就带回本地。")
+        self._hero_title.setObjectName("HeroTitle")
+        self._hero_layout.addWidget(self._hero_eyebrow)
+        self._hero_layout.addWidget(self._hero_title)
+        self._hero_layout.addStretch()
 
         url_layout = QHBoxLayout()
         url_layout.setSpacing(10)
@@ -234,14 +237,19 @@ class MainWindow(QMainWindow):
         self._url_input.setPlaceholderText("粘贴 B 站链接、BV / AV 号或 b23.tv 短链")
         self._url_input.returnPressed.connect(self._on_resolve_clicked)
         url_layout.addWidget(self._url_input)
-        self._resolve_btn = QPushButton("开始解析  →")
+        self._resolve_btn = QPushButton("开始解析")
         self._resolve_btn.setObjectName("HeroButton")
+        self._resolve_btn.setMinimumWidth(140)
         self._resolve_btn.clicked.connect(self._on_resolve_clicked)
         url_layout.addWidget(self._resolve_btn)
-        hero_layout.addLayout(url_layout)
-        layout.addWidget(hero)
+        self._hero_layout.addLayout(url_layout)
+        layout.addWidget(self._hero)
 
-        self._content_layout = QHBoxLayout()
+        self._content_section = QWidget()
+        self._content_section.setObjectName("ContentSection")
+        self._content_layout = QBoxLayout(QBoxLayout.Direction.LeftToRight)
+        self._content_section.setLayout(self._content_layout)
+        self._content_layout.setContentsMargins(0, 0, 0, 0)
         self._content_layout.setSpacing(16)
         self._video_info = VideoInfoWidget()
         self._video_info.setMinimumHeight(264)
@@ -326,11 +334,13 @@ class MainWindow(QMainWindow):
         )
         controls_layout.addWidget(self._danmaku_check, 5, 0)
         controls_layout.addWidget(self._subtitle_check, 5, 1)
-        archive_options = QHBoxLayout()
-        archive_options.setSpacing(10)
-        archive_options.addWidget(self._all_subtitles_check)
-        archive_options.addWidget(self._cover_check)
-        archive_options.addWidget(self._metadata_check)
+        archive_options = QGridLayout()
+        archive_options.setHorizontalSpacing(12)
+        archive_options.setVerticalSpacing(4)
+        archive_options.addWidget(self._all_subtitles_check, 0, 0)
+        archive_options.addWidget(self._cover_check, 0, 1)
+        archive_options.addWidget(self._metadata_check, 0, 2)
+        archive_options.setColumnStretch(3, 1)
         controls_layout.addLayout(archive_options, 6, 0, 1, 2)
         self._sync_output_mode_controls()
 
@@ -348,47 +358,73 @@ class MainWindow(QMainWindow):
         controls_layout.addLayout(action_layout, 7, 0, 1, 2)
         controls_layout.setRowStretch(8, 1)
         self._content_layout.addWidget(controls, 3)
-        layout.addLayout(self._content_layout)
+        layout.addWidget(self._content_section)
 
-        queue_header = QHBoxLayout()
+        self._queue_section = QWidget()
+        self._queue_section.setObjectName("QueueSection")
+        queue_section_layout = QVBoxLayout(self._queue_section)
+        queue_section_layout.setContentsMargins(0, 0, 0, 0)
+        queue_section_layout.setSpacing(8)
+
+        self._queue_toolbar = QBoxLayout(QBoxLayout.Direction.LeftToRight)
+        self._queue_toolbar.setContentsMargins(0, 0, 0, 0)
+        self._queue_toolbar.setSpacing(8)
+        queue_copy_widget = QWidget()
+        queue_copy = QHBoxLayout(queue_copy_widget)
+        queue_copy.setContentsMargins(0, 0, 0, 0)
+        queue_copy.setSpacing(8)
         queue_title = QLabel("任务轨道")
         queue_title.setObjectName("SectionTitle")
-        queue_header.addWidget(queue_title)
+        queue_copy.addWidget(queue_title)
         queue_hint = QLabel("实时进度与失败重试")
         queue_hint.setObjectName("MetaLabel")
-        queue_header.addWidget(queue_hint)
-        queue_header.addStretch()
+        queue_copy.addWidget(queue_hint)
+        queue_copy.addStretch()
+        self._queue_toolbar.addWidget(queue_copy_widget, 1)
+
+        queue_actions_widget = QWidget()
+        queue_actions = QHBoxLayout(queue_actions_widget)
+        queue_actions.setContentsMargins(0, 0, 0, 0)
+        queue_actions.setSpacing(8)
+        queue_actions.addStretch()
         pause_all = QPushButton("全部暂停")
         pause_all.setObjectName("SubtleButton")
         pause_all.clicked.connect(self._on_pause_all)
-        queue_header.addWidget(pause_all)
+        queue_actions.addWidget(pause_all)
         resume_all = QPushButton("全部继续")
         resume_all.setObjectName("SubtleButton")
         resume_all.clicked.connect(self._on_resume_all)
-        queue_header.addWidget(resume_all)
+        queue_actions.addWidget(resume_all)
         clear_done = QPushButton("清除完成")
         clear_done.setObjectName("SubtleButton")
         clear_done.clicked.connect(self._on_clear_completed)
-        queue_header.addWidget(clear_done)
+        queue_actions.addWidget(clear_done)
         clear_cache = QPushButton("清理缓存")
         clear_cache.setObjectName("SubtleButton")
         clear_cache.clicked.connect(self._on_clear_cache)
-        queue_header.addWidget(clear_cache)
-        layout.addLayout(queue_header)
+        queue_actions.addWidget(clear_cache)
+        self._queue_toolbar.addWidget(queue_actions_widget)
+        queue_section_layout.addLayout(self._queue_toolbar)
 
         self._download_list = DownloadListWidget()
         self._download_list.retry_requested.connect(self._on_retry_download)
         self._download_list.pause_requested.connect(self._on_pause_requested)
         self._download_list.delete_requested.connect(self._on_delete_download)
         self._download_list.open_requested.connect(self._on_open_download)
-        layout.addWidget(self._download_list)
-        workspace_scroll = QScrollArea()
-        workspace_scroll.setObjectName("WorkspaceScroll")
-        workspace_scroll.setWidgetResizable(True)
-        workspace_scroll.setFrameShape(QFrame.NoFrame)
-        workspace_scroll.setAttribute(Qt.WA_MacShowFocusRect, False)
-        workspace_scroll.setWidget(workspace)
-        shell.addWidget(workspace_scroll, 1)
+        self._download_list.content_state_changed.connect(
+            self._on_download_content_state_changed
+        )
+        queue_section_layout.addWidget(self._download_list)
+        layout.addWidget(self._queue_section)
+        self._task_priority_mode = False
+        self._workspace_scroll = QScrollArea()
+        self._workspace_scroll.setObjectName("WorkspaceScroll")
+        self._workspace_scroll.setWidgetResizable(True)
+        self._workspace_scroll.setFrameShape(QFrame.NoFrame)
+        self._workspace_scroll.setAttribute(Qt.WA_MacShowFocusRect, False)
+        self._workspace_scroll.setWidget(workspace)
+        shell.addWidget(self._workspace_scroll, 1)
+        self._update_responsive_layout(self.width())
 
     def _create_checkbox(self, text: str, checked: bool):
         cb = QCheckBox(text)
@@ -487,15 +523,53 @@ class MainWindow(QMainWindow):
         else:
             self._page_combo.addItem("单 P 视频", "current")
 
+    def _on_download_content_state_changed(self, has_content: bool):
+        """Give the queue priority once the first durable row appears."""
+        if self._task_priority_mode == has_content:
+            return
+        self._task_priority_mode = has_content
+        self._hero.set_compact(has_content)
+        self._hero_eyebrow.setVisible(not has_content)
+        self._hero_title.setVisible(not has_content)
+        if has_content:
+            self._hero_layout.setContentsMargins(18, 14, 18, 14)
+        else:
+            self._hero_layout.setContentsMargins(28, 24, 28, 26)
+        self._download_list.setMinimumHeight(184 if has_content else 120)
+        self._update_responsive_layout(self.width())
+
+    def _update_responsive_layout(self, width: int):
+        """Apply one coherent layout policy for width and queue state."""
+        if not hasattr(self, "_content_layout"):
+            return
+        narrow = width < 1120
+        self._content_layout.setDirection(
+            QBoxLayout.Direction.TopToBottom
+            if narrow
+            else QBoxLayout.Direction.LeftToRight
+        )
+        self._queue_toolbar.setDirection(
+            QBoxLayout.Direction.TopToBottom
+            if width < 1040
+            else QBoxLayout.Direction.LeftToRight
+        )
+
+        self._workspace_layout.removeWidget(self._content_section)
+        self._workspace_layout.removeWidget(self._queue_section)
+        if narrow and self._task_priority_mode:
+            self._workspace_layout.insertWidget(2, self._queue_section)
+            self._workspace_layout.insertWidget(3, self._content_section)
+        else:
+            self._workspace_layout.insertWidget(2, self._content_section)
+            self._workspace_layout.insertWidget(3, self._queue_section)
+        self._workspace_layout.setStretchFactor(
+            self._queue_section,
+            1 if self._task_priority_mode and not narrow else 0,
+        )
+
     def resizeEvent(self, event):
-        """Stack the dense content panels on narrower screens."""
-        if hasattr(self, "_content_layout"):
-            direction = (
-                QBoxLayout.Direction.TopToBottom
-                if event.size().width() < 1120
-                else QBoxLayout.Direction.LeftToRight
-            )
-            self._content_layout.setDirection(direction)
+        """Update the task-focused responsive layout."""
+        self._update_responsive_layout(event.size().width())
         super().resizeEvent(event)
 
     def _setup_menu(self):
@@ -554,7 +628,14 @@ class MainWindow(QMainWindow):
         self._login_status_label.style().unpolish(self._login_status_label)
         self._login_status_label.style().polish(self._login_status_label)
         if hasattr(self, "_header_login"):
-            self._header_login.setText(text)
+            available = self._header_login.maximumWidth() - 28
+            elided = self._header_login.fontMetrics().elidedText(
+                text, Qt.ElideRight, available
+            )
+            self._header_login.setText(elided)
+            self._header_login.setToolTip(
+                " · ".join(part for part in (text, tooltip) if part)
+            )
 
     # -- Event Handlers --
 
@@ -612,7 +693,7 @@ class MainWindow(QMainWindow):
     def _on_resolve_success(self, info, video_streams, audio_streams, playurl_ok):
         """Handle successful URL resolution."""
         self._resolve_btn.setEnabled(True)
-        self._resolve_btn.setText("开始解析  →")
+        self._resolve_btn.setText("开始解析")
         self._status_bar.showMessage(f"已解析：{info.title}")
 
         self._current_video = info
@@ -660,7 +741,7 @@ class MainWindow(QMainWindow):
     def _on_resolve_error(self, error: str):
         """Handle resolution error."""
         self._resolve_btn.setEnabled(True)
-        self._resolve_btn.setText("开始解析  →")
+        self._resolve_btn.setText("开始解析")
         self._status_bar.showMessage("解析失败")
         self._show_error(f"解析视频失败：{error}")
 

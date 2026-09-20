@@ -11,15 +11,19 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QGridLayout,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QSpinBox,
     QVBoxLayout,
+    QWidget,
 )
 
 from bilibili_downloader.core.models import (
@@ -31,6 +35,18 @@ from bilibili_downloader.core.models import (
 from bilibili_downloader.utils.validators import render_path_template
 
 
+class _LeadingPathLineEdit(QLineEdit):
+    """Keep long read-only paths anchored at the meaningful beginning."""
+
+    def focusOutEvent(self, event):
+        super().focusOutEvent(event)
+        self.setCursorPosition(0)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.setCursorPosition(0)
+
+
 class SettingsDialog(QDialog):
     """Dialog for editing application settings."""
 
@@ -38,34 +54,47 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self._settings = settings.model_copy(deep=True)
         self.setWindowTitle("下载设置")
-        self.setMinimumWidth(620)
+        self.setMinimumSize(620, 520)
+        self.resize(660, 620)
         self._setup_ui()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 16, 18, 16)
-        layout.setSpacing(14)
+        layout.setContentsMargins(22, 20, 22, 18)
+        layout.setSpacing(12)
         title = QLabel("下载偏好")
         title.setObjectName("DialogTitle")
         caption = QLabel("统一管理保存位置、默认规格和并行任务数")
         caption.setObjectName("DialogCaption")
         layout.addWidget(title)
         layout.addWidget(caption)
-        form = QFormLayout()
-        form.setHorizontalSpacing(12)
-        form.setVerticalSpacing(12)
+
+        scroll = QScrollArea()
+        scroll.setObjectName("DialogScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        body = QWidget()
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(0, 0, 4, 0)
+        body_layout.setSpacing(12)
+
+        paths_group = QGroupBox("保存位置")
+        paths_group.setObjectName("SettingsSection")
+        paths_form = self._create_form(paths_group)
 
         # Output directory
         dir_layout = QHBoxLayout()
-        self._output_dir = QLineEdit(self._settings.output_dir)
+        self._output_dir = _LeadingPathLineEdit(self._settings.output_dir)
         self._output_dir.setReadOnly(True)
         self._output_dir.setToolTip(self._settings.output_dir)
+        self._output_dir.setCursorPosition(0)
         dir_layout.addWidget(self._output_dir, 1)
-        browse_btn = QPushButton("浏览...")
+        browse_btn = QPushButton("选择…")
         browse_btn.setObjectName("SubtleButton")
         browse_btn.clicked.connect(self._browse_output_dir)
         dir_layout.addWidget(browse_btn)
-        form.addRow("保存目录：", dir_layout)
+        paths_form.addRow("保存目录", dir_layout)
 
         self._path_template = QLineEdit(self._settings.path_template)
         self._path_template.setPlaceholderText("{author}/{title}{part_suffix}")
@@ -73,7 +102,22 @@ class SettingsDialog(QDialog):
             "可用字段：title、author、bvid、page、part、part_suffix、"
             "collection、quality、codec"
         )
-        form.addRow("目录模板：", self._path_template)
+        paths_form.addRow("目录模板", self._path_template)
+
+        ffmpeg_layout = QHBoxLayout()
+        self._ffmpeg_path = QLineEdit(self._settings.ffmpeg_path)
+        self._ffmpeg_path.setPlaceholderText("留空自动检测")
+        ffmpeg_layout.addWidget(self._ffmpeg_path)
+        ffmpeg_browse = QPushButton("选择…")
+        ffmpeg_browse.setObjectName("SubtleButton")
+        ffmpeg_browse.clicked.connect(self._browse_ffmpeg)
+        ffmpeg_layout.addWidget(ffmpeg_browse)
+        paths_form.addRow("FFmpeg 路径", ffmpeg_layout)
+        body_layout.addWidget(paths_group)
+
+        format_group = QGroupBox("默认规格")
+        format_group.setObjectName("SettingsSection")
+        format_form = self._create_form(format_group)
 
         # Default quality
         self._quality_combo = QComboBox()
@@ -82,7 +126,7 @@ class SettingsDialog(QDialog):
         self._quality_combo.setCurrentIndex(
             self._quality_combo.findData(self._settings.default_quality)
         )
-        form.addRow("默认画质：", self._quality_combo)
+        format_form.addRow("画面质量", self._quality_combo)
 
         self._codec_combo = QComboBox()
         self._codec_combo.addItem("H.265 / HEVC", 12)
@@ -90,7 +134,7 @@ class SettingsDialog(QDialog):
         self._codec_combo.addItem("AV1", 13)
         codec_index = self._codec_combo.findData(self._settings.default_video_codec)
         self._codec_combo.setCurrentIndex(codec_index if codec_index >= 0 else 0)
-        form.addRow("默认编码：", self._codec_combo)
+        format_form.addRow("视频编码", self._codec_combo)
 
         self._audio_combo = QComboBox()
         for audio_id in (30251, 30250, 30285, 30280, 30216, 0):
@@ -101,7 +145,7 @@ class SettingsDialog(QDialog):
             self._settings.default_audio_quality
         )
         self._audio_combo.setCurrentIndex(audio_index if audio_index >= 0 else 0)
-        form.addRow("默认音频：", self._audio_combo)
+        format_form.addRow("音频质量", self._audio_combo)
 
         self._output_mode_combo = QComboBox()
         self._output_mode_combo.addItem("视频 / MP4", OutputMode.VIDEO)
@@ -110,7 +154,7 @@ class SettingsDialog(QDialog):
             self._settings.default_output_mode
         )
         self._output_mode_combo.setCurrentIndex(output_index if output_index >= 0 else 0)
-        form.addRow("默认输出：", self._output_mode_combo)
+        format_form.addRow("输出类型", self._output_mode_combo)
 
         # Max concurrent downloads
         self._max_concurrent = QSpinBox()
@@ -134,23 +178,17 @@ class SettingsDialog(QDialog):
         concurrency_layout.addWidget(self._concurrency_up)
         self._max_concurrent.valueChanged.connect(self._sync_stepper_buttons)
         self._sync_stepper_buttons(self._max_concurrent.value())
-        form.addRow("最大并发：", concurrency_layout)
-
-        # FFmpeg path
-        ffmpeg_layout = QHBoxLayout()
-        self._ffmpeg_path = QLineEdit(self._settings.ffmpeg_path)
-        self._ffmpeg_path.setPlaceholderText("留空自动检测")
-        ffmpeg_layout.addWidget(self._ffmpeg_path)
-        ffmpeg_browse = QPushButton("浏览...")
-        ffmpeg_browse.setObjectName("SubtleButton")
-        ffmpeg_browse.clicked.connect(self._browse_ffmpeg)
-        ffmpeg_layout.addWidget(ffmpeg_browse)
-        form.addRow("FFmpeg 路径：", ffmpeg_layout)
-
-        layout.addLayout(form)
+        format_form.addRow("最大并发", concurrency_layout)
+        body_layout.addWidget(format_group)
 
         # Option checkboxes
+        options_group = QGroupBox("附加内容")
+        options_group.setObjectName("SettingsSection")
         options_layout = QGridLayout()
+        options_group.setLayout(options_layout)
+        options_layout.setContentsMargins(4, 4, 4, 4)
+        options_layout.setHorizontalSpacing(16)
+        options_layout.setVerticalSpacing(8)
         self._danmaku_check = QCheckBox("默认下载弹幕")
         self._danmaku_check.setChecked(self._settings.download_danmaku)
         self._subtitle_check = QCheckBox("默认下载字幕")
@@ -167,7 +205,10 @@ class SettingsDialog(QDialog):
         options_layout.addWidget(self._cover_check, 1, 0)
         options_layout.addWidget(self._metadata_check, 1, 1)
         options_layout.setColumnStretch(3, 1)
-        layout.addLayout(options_layout)
+        body_layout.addWidget(options_group)
+        body_layout.addStretch()
+        scroll.setWidget(body)
+        layout.addWidget(scroll, 1)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.button(QDialogButtonBox.Ok).setText("确定")
@@ -176,6 +217,17 @@ class SettingsDialog(QDialog):
         buttons.accepted.connect(self._accept_if_valid)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    @staticmethod
+    def _create_form(parent) -> QFormLayout:
+        form = QFormLayout(parent)
+        form.setContentsMargins(4, 4, 4, 4)
+        form.setHorizontalSpacing(14)
+        form.setVerticalSpacing(10)
+        form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        form.setFormAlignment(Qt.AlignTop)
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        return form
 
     def _create_stepper_button(self, text: str, tooltip: str, callback):
         button = QPushButton(text)
@@ -195,6 +247,7 @@ class SettingsDialog(QDialog):
         if path:
             self._output_dir.setText(path)
             self._output_dir.setToolTip(path)
+            self._output_dir.setCursorPosition(0)
 
     def _browse_ffmpeg(self):
         path, _ = QFileDialog.getOpenFileName(

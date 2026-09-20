@@ -1,13 +1,17 @@
 """Download list table widget with cancel and retry support."""
 
 from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QColor, QIcon, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QHBoxLayout,
     QHeaderView,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QTableWidget,
     QTableWidgetItem,
     QWidget,
@@ -21,16 +25,54 @@ from bilibili_downloader.core.models import (
     VideoQuality,
 )
 from bilibili_downloader.gui.resources.paths import asset_path
+from bilibili_downloader.gui.resources.styles import (
+    DARK_PALETTE,
+    LIGHT_PALETTE,
+    UI_METRICS,
+)
 
-# Shared button size (width, height)
-BTN_W = 68
-BTN_H = 28
+ACTION_BUTTON_MIN_WIDTH = 60
+ACTION_BUTTON_GAP = 6
+ACTION_CELL_PADDING = 12
+STATUS_TONE_ROLE = Qt.UserRole + 1
+
+_TABLE_BUTTON_NAMES = {
+    "SubtleButton": "TableSubtleButton",
+    "PrimaryButton": "TablePrimaryButton",
+    "DangerButton": "TableDangerButton",
+}
+
+
+class _StatusDelegate(QStyledItemDelegate):
+    """Paint semantic task tones from the live light/dark theme."""
+
+    def paint(self, painter, option, index):
+        tone = index.data(STATUS_TONE_ROLE)
+        if tone:
+            option = QStyleOptionViewItem(option)
+            self.initStyleOption(option, index)
+            app = QApplication.instance()
+            dark = bool(app and app.property("darkTheme"))
+            palette = DARK_PALETTE if dark else LIGHT_PALETTE
+            colors = {
+                "success": palette.success,
+                "warning": palette.warning,
+                "danger": palette.danger,
+                "muted": palette.muted,
+            }
+            color = QColor(colors.get(tone, colors["muted"]))
+            option.palette.setColor(QPalette.Text, color)
+            option.palette.setColor(QPalette.HighlightedText, color)
+        super().paint(painter, option, index)
 
 
 def _create_action_btn(text: str, object_name: str, download_id: int, handler):
     btn = QPushButton(text)
-    btn.setObjectName(object_name)
-    btn.setFixedSize(BTN_W, BTN_H)
+    btn.setObjectName(_TABLE_BUTTON_NAMES[object_name])
+    btn.ensurePolished()
+    btn.setMinimumWidth(max(ACTION_BUTTON_MIN_WIDTH, btn.sizeHint().width()))
+    btn.setFixedHeight(UI_METRICS.compact_button_height)
+    btn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
     btn.clicked.connect(lambda checked, d=download_id: handler(d))
     return btn
 
@@ -56,7 +98,7 @@ def _wrap_btn(widget):
     container = QWidget()
     layout = QHBoxLayout(container)
     layout.addWidget(widget, alignment=Qt.AlignCenter)
-    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setContentsMargins(6, 0, 6, 0)
     return container
 
 
@@ -64,10 +106,10 @@ def _wrap_btns(*widgets):
     """Wrap multiple buttons in a centered container."""
     container = QWidget()
     layout = QHBoxLayout(container)
-    layout.setSpacing(4)
+    layout.setSpacing(ACTION_BUTTON_GAP)
     for w in widgets:
         layout.addWidget(w)
-    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setContentsMargins(6, 0, 6, 0)
     return container
 
 
@@ -83,6 +125,7 @@ class DownloadListWidget(QTableWidget):
     pause_requested = Signal(int)
     delete_requested = Signal(int)
     open_requested = Signal(int)
+    content_state_changed = Signal(bool)
 
     def __init__(self):
         super().__init__()
@@ -101,20 +144,27 @@ class DownloadListWidget(QTableWidget):
         self.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
-        self.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        self.horizontalHeader().resizeSection(2, 220)
-        # Button column: fixed width based on BTN_W + padding buffer
+        self.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.horizontalHeader().resizeSection(2, 210)
+        # The operation column fits two localized action buttons without clipping.
         self.horizontalHeader().setSectionResizeMode(4, QHeaderView.Fixed)
-        self.horizontalHeader().resizeSection(4, BTN_W * 2 + 28)
+        self.horizontalHeader().resizeSection(
+            4,
+            ACTION_BUTTON_MIN_WIDTH * 2
+            + ACTION_BUTTON_GAP
+            + ACTION_CELL_PADDING * 2,
+        )
         self.verticalHeader().setVisible(False)
-        self.verticalHeader().setDefaultSectionSize(46)
-        self.verticalHeader().setMinimumSectionSize(42)
+        self.verticalHeader().setDefaultSectionSize(UI_METRICS.row_height)
+        self.verticalHeader().setMinimumSectionSize(UI_METRICS.row_height)
         self.setAlternatingRowColors(True)
         self.setSelectionBehavior(QTableWidget.SelectRows)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
         self.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.setShowGrid(False)
         self.setIconSize(QSize(20, 20))
+        self.setTextElideMode(Qt.ElideRight)
+        self.setItemDelegateForColumn(3, _StatusDelegate(self))
         self._show_placeholder()
 
     def add_item(
@@ -141,7 +191,7 @@ class DownloadListWidget(QTableWidget):
         if output_path:
             self._output_paths[download_id] = output_path
 
-        title_item = QTableWidgetItem(item.video_info.title[:50])
+        title_item = QTableWidgetItem(item.video_info.title)
         title_item.setToolTip(item.video_info.title)
         title_item.setData(Qt.UserRole, download_id)
         self.setItem(row, 0, title_item)
@@ -165,10 +215,10 @@ class DownloadListWidget(QTableWidget):
 
         status_item = QTableWidgetItem(status_text or _status_label(status))
         status_item.setData(Qt.UserRole, download_id)
+        status_item.setData(STATUS_TONE_ROLE, _status_tone(status, bool(warnings)))
+        status_item.setToolTip(status_text or _status_label(status))
         if warnings:
             status_item.setToolTip("\n".join(warnings))
-            if status == TaskStatus.COMPLETED:
-                status_item.setForeground(Qt.yellow)
         self.setItem(row, 3, status_item)
 
         self._set_actions(download_id, status)
@@ -183,7 +233,7 @@ class DownloadListWidget(QTableWidget):
         self.insertRow(row)
         self._id_to_row[download_id] = row
 
-        title = QTableWidgetItem(error[:80])
+        title = QTableWidgetItem(error)
         title.setToolTip(error)
         title.setData(Qt.UserRole, download_id)
         self.setItem(row, 0, title)
@@ -193,7 +243,7 @@ class DownloadListWidget(QTableWidget):
         _set_progress_state(progress, "ErrorProgress")
         self.setCellWidget(row, 2, progress)
         status = QTableWidgetItem("未加入队列")
-        status.setForeground(Qt.red)
+        status.setData(STATUS_TONE_ROLE, "danger")
         status.setToolTip(error)
         self.setItem(row, 3, status)
         self.setCellWidget(
@@ -228,7 +278,7 @@ class DownloadListWidget(QTableWidget):
                 status_item = self.item(row, 3)
                 if status_item:
                     status_item.setText("暂停中...")
-                    status_item.setForeground(Qt.yellow)
+                    status_item.setData(STATUS_TONE_ROLE, "warning")
 
     def register_worker(self, download_id: int, worker):
         """Register a worker for a download ID (enables cancel)."""
@@ -254,6 +304,7 @@ class DownloadListWidget(QTableWidget):
         status_item = self.item(row, 3)
         if status_item:
             status_item.setText(status_text)
+            status_item.setToolTip(status_text)
 
     def mark_downloading(self, download_id: int):
         self._states[download_id] = TaskStatus.DOWNLOADING
@@ -277,7 +328,9 @@ class DownloadListWidget(QTableWidget):
         if status_item:
             warnings = list(getattr(outcome, "warnings", []) or [])
             status_item.setText("部分完成" if warnings else "完成")
-            status_item.setForeground(Qt.yellow if warnings else Qt.green)
+            status_item.setData(
+                STATUS_TONE_ROLE, "warning" if warnings else "success"
+            )
             status_item.setToolTip("\n".join(warnings))
 
         if outcome is not None and outcome.actual_quality is not None:
@@ -316,8 +369,8 @@ class DownloadListWidget(QTableWidget):
 
         status_item = self.item(row, 3)
         if status_item:
-            status_item.setText(f"失败：{error[:30]}")
-            status_item.setForeground(Qt.red)
+            status_item.setText(f"失败：{error}")
+            status_item.setData(STATUS_TONE_ROLE, "danger")
             status_item.setToolTip(error)
 
         self._set_actions(download_id, TaskStatus.FAILED)
@@ -332,7 +385,7 @@ class DownloadListWidget(QTableWidget):
         status_item = self.item(row, 3)
         if status_item:
             status_item.setText("已取消")
-            status_item.setForeground(Qt.gray)
+            status_item.setData(STATUS_TONE_ROLE, "muted")
         self._set_actions(download_id, TaskStatus.CANCELLED)
 
     def mark_paused(self, download_id: int):
@@ -344,7 +397,7 @@ class DownloadListWidget(QTableWidget):
         status_item = self.item(row, 3)
         if status_item:
             status_item.setText("已暂停，可继续")
-            status_item.setForeground(Qt.gray)
+            status_item.setData(STATUS_TONE_ROLE, "muted")
         self._set_actions(download_id, TaskStatus.PAUSED)
 
     def mark_failed_retry_reset(self, download_id: int):
@@ -360,7 +413,7 @@ class DownloadListWidget(QTableWidget):
         status_item = self.item(row, 3)
         if status_item:
             status_item.setText("重试中...")
-            status_item.setForeground(Qt.yellow)
+            status_item.setData(STATUS_TONE_ROLE, "warning")
 
         self._states[download_id] = TaskStatus.QUEUED
         self._set_actions(download_id, TaskStatus.QUEUED)
@@ -426,19 +479,27 @@ class DownloadListWidget(QTableWidget):
         if row is None:
             return
         if status in (TaskStatus.QUEUED, TaskStatus.DOWNLOADING, TaskStatus.MERGING):
-            controls = _wrap_btn(
-                _create_pause_btn(download_id, self._on_pause_clicked)
-            )
+            buttons = (_create_pause_btn(download_id, self._on_pause_clicked),)
+            controls = _wrap_btn(*buttons)
         elif status == TaskStatus.COMPLETED:
-            controls = _wrap_btns(
+            buttons = (
                 _create_open_btn(download_id, self.open_requested.emit),
                 _create_delete_btn(download_id, self._on_delete_clicked),
             )
+            controls = _wrap_btns(*buttons)
         else:
-            controls = _wrap_btns(
+            buttons = (
                 _create_retry_btn(download_id, self.retry_requested.emit),
                 _create_delete_btn(download_id, self._on_delete_clicked),
             )
+            controls = _wrap_btns(*buttons)
+        required_width = (
+            sum(button.minimumWidth() for button in buttons)
+            + ACTION_BUTTON_GAP * (len(buttons) - 1)
+            + ACTION_CELL_PADDING
+        )
+        if self.horizontalHeader().sectionSize(4) < required_width:
+            self.horizontalHeader().resizeSection(4, required_width)
         self.setCellWidget(row, 4, controls)
 
     def _show_placeholder(self):
@@ -458,6 +519,7 @@ class DownloadListWidget(QTableWidget):
             item = QTableWidgetItem("")
             item.setFlags(Qt.NoItemFlags)
             self.setItem(0, col, item)
+        self.content_state_changed.emit(False)
 
     def _clear_placeholder(self):
         """Remove the empty-state row before adding real items."""
@@ -465,6 +527,13 @@ class DownloadListWidget(QTableWidget):
             self.setSpan(0, 0, 1, 1)
             self.removeRow(0)
             self._placeholder_active = False
+            self.content_state_changed.emit(True)
+
+    def resizeEvent(self, event):
+        """Keep progress useful without starving title text on compact windows."""
+        progress_width = 160 if event.size().width() < 800 else 210
+        self.horizontalHeader().resizeSection(2, progress_width)
+        super().resizeEvent(event)
 
 
 def _set_progress_state(progress_bar: QProgressBar, object_name: str):
@@ -484,3 +553,15 @@ def _status_label(status: TaskStatus) -> str:
         TaskStatus.FAILED: "失败",
         TaskStatus.CANCELLED: "已取消",
     }[status]
+
+
+def _status_tone(status: TaskStatus, has_warnings: bool = False) -> str:
+    if status == TaskStatus.COMPLETED:
+        return "warning" if has_warnings else "success"
+    if status == TaskStatus.FAILED:
+        return "danger"
+    if status in (TaskStatus.PAUSED, TaskStatus.CANCELLED):
+        return "muted"
+    if status == TaskStatus.MERGING:
+        return "warning"
+    return "muted"

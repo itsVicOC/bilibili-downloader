@@ -1,9 +1,85 @@
-"""Application QSS stylesheet."""
+"""Application QSS stylesheet and shared visual design tokens."""
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class UiMetrics:
+    """Logical-pixel measurements shared by QSS and widget geometry."""
+
+    control_height: int = 36
+    compact_button_height: int = 32
+    primary_height: int = 44
+    hero_control_height: int = 48
+    radius: int = 8
+    row_height: int = 48
+
+
+@dataclass(frozen=True)
+class ThemePalette:
+    """Semantic colors used by the final component-state overrides."""
+
+    text: str
+    muted: str
+    surface: str
+    surface_raised: str
+    border: str
+    border_hover: str
+    accent: str
+    accent_hover: str
+    accent_pressed: str
+    accent_text: str
+    danger: str
+    danger_surface: str
+    danger_border: str
+    success: str
+    warning: str
+    focus: str
+
+
+UI_METRICS = UiMetrics()
+
+DARK_PALETTE = ThemePalette(
+    text="#f4f1f7",
+    muted="#aaa4b0",
+    surface="#202027",
+    surface_raised="#2a2931",
+    border="#6d6974",
+    border_hover="#8a8490",
+    accent="#ff79b3",
+    accent_hover="#ff96c2",
+    accent_pressed="#e75391",
+    accent_text="#181319",
+    danger="#ffc1cc",
+    danger_surface="#422730",
+    danger_border="#70404d",
+    success="#82d9b6",
+    warning="#e7ba62",
+    focus="#ff9ac5",
+)
+
+LIGHT_PALETTE = ThemePalette(
+    text="#29242f",
+    muted="#6e6675",
+    surface="#ffffff",
+    surface_raised="#f1eff3",
+    border="#948c9a",
+    border_hover="#756b7a",
+    accent="#ef5f9d",
+    accent_hover="#e94f91",
+    accent_pressed="#d94382",
+    accent_text="#251820",
+    danger="#9f2945",
+    danger_surface="#fff0f3",
+    danger_border="#df9eae",
+    success="#247052",
+    warning="#7b5a1c",
+    focus="#b84777",
+)
 
 DARK_STYLE = """
     * {
-        font-family: "PingFang SC", "Microsoft YaHei", Arial;
-        font-size: 13px;
+        font-size: 10pt;
         letter-spacing: 0px;
         color: #f4f1f7;
     }
@@ -100,18 +176,18 @@ DARK_STYLE = """
 
     QLabel#BrandTitle {
         color: #ffffff;
-        font-size: 20px;
+        font-size: 15pt;
         font-weight: 800;
     }
 
     QLabel#SidebarCaption {
         color: #8f8998;
-        font-size: 11px;
+        font-size: 8.25pt;
     }
 
     QLabel#NavSection {
         color: #8f8998;
-        font-size: 10px;
+        font-size: 7.5pt;
         font-weight: 700;
         padding: 0 8px 5px 8px;
     }
@@ -165,13 +241,13 @@ DARK_STYLE = """
 
     QLabel#PageTitle {
         color: #ffffff;
-        font-size: 23px;
+        font-size: 17.25pt;
         font-weight: 800;
     }
 
     QLabel#DialogTitle {
         color: #ffffff;
-        font-size: 22px;
+        font-size: 16.5pt;
         font-weight: 800;
     }
 
@@ -212,13 +288,13 @@ DARK_STYLE = """
 
     QLabel#HeroEyebrow {
         color: #8be4ff;
-        font-size: 10px;
+        font-size: 7.5pt;
         font-weight: 800;
     }
 
     QLabel#HeroTitle {
         color: #ffffff;
-        font-size: 27px;
+        font-size: 20.25pt;
         font-weight: 800;
     }
 
@@ -275,19 +351,19 @@ DARK_STYLE = """
 
     QLabel#SectionTitle {
         color: #ffffff;
-        font-size: 15px;
+        font-size: 11.25pt;
         font-weight: 800;
     }
 
     QLabel#FieldLabel {
         color: #b6b0bd;
-        font-size: 11px;
+        font-size: 8.25pt;
         font-weight: 700;
     }
 
     QLabel#VideoTitle {
         color: #ffffff;
-        font-size: 18px;
+        font-size: 13.5pt;
         font-weight: 800;
     }
 
@@ -297,7 +373,7 @@ DARK_STYLE = """
         border: 1px solid #285b66;
         border-radius: 8px;
         padding: 3px 9px;
-        font-size: 11px;
+        font-size: 8.25pt;
         font-weight: 700;
     }
 
@@ -307,7 +383,7 @@ DARK_STYLE = """
         border: 1px solid #3d3a45;
         border-radius: 7px;
         padding: 5px 9px;
-        font-size: 11px;
+        font-size: 8.25pt;
     }
 
     QLabel#EmptyCover {
@@ -375,7 +451,7 @@ DARK_STYLE = """
         color: #d9d3dd;
         background-color: #24232a;
         border-color: #3a3942;
-        font-size: 17px;
+        font-size: 12.75pt;
         font-weight: 600;
     }
 
@@ -426,7 +502,7 @@ DARK_STYLE = """
     }
 
     QPushButton {
-        min-height: 32px;
+        min-height: 34px;
         padding: 0 14px;
         color: #eeebf0;
         background-color: #2a2931;
@@ -571,7 +647,7 @@ DARK_STYLE = """
         background-color: #1a1a20;
         border: none;
         border-bottom: 1px solid #34343d;
-        font-size: 11px;
+        font-size: 8.25pt;
         font-weight: 700;
     }
 
@@ -582,7 +658,7 @@ DARK_STYLE = """
         border: 1px solid #34323b;
         border-radius: 6px;
         text-align: center;
-        font-size: 10px;
+        font-size: 7.5pt;
     }
 
     QProgressBar::chunk {
@@ -1046,3 +1122,233 @@ LIGHT_OVERRIDES = """
         background-color: #fff0f6;
     }
 """
+
+
+def build_component_overrides(is_dark: bool) -> str:
+    """Build the final, semantic control-state layer from design tokens."""
+    palette = DARK_PALETTE if is_dark else LIGHT_PALETTE
+    metrics = UI_METRICS
+    compact_content_height = metrics.compact_button_height - 2
+    primary_content_height = metrics.primary_height - 2
+    hero_content_height = metrics.hero_control_height - 2
+    disabled_text = "#77727d" if is_dark else "#aaa4ae"
+    disabled_surface = "#222127" if is_dark else "#efedf0"
+    disabled_border = "#33313a" if is_dark else "#e0dde3"
+    return f"""
+        QPushButton {{
+            min-height: {metrics.control_height - 2}px;
+            border-radius: {metrics.radius - 1}px;
+            border-color: {palette.border};
+        }}
+
+        QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QComboBox {{
+            border-color: {palette.border};
+        }}
+
+        QCheckBox::indicator {{
+            border-color: {palette.border};
+        }}
+
+        QLineEdit#UrlInput {{ border-color: {palette.border}; }}
+        QLineEdit#UrlInput:hover {{ border-color: {palette.border_hover}; }}
+        QLineEdit#UrlInput:focus {{ border: 2px solid {palette.focus}; }}
+
+        QPushButton:focus, QComboBox:focus, QLineEdit:focus,
+        QTextEdit:focus, QPlainTextEdit:focus, QSpinBox:focus {{
+            border: 2px solid {palette.focus};
+        }}
+
+        QPushButton#PrimaryButton, QPushButton#DownloadButton {{
+            min-height: {primary_content_height}px;
+            color: {palette.accent_text};
+            background-color: {palette.accent};
+            border-color: {palette.accent};
+            font-weight: 800;
+        }}
+
+        QPushButton#PrimaryButton:hover, QPushButton#DownloadButton:hover {{
+            color: {palette.accent_text};
+            background-color: {palette.accent_hover};
+            border-color: {palette.accent_hover};
+        }}
+
+        QPushButton#PrimaryButton:pressed, QPushButton#DownloadButton:pressed {{
+            color: {palette.accent_text};
+            background-color: {palette.accent_pressed};
+            border-color: {palette.accent_pressed};
+        }}
+
+        QPushButton#HeroButton {{
+            min-height: {hero_content_height}px;
+            max-height: {hero_content_height}px;
+            color: {palette.accent_text};
+            background-color: {palette.accent};
+            border-color: {palette.accent};
+        }}
+
+        QPushButton#HeroButton:hover {{
+            color: {palette.accent_text};
+            background-color: {palette.accent_hover};
+            border-color: {palette.accent_hover};
+        }}
+
+        QPushButton#HeroButton:pressed {{
+            color: {palette.accent_text};
+            background-color: {palette.accent_pressed};
+            border-color: {palette.accent_pressed};
+        }}
+
+        QPushButton#PrimaryButton:disabled, QPushButton#DownloadButton:disabled,
+        QPushButton#HeroButton:disabled {{
+            color: {disabled_text};
+            background-color: {disabled_surface};
+            border-color: {disabled_border};
+        }}
+
+        QPushButton#SecondaryButton, QPushButton#SubtleButton,
+        QPushButton#GhostButton {{
+            color: {palette.muted};
+            background-color: transparent;
+            border-color: {palette.border};
+        }}
+
+        QPushButton#SecondaryButton:hover, QPushButton#SubtleButton:hover,
+        QPushButton#GhostButton:hover {{
+            color: {palette.text};
+            background-color: {palette.surface_raised};
+            border-color: {palette.border_hover};
+        }}
+
+        QPushButton#SecondaryButton:pressed, QPushButton#SubtleButton:pressed,
+        QPushButton#GhostButton:pressed {{
+            color: {palette.text};
+            background-color: {palette.surface};
+            border-color: {palette.focus};
+        }}
+
+        QPushButton#SecondaryButton:disabled, QPushButton#SubtleButton:disabled,
+        QPushButton#GhostButton:disabled, QPushButton#DangerButton:disabled {{
+            color: {disabled_text};
+            background-color: {disabled_surface};
+            border-color: {disabled_border};
+        }}
+
+        QPushButton#DangerButton {{
+            color: {palette.danger};
+            background-color: {palette.danger_surface};
+            border-color: {palette.danger_border};
+        }}
+
+        QPushButton#DangerButton:hover {{
+            color: {palette.text};
+            border-color: {palette.danger};
+        }}
+
+        QPushButton#DangerButton:pressed {{
+            color: {palette.text};
+            background-color: {palette.danger_border};
+        }}
+
+        QPushButton#TableSubtleButton, QPushButton#TablePrimaryButton,
+        QPushButton#TableDangerButton {{
+            min-height: {compact_content_height}px;
+            max-height: {compact_content_height}px;
+            padding: 0 12px;
+            border-radius: 6px;
+        }}
+
+        QPushButton#TableSubtleButton {{
+            color: {palette.muted};
+            background-color: transparent;
+            border-color: {palette.border};
+        }}
+
+        QPushButton#TableSubtleButton:hover {{
+            color: {palette.text};
+            background-color: {palette.surface_raised};
+            border-color: {palette.border_hover};
+        }}
+
+        QPushButton#TableSubtleButton:pressed {{
+            color: {palette.text};
+            background-color: {palette.surface};
+            border-color: {palette.focus};
+        }}
+
+        QPushButton#TablePrimaryButton {{
+            color: {palette.accent_text};
+            background-color: {palette.accent};
+            border-color: {palette.accent};
+        }}
+
+        QPushButton#TablePrimaryButton:hover {{
+            background-color: {palette.accent_hover};
+            border-color: {palette.accent_hover};
+        }}
+
+        QPushButton#TablePrimaryButton:pressed {{
+            background-color: {palette.accent_pressed};
+            border-color: {palette.accent_pressed};
+        }}
+
+        QPushButton#TableDangerButton {{
+            color: {palette.danger};
+            background-color: {palette.danger_surface};
+            border-color: {palette.danger_border};
+        }}
+
+        QPushButton#TableDangerButton:hover {{
+            color: {palette.text};
+            border-color: {palette.danger};
+        }}
+
+        QPushButton#TableDangerButton:pressed {{
+            color: {palette.text};
+            background-color: {palette.danger_border};
+        }}
+
+        QPushButton#TableSubtleButton:disabled,
+        QPushButton#TablePrimaryButton:disabled,
+        QPushButton#TableDangerButton:disabled {{
+            color: {disabled_text};
+            background-color: {disabled_surface};
+            border-color: {disabled_border};
+        }}
+
+        QPushButton#PrimaryButton:focus, QPushButton#DownloadButton:focus,
+        QPushButton#HeroButton:focus, QPushButton#SecondaryButton:focus,
+        QPushButton#SubtleButton:focus, QPushButton#GhostButton:focus,
+        QPushButton#DangerButton:focus, QPushButton#TableSubtleButton:focus,
+        QPushButton#TablePrimaryButton:focus, QPushButton#TableDangerButton:focus {{
+            border: 2px solid {palette.focus};
+        }}
+
+        QLabel#StatusSuccess {{ color: {palette.success}; font-weight: 700; }}
+        QLabel#StatusWarning {{ color: {palette.warning}; font-weight: 700; }}
+        QLabel#StatusDanger {{ color: {palette.danger}; font-weight: 700; }}
+
+        QGroupBox#SettingsSection {{
+            margin-top: 12px;
+            padding: 16px 14px 12px 14px;
+            color: {palette.text};
+            background-color: {palette.surface};
+            border: 1px solid {palette.border};
+            border-radius: {metrics.radius}px;
+            font-weight: 700;
+        }}
+
+        QGroupBox#SettingsSection::title {{
+            subcontrol-origin: margin;
+            subcontrol-position: top left;
+            left: 10px;
+            padding: 0 5px;
+            color: {palette.text};
+            background-color: transparent;
+        }}
+
+        QScrollArea#DialogScroll,
+        QScrollArea#DialogScroll > QWidget > QWidget {{
+            background-color: transparent;
+            border: none;
+        }}
+    """

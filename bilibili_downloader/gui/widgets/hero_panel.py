@@ -17,6 +17,15 @@ class HeroPanel(QWidget):
         self.setMinimumHeight(190)
         self._background = QPixmap(asset_path("nebula.jpg"))
 
+    def set_compact(self, compact: bool) -> None:
+        """Switch between the branded empty state and task-focused toolbar."""
+        height = 92 if compact else 190
+        self.setMinimumHeight(height)
+        self.setMaximumHeight(height if compact else 16777215)
+        self.setProperty("compact", compact)
+        self.updateGeometry()
+        self.update()
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)

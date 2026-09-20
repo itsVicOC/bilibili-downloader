@@ -1,7 +1,9 @@
-"""System-aware application theme management."""
+"""System-aware application theme and typography management."""
+
+import sys
 
 from PySide6.QtCore import QObject, Qt
-from PySide6.QtGui import QPalette
+from PySide6.QtGui import QFont, QFontDatabase, QPalette
 
 from bilibili_downloader.gui.resources import load_stylesheet
 
@@ -13,10 +15,28 @@ class ThemeManager(QObject):
         super().__init__(app)
         self._app = app
         self._is_dark = False
+        self._apply_platform_font()
         style_hints = app.styleHints()
         if hasattr(style_hints, "colorSchemeChanged"):
             style_hints.colorSchemeChanged.connect(self._on_color_scheme_changed)
         self.apply_theme(self._system_prefers_dark())
+
+    def _apply_platform_font(self) -> None:
+        """Use a native CJK UI font while preserving platform DPI scaling."""
+        if sys.platform == "darwin":
+            candidates = ("PingFang SC", "Hiragino Sans GB")
+        elif sys.platform == "win32":
+            candidates = ("Microsoft YaHei UI", "Microsoft YaHei")
+        else:
+            candidates = ("Noto Sans CJK SC", "Noto Sans SC", "WenQuanYi Micro Hei")
+
+        available = set(QFontDatabase.families())
+        family = next((name for name in candidates if name in available), "")
+        font = QFont(self._app.font())
+        if family:
+            font.setFamily(family)
+        font.setPointSizeF(10.0)
+        self._app.setFont(font)
 
     @property
     def is_dark(self) -> bool:

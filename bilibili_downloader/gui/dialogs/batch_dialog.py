@@ -6,11 +6,14 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
     QDialogButtonBox,
+    QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -43,12 +46,13 @@ class BatchDialog(QDialog):
         self._resolve_runner = None
 
         self.setWindowTitle("批量导入")
-        self.setMinimumSize(780, 620)
+        self.setMinimumSize(700, 520)
+        self.resize(820, 640)
         self._setup_ui()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(22, 20, 22, 20)
+        layout.setContentsMargins(22, 20, 22, 18)
         layout.setSpacing(12)
 
         title = QLabel("导入作品与合集")
@@ -58,6 +62,16 @@ class BatchDialog(QDialog):
         layout.addWidget(title)
         layout.addWidget(caption)
 
+        scroll = QScrollArea()
+        scroll.setObjectName("DialogScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        body = QWidget()
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(0, 0, 4, 0)
+        body_layout.setSpacing(12)
+
         self._url_text = QPlainTextEdit()
         self._url_text.setMaximumHeight(130)
         self._url_text.setPlaceholderText(
@@ -66,7 +80,7 @@ class BatchDialog(QDialog):
             "https://space.bilibili.com/123/favlist?fid=456"
         )
         self._url_text.textChanged.connect(self._refresh_input_count)
-        layout.addWidget(self._url_text)
+        body_layout.addWidget(self._url_text)
 
         input_row = QHBoxLayout()
         self._count_label = QLabel("0 个来源")
@@ -75,28 +89,36 @@ class BatchDialog(QDialog):
         input_row.addStretch()
         self._resolve_btn = QPushButton("解析并预览")
         self._resolve_btn.setObjectName("PrimaryButton")
+        self._resolve_btn.setMinimumWidth(120)
         self._resolve_btn.clicked.connect(self._start_resolve)
         input_row.addWidget(self._resolve_btn)
-        layout.addLayout(input_row)
+        body_layout.addLayout(input_row)
 
         self._preview = QTableWidget()
         self._preview.setColumnCount(4)
         self._preview.setHorizontalHeaderLabels(["选择", "作品", "UP 主", "来源"])
-        self._preview.horizontalHeader().setStretchLastSection(True)
-        self._preview.setColumnWidth(0, 64)
-        self._preview.setColumnWidth(1, 330)
-        self._preview.setColumnWidth(2, 140)
+        header = self._preview.horizontalHeader()
+        header.setMinimumSectionSize(72)
+        header.setSectionResizeMode(0, QHeaderView.Fixed)
+        header.resizeSection(0, 72)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.Stretch)
         self._preview.verticalHeader().setVisible(False)
         self._preview.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._preview.setAlternatingRowColors(True)
-        layout.addWidget(self._preview, 1)
+        self._preview.setMinimumHeight(220)
+        body_layout.addWidget(self._preview, 1)
 
         self._result_label = QLabel("解析后可在此筛选要加入的作品")
         self._result_label.setObjectName("DialogCaption")
         self._result_label.setWordWrap(True)
-        layout.addWidget(self._result_label)
+        body_layout.addWidget(self._result_label)
+        scroll.setWidget(body)
+        layout.addWidget(scroll, 1)
 
         buttons_row = QHBoxLayout()
+        buttons_row.setSpacing(8)
         select_all = QPushButton("全选")
         select_all.setObjectName("SubtleButton")
         select_all.clicked.connect(lambda: self._set_all_checked(True))
@@ -166,12 +188,18 @@ class BatchDialog(QDialog):
             wrapper_layout.setContentsMargins(0, 0, 0, 0)
             wrapper_layout.addWidget(selector, alignment=Qt.AlignCenter)
             self._preview.setCellWidget(row, 0, wrapper)
-            self._preview.setItem(row, 1, QTableWidgetItem(info.title))
-            self._preview.setItem(row, 2, QTableWidgetItem(info.author))
+            title_item = QTableWidgetItem(info.title)
+            title_item.setToolTip(info.title)
+            self._preview.setItem(row, 1, title_item)
+            author_item = QTableWidgetItem(info.author)
+            author_item.setToolTip(info.author)
+            self._preview.setItem(row, 2, author_item)
             source = info.collection_title or "单个视频"
             if duplicate:
                 source = f"{source} · 已有同源任务"
-            self._preview.setItem(row, 3, QTableWidgetItem(source))
+            source_item = QTableWidgetItem(source)
+            source_item.setToolTip(source)
+            self._preview.setItem(row, 3, source_item)
             self._selectors.append(selector)
 
         details = [f"解析到 {len(items)} 个作品"]
