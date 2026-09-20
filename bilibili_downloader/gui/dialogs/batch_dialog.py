@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from bilibili_downloader.core.batch import classify_batch_inputs
+from bilibili_downloader.gui.resources.styles import UI_METRICS
 from bilibili_downloader.gui.threads.batch_worker import (
     SourceResolveRunner,
     SourceResolveWorker,
@@ -109,7 +110,10 @@ class BatchDialog(QDialog):
         header.setSectionResizeMode(1, QHeaderView.Stretch)
         header.setSectionResizeMode(2, QHeaderView.Stretch)
         header.setSectionResizeMode(3, QHeaderView.Stretch)
-        self._preview.verticalHeader().setVisible(False)
+        vertical_header = self._preview.verticalHeader()
+        vertical_header.setVisible(False)
+        vertical_header.setDefaultSectionSize(UI_METRICS.row_height)
+        vertical_header.setMinimumSectionSize(UI_METRICS.row_height)
         self._preview.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._preview.setAlternatingRowColors(True)
         self._preview.setMinimumHeight(220)

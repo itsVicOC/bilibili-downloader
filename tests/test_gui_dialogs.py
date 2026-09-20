@@ -21,6 +21,7 @@ from bilibili_downloader.gui.dialogs.batch_dialog import BatchDialog
 from bilibili_downloader.gui.dialogs.login_dialog import LoginDialog
 from bilibili_downloader.gui.dialogs.settings_dialog import SettingsDialog
 from bilibili_downloader.gui.main_window import MainWindow
+from bilibili_downloader.gui.resources.styles import UI_METRICS
 from bilibili_downloader.utils.config import ConfigManager
 
 
@@ -147,6 +148,8 @@ def test_batch_dialog_selects_only_main_bangumi_episodes_by_default(qtbot):
     assert dialog._selectors[0].isChecked()
     assert not dialog._selectors[1].isChecked()
     assert dialog._preview.item(1, 3).text() == "系列 · 季度 · PV"
+    assert dialog._preview.rowHeight(0) == UI_METRICS.row_height
+    assert dialog._preview.rowHeight(1) == UI_METRICS.row_height
 
 
 def test_cancelling_copyright_notice_does_not_acknowledge(qtbot, tmp_path, monkeypatch):

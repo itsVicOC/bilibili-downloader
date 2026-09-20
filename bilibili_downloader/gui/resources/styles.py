@@ -1,6 +1,26 @@
 """Application QSS stylesheet and shared visual design tokens."""
 
+import re
 from dataclasses import dataclass
+
+_FONT_SIZE_PATTERN = re.compile(
+    r"(font-size:\s*)(\d+(?:\.\d+)?)(pt\s*;)"
+)
+
+
+def scale_font_sizes(stylesheet: str, factor: float) -> str:
+    """Scale point-based QSS typography without changing widget geometry."""
+    if factor <= 0:
+        raise ValueError("font scale must be positive")
+    if factor == 1.0:
+        return stylesheet
+
+    def replace(match: re.Match[str]) -> str:
+        value = float(match.group(2)) * factor
+        formatted = f"{value:.4f}".rstrip("0").rstrip(".")
+        return f"{match.group(1)}{formatted}{match.group(3)}"
+
+    return _FONT_SIZE_PATTERN.sub(replace, stylesheet)
 
 
 @dataclass(frozen=True)

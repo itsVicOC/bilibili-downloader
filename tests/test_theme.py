@@ -5,6 +5,7 @@ from bilibili_downloader.gui.resources.styles import (
     DARK_PALETTE,
     LIGHT_PALETTE,
     UI_METRICS,
+    scale_font_sizes,
 )
 
 
@@ -15,6 +16,14 @@ def test_dark_and_light_styles_are_distinct():
     assert dark != light
     assert "background-color: #15151a" in dark
     assert "background-color: #f5f5f8" in light
+
+
+def test_macos_typography_scale_increases_all_point_sizes():
+    scaled = load_stylesheet(True, font_scale=1.15)
+
+    assert "font-size: 11.5pt;" in scaled
+    assert "font-size: 23.2875pt;" in scaled
+    assert scale_font_sizes("font-size: 10pt;", 1.0) == "font-size: 10pt;"
 
 
 def test_light_theme_overrides_core_surfaces():

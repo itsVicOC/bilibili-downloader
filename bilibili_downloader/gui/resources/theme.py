@@ -7,6 +7,9 @@ from PySide6.QtGui import QFont, QFontDatabase, QPalette
 
 from bilibili_downloader.gui.resources import load_stylesheet
 
+DEFAULT_FONT_POINT_SIZE = 10.0
+MACOS_FONT_SCALE = 1.15
+
 
 class ThemeManager(QObject):
     """Apply and live-update the theme based on the operating system setting."""
@@ -15,6 +18,7 @@ class ThemeManager(QObject):
         super().__init__(app)
         self._app = app
         self._is_dark = False
+        self._font_scale = MACOS_FONT_SCALE if sys.platform == "darwin" else 1.0
         self._apply_platform_font()
         style_hints = app.styleHints()
         if hasattr(style_hints, "colorSchemeChanged"):
@@ -35,7 +39,7 @@ class ThemeManager(QObject):
         font = QFont(self._app.font())
         if family:
             font.setFamily(family)
-        font.setPointSizeF(10.0)
+        font.setPointSizeF(DEFAULT_FONT_POINT_SIZE * self._font_scale)
         self._app.setFont(font)
 
     @property
@@ -61,7 +65,9 @@ class ThemeManager(QObject):
         """Apply a theme immediately; also useful for visual verification."""
         self._is_dark = is_dark
         self._app.setProperty("darkTheme", is_dark)
-        self._app.setStyleSheet(load_stylesheet(is_dark))
+        self._app.setStyleSheet(
+            load_stylesheet(is_dark, font_scale=self._font_scale)
+        )
         for widget in self._app.topLevelWidgets():
             widget.setProperty("darkTheme", is_dark)
             widget.style().unpolish(widget)
