@@ -55,6 +55,7 @@ case $(uname -s) in
         configure_args+=(
             --disable-pthreads
             --enable-w32threads
+            --extra-ldflags=-static
         )
         ;;
 esac

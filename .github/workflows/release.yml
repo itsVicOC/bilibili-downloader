@@ -171,6 +171,8 @@ jobs:
           $smokeDir = Join-Path $env:RUNNER_TEMP "biliflow-ffmpeg-smoke"
           New-Item -ItemType Directory -Force -Path $smokeDir | Out-Null
           Copy-Item "dist/variants/full/BilibiliDownloader/ffmpeg.exe" "$smokeDir/ffmpeg.exe"
+          $objdump = (Get-Command objdump.exe -ErrorAction Stop).Source
+          & $objdump -p "$smokeDir/ffmpeg.exe" | Select-String "DLL Name:"
           $savedPath = $env:PATH
           try {
             $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"

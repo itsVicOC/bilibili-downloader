@@ -6,7 +6,7 @@
 
 ### Fixed
 
-- 修复 Windows full 包内置 FFmpeg 缺少 `libwinpthread-1.dll`、导致视频合并失败的问题；Windows 构建改用原生线程后端，不再依赖 MSYS2 运行时 DLL。
+- 修复 Windows full 包内置 FFmpeg 缺少 `libwinpthread-1.dll`、导致视频合并失败的问题；Windows 构建改用原生线程后端并静态链接工具链运行库，不再依赖 MSYS2 运行时 DLL。
 - Windows 发布流水线新增隔离 PATH 的内置 FFmpeg 冒烟测试，防止仅在构建机工具链环境中可运行的二进制进入发布包。
 
 ## v0.7.0 - 2026-09-20

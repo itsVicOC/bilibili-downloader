@@ -39,6 +39,7 @@ MACOS_CONFIGURE_ARGS = (
 WINDOWS_CONFIGURE_ARGS = (
     "--disable-pthreads",
     "--enable-w32threads",
+    "--extra-ldflags=-static",
 )
 
 
