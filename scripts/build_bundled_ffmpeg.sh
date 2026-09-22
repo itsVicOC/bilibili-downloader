@@ -42,12 +42,22 @@ configure_args=(
     --enable-muxer=ipod
     --enable-muxer=flac
 )
-if [[ $(uname -s) == "Darwin" ]]; then
-    configure_args+=(
-        --extra-cflags=-mmacosx-version-min=12.0
-        --extra-ldflags=-mmacosx-version-min=12.0
-    )
-fi
+case $(uname -s) in
+    Darwin)
+        configure_args+=(
+            --extra-cflags=-mmacosx-version-min=12.0
+            --extra-ldflags=-mmacosx-version-min=12.0
+        )
+        ;;
+    MINGW*|MSYS*|CYGWIN*)
+        # Use the native Windows threading backend so the standalone executable
+        # does not depend on MSYS2's libwinpthread-1.dll at runtime.
+        configure_args+=(
+            --disable-pthreads
+            --enable-w32threads
+        )
+        ;;
+esac
 ./configure "${configure_args[@]}"
 
 jobs=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)

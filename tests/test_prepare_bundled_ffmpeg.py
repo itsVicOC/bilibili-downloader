@@ -42,6 +42,15 @@ def test_validate_macos_binary_output_requires_macos_12_target() -> None:
     )
 
 
+def test_validate_windows_binary_output_requires_native_threads() -> None:
+    with pytest.raises(ValueError, match="self-contained threading"):
+        prepare_bundled_ffmpeg.validate_windows_binary_output(_version_output())
+
+    prepare_bundled_ffmpeg.validate_windows_binary_output(
+        f"{_version_output()} {' '.join(prepare_bundled_ffmpeg.WINDOWS_CONFIGURE_ARGS)}"
+    )
+
+
 def test_prepare_release_metadata_adds_ffmpeg_only_to_full_sbom(
     tmp_path: Path, monkeypatch
 ) -> None:

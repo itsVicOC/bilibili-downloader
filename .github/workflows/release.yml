@@ -164,6 +164,24 @@ jobs:
           Copy-Item "ffmpeg-build/output/COPYING.LGPLv2.1" "$resources/COPYING.LGPLv2.1"
           Copy-Item "ffmpeg-build/output/FFMPEG-LICENSE.md" "$resources/FFMPEG-LICENSE.md"
 
+      - name: Verify bundled Windows FFmpeg is self-contained
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $smokeDir = Join-Path $env:RUNNER_TEMP "biliflow-ffmpeg-smoke"
+          New-Item -ItemType Directory -Force -Path $smokeDir | Out-Null
+          Copy-Item "dist/variants/full/BilibiliDownloader/ffmpeg.exe" "$smokeDir/ffmpeg.exe"
+          $savedPath = $env:PATH
+          try {
+            $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+            & "$smokeDir/ffmpeg.exe" -version
+            if ($LASTEXITCODE -ne 0) {
+              throw "Bundled FFmpeg failed outside the MSYS2 toolchain environment."
+            }
+          } finally {
+            $env:PATH = $savedPath
+          }
+
       - name: Sign and notarize macOS variants
         if: runner.os == 'macOS'
         shell: bash

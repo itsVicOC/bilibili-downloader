@@ -36,6 +36,10 @@ MACOS_CONFIGURE_ARGS = (
     "--extra-cflags=-mmacosx-version-min=12.0",
     "--extra-ldflags=-mmacosx-version-min=12.0",
 )
+WINDOWS_CONFIGURE_ARGS = (
+    "--disable-pthreads",
+    "--enable-w32threads",
+)
 
 
 def sha256(path: Path) -> str:
@@ -90,6 +94,8 @@ def inspect_binary(binary: Path) -> tuple[str, str]:
     validate_binary_output(version_text, license_text)
     if platform.system() == "Darwin":
         validate_macos_binary_output(version_text)
+    elif platform.system() == "Windows":
+        validate_windows_binary_output(version_text)
     return version_text, license_text
 
 
@@ -112,6 +118,14 @@ def validate_macos_binary_output(version_text: str) -> None:
     if missing_args:
         raise ValueError(
             f"bundled macOS FFmpeg is missing deployment target args: {missing_args}"
+        )
+
+
+def validate_windows_binary_output(version_text: str) -> None:
+    missing_args = [arg for arg in WINDOWS_CONFIGURE_ARGS if arg not in version_text]
+    if missing_args:
+        raise ValueError(
+            f"bundled Windows FFmpeg is missing self-contained threading args: {missing_args}"
         )
 
 

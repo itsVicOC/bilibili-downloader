@@ -33,6 +33,8 @@ python -m bilibili_downloader
 
 full 包应直接使用应用内置 FFmpeg。若 full 包仍提示不可用，请重新完整解压、核对 `SHA256SUMS.txt`，并确认安全软件没有隔离应用内的 `ffmpeg` 或 `ffmpeg.exe`。
 
+Windows v0.7.0 full 包的内置 FFmpeg 会因缺少 `libwinpthread-1.dll` 而无法启动，请直接升级到 v0.7.1 或更高版本。不要从非官方 DLL 下载站点单独下载文件。
+
 lite 包和源码运行先检查：
 
 ```bash
