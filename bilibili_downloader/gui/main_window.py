@@ -15,7 +15,6 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QBoxLayout,
     QCheckBox,
-    QComboBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -69,6 +68,7 @@ from bilibili_downloader.gui.threads.login_status_worker import (
 )
 from bilibili_downloader.gui.threads.resolve_worker import ResolveRunner, ResolveWorker
 from bilibili_downloader.gui.widgets.chinese_input import ChineseLineEdit
+from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
     FieldRow,
     IconButton,
@@ -338,10 +338,10 @@ class MainWindow(QMainWindow):
         controls = SectionCard("输出规格")
         controls.setObjectName("ControlPanel")
         self._output_card = controls
-        self._page_combo = QComboBox()
+        self._page_combo = ComboBox()
         self._page_combo.addItem("当前视频", "current")
         controls.body.addWidget(FieldRow("分 P 范围", self._page_combo))
-        self._output_mode_combo = QComboBox()
+        self._output_mode_combo = ComboBox()
         self._output_mode_combo.addItem("视频 / MP4", OutputMode.VIDEO)
         self._output_mode_combo.addItem("仅音频 / M4A 或 FLAC", OutputMode.AUDIO)
         self._output_mode_combo.setCurrentIndex(
@@ -351,14 +351,14 @@ class MainWindow(QMainWindow):
             self._sync_output_mode_controls
         )
         controls.body.addWidget(FieldRow("输出类型", self._output_mode_combo))
-        self._quality_combo = QComboBox()
+        self._quality_combo = ComboBox()
         self._populate_quality_combo()
         self._quality_combo.currentIndexChanged.connect(self._refresh_codec_options)
         controls.body.addWidget(FieldRow("画面质量", self._quality_combo))
         self._codec_stack = QStackedWidget()
-        self._codec_combo = QComboBox()
+        self._codec_combo = ComboBox()
         self._populate_codec_combo()
-        self._audio_combo = QComboBox()
+        self._audio_combo = ComboBox()
         self._populate_audio_combo()
         self._codec_stack.addWidget(self._codec_combo)
         self._codec_stack.addWidget(self._audio_combo)

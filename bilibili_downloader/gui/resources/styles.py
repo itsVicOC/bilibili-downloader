@@ -194,10 +194,18 @@ def build_component_overrides(is_dark: bool) -> str:
     QLabel#FieldError {{ color: {p.danger}; font-size: 9pt; }}
     QLineEdit[invalid="true"], QComboBox[invalid="true"] {{ border-color: {p.danger_border}; }}
     QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled {{ color: {p.disabled}; background: {p.surface_raised}; border-color: {p.divider}; }}
-    QComboBox {{ padding-right: 28px; }}
-    QComboBox::drop-down {{ subcontrol-origin: padding; subcontrol-position: right; width: 24px; border: none; }}
+    QComboBox {{ padding: 0 12px; combobox-popup: 0; }}
+    QComboBox:hover {{ background: {p.surface_raised}; }}
+    QComboBox[popupOpen="true"] {{ background: {p.selection}; border-color: {p.focus}; }}
+    QComboBox::drop-down {{ subcontrol-origin: padding; subcontrol-position: top right; width: 30px; border: none; }}
     QComboBox::down-arrow {{ image: url(__CHEVRON_ICON__); width: 12px; height: 12px; }}
-    QComboBox QAbstractItemView {{ background: {p.surface}; color: {p.text}; selection-background-color: {p.selection}; border: 1px solid {p.border}; outline: none; padding: 4px; }}
+    ComboBox::down-arrow {{ image: none; width: 0; height: 0; }}
+    QFrame#ComboPopup {{ background: transparent; border: none; }}
+    QComboBox QAbstractItemView {{
+        background: {p.surface}; color: {p.text}; selection-background-color: {p.selection};
+        selection-color: {p.text}; border: 1px solid {p.border}; border-radius: 10px;
+        outline: none; padding: 6px;
+    }}
     QCheckBox {{ spacing: 8px; min-height: 26px; }}
     QCheckBox::indicator {{ width: 16px; height: 16px; border: 2px solid {p.border}; border-radius: 5px; background: {p.surface}; }}
     QCheckBox::indicator:checked {{ background: {p.accent}; border-color: {p.focus}; image: url(__CHECKMARK_ICON__); }}
@@ -242,10 +250,20 @@ def build_component_overrides(is_dark: bool) -> str:
     QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
     QStatusBar {{ background: {p.sidebar}; color: {p.muted}; border-top: 1px solid {p.divider}; }}
     QStatusBar::item {{ border: none; }}
-    QMenu {{ background: {p.surface}; border: 1px solid {p.divider}; border-radius: 8px; padding: 6px; }}
-    QMenu::item {{ padding: 8px 18px; border-radius: 5px; }}
-    QMenu::item:selected {{ background: {p.selection}; }}
+    QMenu {{ background: {p.surface}; color: {p.text}; border: 1px solid {p.border}; border-radius: 10px; padding: 6px; }}
+    QMenu::item {{ padding: 9px 18px; border: 1px solid transparent; border-radius: 6px; }}
+    QMenu::item:selected {{ background: {p.selection}; color: {p.active_text}; }}
     QMenu::item:disabled {{ color: {p.disabled}; }}
+    QMenu::separator {{ height: 1px; background: {p.divider}; margin: 6px 12px; }}
+    QPushButton[menuButton="true"], QPushButton#TableSubtleButton[menuButton="true"],
+    QPushButton#TextButton[menuButton="true"] {{ padding-right: 30px; }}
+    QPushButton[menuButton="true"]:open, QPushButton#TableSubtleButton[menuButton="true"]:open,
+    QPushButton#TextButton[menuButton="true"]:open {{ background: {p.selection}; border-color: {p.focus}; }}
+    QPushButton::menu-indicator {{
+        image: url(__CHEVRON_ICON__); width: 12px; height: 12px;
+        subcontrol-origin: padding; subcontrol-position: center right; right: 10px;
+    }}
+    QPushButton::menu-indicator:open {{ image: url(__CHEVRON_UP_ICON__); }}
     QMessageBox {{ background: {p.background}; }}
     QMessageBox QLabel#qt_msgbox_informativelabel {{ min-width: 320px; }}
     QToolTip {{ background: {p.surface_raised}; color: {p.text}; border: 1px solid {p.border}; padding: 6px; }}

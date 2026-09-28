@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import tempfile
@@ -16,8 +17,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from PySide6.QtCore import QPoint, QRect
 from PySide6.QtGui import QCloseEvent, QColor, QIcon, QPainter, QPixmap
-from PySide6.QtWidgets import QApplication, QLineEdit, QMessageBox, QPlainTextEdit
+from PySide6.QtWidgets import (
+    QApplication,
+    QLineEdit,
+    QMessageBox,
+    QPlainTextEdit,
+    QPushButton,
+)
 
 from bilibili_downloader.core.live_models import (
     LiveRoom,
@@ -52,7 +60,7 @@ def _flush_events(app: QApplication) -> None:
         app.processEvents()
 
 
-def _save_widget(app: QApplication, widget, filename: str) -> None:
+def _save_widget(app: QApplication, widget, filename: str, popup=None) -> None:
     widget.ensurePolished()
     widget.show()
     _flush_events(app)
@@ -75,10 +83,19 @@ def _save_widget(app: QApplication, widget, filename: str) -> None:
     _flush_events(app)
     output = OUTPUT_DIR / filename
     captured = widget.grab()
-    flattened = QPixmap(captured.size())
+    bounds = QRect(QPoint(), captured.size())
+    popup_rect = None
+    if popup is not None:
+        popup_rect = QRect(
+            widget.mapFromGlobal(popup.mapToGlobal(QPoint())), popup.size()
+        )
+        bounds = bounds.united(popup_rect)
+    flattened = QPixmap(bounds.size())
     flattened.fill(QColor("#14131b" if app.property("darkTheme") else "#f7f5fb"))
     painter = QPainter(flattened)
-    painter.drawPixmap(0, 0, captured)
+    painter.drawPixmap(-bounds.topLeft(), captured)
+    if popup_rect is not None:
+        painter.drawPixmap(popup_rect.topLeft() - bounds.topLeft(), popup.grab())
     painter.end()
     if not flattened.save(str(output), "PNG"):
         raise RuntimeError(f"无法保存截图：{output}")
@@ -287,7 +304,13 @@ def _populate_live_page(window: MainWindow, workdir: Path) -> None:
             "duration": 2592,
             "size": 2480000000,
             "speed": 1300000,
-            "qualities": [],
+            "qualities": [
+                {"qn": 10000, "label": "原画"},
+                {"qn": 400, "label": "蓝光"},
+                {"qn": 250, "label": "超清"},
+                {"qn": 150, "label": "高清"},
+                {"qn": 80, "label": "流畅"},
+            ],
             "quality": 0,
             "output_dir": str(workdir),
             "segment_seconds": 1800,
@@ -336,6 +359,80 @@ def _populate_live_page(window: MainWindow, workdir: Path) -> None:
     page.rooms.selectRow(0)
     window._task_page.history.expandAll()
     window._show_workspace(1)
+
+
+def _capture_dropdowns(app, theme, window):
+    """Include the actual top-level popup, which QWidget.grab alone excludes."""
+    for dark in (True, False):
+        theme.apply_theme(dark)
+        for width, height in ((900, 640), (1120, 760), (1320, 860)):
+            window.resize(width, height)
+            controls = (
+                (
+                    "download",
+                    lambda: (
+                        window._show_workspace(0),
+                        window._download_tabs.setCurrentIndex(0),
+                    ),
+                    window._quality_combo,
+                    window._workspace_scroll,
+                ),
+                (
+                    "live",
+                    lambda: window._show_workspace(1),
+                    window._live_page.quality,
+                    window._live_page._scroll,
+                ),
+                (
+                    "tasks",
+                    lambda: window._show_tasks(0),
+                    window._task_page.filter,
+                    None,
+                ),
+                (
+                    "settings",
+                    lambda: window._show_settings_tab(0),
+                    window._settings_page._quality_combo,
+                    window._settings_page.tabs.widget(0),
+                ),
+            )
+            for name, navigate, combo, scroll in controls:
+                navigate()
+                window.show()
+                _flush_events(app)
+                if scroll:
+                    scroll.ensureWidgetVisible(combo, 0, 16)
+                    _flush_events(app)
+                combo.showPopup()
+                _flush_events(app)
+                _save_widget(
+                    app,
+                    window,
+                    f"biliflow-dropdown-{name}-{'dark' if dark else 'light'}-{width}.png",
+                    popup=combo.view().window(),
+                )
+                combo.hidePopup()
+                if scroll:
+                    scroll.verticalScrollBar().setValue(0)
+            window._show_tasks(0)
+            window.show()
+            _flush_events(app)
+            button = next(
+                button
+                for button in window._task_page.findChildren(QPushButton)
+                if button.menu()
+            )
+            menu = button.menu()
+            button.showMenu()
+            menu.setActiveAction(menu.actions()[0])
+            _flush_events(app)
+            _save_widget(
+                app,
+                window,
+                f"biliflow-dropdown-more-{'dark' if dark else 'light'}-{width}.png",
+                popup=menu,
+            )
+            menu.hide()
 
 
 def _capture_states(app, theme, window, temp_root):
@@ -485,13 +582,37 @@ def _capture_dialogs(app, window, suffix=""):
 
 def main() -> int:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    app = QApplication.instance() or QApplication(sys.argv)
-    app.setApplicationName("BiliFlow Docs")
-    app.setWindowIcon(QIcon(asset_path("app_icon.png")))
-    theme = ThemeManager(app)
-
     with tempfile.TemporaryDirectory(prefix="biliflow-docs-") as temp_dir:
         temp_root = Path(temp_dir)
+        if (
+            not QApplication.instance()
+            and os.environ.get("QT_QPA_PLATFORM") == "offscreen"
+        ):
+            # Qt's default 800x800 virtual screen would clamp a large window's
+            # dropdown far away from its field. Keep the original DPI and scale.
+            screen_config = temp_root / "screen.json"
+            screen_config.write_text(
+                json.dumps(
+                    {
+                        "screens": [
+                            {
+                                "name": "docs",
+                                "width": 2000,
+                                "height": 1200,
+                                "logicalDpi": 96,
+                                "logicalBaseDpi": 96,
+                                "dpr": 1.0,
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            os.environ["QT_QPA_PLATFORM"] = f"offscreen:configfile={screen_config}"
+        app = QApplication.instance() or QApplication(sys.argv)
+        app.setApplicationName("BiliFlow Docs")
+        app.setWindowIcon(QIcon(asset_path("app_icon.png")))
+        theme = ThemeManager(app)
         app.setProperty("docsTempRoot", str(temp_root))
 
         window = _make_main_window(temp_root / "workspace")
@@ -549,6 +670,7 @@ def main() -> int:
         _save_widget(app, window, "biliflow-dark.png")
         theme.apply_theme(False)
         _save_widget(app, window, "biliflow-light.png")
+        _capture_dropdowns(app, theme, window)
         theme.apply_theme(True)
         login_dialog = LoginDialog(None)
         login_dialog.resize(560, 660)

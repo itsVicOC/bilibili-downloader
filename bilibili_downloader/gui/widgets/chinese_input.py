@@ -1,14 +1,16 @@
 """Shared QLineEdit subclass with Chinese context menu."""
 
 from PySide6.QtGui import QGuiApplication
-from PySide6.QtWidgets import QLineEdit, QMenu
+from PySide6.QtWidgets import QLineEdit
+
+from bilibili_downloader.gui.widgets.components import PopupMenu
 
 
 class ChineseLineEdit(QLineEdit):
     """QLineEdit with Chinese context menu."""
 
     def contextMenuEvent(self, event):
-        menu = QMenu(self)
+        menu = PopupMenu(self)
         undo_act = menu.addAction("撤销")
         redo_act = menu.addAction("重做")
         menu.addSeparator()

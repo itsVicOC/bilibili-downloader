@@ -6,12 +6,10 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QComboBox,
     QFileDialog,
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QMenu,
     QPlainTextEdit,
     QPushButton,
     QStackedWidget,
@@ -26,7 +24,13 @@ from PySide6.QtWidgets import (
 
 from bilibili_downloader.core.models import TaskStatus
 from bilibili_downloader.gui.resources.styles import UI_METRICS
-from bilibili_downloader.gui.widgets.components import EmptyState, Notice, PageHeader
+from bilibili_downloader.gui.widgets.combo_box import ComboBox
+from bilibili_downloader.gui.widgets.components import (
+    EmptyState,
+    Notice,
+    PageHeader,
+    PopupMenu,
+)
 from bilibili_downloader.gui.widgets.download_list import (
     STATUS_TONE_ROLE,
     _StatusDelegate,
@@ -94,7 +98,7 @@ class TaskPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
         toolbar = QHBoxLayout()
-        self.filter = QComboBox()
+        self.filter = ComboBox()
         for text, key in (
             ("全部任务", "all"),
             ("进行中", "active"),
@@ -121,7 +125,8 @@ class TaskPage(QWidget):
             toolbar.addWidget(button)
         more = QPushButton("更多")
         more.setObjectName("TableSubtleButton")
-        menu = QMenu(more)
+        more.setProperty("menuButton", True)
+        menu = PopupMenu(more)
         menu.addAction("清理下载缓存", self.clear_cache_requested.emit)
         more.setMenu(menu)
         toolbar.addWidget(more)

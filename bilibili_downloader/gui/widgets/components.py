@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QMessageBox,
     QPushButton,
     QScrollArea,
@@ -61,6 +62,14 @@ def repolish(widget):
     widget.style().unpolish(widget)
     widget.style().polish(widget)
     widget.update()
+
+
+class PopupMenu(QMenu):
+    """Allow the shared menu's rounded corners to stay transparent."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
 
 
 class IconButton(QPushButton):

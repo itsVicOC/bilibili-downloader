@@ -28,6 +28,7 @@ from bilibili_downloader.core.models import (
     VideoQuality,
 )
 from bilibili_downloader.core.recorder import check_recorder, find_recorder
+from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
     FieldRow,
     Notice,
@@ -318,7 +319,7 @@ class SettingsDialog(QDialog):
         return entry
 
     def _combo(self, key, card, label, values):
-        combo = QComboBox()
+        combo = ComboBox()
         for text, value in values:
             combo.addItem(text, value)
         self._controls[key] = combo

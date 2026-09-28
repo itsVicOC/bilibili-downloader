@@ -4,7 +4,6 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QBoxLayout,
     QCheckBox,
-    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -12,7 +11,6 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
-    QMenu,
     QPushButton,
     QSpinBox,
     QStackedWidget,
@@ -29,11 +27,13 @@ from bilibili_downloader.gui.dialogs.settings_dialog import SettingsDialog
 from bilibili_downloader.gui.live_controller import LiveUiController
 from bilibili_downloader.gui.resources.styles import UI_METRICS
 from bilibili_downloader.gui.widgets.chinese_input import ChineseLineEdit
+from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
     EmptyState,
     FieldRow,
     Notice,
     PageHeader,
+    PopupMenu,
     SectionCard,
     StatusBadge,
     repolish,
@@ -199,7 +199,7 @@ class LivePage(QWidget):
         self._detail.setTextFormat(Qt.PlainText)
         self._detail.setWordWrap(True)
         details.addWidget(self._detail)
-        self.quality = QComboBox()
+        self.quality = ComboBox()
         self.quality.activated.connect(self._set_quality)
         details.addWidget(FieldRow("下次拉流画质", self.quality))
         self._directory = QLineEdit()
@@ -228,7 +228,8 @@ class LivePage(QWidget):
         buttons.addWidget(self.room_settings)
         more = QPushButton("更多")
         more.setObjectName("TextButton")
-        menu = QMenu(more)
+        more.setProperty("menuButton", True)
+        menu = PopupMenu(more)
         self.remove_action = menu.addAction("移除直播间")
         self.remove_action.triggered.connect(lambda: self._command("remove"))
         more.setMenu(menu)

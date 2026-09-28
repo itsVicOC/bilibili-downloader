@@ -51,6 +51,24 @@
 
 测试检查正文及语义文字对比度不低于 4.5:1，交互边界和焦点不低于 3:1。进度文字按填充和未填充区域分别绘制，避免白字落在浅粉进度上。
 
+## 下拉选择与菜单
+
+下载规格、直播画质、任务筛选和设置共用 `gui/widgets/combo_box.py` 的下拉组件。选择框保持 40px 高度与 2px 固定焦点边界；箭头随深浅主题、禁用及展开状态更新。展开列表使用 10px 圆角、6px 内边距和至少 40px 的选项行，当前项以淡粉背景、粉色文字与勾选标记展示；悬停和键盘移动使用局部描边，不改变已选值。
+
+最多同时展示 8 项，更多选项纵向滚动。长标题右侧省略，展开项及选择框均提供完整文字提示，避免长文本撑宽窗口。保留 Qt 的屏幕边界定位、鼠标选择、键盘上下选择、Enter 提交和 Esc 取消；禁用选项无法选择。取消、点击外部或切页关闭浮层后，箭头恢复收起状态。
+
+「更多」及中文输入框右键菜单共用圆角表面、主题箭头、选中颜色、禁用文字和分隔线。菜单按钮给箭头单独留出空间，避免与文案重叠。
+
+离线截图工具捕获真实弹出浮层，并使用保持原 DPI 的大尺寸虚拟屏幕，避免默认 800×800 屏幕将菜单移动到错误位置。下面的尺寸指主窗口；截图会完整保留可能伸出主窗口的浮层。
+
+| 场景 | 深色 900×640 | 浅色 900×640 | 深色 1120×760 | 浅色 1120×760 | 深色 1320×860 | 浅色 1320×860 |
+|---|---|---|---|---|---|---|
+| 下载画质 | [查看](images/biliflow-dropdown-download-dark-900.png) | [查看](images/biliflow-dropdown-download-light-900.png) | [查看](images/biliflow-dropdown-download-dark-1120.png) | [查看](images/biliflow-dropdown-download-light-1120.png) | [查看](images/biliflow-dropdown-download-dark-1320.png) | [查看](images/biliflow-dropdown-download-light-1320.png) |
+| 直播画质 | [查看](images/biliflow-dropdown-live-dark-900.png) | [查看](images/biliflow-dropdown-live-light-900.png) | [查看](images/biliflow-dropdown-live-dark-1120.png) | [查看](images/biliflow-dropdown-live-light-1120.png) | [查看](images/biliflow-dropdown-live-dark-1320.png) | [查看](images/biliflow-dropdown-live-light-1320.png) |
+| 任务筛选 | [查看](images/biliflow-dropdown-tasks-dark-900.png) | [查看](images/biliflow-dropdown-tasks-light-900.png) | [查看](images/biliflow-dropdown-tasks-dark-1120.png) | [查看](images/biliflow-dropdown-tasks-light-1120.png) | [查看](images/biliflow-dropdown-tasks-dark-1320.png) | [查看](images/biliflow-dropdown-tasks-light-1320.png) |
+| 默认规格 | [查看](images/biliflow-dropdown-settings-dark-900.png) | [查看](images/biliflow-dropdown-settings-light-900.png) | [查看](images/biliflow-dropdown-settings-dark-1120.png) | [查看](images/biliflow-dropdown-settings-light-1120.png) | [查看](images/biliflow-dropdown-settings-dark-1320.png) | [查看](images/biliflow-dropdown-settings-light-1320.png) |
+| 更多操作 | [查看](images/biliflow-dropdown-more-dark-900.png) | [查看](images/biliflow-dropdown-more-light-900.png) | [查看](images/biliflow-dropdown-more-dark-1120.png) | [查看](images/biliflow-dropdown-more-light-1120.png) | [查看](images/biliflow-dropdown-more-dark-1320.png) | [查看](images/biliflow-dropdown-more-light-1320.png) |
+
 ## 运行状态与兼容性
 
 `LiveUiController` 集中持有一份直播服务、数据库、实例锁、刷新计时器和导出任务。直播页与任务中心订阅同一快照；服务消息只消费一次，再同步展示。下载继续使用原有稳定任务 ID 和工作线程映射。房间与历史通过房间 ID、场次 ID、片段路径保留选择与展开状态。
@@ -97,4 +115,4 @@
 
 布局回归覆盖两种主题、三种窗口尺寸、所有导航与页签，检查固定操作可见、主体无横向滚动。行为回归覆盖页面状态保留、单一直播服务、稳定 ID、批量失效与去重、设置草稿合并和离开提示、直播状态限制、历史展开与导出防重复。已有下载恢复、账号、版权、API、CLI 与录制测试一并执行。
 
-本轮 GUI 渲染与人工截图检查在 macOS 的 PySide6 offscreen 环境完成。Windows / Linux 原生窗口边框、平台字体替代、系统文件选择器及不同 DPI 的实际显示仍需对应平台检查；这些差异不由离线截图确认。直播原生引擎和真实长时录制的既有发布验收范围见[直播录制](LIVE_RECORDING.md#发布验收状态2026-09-27)。
+本轮 GUI 渲染与人工截图检查在 macOS 的 PySide6 offscreen 环境完成。Windows / Linux 原生窗口边框、平台字体替代、系统文件选择器及不同 DPI 的实际显示仍需对应平台检查；这些差异不由离线截图确认。直播原生引擎和真实长时录制的既有发布验收范围见[直播录制](LIVE_RECORDING.md#发布验收状态2026-09-28)。
