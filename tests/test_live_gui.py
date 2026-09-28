@@ -28,9 +28,10 @@ def test_live_page_fits_small_window_and_navigation_preserves_downloads(
     assert window._workspace_pages.currentWidget() is window._live_page
     assert window.width() == 900
     assert window._live_page.source.isVisible()
-    assert window._live_page.history.height() > 60
+    assert window._live_page._room_stack.height() >= 180
+    assert window._live_page.controller is window._task_page.controller
     window._home_nav.click()
-    assert window._workspace_pages.currentWidget() is window._workspace_scroll
+    assert window._workspace_pages.currentIndex() == 0
     window._live_page.service.shutdown()
     window._live_page.shutdown()
 

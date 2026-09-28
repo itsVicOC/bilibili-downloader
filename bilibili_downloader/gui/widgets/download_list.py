@@ -1,7 +1,7 @@
 """Download list table widget with cancel and retry support."""
 
-from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPalette
+from PySide6.QtCore import QRect, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QPainter, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -24,12 +24,13 @@ from bilibili_downloader.core.models import (
     TaskStatus,
     VideoQuality,
 )
-from bilibili_downloader.gui.resources.paths import asset_path
 from bilibili_downloader.gui.resources.styles import (
     DARK_PALETTE,
     LIGHT_PALETTE,
     UI_METRICS,
+    readable_fill_text,
 )
+from bilibili_downloader.gui.widgets.components import line_icon
 
 ACTION_BUTTON_MIN_WIDTH = 60
 ACTION_BUTTON_GAP = 6
@@ -41,6 +42,47 @@ _TABLE_BUTTON_NAMES = {
     "PrimaryButton": "TablePrimaryButton",
     "DangerButton": "TableDangerButton",
 }
+
+
+class _ReadableProgressBar(QProgressBar):
+    """Paint text with separate contrast on the filled and empty tracks."""
+
+    def __init__(self):
+        super().__init__()
+        self.setTextVisible(False)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        app = QApplication.instance()
+        dark = bool(app and app.property("darkTheme"))
+        p = DARK_PALETTE if dark else LIGHT_PALETTE
+        painter = QPainter(self)
+        text = f"{self.value()}%"
+        painter.setPen(QColor(p.text))
+        painter.drawText(self.rect(), Qt.AlignCenter, text)
+        width = round(self.width() * self.value() / max(1, self.maximum()))
+        painter.setClipRect(QRect(0, 0, width, self.height()))
+        fill = {
+            "CompletedProgress": p.success,
+            "WarningProgress": p.warning,
+            "ErrorProgress": p.danger_border,
+            "PausedProgress": p.border,
+            "CancelledProgress": p.border,
+        }.get(self.objectName(), p.accent)
+        painter.setPen(QColor(readable_fill_text(fill, p.accent_text)))
+        painter.drawText(self.rect(), Qt.AlignCenter, text)
+        painter.end()
+
+
+class _ProgressCell(QWidget):
+    """Center the fixed-height track in the table's full content rectangle."""
+
+    def __init__(self, bar):
+        super().__init__()
+        self.bar = bar
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(bar, 1, Qt.AlignVCenter)
 
 
 class _StatusDelegate(QStyledItemDelegate):
@@ -55,6 +97,7 @@ class _StatusDelegate(QStyledItemDelegate):
             dark = bool(app and app.property("darkTheme"))
             palette = DARK_PALETTE if dark else LIGHT_PALETTE
             colors = {
+                "active": palette.active_text,
                 "success": palette.success,
                 "warning": palette.warning,
                 "danger": palette.danger,
@@ -130,10 +173,10 @@ class DownloadListWidget(QTableWidget):
     def __init__(self):
         super().__init__()
         self._next_id = 0
-        self._workers = {}       # download_id -> worker reference
-        self._items = {}         # download_id -> DownloadItem snapshot
-        self._id_to_row = {}     # download_id -> current row index
-        self._states = {}        # download_id -> TaskStatus
+        self._workers = {}  # download_id -> worker reference
+        self._items = {}  # download_id -> DownloadItem snapshot
+        self._id_to_row = {}  # download_id -> current row index
+        self._states = {}  # download_id -> TaskStatus
         self._output_paths = {}  # download_id -> completed media path
         self._placeholder_active = False
         self._setup_ui()
@@ -142,7 +185,9 @@ class DownloadListWidget(QTableWidget):
         self.setColumnCount(5)
         self.setHorizontalHeaderLabels(["作品", "规格", "传输进度", "任务状态", "操作"])
         self.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        self.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
+        self.horizontalHeader().resizeSection(1, 110)
+        self.horizontalHeader().setMinimumSectionSize(40)
         self.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
         self.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
         self.horizontalHeader().resizeSection(2, 210)
@@ -150,9 +195,7 @@ class DownloadListWidget(QTableWidget):
         self.horizontalHeader().setSectionResizeMode(4, QHeaderView.Fixed)
         self.horizontalHeader().resizeSection(
             4,
-            ACTION_BUTTON_MIN_WIDTH * 2
-            + ACTION_BUTTON_GAP
-            + ACTION_CELL_PADDING * 2,
+            ACTION_BUTTON_MIN_WIDTH * 2 + ACTION_BUTTON_GAP + ACTION_CELL_PADDING * 2,
         )
         self.verticalHeader().setVisible(False)
         self.verticalHeader().setDefaultSectionSize(UI_METRICS.row_height)
@@ -201,17 +244,29 @@ class DownloadListWidget(QTableWidget):
                 item.selected_audio_quality, f"音频 {item.selected_audio_quality}"
             )
             if item.output_mode == OutputMode.AUDIO
-            else item.selected_quality.label
+            else f"{item.selected_quality.label} · {VIDEO_CODEC_MAP.get(item.selected_video_codec, item.selected_video_codec)}"
         )
         quality_item = QTableWidgetItem(quality_label)
+        quality_item.setToolTip(quality_label)
         quality_item.setData(Qt.UserRole, download_id)
         self.setItem(row, 1, quality_item)
 
-        progress_bar = QProgressBar()
+        progress_bar = _ReadableProgressBar()
         progress_bar.setMinimum(0)
         progress_bar.setMaximum(100)
         progress_bar.setValue(int(progress * 100))
-        self.setCellWidget(row, 2, progress_bar)
+        self.setCellWidget(row, 2, _ProgressCell(progress_bar))
+        _set_progress_state(
+            progress_bar,
+            {
+                TaskStatus.COMPLETED: "WarningProgress"
+                if warnings
+                else "CompletedProgress",
+                TaskStatus.FAILED: "ErrorProgress",
+                TaskStatus.PAUSED: "PausedProgress",
+                TaskStatus.CANCELLED: "CancelledProgress",
+            }.get(status, ""),
+        )
 
         status_item = QTableWidgetItem(status_text or _status_label(status))
         status_item.setData(Qt.UserRole, download_id)
@@ -238,10 +293,10 @@ class DownloadListWidget(QTableWidget):
         title.setData(Qt.UserRole, download_id)
         self.setItem(row, 0, title)
         self.setItem(row, 1, QTableWidgetItem("解析失败"))
-        progress = QProgressBar()
+        progress = _ReadableProgressBar()
         progress.setValue(0)
         _set_progress_state(progress, "ErrorProgress")
-        self.setCellWidget(row, 2, progress)
+        self.setCellWidget(row, 2, _ProgressCell(progress))
         status = QTableWidgetItem("未加入队列")
         status.setData(STATUS_TONE_ROLE, "danger")
         status.setToolTip(error)
@@ -256,6 +311,10 @@ class DownloadListWidget(QTableWidget):
     def _row_for(self, download_id: int) -> int | None:
         """Return the current row index for a download ID."""
         return self._id_to_row.get(download_id)
+
+    def _progress_at(self, row: int) -> QProgressBar | None:
+        cell = self.cellWidget(row, 2)
+        return cell.bar if isinstance(cell, _ProgressCell) else None
 
     def _rebuild_row_mapping(self):
         """Rebuild id->row mapping after row insertion/deletion."""
@@ -292,22 +351,34 @@ class DownloadListWidget(QTableWidget):
         """Unregister a worker after download completes."""
         self._workers.pop(download_id, None)
 
-    def update_progress(self, download_id: int, progress: float, status_text: str):
+    def update_progress(
+        self,
+        download_id: int,
+        progress: float,
+        status_text: str,
+        status=TaskStatus.DOWNLOADING,
+    ):
         """Update progress bar and status for a download ID."""
         row = self._row_for(download_id)
         if row is None:
             return
-        progress_bar = self.cellWidget(row, 2)
+        progress_bar = self._progress_at(row)
         if progress_bar:
             progress_bar.setValue(int(progress * 100))
 
+        self._states[download_id] = status
         status_item = self.item(row, 3)
         if status_item:
+            status_item.setData(STATUS_TONE_ROLE, _status_tone(status))
             status_item.setText(status_text)
             status_item.setToolTip(status_text)
 
     def mark_downloading(self, download_id: int):
         self._states[download_id] = TaskStatus.DOWNLOADING
+        row = self._row_for(download_id)
+        if row is not None:
+            _set_progress_state(self._progress_at(row), "")
+            self.item(row, 3).setData(STATUS_TONE_ROLE, "active")
         self._set_actions(download_id, TaskStatus.DOWNLOADING)
 
     def mark_done(self, download_id: int, outcome=None):
@@ -319,23 +390,30 @@ class DownloadListWidget(QTableWidget):
         self._states[download_id] = TaskStatus.COMPLETED
         if outcome is not None:
             self._output_paths[download_id] = outcome.video_path
-        progress_bar = self.cellWidget(row, 2)
+        progress_bar = self._progress_at(row)
         if progress_bar:
-            _set_progress_state(progress_bar, "")
+            _set_progress_state(
+                progress_bar,
+                "WarningProgress"
+                if getattr(outcome, "warnings", None)
+                else "CompletedProgress",
+            )
             progress_bar.setValue(100)
 
         status_item = self.item(row, 3)
         if status_item:
             warnings = list(getattr(outcome, "warnings", []) or [])
             status_item.setText("部分完成" if warnings else "完成")
-            status_item.setData(
-                STATUS_TONE_ROLE, "warning" if warnings else "success"
-            )
+            status_item.setData(STATUS_TONE_ROLE, "warning" if warnings else "success")
             status_item.setToolTip("\n".join(warnings))
 
         if outcome is not None and outcome.actual_quality is not None:
             quality = next(
-                (entry.label for entry in VideoQuality if entry.value == outcome.actual_quality),
+                (
+                    entry.label
+                    for entry in VideoQuality
+                    if entry.value == outcome.actual_quality
+                ),
                 str(outcome.actual_quality),
             )
             codec = VIDEO_CODEC_MAP.get(
@@ -345,6 +423,7 @@ class DownloadListWidget(QTableWidget):
             spec_item = self.item(row, 1)
             if spec_item:
                 spec_item.setText(f"{quality} · {codec}")
+                spec_item.setToolTip(spec_item.text())
         elif outcome is not None and outcome.actual_audio_quality is not None:
             audio = AUDIO_CODEC_MAP.get(
                 outcome.actual_audio_quality,
@@ -353,6 +432,7 @@ class DownloadListWidget(QTableWidget):
             spec_item = self.item(row, 1)
             if spec_item:
                 spec_item.setText(audio)
+                spec_item.setToolTip(audio)
 
         self._set_actions(download_id, TaskStatus.COMPLETED)
 
@@ -363,7 +443,7 @@ class DownloadListWidget(QTableWidget):
         if row is None:
             return
         self._states[download_id] = TaskStatus.FAILED
-        progress_bar = self.cellWidget(row, 2)
+        progress_bar = self._progress_at(row)
         if progress_bar:
             _set_progress_state(progress_bar, "ErrorProgress")
 
@@ -382,6 +462,7 @@ class DownloadListWidget(QTableWidget):
         if row is None:
             return
         self._states[download_id] = TaskStatus.CANCELLED
+        _set_progress_state(self._progress_at(row), "CancelledProgress")
         status_item = self.item(row, 3)
         if status_item:
             status_item.setText("已取消")
@@ -394,6 +475,7 @@ class DownloadListWidget(QTableWidget):
         if row is None:
             return
         self._states[download_id] = TaskStatus.PAUSED
+        _set_progress_state(self._progress_at(row), "PausedProgress")
         status_item = self.item(row, 3)
         if status_item:
             status_item.setText("已暂停，可继续")
@@ -405,7 +487,7 @@ class DownloadListWidget(QTableWidget):
         row = self._row_for(download_id)
         if row is None:
             return
-        progress_bar = self.cellWidget(row, 2)
+        progress_bar = self._progress_at(row)
         if progress_bar:
             progress_bar.setValue(0)
             _set_progress_state(progress_bar, "")
@@ -508,8 +590,10 @@ class DownloadListWidget(QTableWidget):
             return
         self._placeholder_active = True
         self.insertRow(0)
-        placeholder = QTableWidgetItem("  暂无任务 · 在上方解析作品后加入下载队列")
-        placeholder.setIcon(QIcon(asset_path("sparkle.png")))
+        placeholder = QTableWidgetItem(
+            "  暂无任务 · 在视频下载工作台解析作品后加入下载队列"
+        )
+        placeholder.setIcon(line_icon("star"))
         placeholder.setSizeHint(QSize(0, 54))
         placeholder.setTextAlignment(Qt.AlignCenter)
         placeholder.setForeground(Qt.gray)
@@ -531,7 +615,10 @@ class DownloadListWidget(QTableWidget):
 
     def resizeEvent(self, event):
         """Keep progress useful without starving title text on compact windows."""
-        progress_width = 160 if event.size().width() < 800 else 210
+        progress_width = 120 if event.size().width() < 800 else 170
+        self.horizontalHeader().resizeSection(
+            1, 100 if event.size().width() < 800 else 140
+        )
         self.horizontalHeader().resizeSection(2, progress_width)
         super().resizeEvent(event)
 
@@ -562,6 +649,6 @@ def _status_tone(status: TaskStatus, has_warnings: bool = False) -> str:
         return "danger"
     if status in (TaskStatus.PAUSED, TaskStatus.CANCELLED):
         return "muted"
-    if status == TaskStatus.MERGING:
-        return "warning"
+    if status in (TaskStatus.MERGING, TaskStatus.DOWNLOADING):
+        return "active"
     return "muted"

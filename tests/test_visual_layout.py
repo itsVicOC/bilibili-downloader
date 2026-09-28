@@ -1,6 +1,6 @@
 """Geometry regressions for the responsive desktop visual system."""
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, QRect, Qt
 from PySide6.QtWidgets import QApplication, QPushButton
 
 from bilibili_downloader.core.models import (
@@ -46,6 +46,7 @@ def test_table_action_buttons_have_consistent_valid_geometry(qtbot, tmp_path):
     _add_task(window, 1, TaskStatus.FAILED)
     window.resize(1320, 860)
     window.show()
+    window._show_tasks()
     QApplication.processEvents()
 
     action_buttons = [
@@ -60,38 +61,38 @@ def test_table_action_buttons_have_consistent_valid_geometry(qtbot, tmp_path):
         assert button.minimumHeight() <= button.maximumHeight()
 
 
-def test_task_priority_layout_is_responsive(qtbot, tmp_path):
+def test_task_center_layout_is_responsive_without_reordering_download_form(
+    qtbot, tmp_path
+):
     window = _make_window(tmp_path)
     qtbot.addWidget(window)
+    original_position = window._workspace_layout.indexOf(window._content_section)
     for task_id in range(1, 4):
         _add_task(window, task_id)
-
-    window.resize(1320, 860)
+    assert (
+        window._workspace_layout.indexOf(window._content_section) == original_position
+    )
     window.show()
+    window._show_tasks()
+    for size in ((1320, 860), (1120, 760), (900, 640)):
+        window.resize(*size)
+        QApplication.processEvents()
+        assert window._download_list.viewport().height() >= 3 * 56
+        assert window._download_list.horizontalScrollBar().maximum() == 0
+    assert window._sidebar.width() == 72
+    window._show_workspace(0)
     QApplication.processEvents()
-    assert window._task_priority_mode
-    assert window._workspace_layout.indexOf(window._content_section) == 2
-    assert window._workspace_layout.indexOf(window._queue_section) == 3
-    assert window._download_list.viewport().height() >= 3 * 48
-
-    window.resize(900, 640)
-    QApplication.processEvents()
-    assert window._workspace_layout.indexOf(window._queue_section) == 2
-    assert window._workspace_layout.indexOf(window._content_section) == 3
-    assert window._download_list.horizontalScrollBar().maximum() == 0
     assert window._workspace_scroll.horizontalScrollBar().maximum() == 0
 
 
-def test_task_priority_mode_returns_to_branded_empty_state(qtbot, tmp_path):
+def test_last_task_removal_returns_task_center_to_shared_empty_state(qtbot, tmp_path):
     window = _make_window(tmp_path)
     qtbot.addWidget(window)
     _add_task(window, 1, TaskStatus.COMPLETED)
-    assert window._task_priority_mode
-
+    window._task_page.refresh_downloads()
+    assert window._task_page._download_stack.currentIndex() == 0
     window._download_list.remove_item(1)
-
-    assert not window._task_priority_mode
-    assert not window._hero_eyebrow.isHidden()
+    assert window._task_page._download_stack.currentIndex() == 1
     assert not window._hero_title.isHidden()
 
 
@@ -105,9 +106,12 @@ def test_login_qr_controls_do_not_overlap_at_minimum_size(qtbot):
 
     assert dialog._qr_label.width() == 220
     assert dialog._qr_label.height() == 220
-    assert not dialog._qr_label.geometry().intersects(
-        dialog._generate_btn.geometry()
+    qr_rect = QRect(dialog._qr_label.mapTo(dialog, QPoint()), dialog._qr_label.size())
+    button_rect = QRect(
+        dialog._generate_btn.mapTo(dialog, QPoint()), dialog._generate_btn.size()
     )
+    assert not qr_rect.intersects(button_rect)
+    assert dialog.rect().contains(button_rect)
 
 
 def test_long_settings_path_starts_at_leading_edge(qtbot):

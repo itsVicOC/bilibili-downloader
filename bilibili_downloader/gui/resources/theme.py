@@ -3,9 +3,10 @@
 import sys
 
 from PySide6.QtCore import QObject, Qt
-from PySide6.QtGui import QFont, QFontDatabase, QPalette
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QPalette
 
 from bilibili_downloader.gui.resources import load_stylesheet
+from bilibili_downloader.gui.resources.styles import DARK_PALETTE, LIGHT_PALETTE
 
 DEFAULT_FONT_POINT_SIZE = 10.0
 MACOS_FONT_SCALE = 1.15
@@ -65,9 +66,23 @@ class ThemeManager(QObject):
         """Apply a theme immediately; also useful for visual verification."""
         self._is_dark = is_dark
         self._app.setProperty("darkTheme", is_dark)
-        self._app.setStyleSheet(
-            load_stylesheet(is_dark, font_scale=self._font_scale)
-        )
+        colors = DARK_PALETTE if is_dark else LIGHT_PALETTE
+        palette = QPalette(self._app.palette())
+        for role, color in (
+            (QPalette.Window, colors.background),
+            (QPalette.WindowText, colors.text),
+            (QPalette.Base, colors.surface),
+            (QPalette.Text, colors.text),
+            (QPalette.Button, colors.surface_raised),
+            (QPalette.ButtonText, colors.text),
+            (QPalette.PlaceholderText, colors.muted),
+            (QPalette.Link, colors.active_text),
+            (QPalette.Highlight, colors.selection),
+            (QPalette.HighlightedText, colors.text),
+        ):
+            palette.setColor(role, QColor(color))
+        self._app.setPalette(palette)
+        self._app.setStyleSheet(load_stylesheet(is_dark, font_scale=self._font_scale))
         for widget in self._app.topLevelWidgets():
             widget.setProperty("darkTheme", is_dark)
             widget.style().unpolish(widget)

@@ -1,43 +1,44 @@
-"""Settings dialog for application configuration."""
+"""Reusable settings editor with an isolated draft and field-level merging."""
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal
 from PySide6.QtWidgets import (
-    QAbstractSpinBox,
     QCheckBox,
     QComboBox,
     QDialog,
-    QDialogButtonBox,
     QFileDialog,
-    QFormLayout,
-    QFrame,
     QGridLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QPushButton,
-    QScrollArea,
-    QSizePolicy,
     QSpinBox,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from bilibili_downloader.core.errors import redact_sensitive_text
+from bilibili_downloader.core.ffmpeg import FFmpegManager
 from bilibili_downloader.core.models import (
     AUDIO_CODEC_MAP,
     AppSettings,
     OutputMode,
     VideoQuality,
 )
+from bilibili_downloader.core.recorder import check_recorder, find_recorder
+from bilibili_downloader.gui.widgets.components import (
+    FieldRow,
+    Notice,
+    SectionCard,
+    scroll_area,
+    stepper,
+)
 from bilibili_downloader.utils.validators import render_path_template
 
 
 class _LeadingPathLineEdit(QLineEdit):
-    """Keep long read-only paths anchored at the meaningful beginning."""
-
     def focusOutEvent(self, event):
         super().focusOutEvent(event)
         self.setCursorPosition(0)
@@ -47,279 +48,512 @@ class _LeadingPathLineEdit(QLineEdit):
         self.setCursorPosition(0)
 
 
-class SettingsDialog(QDialog):
-    """Dialog for editing application settings."""
+class _ProbeSignals(QObject):
+    finished = Signal(bool, str)
 
-    def __init__(self, settings: AppSettings, parent=None):
+
+class _ProbeRunner(QRunnable):
+    def __init__(self, signals, kind, path):
+        super().__init__()
+        self.signals, self.kind, self.path = signals, kind, path
+
+    def run(self):
+        try:
+            if self.kind == "ffmpeg":
+                ok, message = FFmpegManager.check_available(self.path or None)
+            else:
+                path = find_recorder(self.path)
+                check_recorder(path)
+                ok, message = True, f"配套录制引擎可用：{path}"
+        except Exception as exc:
+            ok, message = False, redact_sensitive_text(str(exc))
+        try:
+            self.signals.finished.emit(ok, message)
+        except RuntimeError:
+            # A standalone editor may be destroyed while the tool probe runs.
+            pass
+
+
+class SettingsDialog(QDialog):
+    """One editor shared by the settings page and standalone callers."""
+
+    save_requested = Signal()
+    cache_requested = Signal()
+    dirty_changed = Signal(bool)
+
+    def __init__(self, settings: AppSettings, parent=None, embedded=False):
         super().__init__(parent)
+        self._embedded = embedded
         self._settings = settings.model_copy(deep=True)
-        self.setWindowTitle("下载设置")
-        self.setMinimumSize(620, 520)
-        self.resize(660, 620)
+        self._controls = {}
+        self._field_rows = {}
+        self._probes = {}
+        if embedded:
+            self.setWindowFlags(Qt.Widget)
+        else:
+            self.setMinimumSize(620, 520)
+            self.resize(740, 760)
+        self.setWindowTitle("BiliFlow 设置")
         self._setup_ui()
+        self.load_settings(settings)
+        for control in self._controls.values():
+            if isinstance(control, QLineEdit):
+                control.textChanged.connect(self._draft_changed)
+                control.textChanged.connect(
+                    lambda text, entry=control: entry.setToolTip(text)
+                )
+            elif isinstance(control, QComboBox):
+                control.currentIndexChanged.connect(self._draft_changed)
+            elif isinstance(control, QCheckBox):
+                control.toggled.connect(self._draft_changed)
+            else:
+                control.valueChanged.connect(self._draft_changed)
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(22, 20, 22, 18)
-        layout.setSpacing(12)
-        title = QLabel("下载偏好")
-        title.setObjectName("DialogTitle")
-        caption = QLabel("统一管理保存位置、默认规格和并行任务数")
-        caption.setObjectName("DialogCaption")
-        layout.addWidget(title)
-        layout.addWidget(caption)
-
-        scroll = QScrollArea()
-        scroll.setObjectName("DialogScroll")
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        body = QWidget()
-        body_layout = QVBoxLayout(body)
-        body_layout.setContentsMargins(0, 0, 4, 0)
-        body_layout.setSpacing(12)
-
-        paths_group = QGroupBox("保存位置")
-        paths_group.setObjectName("SettingsSection")
-        paths_form = self._create_form(paths_group)
-
-        # Output directory
-        dir_layout = QHBoxLayout()
-        self._output_dir = _LeadingPathLineEdit(self._settings.output_dir)
+        layout.setContentsMargins(
+            0, 0, 0, 0
+        ) if self._embedded else layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(16)
+        self.tabs = QTabWidget()
+        layout.addWidget(self.tabs, 1)
+        download, live, tools = [
+            self._tab(name) for name in ("下载", "直播", "工具与存储")
+        ]
+        paths = SectionCard("保存位置与目录模板")
+        self._output_dir = _LeadingPathLineEdit()
         self._output_dir.setReadOnly(True)
-        self._output_dir.setToolTip(self._settings.output_dir)
-        self._output_dir.setCursorPosition(0)
-        dir_layout.addWidget(self._output_dir, 1)
-        browse_btn = QPushButton("选择…")
-        browse_btn.setObjectName("SubtleButton")
-        browse_btn.clicked.connect(self._browse_output_dir)
-        dir_layout.addWidget(browse_btn)
-        paths_form.addRow("保存目录", dir_layout)
-
-        self._path_template = QLineEdit(self._settings.path_template)
+        self._controls["output_dir"] = self._output_dir
+        self._field(
+            "output_dir", paths, "保存目录", self._path_row(self._output_dir, True)
+        )
+        self._path_template = self._entry("path_template", paths, "目录模板")
         self._path_template.setPlaceholderText("{author}/{title}{part_suffix}")
         self._path_template.setToolTip(
-            "可用字段：title、author、bvid、page、part、part_suffix、"
-            "collection、quality、codec"
+            "字段：title、author、bvid、page、part、part_suffix、collection、quality、codec"
         )
-        paths_form.addRow("目录模板", self._path_template)
-
-        self._bangumi_path_template = QLineEdit(
-            self._settings.bangumi_path_template
+        self._bangumi_path_template = self._entry(
+            "bangumi_path_template", paths, "番剧模板"
         )
-        self._bangumi_path_template.setPlaceholderText(
-            "{series}/{season}/{section}/{episode_number} - {episode}"
+        hint = QLabel(
+            "模板控制相对目录与文件名；支持作品、UP 主、分 P 和番剧章节字段。"
         )
-        self._bangumi_path_template.setToolTip(
-            "番剧字段：series、season、section、episode、episode_number；"
-            "也可使用 quality、codec"
+        hint.setObjectName("MetaLabel")
+        hint.setWordWrap(True)
+        paths.body.addWidget(hint)
+        download.addWidget(paths)
+        formats = SectionCard("默认媒体规格")
+        self._output_mode_combo = self._combo(
+            "default_output_mode",
+            formats,
+            "输出类型",
+            [
+                ("视频 / MP4", OutputMode.VIDEO),
+                ("仅音频 / M4A 或 FLAC", OutputMode.AUDIO),
+            ],
         )
-        paths_form.addRow("番剧目录模板", self._bangumi_path_template)
-
-        ffmpeg_layout = QHBoxLayout()
-        self._ffmpeg_path = QLineEdit(self._settings.ffmpeg_path)
-        self._ffmpeg_path.setPlaceholderText("留空自动检测")
-        ffmpeg_layout.addWidget(self._ffmpeg_path)
-        ffmpeg_browse = QPushButton("选择…")
-        ffmpeg_browse.setObjectName("SubtleButton")
-        ffmpeg_browse.clicked.connect(self._browse_ffmpeg)
-        ffmpeg_layout.addWidget(ffmpeg_browse)
-        paths_form.addRow("FFmpeg 路径", ffmpeg_layout)
-        body_layout.addWidget(paths_group)
-
-        format_group = QGroupBox("默认规格")
-        format_group.setObjectName("SettingsSection")
-        format_form = self._create_form(format_group)
-
-        # Default quality
-        self._quality_combo = QComboBox()
-        for q in VideoQuality:
-            self._quality_combo.addItem(q.label, q)
-        self._quality_combo.setCurrentIndex(
-            self._quality_combo.findData(self._settings.default_quality)
+        self._quality_combo = self._combo(
+            "default_quality", formats, "画面质量", [(q.label, q) for q in VideoQuality]
         )
-        format_form.addRow("画面质量", self._quality_combo)
-
-        self._codec_combo = QComboBox()
-        self._codec_combo.addItem("H.265 / HEVC", 12)
-        self._codec_combo.addItem("H.264 / AVC", 7)
-        self._codec_combo.addItem("AV1", 13)
-        codec_index = self._codec_combo.findData(self._settings.default_video_codec)
-        self._codec_combo.setCurrentIndex(codec_index if codec_index >= 0 else 0)
-        format_form.addRow("视频编码", self._codec_combo)
-
-        self._audio_combo = QComboBox()
-        for audio_id in (30251, 30250, 30285, 30280, 30216, 0):
-            self._audio_combo.addItem(
-                AUDIO_CODEC_MAP.get(audio_id, f"音频 {audio_id}"), audio_id
+        self._codec_combo = self._combo(
+            "default_video_codec",
+            formats,
+            "视频编码",
+            [("H.265 / HEVC", 12), ("H.264 / AVC", 7), ("AV1", 13)],
+        )
+        self._audio_combo = self._combo(
+            "default_audio_quality",
+            formats,
+            "音频质量",
+            [
+                (AUDIO_CODEC_MAP.get(i, str(i)), i)
+                for i in (30251, 30250, 30285, 30280, 30216, 0)
+            ],
+        )
+        self._max_concurrent, self._concurrency_down, self._concurrency_up = (
+            self._number("max_concurrent_downloads", formats, "最大并发", 1, 8)
+        )
+        self._concurrency_down.setToolTip("减少并发数")
+        self._concurrency_up.setToolTip("增加并发数")
+        download.addWidget(formats)
+        options = SectionCard("归档附加内容")
+        options_grid = QGridLayout()
+        options_grid.setHorizontalSpacing(16)
+        options_grid.setVerticalSpacing(4)
+        positions = [(0, 0), (0, 1), (1, 1), (2, 0), (2, 1)]
+        for index, (key, label, attr) in enumerate(
+            (
+                ("download_danmaku", "默认下载弹幕", "_danmaku_check"),
+                ("download_subtitle", "默认下载字幕", "_subtitle_check"),
+                ("download_all_subtitles", "默认下载全部字幕", "_all_subtitles_check"),
+                ("download_cover", "默认保存封面", "_cover_check"),
+                ("download_metadata", "默认保存元数据", "_metadata_check"),
             )
-        audio_index = self._audio_combo.findData(
-            self._settings.default_audio_quality
+        ):
+            control = QCheckBox(label)
+            self._controls[key] = control
+            setattr(self, attr, control)
+            if key == "download_all_subtitles":
+                wrapper = QWidget()
+                wrapper_layout = QHBoxLayout(wrapper)
+                wrapper_layout.setContentsMargins(24, 0, 0, 0)
+                wrapper_layout.addWidget(control)
+                options_grid.addWidget(wrapper, *positions[index])
+            else:
+                options_grid.addWidget(control, *positions[index])
+        options.body.addLayout(options_grid)
+        self._all_subtitles_check.toggled.connect(
+            lambda checked: self._subtitle_check.setChecked(True) if checked else None
         )
-        self._audio_combo.setCurrentIndex(audio_index if audio_index >= 0 else 0)
-        format_form.addRow("音频质量", self._audio_combo)
-
-        self._output_mode_combo = QComboBox()
-        self._output_mode_combo.addItem("视频 / MP4", OutputMode.VIDEO)
-        self._output_mode_combo.addItem("仅音频 / M4A 或 FLAC", OutputMode.AUDIO)
-        output_index = self._output_mode_combo.findData(
-            self._settings.default_output_mode
+        download.addWidget(options)
+        defaults = SectionCard("默认录制位置与分段")
+        self._live_directory = _LeadingPathLineEdit()
+        self._controls["live.output_dir"] = self._live_directory
+        self._field(
+            "live.output_dir",
+            defaults,
+            "保存目录",
+            self._path_row(self._live_directory, True),
         )
-        self._output_mode_combo.setCurrentIndex(output_index if output_index >= 0 else 0)
-        format_form.addRow("输出类型", self._output_mode_combo)
-
-        # Max concurrent downloads
-        self._max_concurrent = QSpinBox()
-        self._max_concurrent.setRange(1, 8)
-        self._max_concurrent.setValue(self._settings.max_concurrent_downloads)
-        self._max_concurrent.setButtonSymbols(QAbstractSpinBox.NoButtons)
-        self._max_concurrent.setAlignment(Qt.AlignCenter)
-        self._max_concurrent.setSizePolicy(
-            QSizePolicy.Expanding, QSizePolicy.Fixed
+        self._number("live.segment_seconds", defaults, "分段时长", 1, 1440, " 分钟")
+        defaults.body.addWidget(
+            Notice("目录与分段时长只用于新添加的直播间；已有房间请在房间设置中修改。")
         )
-        concurrency_layout = QHBoxLayout()
-        concurrency_layout.setSpacing(8)
-        self._concurrency_down = self._create_stepper_button(
-            "-", "减少并发数", self._max_concurrent.stepDown
+        quality_hint = QLabel(
+            "默认使用当前可用最高画质；单房间画质可在直播工作台设置，下次拉流生效。"
         )
-        self._concurrency_up = self._create_stepper_button(
-            "+", "增加并发数", self._max_concurrent.stepUp
+        quality_hint.setObjectName("MetaLabel")
+        quality_hint.setWordWrap(True)
+        defaults.body.addWidget(quality_hint)
+        live.addWidget(defaults)
+        limits = SectionCard("录制并发与空间")
+        self._number("live.max_concurrent", limits, "同时录制", 1, 4)
+        self._number("live.minimum_free_bytes", limits, "保留空间", 1, 1024, " GiB")
+        limits.body.addWidget(
+            Notice(
+                "应用退出或电脑睡眠时无法录制；断线后会重新拉流，缺失内容无法补录。",
+                "warning",
+            )
         )
-        concurrency_layout.addWidget(self._concurrency_down)
-        concurrency_layout.addWidget(self._max_concurrent, 1)
-        concurrency_layout.addWidget(self._concurrency_up)
-        self._max_concurrent.valueChanged.connect(self._sync_stepper_buttons)
-        self._sync_stepper_buttons(self._max_concurrent.value())
-        format_form.addRow("最大并发", concurrency_layout)
-        body_layout.addWidget(format_group)
-
-        # Option checkboxes
-        options_group = QGroupBox("附加内容")
-        options_group.setObjectName("SettingsSection")
-        options_layout = QGridLayout()
-        options_group.setLayout(options_layout)
-        options_layout.setContentsMargins(4, 4, 4, 4)
-        options_layout.setHorizontalSpacing(16)
-        options_layout.setVerticalSpacing(8)
-        self._danmaku_check = QCheckBox("默认下载弹幕")
-        self._danmaku_check.setChecked(self._settings.download_danmaku)
-        self._subtitle_check = QCheckBox("默认下载字幕")
-        self._subtitle_check.setChecked(self._settings.download_subtitle)
-        self._all_subtitles_check = QCheckBox("默认下载全部字幕")
-        self._all_subtitles_check.setChecked(self._settings.download_all_subtitles)
-        self._cover_check = QCheckBox("默认保存封面")
-        self._cover_check.setChecked(self._settings.download_cover)
-        self._metadata_check = QCheckBox("默认保存元数据")
-        self._metadata_check.setChecked(self._settings.download_metadata)
-        options_layout.addWidget(self._danmaku_check, 0, 0)
-        options_layout.addWidget(self._subtitle_check, 0, 1)
-        options_layout.addWidget(self._all_subtitles_check, 0, 2)
-        options_layout.addWidget(self._cover_check, 1, 0)
-        options_layout.addWidget(self._metadata_check, 1, 1)
-        options_layout.setColumnStretch(3, 1)
-        body_layout.addWidget(options_group)
-        body_layout.addStretch()
-        scroll.setWidget(body)
-        layout.addWidget(scroll, 1)
-
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.button(QDialogButtonBox.Ok).setText("确定")
-        buttons.button(QDialogButtonBox.Ok).setObjectName("PrimaryButton")
-        buttons.button(QDialogButtonBox.Cancel).setText("取消")
-        buttons.accepted.connect(self._accept_if_valid)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-
-    @staticmethod
-    def _create_form(parent) -> QFormLayout:
-        form = QFormLayout(parent)
-        form.setContentsMargins(4, 4, 4, 4)
-        form.setHorizontalSpacing(14)
-        form.setVerticalSpacing(10)
-        form.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        form.setFormAlignment(Qt.AlignTop)
-        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        return form
-
-    def _create_stepper_button(self, text: str, tooltip: str, callback):
-        button = QPushButton(text)
-        button.setObjectName("StepperButton")
-        button.setToolTip(tooltip)
-        button.setAccessibleName(tooltip)
-        button.setAutoRepeat(True)
-        button.clicked.connect(callback)
-        return button
-
-    def _sync_stepper_buttons(self, value: int):
-        self._concurrency_down.setEnabled(value > self._max_concurrent.minimum())
-        self._concurrency_up.setEnabled(value < self._max_concurrent.maximum())
-
-    def _browse_output_dir(self):
-        path = QFileDialog.getExistingDirectory(self, "选择保存目录")
-        if path:
-            self._output_dir.setText(path)
-            self._output_dir.setToolTip(path)
-            self._output_dir.setCursorPosition(0)
-
-    def _browse_ffmpeg(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self, "选择 FFmpeg", "", "可执行文件 (ffmpeg*;ffmpeg.exe)"
+        live.addWidget(limits)
+        engines = SectionCard("媒体工具")
+        self._ffmpeg_path = QLineEdit()
+        self._controls["ffmpeg_path"] = self._ffmpeg_path
+        self._ffmpeg_path.setPlaceholderText("留空自动检测内置版本或系统 FFmpeg")
+        self._field(
+            "ffmpeg_path", engines, "FFmpeg", self._path_row(self._ffmpeg_path, False)
         )
-        if path:
-            self._ffmpeg_path.setText(path)
+        self._recorder_path = QLineEdit()
+        self._controls["live.recorder_path"] = self._recorder_path
+        self._recorder_path.setPlaceholderText("full 包自动检测；lite 包选择配套引擎")
+        self._field(
+            "live.recorder_path",
+            engines,
+            "录制引擎",
+            self._path_row(self._recorder_path, False),
+        )
+        probe_row = QHBoxLayout()
+        for kind, text in (("ffmpeg", "检查 FFmpeg"), ("recorder", "检查录制引擎")):
+            button = QPushButton(text)
+            button.clicked.connect(
+                lambda _checked=False, k=kind, b=button: self._probe(k, b)
+            )
+            probe_row.addWidget(button)
+        probe_row.addStretch()
+        engines.body.addLayout(probe_row)
+        self._probe_notice = Notice("可检测当前填写的路径；检测不会保存草稿。")
+        engines.body.addWidget(self._probe_notice)
+        tools.addWidget(engines)
+        storage = SectionCard("断点缓存")
+        storage.body.addWidget(
+            Notice(
+                "清理前请暂停全部下载。清理只删除未完成的断点缓存，保留已保存媒体。",
+                "warning",
+            )
+        )
+        clear = QPushButton("清理下载缓存")
+        clear.setObjectName("DangerButton")
+        clear.clicked.connect(self.cache_requested.emit)
+        storage.body.addWidget(clear, alignment=Qt.AlignLeft)
+        tools.addWidget(storage)
+        for column in (download, live, tools):
+            column.addStretch()
+        self._notice = Notice()
+        layout.addWidget(self._notice)
+        footer = QHBoxLayout()
+        self._draft_label = QLabel("所有修改已保存")
+        self._draft_label.setObjectName("MetaLabel")
+        footer.addWidget(self._draft_label, 1)
+        self._reset_btn = QPushButton("撤销修改")
+        self._reset_btn.clicked.connect(lambda: self.load_settings(self._settings))
+        footer.addWidget(self._reset_btn)
+        self._save_btn = QPushButton("保存设置")
+        self._save_btn.setObjectName("PrimaryButton")
+        self._save_btn.clicked.connect(self._accept_if_valid)
+        footer.addWidget(self._save_btn)
+        if not self._embedded:
+            cancel = QPushButton("取消")
+            cancel.clicked.connect(self.reject)
+            footer.addWidget(cancel)
+        layout.addLayout(footer)
+
+    def _tab(self, name):
+        body = QWidget()
+        column = QVBoxLayout(body)
+        column.setContentsMargins(0, 0, 4, 0)
+        column.setSpacing(20)
+        self.tabs.addTab(scroll_area(body), name)
+        return column
+
+    def _field(self, key, card, label, control):
+        row = FieldRow(label, control)
+        self._field_rows[key] = row
+        card.body.addWidget(row)
+        return row
+
+    def _entry(self, key, card, label):
+        entry = QLineEdit()
+        self._controls[key] = entry
+        self._field(key, card, label, entry)
+        return entry
+
+    def _combo(self, key, card, label, values):
+        combo = QComboBox()
+        for text, value in values:
+            combo.addItem(text, value)
+        self._controls[key] = combo
+        self._field(key, card, label, combo)
+        return combo
+
+    def _number(self, key, card, label, low, high, suffix=""):
+        spin = QSpinBox()
+        spin.setRange(low, high)
+        spin.setSuffix(suffix)
+        self._controls[key] = spin
+        row, down, up = stepper(spin)
+        self._field(key, card, label, row)
+        return spin, down, up
+
+    def _path_row(self, entry, folder):
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        layout.addWidget(entry, 1)
+        browse = QPushButton("选择…")
+        browse.clicked.connect(lambda: self._browse(entry, folder))
+        layout.addWidget(browse)
+        return row
+
+    def _browse(self, entry, folder):
+        value = (
+            QFileDialog.getExistingDirectory(self, "选择保存目录", entry.text())
+            if folder
+            else QFileDialog.getOpenFileName(self, "选择可执行文件", entry.text())[0]
+        )
+        if value:
+            entry.setText(value)
+            entry.setToolTip(value)
+            entry.setCursorPosition(0)
+
+    def load_settings(self, settings):
+        self._settings = settings.model_copy(deep=True)
+        for key, control in self._controls.items():
+            value = (
+                getattr(settings.live, key.split(".")[1])
+                if key.startswith("live.")
+                else getattr(settings, key)
+            )
+            if key == "live.segment_seconds":
+                value //= 60
+            elif key == "live.minimum_free_bytes":
+                value //= 1024**3
+            control.blockSignals(True)
+            if isinstance(control, QLineEdit):
+                control.setText(value)
+                control.setToolTip(value)
+                control.setCursorPosition(0)
+            elif isinstance(control, QComboBox):
+                control.setCurrentIndex(max(0, control.findData(value)))
+            elif isinstance(control, QCheckBox):
+                control.setChecked(value)
+            else:
+                control.setValue(value)
+            control.blockSignals(False)
+            # Stepper endpoints must also update after loading a blocked spinbox.
+            if isinstance(control, QSpinBox):
+                control.valueChanged.emit(control.value())
+        for row in self._field_rows.values():
+            row.set_error("")
+        self._notice.set_message("")
+        self._draft_changed()
+
+    def _draft_values(self):
+        values = {}
+        for key, control in self._controls.items():
+            if isinstance(control, QLineEdit):
+                value = control.text().strip()
+            elif isinstance(control, QComboBox):
+                value = control.currentData()
+            elif isinstance(control, QCheckBox):
+                value = control.isChecked()
+            else:
+                value = control.value()
+            if key == "live.segment_seconds":
+                value = (
+                    self._settings.live.segment_seconds
+                    if value == self._settings.live.segment_seconds // 60
+                    else value * 60
+                )
+            elif key == "live.minimum_free_bytes":
+                value = (
+                    self._settings.live.minimum_free_bytes
+                    if value == self._settings.live.minimum_free_bytes // 1024**3
+                    else value * 1024**3
+                )
+            values[key] = value
+        values["download_subtitle"] |= values["download_all_subtitles"]
+        return values
+
+    def get_settings(self):
+        draft = self._settings.model_copy(deep=True)
+        for key, value in self._draft_values().items():
+            if key.startswith("live."):
+                setattr(draft.live, key.split(".")[1], value)
+            else:
+                setattr(draft, key, value)
+        return draft
+
+    def merge_into(self, latest):
+        draft = self.get_settings()
+        merged = latest.model_copy(deep=True)
+        for key in self._controls:
+            if key.startswith("live."):
+                field = key.split(".")[1]
+                if getattr(draft.live, field) != getattr(self._settings.live, field):
+                    setattr(merged.live, field, getattr(draft.live, field))
+            elif getattr(draft, key) != getattr(self._settings, key):
+                setattr(merged, key, getattr(draft, key))
+        return merged
+
+    @property
+    def dirty(self):
+        # Invalid text is still an editable draft; validate only on save.
+        return any(
+            value
+            != (
+                getattr(self._settings.live, key.split(".")[1])
+                if key.startswith("live.")
+                else getattr(self._settings, key)
+            )
+            for key, value in self._draft_values().items()
+        )
+
+    def _draft_changed(self, *_args):
+        dirty = self.dirty
+        self._draft_label.setText("有未保存的修改" if dirty else "所有修改已保存")
+        self._reset_btn.setEnabled(dirty)
+        self._save_btn.setEnabled(dirty or not self._embedded)
+        self.dirty_changed.emit(dirty)
+
+    def validate(self):
+        for row in self._field_rows.values():
+            row.set_error("")
+        checks = [
+            (
+                self._output_dir,
+                bool(self._output_dir.text().strip()),
+                "请选择有效的下载保存目录",
+            ),
+            (
+                self._live_directory,
+                bool(self._live_directory.text().strip()),
+                "请选择有效的录制保存目录",
+            ),
+        ]
+        for entry in (self._ffmpeg_path, self._recorder_path):
+            checks.append(
+                (
+                    entry,
+                    not entry.text().strip()
+                    or Path(entry.text().strip()).expanduser().is_file(),
+                    "工具路径不是有效文件",
+                )
+            )
+        for entry, valid, message in checks:
+            if not valid:
+                self._show_validation(entry, message)
+                return False
+        values = {
+            key: key
+            for key in (
+                "title",
+                "author",
+                "bvid",
+                "page",
+                "part",
+                "part_suffix",
+                "collection",
+                "series",
+                "season",
+                "section",
+                "episode",
+                "episode_number",
+                "quality",
+                "codec",
+            )
+        }
+        for entry in (self._path_template, self._bangumi_path_template):
+            try:
+                render_path_template(entry.text(), values)
+            except ValueError as exc:
+                self._show_validation(entry, str(exc))
+                return False
+        self._notice.set_message("")
+        return True
+
+    def _show_validation(self, entry, message):
+        tab = (
+            1
+            if entry is self._live_directory
+            else 2
+            if entry in (self._ffmpeg_path, self._recorder_path)
+            else 0
+        )
+        self.tabs.setCurrentIndex(tab)
+        self._notice.set_message(message, "danger")
+        for key, control in self._controls.items():
+            if control is entry and key in self._field_rows:
+                row = self._field_rows[key]
+                row.set_error(message)
+                self.tabs.currentWidget().ensureWidgetVisible(row)
+                break
+        entry.setFocus()
 
     def _accept_if_valid(self):
-        output_dir = self._output_dir.text().strip()
-        if not output_dir:
-            QMessageBox.warning(self, "下载设置", "请选择有效的保存目录")
-            return
-        ffmpeg_path = self._ffmpeg_path.text().strip()
-        if ffmpeg_path and not Path(ffmpeg_path).is_file():
-            QMessageBox.warning(self, "下载设置", "FFmpeg 路径不是有效文件")
-            return
-        try:
-            values = {
-                    "title": "title",
-                    "author": "author",
-                    "bvid": "BV1xx",
-                    "page": "1",
-                    "part": "part",
-                    "part_suffix": "_part",
-                    "collection": "collection",
-                    "series": "series",
-                    "season": "season",
-                    "section": "section",
-                    "episode": "episode",
-                    "episode_number": "01",
-                    "quality": "1080P",
-                    "codec": "HEVC",
-                }
-            render_path_template(self._path_template.text(), values)
-            render_path_template(self._bangumi_path_template.text(), values)
-        except ValueError as exc:
-            QMessageBox.warning(self, "下载设置", str(exc))
-            return
-        self.accept()
+        if self.validate():
+            self.save_requested.emit() if self._embedded else self.accept()
 
-    def get_settings(self) -> AppSettings:
-        """Return updated settings from dialog."""
-        self._settings.output_dir = self._output_dir.text()
-        self._settings.default_quality = self._quality_combo.currentData()
-        self._settings.default_video_codec = self._codec_combo.currentData()
-        self._settings.default_audio_quality = self._audio_combo.currentData()
-        self._settings.default_output_mode = self._output_mode_combo.currentData()
-        self._settings.path_template = self._path_template.text().strip()
-        self._settings.bangumi_path_template = (
-            self._bangumi_path_template.text().strip()
-        )
-        self._settings.max_concurrent_downloads = self._max_concurrent.value()
-        self._settings.ffmpeg_path = self._ffmpeg_path.text()
-        self._settings.download_danmaku = self._danmaku_check.isChecked()
-        all_subtitles = self._all_subtitles_check.isChecked()
-        self._settings.download_subtitle = (
-            self._subtitle_check.isChecked() or all_subtitles
-        )
-        self._settings.download_all_subtitles = all_subtitles
-        self._settings.download_cover = self._cover_check.isChecked()
-        self._settings.download_metadata = self._metadata_check.isChecked()
-        return self._settings
+    def _probe(self, kind, button):
+        if kind in self._probes:
+            return
+        button.setEnabled(False)
+        signals = _ProbeSignals(self)
+        entry = self._ffmpeg_path if kind == "ffmpeg" else self._recorder_path
+        requested_path = entry.text().strip()
+        runner = _ProbeRunner(signals, kind, requested_path)
+        self._probes[kind] = (signals, runner)
+
+        def finished(ok, message):
+            button.setEnabled(True)
+            if entry.text().strip() != requested_path:
+                self._probe_notice.set_message(
+                    "检查期间路径已修改，请再次检查当前路径。", "warning"
+                )
+            else:
+                self._probe_notice.set_message(message, "success" if ok else "danger")
+            self._probes.pop(kind, None)
+
+        signals.finished.connect(finished)
+        self._probe_notice.set_message("正在检查媒体工具…")
+        QThreadPool.globalInstance().start(runner)

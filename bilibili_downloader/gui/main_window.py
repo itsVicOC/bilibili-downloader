@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, QThreadPool, QTimer, QUrl
+from PySide6.QtCore import Qt, QThreadPool, QTimer, QUrl
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
@@ -20,12 +20,13 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
     QPushButton,
-    QScrollArea,
     QStackedWidget,
     QStatusBar,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -52,6 +53,7 @@ from bilibili_downloader.core.task_repository import TaskRepository
 from bilibili_downloader.gui.dialogs.batch_dialog import BatchDialog
 from bilibili_downloader.gui.dialogs.login_dialog import LoginDialog
 from bilibili_downloader.gui.dialogs.settings_dialog import SettingsDialog
+from bilibili_downloader.gui.live_controller import LiveUiController
 from bilibili_downloader.gui.resources.paths import asset_path
 from bilibili_downloader.gui.threads.download_worker import (
     DownloadRunner,
@@ -67,9 +69,20 @@ from bilibili_downloader.gui.threads.login_status_worker import (
 )
 from bilibili_downloader.gui.threads.resolve_worker import ResolveRunner, ResolveWorker
 from bilibili_downloader.gui.widgets.chinese_input import ChineseLineEdit
+from bilibili_downloader.gui.widgets.components import (
+    FieldRow,
+    IconButton,
+    MessageBox,
+    Notice,
+    PageHeader,
+    SectionCard,
+    repolish,
+    scroll_area,
+)
 from bilibili_downloader.gui.widgets.download_list import DownloadListWidget
 from bilibili_downloader.gui.widgets.hero_panel import HeroPanel
 from bilibili_downloader.gui.widgets.live_page import LivePage
+from bilibili_downloader.gui.widgets.task_page import TaskPage
 from bilibili_downloader.gui.widgets.video_info import VideoInfoWidget
 from bilibili_downloader.utils.config import ConfigManager
 from bilibili_downloader.utils.validators import is_bilibili_url
@@ -80,7 +93,7 @@ logger = logging.getLogger(__name__)
 class MainWindow(QMainWindow):
     """Main application window."""
 
-    def __init__(self, config_manager=None, task_repository=None):
+    def __init__(self, config_manager=None, task_repository=None, live_controller=None):
         super().__init__()
         self.setWindowTitle("BiliFlow · 星轨下载站")
         self.setMinimumSize(900, 640)
@@ -102,6 +115,7 @@ class MainWindow(QMainWindow):
         self._current_video: VideoInfo | None = None
         self._login_status_request_id = 0
         self._close_confirmed = False
+        self._provided_live_controller = live_controller
         self._setup_ui()
         self._setup_menu()
         self._setup_status_bar()
@@ -134,335 +148,332 @@ class MainWindow(QMainWindow):
         previous = self._api_client
         self._api_client = self._create_api_client()
         self._retired_api_clients.append(previous)
+        self._batch_page._api_client = self._api_client
         if self._live_page.service:
             self._live_page.service.command("auth", cookies=self._config.auth_cookies)
 
     def _setup_ui(self):
-        """Build the main UI layout."""
+        """Persistent workspaces sharing navigation, theme and service ownership."""
         central = QWidget()
         central.setObjectName("AppSurface")
         self.setCentralWidget(central)
         shell = QHBoxLayout(central)
         shell.setContentsMargins(0, 0, 0, 0)
         shell.setSpacing(0)
-
-        sidebar = QFrame()
-        sidebar.setObjectName("Sidebar")
-        sidebar.setFixedWidth(212)
-        side_layout = QVBoxLayout(sidebar)
-        side_layout.setContentsMargins(18, 22, 18, 18)
-        side_layout.setSpacing(10)
-
-        brand_row = QHBoxLayout()
+        self._sidebar = QFrame()
+        self._sidebar.setObjectName("Sidebar")
+        self._sidebar.setFixedWidth(208)
+        self._side_layout = QVBoxLayout(self._sidebar)
+        self._side_layout.setContentsMargins(16, 24, 16, 16)
+        self._side_layout.setSpacing(12)
+        brand = QHBoxLayout()
+        brand.setSpacing(12)
         brand_icon = QLabel()
-        brand_icon.setObjectName("BrandIcon")
-        brand_icon.setPixmap(QIcon(asset_path("clapper.png")).pixmap(QSize(40, 40)))
-        brand_copy = QVBoxLayout()
-        brand_copy.setSpacing(0)
-        brand_title = QLabel("BiliFlow")
-        brand_title.setObjectName("BrandTitle")
-        brand_caption = QLabel("星轨下载站")
-        brand_caption.setObjectName("SidebarCaption")
-        brand_copy.addWidget(brand_title)
-        brand_copy.addWidget(brand_caption)
-        brand_row.addWidget(brand_icon)
-        brand_row.addLayout(brand_copy)
-        brand_row.addStretch()
-        side_layout.addLayout(brand_row)
-        side_layout.addSpacing(20)
-
-        section_label = QLabel("工作区")
-        section_label.setObjectName("NavSection")
-        side_layout.addWidget(section_label)
-        home_btn = QPushButton("首页")
-        home_btn.setObjectName("NavButtonActive")
-        home_btn.clicked.connect(lambda: self._show_workspace(0))
-        self._home_nav = home_btn
-        side_layout.addWidget(home_btn)
-        self._live_nav = QPushButton("直播录制")
-        self._live_nav.setObjectName("NavButton")
-        self._live_nav.clicked.connect(lambda: self._show_workspace(1))
-        side_layout.addWidget(self._live_nav)
-        batch_nav = QPushButton("批量导入")
-        batch_nav.setObjectName("NavButton")
-        batch_nav.clicked.connect(self._on_batch_clicked)
-        side_layout.addWidget(batch_nav)
-        settings_nav = QPushButton("下载设置")
-        settings_nav.setObjectName("NavButton")
-        settings_nav.clicked.connect(self._on_settings_triggered)
-        side_layout.addWidget(settings_nav)
-        side_layout.addStretch()
-
-        mascot_card = QFrame()
-        mascot_card.setObjectName("MascotCard")
-        mascot_layout = QVBoxLayout(mascot_card)
-        mascot_layout.setContentsMargins(14, 14, 14, 14)
-        mascot_layout.setSpacing(5)
-        mascot_icon = QLabel()
-        mascot_icon.setPixmap(QIcon(asset_path("alien.png")).pixmap(QSize(50, 50)))
-        mascot_title = QLabel("次元传送已就绪")
-        mascot_title.setObjectName("MascotTitle")
-        mascot_text = QLabel("支持 8K · HDR · 弹幕 · 字幕")
-        mascot_text.setObjectName("SidebarCaption")
-        mascot_text.setWordWrap(True)
-        mascot_layout.addWidget(mascot_icon)
-        mascot_layout.addWidget(mascot_title)
-        mascot_layout.addWidget(mascot_text)
-        side_layout.addWidget(mascot_card)
-
-        login_btn = QPushButton("登录 B 站账号")
-        login_btn.setObjectName("SidebarAction")
-        login_btn.clicked.connect(self._on_login_triggered)
-        side_layout.addWidget(login_btn)
-        shell.addWidget(sidebar)
-
-        workspace = QWidget()
-        workspace.setObjectName("Workspace")
-        layout = QVBoxLayout(workspace)
-        self._workspace_layout = layout
-        layout.setContentsMargins(26, 22, 26, 16)
-        layout.setSpacing(16)
-
-        header_row = QHBoxLayout()
-        page_copy = QVBoxLayout()
-        page_copy.setSpacing(2)
-        page_title = QLabel("下载控制台")
-        page_title.setObjectName("PageTitle")
-        page_caption = QLabel("把在线视频、MAD 与收藏，变成本地永久收藏")
-        page_caption.setObjectName("Caption")
-        page_copy.addWidget(page_title)
-        page_copy.addWidget(page_caption)
-        header_row.addLayout(page_copy)
-        header_row.addStretch()
-        self._header_login = QPushButton("未登录")
-        self._header_login.setObjectName("GhostButton")
-        self._header_login.setMinimumWidth(136)
-        self._header_login.setMaximumWidth(180)
+        brand_icon.setPixmap(QIcon(asset_path("app_icon.png")).pixmap(40, 40))
+        brand_icon.setFixedSize(40, 40)
+        brand.addWidget(brand_icon)
+        self._brand_copy = QWidget()
+        copy = QVBoxLayout(self._brand_copy)
+        copy.setContentsMargins(0, 0, 0, 0)
+        copy.setSpacing(2)
+        title = QLabel("BiliFlow")
+        title.setObjectName("BrandTitle")
+        caption = QLabel("星轨收藏站")
+        caption.setObjectName("SidebarCaption")
+        copy.addWidget(title)
+        copy.addWidget(caption)
+        brand.addWidget(self._brand_copy, 1)
+        self._side_layout.addLayout(brand)
+        self._side_layout.addSpacing(16)
+        self._nav_caption = QLabel("工作区")
+        self._nav_caption.setObjectName("NavSection")
+        self._side_layout.addWidget(self._nav_caption)
+        self._nav_buttons = []
+        for index, (text, icon) in enumerate(
+            (("视频下载", "download"), ("直播录制", "live"), ("任务中心", "tasks"))
+        ):
+            button = IconButton(text, icon, "NavButton")
+            button.clicked.connect(
+                lambda _checked=False, page=index: self._show_workspace(page)
+            )
+            self._nav_buttons.append(button)
+            self._side_layout.addWidget(button)
+        self._home_nav, self._live_nav, self._tasks_nav = self._nav_buttons
+        self._side_layout.addStretch()
+        self._mascot_card = SectionCard()
+        mascot = QLabel()
+        mascot.setPixmap(QIcon(asset_path("alien.png")).pixmap(28, 28))
+        self._mascot_card.body.addWidget(mascot)
+        welcome = QLabel("次元收藏，随时继续")
+        welcome.setObjectName("SidebarCaption")
+        welcome.setWordWrap(True)
+        self._mascot_card.body.addWidget(welcome)
+        self._side_layout.addWidget(self._mascot_card)
+        self._settings_nav = IconButton("设置", "settings", "NavButton")
+        self._settings_nav.clicked.connect(self._on_settings_triggered)
+        self._side_layout.addWidget(self._settings_nav)
+        self._account_text = "未登录"
+        self._header_login = IconButton("未登录", "account", "SidebarAction")
         self._header_login.clicked.connect(self._on_login_triggered)
-        header_row.addWidget(self._header_login)
-        layout.addLayout(header_row)
-
-        self._hero = HeroPanel()
-        self._hero_layout = QVBoxLayout(self._hero)
-        self._hero_layout.setContentsMargins(28, 24, 28, 26)
-        self._hero_layout.setSpacing(10)
-        self._hero_eyebrow = QLabel("ANIME STREAM STUDIO  /  ONLINE")
-        self._hero_eyebrow.setObjectName("HeroEyebrow")
-        self._hero_title = QLabel("喜欢的这一集，\n现在就带回本地。")
-        self._hero_title.setObjectName("HeroTitle")
-        self._hero_layout.addWidget(self._hero_eyebrow)
-        self._hero_layout.addWidget(self._hero_title)
-        self._hero_layout.addStretch()
-
-        url_layout = QHBoxLayout()
-        url_layout.setSpacing(10)
-        self._url_input = ChineseLineEdit()
-        self._url_input.setObjectName("UrlInput")
-        self._url_input.setPlaceholderText(
-            "粘贴 B 站链接、BV / AV / ep 号或 b23.tv 短链"
+        self._side_layout.addWidget(self._header_login)
+        shell.addWidget(self._sidebar)
+        self._workspace_pages = QStackedWidget()
+        shell.addWidget(self._workspace_pages, 1)
+        self._build_download_page()
+        self._live_controller = self._provided_live_controller or LiveUiController(
+            self._config, self
         )
+        self._live_page = LivePage(
+            self._config,
+            self._confirm_copyright_acknowledgement,
+            self,
+            self._live_controller,
+        )
+        self._live_page.settings_requested.connect(self._show_settings_tab)
+        self._live_page.history_requested.connect(lambda: self._show_tasks(2))
+        self._workspace_pages.addWidget(self._live_page)
+        self._download_list = DownloadListWidget()
+        self._download_list.retry_requested.connect(self._on_retry_download)
+        self._download_list.pause_requested.connect(self._on_pause_requested)
+        self._download_list.delete_requested.connect(self._on_delete_download)
+        self._download_list.open_requested.connect(self._on_open_download)
+        self._task_page = TaskPage(self._download_list, self._live_controller)
+        self._task_page.download_requested.connect(lambda: self._show_workspace(0))
+        self._task_page.room_requested.connect(self._show_room)
+        self._task_page.pause_all_requested.connect(self._on_pause_all)
+        self._task_page.resume_all_requested.connect(self._on_resume_all)
+        self._task_page.clear_completed_requested.connect(self._on_clear_completed)
+        self._task_page.clear_cache_requested.connect(self._on_clear_cache)
+        self._workspace_pages.addWidget(self._task_page)
+        settings_page = QWidget()
+        settings_layout = QVBoxLayout(settings_page)
+        settings_layout.setContentsMargins(24, 24, 24, 24)
+        settings_layout.setSpacing(20)
+        settings_header = PageHeader("设置", "统一管理下载偏好、直播录制与媒体工具")
+        about_button = QPushButton("关于 BiliFlow")
+        about_button.setObjectName("TextButton")
+        about_button.clicked.connect(self._on_about_triggered)
+        settings_header.actions.addWidget(about_button)
+        settings_layout.addWidget(settings_header)
+        self._settings_page = SettingsDialog(self._settings, embedded=True)
+        self._settings_page.save_requested.connect(self._save_settings)
+        self._settings_page.cache_requested.connect(self._on_clear_cache)
+        settings_layout.addWidget(self._settings_page, 1)
+        self._workspace_pages.addWidget(settings_page)
+        self._live_controller.snapshot_changed.connect(self._refresh_activity)
+        self._activity_timer = QTimer(self)
+        self._activity_timer.timeout.connect(self._refresh_activity)
+        self._activity_timer.start(1000)
+        self._show_workspace(0)
+        self._update_responsive_layout(self.width())
+
+    def _build_download_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(20)
+        layout.addWidget(PageHeader("视频下载", "把喜欢的作品，带回自己的收藏空间"))
+        self._download_tabs = QTabWidget()
+        layout.addWidget(self._download_tabs, 1)
+        body = QWidget()
+        self._workspace_layout = QVBoxLayout(body)
+        self._workspace_layout.setContentsMargins(0, 0, 4, 0)
+        self._workspace_layout.setSpacing(20)
+        self._hero = HeroPanel()
+        self._hero.set_compact(True)
+        self._hero_layout = QVBoxLayout(self._hero)
+        self._hero_layout.setContentsMargins(20, 16, 20, 16)
+        self._hero_layout.setSpacing(10)
+        self._hero_title = QLabel("喜欢的这一集，现在就带回本地。")
+        self._hero_title.setObjectName("HeroTitle")
+        self._hero_layout.addWidget(self._hero_title)
+        row = QHBoxLayout()
+        row.setSpacing(12)
+        self._url_input = ChineseLineEdit()
+        self._url_input.setPlaceholderText("B 站链接、BV / AV / ep 号或 b23.tv 短链")
         self._url_input.returnPressed.connect(self._on_resolve_clicked)
-        url_layout.addWidget(self._url_input)
+        self._url_input.textChanged.connect(self._source_changed)
+        row.addWidget(self._url_input, 1)
         self._resolve_btn = QPushButton("开始解析")
-        self._resolve_btn.setObjectName("HeroButton")
-        self._resolve_btn.setMinimumWidth(140)
+        self._resolve_btn.setObjectName("PrimaryButton")
         self._resolve_btn.clicked.connect(self._on_resolve_clicked)
-        url_layout.addWidget(self._resolve_btn)
-        self._hero_layout.addLayout(url_layout)
-        layout.addWidget(self._hero)
-
+        row.addWidget(self._resolve_btn)
+        self._hero_layout.addLayout(row)
+        self._workspace_layout.addWidget(self._hero)
+        self._resolve_notice = Notice()
+        self._workspace_layout.addWidget(self._resolve_notice)
         self._content_section = QWidget()
-        self._content_section.setObjectName("ContentSection")
-        self._content_layout = QBoxLayout(QBoxLayout.Direction.LeftToRight)
-        self._content_section.setLayout(self._content_layout)
+        self._content_layout = QBoxLayout(QBoxLayout.LeftToRight, self._content_section)
         self._content_layout.setContentsMargins(0, 0, 0, 0)
-        self._content_layout.setSpacing(16)
+        self._content_layout.setSpacing(20)
         self._video_info = VideoInfoWidget()
-        self._video_info.setMinimumHeight(264)
         self._content_layout.addWidget(self._video_info, 5)
+        self._build_output_card()
+        self._workspace_layout.addWidget(self._content_section)
+        self._workspace_layout.addStretch()
+        self._workspace_scroll = scroll_area(body)
+        self._download_tabs.addTab(self._workspace_scroll, "单个解析")
+        self._batch_page = BatchDialog(
+            api_client=self._api_client,
+            existing_content_identities=self._task_repository.known_content_identities(),
+            embedded=True,
+        )
+        self._batch_page.enqueue_requested.connect(self._enqueue_batch_from_page)
+        batch_format = QPushButton("调整输出规格")
+        batch_format.setObjectName("TableSubtleButton")
+        batch_format.clicked.connect(lambda: self._download_tabs.setCurrentIndex(0))
+        self._batch_page._preview_card.header.addWidget(batch_format)
+        self._download_tabs.addTab(self._batch_page, "批量导入")
+        self._enqueue_notice = Notice(
+            action="查看任务", callback=lambda: self._show_tasks(0)
+        )
+        layout.addWidget(self._enqueue_notice)
+        layout.addWidget(self._download_actions)
+        self._download_tabs.currentChanged.connect(
+            lambda index: self._download_actions.setVisible(index == 0)
+        )
+        self._workspace_pages.addWidget(page)
 
-        controls = QWidget()
+    def _build_output_card(self):
+        controls = SectionCard("输出规格")
         controls.setObjectName("ControlPanel")
-        controls.setMinimumHeight(340)
-        controls_layout = QGridLayout(controls)
-        controls_layout.setContentsMargins(16, 14, 16, 14)
-        controls_layout.setHorizontalSpacing(10)
-        controls_layout.setVerticalSpacing(8)
-
-        settings_label = QLabel("输出规格")
-        settings_label.setObjectName("SectionTitle")
-        controls_layout.addWidget(settings_label, 0, 0, 1, 2)
-        settings_hint = QLabel("按收藏场景选择最合适的组合")
-        settings_hint.setObjectName("MetaLabel")
-        settings_hint.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        controls_layout.addWidget(settings_hint, 0, 1)
-
-        page_label = QLabel("分 P 范围")
-        page_label.setObjectName("FieldLabel")
-        controls_layout.addWidget(page_label, 1, 0)
+        self._output_card = controls
         self._page_combo = QComboBox()
         self._page_combo.addItem("当前视频", "current")
-        controls_layout.addWidget(self._page_combo, 1, 1)
-
-        vq_label = QLabel("画面质量")
-        vq_label.setObjectName("FieldLabel")
-        controls_layout.addWidget(vq_label, 2, 0)
+        controls.body.addWidget(FieldRow("分 P 范围", self._page_combo))
+        self._output_mode_combo = QComboBox()
+        self._output_mode_combo.addItem("视频 / MP4", OutputMode.VIDEO)
+        self._output_mode_combo.addItem("仅音频 / M4A 或 FLAC", OutputMode.AUDIO)
+        self._output_mode_combo.setCurrentIndex(
+            max(0, self._output_mode_combo.findData(self._settings.default_output_mode))
+        )
+        self._output_mode_combo.currentIndexChanged.connect(
+            self._sync_output_mode_controls
+        )
+        controls.body.addWidget(FieldRow("输出类型", self._output_mode_combo))
         self._quality_combo = QComboBox()
         self._populate_quality_combo()
         self._quality_combo.currentIndexChanged.connect(self._refresh_codec_options)
-        controls_layout.addWidget(self._quality_combo, 2, 1)
-
-        self._codec_label = QLabel("视频编码")
-        self._codec_label.setObjectName("FieldLabel")
-        controls_layout.addWidget(self._codec_label, 3, 0)
+        controls.body.addWidget(FieldRow("画面质量", self._quality_combo))
         self._codec_stack = QStackedWidget()
         self._codec_combo = QComboBox()
         self._populate_codec_combo()
-        self._codec_combo.setToolTip("H.265 体积与画质均衡；H.264 兼容性更好；AV1 体积更小")
         self._audio_combo = QComboBox()
         self._populate_audio_combo()
         self._codec_stack.addWidget(self._codec_combo)
         self._codec_stack.addWidget(self._audio_combo)
-        controls_layout.addWidget(self._codec_stack, 3, 1)
-
-        output_label = QLabel("输出类型")
-        output_label.setObjectName("FieldLabel")
-        controls_layout.addWidget(output_label, 4, 0)
-        self._output_mode_combo = QComboBox()
-        self._output_mode_combo.addItem("视频 / MP4", OutputMode.VIDEO)
-        self._output_mode_combo.addItem("仅音频 / M4A 或 FLAC", OutputMode.AUDIO)
-        output_index = self._output_mode_combo.findData(
-            self._settings.default_output_mode
+        codec_row = FieldRow("视频编码", self._codec_stack)
+        self._codec_label = codec_row.label
+        controls.body.addWidget(codec_row)
+        self._danmaku_check = self._create_checkbox(
+            "下载弹幕", self._settings.download_danmaku
         )
-        self._output_mode_combo.setCurrentIndex(output_index if output_index >= 0 else 0)
-        self._output_mode_combo.currentIndexChanged.connect(
-            self._sync_output_mode_controls
+        self._subtitle_check = self._create_checkbox(
+            "下载字幕", self._settings.download_subtitle
         )
-        controls_layout.addWidget(self._output_mode_combo, 4, 1)
-
-        self._danmaku_check = self._create_checkbox("下载弹幕", self._settings.download_danmaku)
-        self._subtitle_check = self._create_checkbox("下载字幕", self._settings.download_subtitle)
-        self._subtitle_check.setEnabled(False)
         self._all_subtitles_check = self._create_checkbox(
             "全部字幕", self._settings.download_all_subtitles
         )
-        self._all_subtitles_check.setEnabled(False)
         self._cover_check = self._create_checkbox(
             "保存封面", self._settings.download_cover
         )
         self._metadata_check = self._create_checkbox(
             "保存元数据", self._settings.download_metadata
         )
+        self._subtitle_check.setEnabled(False)
+        self._all_subtitles_check.setEnabled(False)
         self._subtitle_check.toggled.connect(
             lambda checked: self._all_subtitles_check.setEnabled(
                 checked and self._subtitle_check.isEnabled()
             )
         )
-        controls_layout.addWidget(self._danmaku_check, 5, 0)
-        controls_layout.addWidget(self._subtitle_check, 5, 1)
-        archive_options = QGridLayout()
-        archive_options.setHorizontalSpacing(12)
-        archive_options.setVerticalSpacing(4)
-        archive_options.addWidget(self._all_subtitles_check, 0, 0)
-        archive_options.addWidget(self._cover_check, 0, 1)
-        archive_options.addWidget(self._metadata_check, 0, 2)
-        archive_options.setColumnStretch(3, 1)
-        controls_layout.addLayout(archive_options, 6, 0, 1, 2)
-        self._sync_output_mode_controls()
-
+        archive = QGridLayout()
+        archive.setHorizontalSpacing(16)
+        archive.setVerticalSpacing(4)
+        archive.addWidget(self._danmaku_check, 0, 0)
+        archive.addWidget(self._subtitle_check, 0, 1)
+        subtitle_options = QWidget()
+        subtitle_layout = QHBoxLayout(subtitle_options)
+        subtitle_layout.setContentsMargins(24, 0, 0, 0)
+        subtitle_layout.addWidget(self._all_subtitles_check)
+        archive.addWidget(subtitle_options, 1, 1)
+        archive.addWidget(self._cover_check, 2, 0)
+        archive.addWidget(self._metadata_check, 2, 1)
+        controls.body.addLayout(archive)
+        self._output_summary = QLineEdit(self._settings.output_dir)
+        self._output_summary.setReadOnly(True)
+        self._output_summary.setToolTip(self._settings.output_dir)
+        self._output_summary.setCursorPosition(0)
+        controls.body.addWidget(FieldRow("保存目录", self._output_summary))
+        self._download_actions = QWidget()
+        actions = QHBoxLayout(self._download_actions)
+        actions.setContentsMargins(0, 0, 0, 0)
+        actions.setSpacing(12)
+        self._download_hint = QLabel("选择输出规格后，加入下载队列")
+        self._download_hint.setObjectName("MetaLabel")
+        actions.addWidget(self._download_hint, 1)
         self._download_btn = QPushButton("加入下载队列")
-        self._download_btn.setObjectName("DownloadButton")
+        self._download_btn.setObjectName("PrimaryButton")
+        self._download_btn.setEnabled(False)
         self._download_btn.clicked.connect(self._on_download_clicked)
-
-        self._batch_btn = QPushButton("批量导入链接")
-        self._batch_btn.setObjectName("SecondaryButton")
+        actions.addWidget(self._download_btn)
+        self._batch_btn = QPushButton("批量导入")
+        self._batch_btn.setObjectName("TextButton")
         self._batch_btn.clicked.connect(self._on_batch_clicked)
-        action_layout = QHBoxLayout()
-        action_layout.setSpacing(8)
-        action_layout.addWidget(self._download_btn, 3)
-        action_layout.addWidget(self._batch_btn, 2)
-        controls_layout.addLayout(action_layout, 7, 0, 1, 2)
-        controls_layout.setRowStretch(8, 1)
-        self._content_layout.addWidget(controls, 3)
-        layout.addWidget(self._content_section)
-
-        self._queue_section = QWidget()
-        self._queue_section.setObjectName("QueueSection")
-        queue_section_layout = QVBoxLayout(self._queue_section)
-        queue_section_layout.setContentsMargins(0, 0, 0, 0)
-        queue_section_layout.setSpacing(8)
-
-        self._queue_toolbar = QBoxLayout(QBoxLayout.Direction.LeftToRight)
-        self._queue_toolbar.setContentsMargins(0, 0, 0, 0)
-        self._queue_toolbar.setSpacing(8)
-        queue_copy_widget = QWidget()
-        queue_copy = QHBoxLayout(queue_copy_widget)
-        queue_copy.setContentsMargins(0, 0, 0, 0)
-        queue_copy.setSpacing(8)
-        queue_title = QLabel("任务轨道")
-        queue_title.setObjectName("SectionTitle")
-        queue_copy.addWidget(queue_title)
-        queue_hint = QLabel("实时进度与失败重试")
-        queue_hint.setObjectName("MetaLabel")
-        queue_copy.addWidget(queue_hint)
-        queue_copy.addStretch()
-        self._queue_toolbar.addWidget(queue_copy_widget, 1)
-
-        queue_actions_widget = QWidget()
-        queue_actions = QHBoxLayout(queue_actions_widget)
-        queue_actions.setContentsMargins(0, 0, 0, 0)
-        queue_actions.setSpacing(8)
-        queue_actions.addStretch()
-        pause_all = QPushButton("全部暂停")
-        pause_all.setObjectName("SubtleButton")
-        pause_all.clicked.connect(self._on_pause_all)
-        queue_actions.addWidget(pause_all)
-        resume_all = QPushButton("全部继续")
-        resume_all.setObjectName("SubtleButton")
-        resume_all.clicked.connect(self._on_resume_all)
-        queue_actions.addWidget(resume_all)
-        clear_done = QPushButton("清除完成")
-        clear_done.setObjectName("SubtleButton")
-        clear_done.clicked.connect(self._on_clear_completed)
-        queue_actions.addWidget(clear_done)
-        clear_cache = QPushButton("清理缓存")
-        clear_cache.setObjectName("SubtleButton")
-        clear_cache.clicked.connect(self._on_clear_cache)
-        queue_actions.addWidget(clear_cache)
-        self._queue_toolbar.addWidget(queue_actions_widget)
-        queue_section_layout.addLayout(self._queue_toolbar)
-
-        self._download_list = DownloadListWidget()
-        self._download_list.retry_requested.connect(self._on_retry_download)
-        self._download_list.pause_requested.connect(self._on_pause_requested)
-        self._download_list.delete_requested.connect(self._on_delete_download)
-        self._download_list.open_requested.connect(self._on_open_download)
-        self._download_list.content_state_changed.connect(
-            self._on_download_content_state_changed
-        )
-        queue_section_layout.addWidget(self._download_list)
-        layout.addWidget(self._queue_section)
-        self._task_priority_mode = False
-        self._workspace_scroll = QScrollArea()
-        self._workspace_scroll.setObjectName("WorkspaceScroll")
-        self._workspace_scroll.setWidgetResizable(True)
-        self._workspace_scroll.setFrameShape(QFrame.NoFrame)
-        self._workspace_scroll.setAttribute(Qt.WA_MacShowFocusRect, False)
-        self._workspace_scroll.setWidget(workspace)
-        self._workspace_pages = QStackedWidget()
-        self._workspace_pages.addWidget(self._workspace_scroll)
-        self._live_page = LivePage(self._config, self._confirm_copyright_acknowledgement, self)
-        self._live_page.settings_changed.connect(self._live_settings_changed)
-        self._workspace_pages.addWidget(self._live_page)
-        shell.addWidget(self._workspace_pages, 1)
-        self._update_responsive_layout(self.width())
+        actions.addWidget(self._batch_btn)
+        controls.body.addStretch()
+        self._sync_output_mode_controls()
+        self._content_layout.addWidget(controls, 4)
 
     def _show_workspace(self, index):
+        if (
+            self._workspace_pages.currentIndex() == 3
+            and index != 3
+            and not self._can_leave_settings()
+        ):
+            return False
+        if index == 3 and not self._settings_page.dirty:
+            self._settings_page.load_settings(self._settings)
         self._workspace_pages.setCurrentIndex(index)
-        for button, active in ((self._home_nav, index == 0), (self._live_nav, index == 1)):
-            button.setObjectName("NavButtonActive" if active else "NavButton")
-            button.style().unpolish(button)
-            button.style().polish(button)
+        for i, button in enumerate([*self._nav_buttons, self._settings_nav]):
+            button.setObjectName("NavButtonActive" if i == index else "NavButton")
+            repolish(button)
+        return True
+
+    def _show_tasks(self, tab=0):
+        if self._show_workspace(2):
+            self._task_page.tabs.setCurrentIndex(tab)
+
+    def _show_room(self, room_id):
+        if self._show_workspace(1):
+            self._live_page.select_room(room_id)
+
+    def _show_settings_tab(self, tab):
+        if self._show_workspace(3):
+            self._settings_page.tabs.setCurrentIndex(tab)
+
+    def _can_leave_settings(self):
+        if not self._settings_page.dirty:
+            return True
+        box = MessageBox(
+            "保存设置修改",
+            "设置中有未保存的修改。",
+            self,
+            buttons=QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+            default=QMessageBox.Cancel,
+        )
+        box.button(QMessageBox.Save).setText("保存修改")
+        box.button(QMessageBox.Save).setObjectName("PrimaryButton")
+        box.button(QMessageBox.Discard).setText("放弃修改")
+        box.button(QMessageBox.Cancel).setText("继续编辑")
+        box.setDefaultButton(QMessageBox.Cancel)
+        answer = box.exec()
+        if answer == QMessageBox.Save:
+            return self._save_settings()
+        if answer == QMessageBox.Discard:
+            self._settings_page.load_settings(self._settings)
+            return True
+        return False
 
     def _live_settings_changed(self, settings):
         self._settings = settings
@@ -511,7 +522,9 @@ class MainWindow(QMainWindow):
             7: "H.264 / AVC",
             13: "AV1",
         }
-        previous = self._codec_combo.currentData() if self._codec_combo.count() else None
+        previous = (
+            self._codec_combo.currentData() if self._codec_combo.count() else None
+        )
         preferred = previous or self._settings.default_video_codec
         self._codec_combo.blockSignals(True)
         self._codec_combo.clear()
@@ -523,11 +536,11 @@ class MainWindow(QMainWindow):
         self._codec_combo.blockSignals(False)
 
     def _populate_audio_combo(self, available: set[int] | None = None):
-        previous = self._audio_combo.currentData() if self._audio_combo.count() else None
+        previous = (
+            self._audio_combo.currentData() if self._audio_combo.count() else None
+        )
         preferred = (
-            previous
-            if previous is not None
-            else self._settings.default_audio_quality
+            previous if previous is not None else self._settings.default_audio_quality
         )
         self._audio_combo.blockSignals(True)
         self._audio_combo.clear()
@@ -564,52 +577,30 @@ class MainWindow(QMainWindow):
         else:
             self._page_combo.addItem("单 P 视频", "current")
 
-    def _on_download_content_state_changed(self, has_content: bool):
-        """Give the queue priority once the first durable row appears."""
-        if self._task_priority_mode == has_content:
+    def _update_responsive_layout(self, width):
+        if not hasattr(self, "_sidebar"):
             return
-        self._task_priority_mode = has_content
-        self._hero.set_compact(has_content)
-        self._hero_eyebrow.setVisible(not has_content)
-        self._hero_title.setVisible(not has_content)
-        if has_content:
-            self._hero_layout.setContentsMargins(18, 14, 18, 14)
-        else:
-            self._hero_layout.setContentsMargins(28, 24, 28, 26)
-        self._download_list.setMinimumHeight(184 if has_content else 120)
-        self._update_responsive_layout(self.width())
-
-    def _update_responsive_layout(self, width: int):
-        """Apply one coherent layout policy for width and queue state."""
-        if not hasattr(self, "_content_layout"):
-            return
-        narrow = width < 1120
+        compact = width < 1120
+        self._sidebar.setFixedWidth(72 if compact else 208)
+        self._side_layout.setContentsMargins(
+            12 if compact else 16, 24, 12 if compact else 16, 16
+        )
+        for widget in (self._brand_copy, self._nav_caption, self._mascot_card):
+            widget.setVisible(not compact)
+        for button in [*self._nav_buttons, self._settings_nav, self._header_login]:
+            button.set_compact(compact)
+        if not compact:
+            self._header_login.setText(
+                self._header_login.fontMetrics().elidedText(
+                    self._account_text, Qt.ElideRight, 116
+                )
+            )
+        content_width = width - (72 if compact else 208) - 48
         self._content_layout.setDirection(
-            QBoxLayout.Direction.TopToBottom
-            if narrow
-            else QBoxLayout.Direction.LeftToRight
-        )
-        self._queue_toolbar.setDirection(
-            QBoxLayout.Direction.TopToBottom
-            if width < 1040
-            else QBoxLayout.Direction.LeftToRight
-        )
-
-        self._workspace_layout.removeWidget(self._content_section)
-        self._workspace_layout.removeWidget(self._queue_section)
-        if narrow and self._task_priority_mode:
-            self._workspace_layout.insertWidget(2, self._queue_section)
-            self._workspace_layout.insertWidget(3, self._content_section)
-        else:
-            self._workspace_layout.insertWidget(2, self._content_section)
-            self._workspace_layout.insertWidget(3, self._queue_section)
-        self._workspace_layout.setStretchFactor(
-            self._queue_section,
-            1 if self._task_priority_mode and not narrow else 0,
+            QBoxLayout.TopToBottom if content_width < 900 else QBoxLayout.LeftToRight
         )
 
     def resizeEvent(self, event):
-        """Update the task-focused responsive layout."""
         self._update_responsive_layout(event.size().width())
         super().resizeEvent(event)
 
@@ -652,31 +643,62 @@ class MainWindow(QMainWindow):
         help_menu.addAction(about_action)
 
     def _setup_status_bar(self):
-        """Create status bar."""
         self._status_bar = QStatusBar()
         self.setStatusBar(self._status_bar)
         self._status_bar.showMessage("就绪")
-
         self._login_status_label = QLabel("未登录")
         self._login_status_label.setObjectName("MutedLabel")
-        self._status_bar.addPermanentWidget(self._login_status_label)
+        # Account status is presented once, in the sidebar.
+        self._download_activity = QPushButton("下载 0")
+        self._download_activity.setObjectName("ActivityButton")
+        self._download_activity.clicked.connect(lambda: self._show_tasks(0))
+        self._record_activity = QPushButton("录制 0")
+        self._record_activity.setObjectName("ActivityButton")
+        self._record_activity.clicked.connect(lambda: self._show_tasks(1))
+        self._status_bar.addPermanentWidget(self._download_activity)
+        self._status_bar.addPermanentWidget(self._record_activity)
+        self._refresh_activity()
 
-    def _set_login_status_label(self, text: str, style_name: str, tooltip: str = ""):
-        """Update login status label and refresh QSS-dependent styling."""
+    def _refresh_activity(self, *_args):
+        if not hasattr(self, "_status_bar"):
+            return
+        count = sum(
+            state in {TaskStatus.QUEUED, TaskStatus.DOWNLOADING, TaskStatus.MERGING}
+            for state in self._download_list._states.values()
+        )
+        recording = sum(row["active"] for row in self._live_controller.rows)
+        self._download_activity.setText(f"下载 {count}")
+        self._record_activity.setText(f"录制 {recording}")
+        self._tasks_nav.setToolTip(f"任务中心 · {count} 项下载 / {recording} 场录制")
+        self._live_nav.setToolTip(f"直播录制 · {recording} 场正在录制")
+        self._task_page.refresh_downloads()
+
+    def _set_login_status_label(self, text, style_name, tooltip=""):
         self._login_status_label.setText(text)
         self._login_status_label.setObjectName(style_name)
-        self._login_status_label.setToolTip(tooltip)
-        self._login_status_label.style().unpolish(self._login_status_label)
-        self._login_status_label.style().polish(self._login_status_label)
-        if hasattr(self, "_header_login"):
-            available = self._header_login.maximumWidth() - 28
-            elided = self._header_login.fontMetrics().elidedText(
-                text, Qt.ElideRight, available
+        self._account_text = text
+        self._header_login.full_text = text
+        compact = self._sidebar.width() == 72
+        self._header_login.set_compact(compact)
+        if not compact:
+            self._header_login.setText(
+                self._header_login.fontMetrics().elidedText(text, Qt.ElideRight, 116)
             )
-            self._header_login.setText(elided)
-            self._header_login.setToolTip(
-                " · ".join(part for part in (text, tooltip) if part)
-            )
+        self._header_login.setToolTip(
+            " · ".join(part for part in (text, tooltip) if part)
+        )
+        self._header_login.setAccessibleName(text)
+
+    def _source_changed(self, text):
+        if hasattr(self, "_download_btn") and text.strip() != getattr(
+            self, "_resolved_url", ""
+        ):
+            self._current_video = None
+            self._download_btn.setEnabled(False)
+            self._video_info._state_label.setText("等待解析")
+            self._video_info._state_label.set_tone("muted")
+            if getattr(self, "_resolved_url", ""):
+                self._resolve_notice.set_message("来源已修改，请重新解析。")
 
     # -- Event Handlers --
 
@@ -703,23 +725,35 @@ class MainWindow(QMainWindow):
         )
         if recovered_database:
             self._status_bar.showMessage(
-                "任务数据库损坏，原文件已隔离并建立新任务库："
-                f"{recovered_database.name}"
+                f"任务数据库损坏，原文件已隔离并建立新任务库：{recovered_database.name}"
             )
         elif recovered:
             self._status_bar.showMessage(f"已恢复 {recovered} 个中断任务，可继续下载")
 
     def _on_resolve_clicked(self):
         """Resolve URL and show video info."""
+        if not self._resolve_btn.isEnabled():
+            return
         url = self._url_input.text().strip()
         if not url:
-            self._show_error("请输入B站视频链接或BV号")
+            self._resolve_notice.set_message(
+                "请输入 B 站链接或 BV / AV / ep 号。", "warning"
+            )
             return
 
         if not is_bilibili_url(url):
-            self._show_error("无效的B站视频链接格式")
+            self._resolve_notice.set_message(
+                "无法识别这个来源。番剧季度、合集和收藏夹请使用批量导入。", "warning"
+            )
             return
 
+        self._resolve_request_url = url
+        self._current_video = None
+        self._download_btn.setEnabled(False)
+        self._resolve_notice.set_message("正在读取作品与可用规格…")
+        self._video_info._state_label.setText("解析中")
+        self._video_info._state_label.set_tone("active")
+        self._video_info._state_label.setText("解析中")
         self._resolve_btn.setEnabled(False)
         self._resolve_btn.setText("解析中...")
         self._status_bar.showMessage("正在解析视频...")
@@ -735,6 +769,17 @@ class MainWindow(QMainWindow):
         """Handle successful URL resolution."""
         self._resolve_btn.setEnabled(True)
         self._resolve_btn.setText("开始解析")
+        if (
+            getattr(self, "_resolve_request_url", self._url_input.text().strip())
+            != self._url_input.text().strip()
+        ):
+            self._resolve_notice.set_message(
+                "解析期间来源已修改，请重新解析。", "warning"
+            )
+            return
+        self._resolved_url = self._url_input.text().strip()
+        self._resolve_notice.set_message("")
+        self._download_btn.setEnabled(True)
         self._status_bar.showMessage(f"已解析：{info.title}")
 
         self._current_video = info
@@ -762,8 +807,12 @@ class MainWindow(QMainWindow):
                 label = enum_val.label if enum_val else str(qid)
                 self._quality_combo.addItem(label, enum_val)
             if available:
-                default_index = self._quality_combo.findData(self._settings.default_quality)
-                self._quality_combo.setCurrentIndex(default_index if default_index >= 0 else 0)
+                default_index = self._quality_combo.findData(
+                    self._settings.default_quality
+                )
+                self._quality_combo.setCurrentIndex(
+                    default_index if default_index >= 0 else 0
+                )
             else:
                 self._populate_quality_combo()
         else:
@@ -784,7 +833,10 @@ class MainWindow(QMainWindow):
         self._resolve_btn.setEnabled(True)
         self._resolve_btn.setText("开始解析")
         self._status_bar.showMessage("解析失败")
-        self._show_error(f"解析视频失败：{error}")
+        self._download_btn.setEnabled(False)
+        self._video_info._state_label.setText("解析失败")
+        self._video_info._state_label.set_tone("danger")
+        self._resolve_notice.set_message(f"解析失败：{error}", "danger")
 
     def _on_retry_download(self, download_id: int):
         """Retry a failed download."""
@@ -818,7 +870,9 @@ class MainWindow(QMainWindow):
 
         page_selection = self._page_combo.currentData()
         if page_selection == "all":
-            video_infos = [self._current_video.for_page(page) for page in self._current_video.pages]
+            video_infos = [
+                self._current_video.for_page(page) for page in self._current_video.pages
+            ]
         elif hasattr(page_selection, "cid"):
             video_infos = [self._current_video.for_page(page_selection)]
         else:
@@ -828,12 +882,17 @@ class MainWindow(QMainWindow):
             self._enqueue_download(self._make_download_item(video_info))
             for video_info in video_infos
         )
-        self._status_bar.showMessage(f"已加入 {added} 个下载任务")
+        skipped = len(video_infos) - added
+        message = f"已加入 {added} 个下载任务" + (
+            f"，跳过 {skipped} 个重复项" if skipped else ""
+        )
+        self._status_bar.showMessage(message)
+        self._enqueue_notice.set_message(message, "success" if added else "info")
+        self._refresh_activity()
 
     def _make_download_item(self, video_info: VideoInfo) -> DownloadItem:
         all_subtitles = (
-            self._subtitle_check.isChecked()
-            and self._all_subtitles_check.isChecked()
+            self._subtitle_check.isChecked() and self._all_subtitles_check.isChecked()
         )
         return DownloadItem(
             video_info=video_info,
@@ -841,8 +900,7 @@ class MainWindow(QMainWindow):
                 self._quality_combo.currentData() or self._settings.default_quality
             ),
             selected_video_codec=(
-                self._codec_combo.currentData()
-                or self._settings.default_video_codec
+                self._codec_combo.currentData() or self._settings.default_video_codec
             ),
             selected_audio_quality=(
                 self._audio_combo.currentData()
@@ -865,9 +923,7 @@ class MainWindow(QMainWindow):
     def _enqueue_download(self, item: DownloadItem) -> bool:
         duplicate = self._task_repository.find_duplicate(item)
         if duplicate is not None:
-            self._status_bar.showMessage(
-                f"已跳过重复任务：{item.video_info.title}"
-            )
+            self._status_bar.showMessage(f"已跳过重复任务：{item.video_info.title}")
             return False
         download_id = self._task_repository.add(item)
         self._download_list.add_item(item, download_id=download_id)
@@ -951,12 +1007,12 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage("下载已取消")
 
     def _on_download_progress(self, download_id: int, progress: float, text: str):
-        self._download_list.update_progress(download_id, progress, text)
         state = (
             TaskStatus.MERGING
             if "合并" in text or "封装" in text
             else TaskStatus.DOWNLOADING
         )
+        self._download_list.update_progress(download_id, progress, text, state)
         self._task_repository.update(
             download_id,
             status=state,
@@ -1031,32 +1087,42 @@ class MainWindow(QMainWindow):
             self._show_info("当前没有断点缓存")
             return
         size = _format_bytes(summary.size_bytes)
-        answer = QMessageBox.question(
-            self,
+        box = MessageBox(
             "清理断点缓存",
             f"将删除 {summary.file_count} 个断点文件（{size}）。\n"
             "删除后未完成任务需要重新下载，确认继续吗？",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+            self,
+            tone="warning",
+            buttons=QMessageBox.Yes | QMessageBox.No,
+            default=QMessageBox.No,
         )
-        if answer != QMessageBox.Yes:
+        box.button(QMessageBox.Yes).setText("清理缓存")
+        box.button(QMessageBox.Yes).setObjectName("DangerButton")
+        if box.exec() != QMessageBox.Yes:
             return
         cleared = clear_download_cache(self._settings.output_dir)
         self._status_bar.showMessage(f"已清理 {cleared.file_count} 个断点文件")
 
     def _on_settings_triggered(self):
-        """Open settings dialog."""
-        dialog = SettingsDialog(self._settings, self)
-        if dialog.exec():
-            new_settings = dialog.get_settings()
-            try:
-                self._config.save(new_settings)
-            except OSError as e:
-                self._show_error(f"设置保存失败：{e}")
-                return
-            self._settings = new_settings
-            self._apply_thread_pool_settings()
-            self._apply_settings_to_controls()
+        self._show_workspace(3)
+
+    def _save_settings(self):
+        if not self._settings_page.validate():
+            return False
+        new_settings = self._settings_page.merge_into(self._config.load())
+        try:
+            self._config.save(new_settings)
+        except OSError as exc:
+            self._settings_page._notice.set_message(f"设置保存失败：{exc}", "danger")
+            return False
+        self._settings = new_settings
+        self._apply_thread_pool_settings()
+        self._apply_settings_to_controls()
+        self._live_controller.command("settings", settings=new_settings.live)
+        self._live_page.check_engine()
+        self._settings_page.load_settings(new_settings)
+        self._settings_page._notice.set_message("设置已保存", "success")
+        return True
 
     def _apply_settings_to_controls(self):
         quality_index = self._quality_combo.findData(self._settings.default_quality)
@@ -1075,12 +1141,13 @@ class MainWindow(QMainWindow):
             self._output_mode_combo.setCurrentIndex(output_index)
         self._danmaku_check.setChecked(self._settings.download_danmaku)
         self._subtitle_check.setChecked(self._settings.download_subtitle)
-        self._all_subtitles_check.setChecked(
-            self._settings.download_all_subtitles
-        )
+        self._all_subtitles_check.setChecked(self._settings.download_all_subtitles)
         self._cover_check.setChecked(self._settings.download_cover)
         self._metadata_check.setChecked(self._settings.download_metadata)
         self._sync_output_mode_controls()
+        self._output_summary.setText(self._settings.output_dir)
+        self._output_summary.setToolTip(self._settings.output_dir)
+        self._output_summary.setCursorPosition(0)
 
     def _on_login_triggered(self):
         """Open login dialog."""
@@ -1169,33 +1236,39 @@ class MainWindow(QMainWindow):
         self._set_login_status_label("登录状态未知", "MutedLabel")
 
     def _on_batch_clicked(self):
-        """Open batch download dialog."""
-        dialog = BatchDialog(
-            api_client=self._api_client,
-            existing_content_identities=(
+        if self._show_workspace(0):
+            self._download_tabs.setCurrentIndex(1)
+            self._batch_page._api_client = self._api_client
+            self._batch_page._existing_content_identities = (
                 self._task_repository.known_content_identities()
-            ),
-            parent=self,
-        )
-        if dialog.exec():
-            infos = dialog.get_video_infos()
-            if infos and self._confirm_copyright_acknowledgement():
-                self._enqueue_batch_infos(infos)
+            )
+
+    def _enqueue_batch_from_page(self, infos):
+        if infos and self._confirm_copyright_acknowledgement():
+            self._enqueue_batch_infos(infos)
 
     def _confirm_copyright_acknowledgement(self) -> bool:
         if self._settings.copyright_notice_version >= COPYRIGHT_NOTICE_VERSION:
             return True
-        box = QMessageBox(self)
-        box.setIcon(QMessageBox.Warning)
-        box.setWindowTitle(COPYRIGHT_NOTICE_TITLE)
-        box.setText(COPYRIGHT_NOTICE_SUMMARY.replace("\n", "<br>"))
-        box.setInformativeText(
-            f'<a href="{COPYRIGHT_DOCUMENT_URL}">项目版权说明</a> · '
-            f'<a href="{BILIBILI_TERMS_URL}">Bilibili 服务协议</a>'
+        text = (
+            COPYRIGHT_NOTICE_SUMMARY.replace("\n", "<br>")
+            + "<br><br>"
+            + (
+                f'<a href="{COPYRIGHT_DOCUMENT_URL}">项目版权说明</a> · '
+                f'<a href="{BILIBILI_TERMS_URL}">Bilibili 服务协议</a>'
+            )
         )
-        box.setTextFormat(Qt.RichText)
-        box.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
+        box = MessageBox(
+            COPYRIGHT_NOTICE_TITLE,
+            text,
+            self,
+            tone="warning",
+            buttons=QMessageBox.Yes | QMessageBox.Cancel,
+            default=QMessageBox.Cancel,
+            rich_text=True,
+        )
         box.button(QMessageBox.Yes).setText("我已了解并继续")
+        box.button(QMessageBox.Yes).setObjectName("PrimaryButton")
         box.button(QMessageBox.Cancel).setText("取消")
         box.setDefaultButton(QMessageBox.Cancel)
         if box.exec() != QMessageBox.Yes:
@@ -1227,9 +1300,15 @@ class MainWindow(QMainWindow):
                     added += 1
                 else:
                     skipped += 1
-        self._status_bar.showMessage(
-            f"已加入 {added} 个任务" + (f"，跳过 {skipped} 个重复项" if skipped else "")
+        message = f"已加入 {added} 个任务" + (
+            f"，跳过 {skipped} 个重复项" if skipped else ""
         )
+        self._status_bar.showMessage(message)
+        self._enqueue_notice.set_message(message, "success" if added else "info")
+        self._batch_page._existing_content_identities = (
+            self._task_repository.known_content_identities()
+        )
+        self._refresh_activity()
 
     def _on_check_ffmpeg(self):
         """Check FFmpeg availability."""
@@ -1251,32 +1330,41 @@ class MainWindow(QMainWindow):
 
     def _on_about_triggered(self):
         """Show about dialog."""
-        QMessageBox.about(
+        MessageBox(
+            "关于 BiliFlow",
+            f"BiliFlow · 星轨收藏站 v{__version__}\n\n"
+            "视频下载、批量导入与直播录制，统一的本地收藏工作台。\n"
+            "支持多 P、番剧、弹幕、字幕与可恢复任务。",
             self,
-            "关于",
-            f"哔哩哔哩视频下载器 v{__version__}\n\n"
-            "一款桌面端B站视频下载工具。\n"
-            "支持4K、HDR、杜比视界、弹幕和字幕下载。",
-        )
+        ).exec()
 
     def _show_error(self, message: str):
-        QMessageBox.critical(self, "任务出现问题", message)
+        MessageBox("任务出现问题", message, self, tone="danger").exec()
 
     def _show_info(self, message: str):
-        QMessageBox.information(self, "运行信息", message)
+        MessageBox("运行信息", message, self).exec()
 
     def closeEvent(self, event: QCloseEvent):
         """Cancel running downloads and close API client on window close."""
+        if self._settings_page.dirty and not self._can_leave_settings():
+            event.ignore()
+            return
         live_service = self._live_page.service
-        if (self._download_list.has_active_workers or (live_service and live_service.active)) and not self._close_confirmed:
-            answer = QMessageBox.question(
-                self,
+        if (
+            self._download_list.has_active_workers
+            or (live_service and live_service.active)
+        ) and not self._close_confirmed:
+            box = MessageBox(
                 "退出 BiliFlow",
                 "仍有下载或直播录制正在运行。退出将停止录制并保留文件；直播离线期间无法补录。确认退出吗？",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
+                self,
+                tone="warning",
+                buttons=QMessageBox.Yes | QMessageBox.No,
+                default=QMessageBox.No,
             )
-            if answer != QMessageBox.Yes:
+            box.button(QMessageBox.Yes).setText("停止并退出")
+            box.button(QMessageBox.Yes).setObjectName("DangerButton")
+            if box.exec() != QMessageBox.Yes:
                 event.ignore()
                 return
             self._close_confirmed = True

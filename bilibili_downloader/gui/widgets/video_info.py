@@ -4,7 +4,7 @@ import io
 
 from PIL import Image, UnidentifiedImageError
 from PySide6.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, Signal
-from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from bilibili_downloader.gui.resources.paths import asset_path
+from bilibili_downloader.gui.widgets.components import StatusBadge, line_icon
 from bilibili_downloader.utils.network import BILIBILI_RESOURCE_HOSTS, trusted_https_url
 
 MAX_COVER_BYTES = 10 * 1024 * 1024
@@ -59,7 +59,9 @@ class _AspectCoverLabel(QLabel):
             super().setPixmap(self._source)
             return
         mode = Qt.KeepAspectRatioByExpanding if self._expand else Qt.KeepAspectRatio
-        super().setPixmap(self._source.scaled(self.size(), mode, Qt.SmoothTransformation))
+        super().setPixmap(
+            self._source.scaled(self.size(), mode, Qt.SmoothTransformation)
+        )
 
     def resizeEvent(self, event):
         self.setFixedHeight(self.heightForWidth(event.size().width()))
@@ -151,14 +153,13 @@ class VideoInfoWidget(QWidget):
         layout = QVBoxLayout(self)
         self.setObjectName("Panel")
         self.setAttribute(Qt.WA_StyledBackground, True)
-        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(13)
 
         header_layout = QHBoxLayout()
         title = QLabel("作品资料卡")
         title.setObjectName("SectionTitle")
-        self._state_label = QLabel("等待解析")
-        self._state_label.setObjectName("StatusPill")
+        self._state_label = StatusBadge("等待解析")
         header_layout.addWidget(title)
         header_layout.addStretch()
         header_layout.addWidget(self._state_label)
@@ -168,7 +169,7 @@ class VideoInfoWidget(QWidget):
         self._cover_label = _AspectCoverLabel()
         self._cover_label.setObjectName("EmptyCover")
         self._cover_label.setAlignment(Qt.AlignCenter)
-        placeholder = QIcon(asset_path("artist_palette.png")).pixmap(QSize(58, 58))
+        placeholder = line_icon("star", size=48).pixmap(48, 48)
         self._cover_label.set_source_pixmap(placeholder)
         self._cover_label.setToolTip("解析后显示视频封面")
         self._cover_label.setAlignment(Qt.AlignCenter)
@@ -176,6 +177,7 @@ class VideoInfoWidget(QWidget):
         # Info labels
         self._title_label = QLabel("等待新的次元旅程")
         self._title_label.setObjectName("VideoTitle")
+        self._title_label.setTextFormat(Qt.PlainText)
         self._title_label.setWordWrap(True)
 
         self._author_label = _ElidedLabel("UP 主  --")
@@ -192,7 +194,7 @@ class VideoInfoWidget(QWidget):
         info_layout = QVBoxLayout()
         info_layout.setSpacing(9)
         info_layout.addWidget(self._title_label)
-        subtitle = QLabel("解析完成后，可以在右侧选择画质和编码")
+        subtitle = QLabel("封面、作者与作品编号，帮助确认收藏内容")
         subtitle.setObjectName("MetaLabel")
         subtitle.setWordWrap(True)
         info_layout.addWidget(subtitle)
@@ -202,9 +204,9 @@ class VideoInfoWidget(QWidget):
         info_layout.addWidget(self._bvid_label)
         info_layout.addStretch()
         top_layout.addLayout(info_layout)
-        top_layout.addStretch()
 
         layout.addLayout(top_layout)
+        layout.addStretch()
 
     def set_video_info(self, info):
         """Update display with video info."""
@@ -226,7 +228,8 @@ class VideoInfoWidget(QWidget):
         self._duration_label.set_full_text(f"时长  {info.duration_str}")
         identity = f"ep{info.episode_id}" if info.episode_id else info.bvid
         self._bvid_label.set_full_text(f"作品号  {identity}")
-        self._state_label.setText("READY")
+        self._state_label.setText("已解析")
+        self._state_label.set_tone("success")
 
         # Load cover image
         if info.cover_url:
@@ -248,9 +251,7 @@ class VideoInfoWidget(QWidget):
         self._cover_pool.start(runner)
 
     def _finish_cover_job(self, worker):
-        self._cover_jobs = [
-            job for job in self._cover_jobs if job[0] is not worker
-        ]
+        self._cover_jobs = [job for job in self._cover_jobs if job[0] is not worker]
 
     def _on_cover_loaded(self, url: str, image_data: bytes):
         """Create and show the cover pixmap on the GUI thread."""
@@ -264,6 +265,4 @@ class VideoInfoWidget(QWidget):
         """Restore cover placeholder when cover loading fails."""
         if url and url != self._cover_url:
             return
-        self._cover_label.set_source_pixmap(
-            QIcon(asset_path("artist_palette.png")).pixmap(QSize(58, 58))
-        )
+        self._cover_label.set_source_pixmap(line_icon("star", size=48).pixmap(48, 48))

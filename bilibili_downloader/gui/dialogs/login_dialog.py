@@ -25,6 +25,7 @@ from bilibili_downloader.api.auth import filter_auth_cookies, parse_cookie_input
 from bilibili_downloader.api.login import LoginManager
 from bilibili_downloader.core.errors import redact_sensitive_text
 from bilibili_downloader.gui.widgets.chinese_input import ChineseLineEdit
+from bilibili_downloader.gui.widgets.components import MessageBox, palette
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +122,7 @@ class LoginDialog(QDialog):
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(22, 20, 22, 18)
+        layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(12)
 
         title = QLabel("连接 B 站账号")
@@ -130,9 +131,7 @@ class LoginDialog(QDialog):
         caption.setObjectName("DialogCaption")
         layout.addWidget(title)
         layout.addWidget(caption)
-        rights_notice = QLabel(
-            "账号可观看不等于获得永久复制、传播或商业使用授权。"
-        )
+        rights_notice = QLabel("账号可观看不等于获得永久复制、传播或商业使用授权。")
         rights_notice.setObjectName("WarningBanner")
         rights_notice.setWordWrap(True)
         layout.addWidget(rights_notice)
@@ -157,17 +156,19 @@ class LoginDialog(QDialog):
         self._instructions.setTextInteractionFlags(Qt.TextBrowserInteraction)
         self._instructions.setAttribute(Qt.WA_MacShowFocusRect, False)
         self._instructions.setText(
-            '<p style="margin:4px 0;font-size:10pt;">'
+            '<p style="margin:4px 0;">'
             '<b>1.</b> 登录 <a href="https://www.bilibili.com">bilibili.com</a></p>'
-            '<p style="margin:4px 0;font-size:10pt;">'
-            '<b>2.</b> 打开开发者工具：Windows/Linux 按 <code>F12</code>，'
-            'macOS 按 <code>Command+Option+I</code></p>'
-            '<p style="margin:4px 0;font-size:10pt;">'
-            '<b>3.</b> 进入 <code>Application</code>（应用）→ '
-            '<code>Cookies</code> → <code>bilibili.com</code></p>'
-            '<p style="margin:4px 0;font-size:10pt;">'
-            '<b>4.</b> 复制 <code>SESSDATA</code> 的值并粘贴到下方</p>'
+            '<p style="margin:4px 0;">'
+            "<b>2.</b> 打开开发者工具：Windows/Linux 按 <code>F12</code>，"
+            "macOS 按 <code>Command+Option+I</code></p>"
+            '<p style="margin:4px 0;">'
+            "<b>3.</b> 进入 <code>Application</code>（应用）→ "
+            "<code>Cookies</code> → <code>bilibili.com</code></p>"
+            '<p style="margin:4px 0;">'
+            "<b>4.</b> 复制 <code>SESSDATA</code> 的值并粘贴到下方</p>"
         )
+        self._instruction_source = self._instructions.text()
+        self._sync_instruction_color()
         cookie_layout.addWidget(self._instructions)
 
         input_label = QLabel("粘贴 SESSDATA 值或完整 Cookie 字符串")
@@ -201,7 +202,7 @@ class LoginDialog(QDialog):
 
         qr_hint = QLabel("请使用哔哩哔哩客户端扫码，并在手机端确认登录。")
         qr_hint.setWordWrap(True)
-        qr_hint.setObjectName("WarningBanner")
+        qr_hint.setObjectName("DialogCaption")
         qr_layout.addWidget(qr_hint)
 
         self._qr_label = QLabel()
@@ -229,7 +230,16 @@ class LoginDialog(QDialog):
         qr_layout.addWidget(self._refresh_btn, alignment=Qt.AlignCenter)
 
         qr_layout.addStretch()
-        self._tabs.addTab(self._make_scroll_tab(qr_tab), "扫码登录")
+        qr_layout.removeWidget(self._generate_btn)
+        qr_layout.removeWidget(self._refresh_btn)
+        qr_panel = QWidget()
+        qr_outer = QVBoxLayout(qr_panel)
+        qr_outer.setContentsMargins(0, 0, 0, 0)
+        qr_outer.setSpacing(12)
+        qr_outer.addWidget(self._make_scroll_tab(qr_tab), 1)
+        qr_outer.addWidget(self._generate_btn, alignment=Qt.AlignCenter)
+        qr_outer.addWidget(self._refresh_btn, alignment=Qt.AlignCenter)
+        self._tabs.addTab(qr_panel, "扫码登录")
 
         layout.addWidget(self._tabs)
 
@@ -246,6 +256,18 @@ class LoginDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
         layout.addLayout(btn_layout)
+
+    def _sync_instruction_color(self):
+        self._instructions.setText(
+            self._instruction_source.replace(
+                "<a href=", f'<a style="color:{palette().active_text}" href='
+            )
+        )
+
+    def changeEvent(self, event):
+        if hasattr(self, "_instruction_source"):
+            self._sync_instruction_color()
+        super().changeEvent(event)
 
     @staticmethod
     def _make_scroll_tab(content: QWidget) -> QScrollArea:
@@ -290,9 +312,7 @@ class LoginDialog(QDialog):
         qr_img.save(buffer, format="PNG")
         pixmap = QPixmap()
         pixmap.loadFromData(buffer.getvalue())
-        pixmap = pixmap.scaled(
-            220, 220, Qt.KeepAspectRatio, Qt.SmoothTransformation
-        )
+        pixmap = pixmap.scaled(220, 220, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self._qr_label.setPixmap(pixmap)
         self._qr_label.setText("")
 
@@ -340,10 +360,12 @@ class LoginDialog(QDialog):
                 self._qr_status.setText("正在验证账号...")
                 self._begin_cookie_validation(cookies, source="qr")
             else:
-                QMessageBox.warning(
-                    self, "登录",
+                MessageBox(
+                    "登录",
                     "登录成功但未获取到 SESSDATA，请使用手动输入 Cookie 方式。",
-                )
+                    self,
+                    tone="warning",
+                ).exec()
 
         elif status == 86101:
             self._qr_status.setText("等待扫码...")
@@ -367,14 +389,12 @@ class LoginDialog(QDialog):
         """Validate the manually entered SESSDATA."""
         bundle = parse_cookie_input(self._cookie_input.text())
         if not bundle.is_authenticated:
-            QMessageBox.warning(self, "验证", "请输入 SESSDATA 值")
+            MessageBox("验证", "请输入 SESSDATA 值", self, tone="warning").exec()
             return
 
         self._begin_cookie_validation(bundle.cookies, source="manual")
 
-    def _begin_cookie_validation(
-        self, cookies: dict[str, str], *, source: str
-    ) -> None:
+    def _begin_cookie_validation(self, cookies: dict[str, str], *, source: str) -> None:
         self._pending_cookies = filter_auth_cookies(cookies)
         self._validation_source = source
         if source == "manual":
@@ -395,14 +415,17 @@ class LoginDialog(QDialog):
         self._cookie_visibility_btn.setText("隐藏" if visible else "显示")
 
     def _logout(self):
-        answer = QMessageBox.question(
-            self,
+        box = MessageBox(
             "退出登录",
             "确认从本机凭据库和配置中清除 B 站登录信息吗？",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+            self,
+            tone="warning",
+            buttons=QMessageBox.Yes | QMessageBox.No,
+            default=QMessageBox.No,
         )
-        if answer == QMessageBox.Yes:
+        box.button(QMessageBox.Yes).setText("退出登录")
+        box.button(QMessageBox.Yes).setObjectName("DangerButton")
+        if box.exec() == QMessageBox.Yes:
             self._sessdata = None
             self._auth_cookies = {}
             self._logout_requested = True
@@ -416,7 +439,7 @@ class LoginDialog(QDialog):
             self._auth_cookies = self._pending_cookies
             self._sessdata = self._auth_cookies.get("SESSDATA")
             if self._validation_source == "manual":
-                QMessageBox.information(self, "验证", "Cookie 有效！")
+                MessageBox("验证", "Cookie 有效！", self, tone="success").exec()
             else:
                 self._qr_status.setText("登录成功！")
             self.accept()
@@ -424,7 +447,7 @@ class LoginDialog(QDialog):
             if self._validation_source == "qr":
                 self._qr_status.setText("登录验证失败，请重新生成二维码")
                 self._refresh_btn.show()
-            QMessageBox.warning(self, "验证", "Cookie 无效或已过期")
+            MessageBox("验证", "Cookie 无效或已过期", self, tone="warning").exec()
 
     def _on_cookie_validate_error(self, error: str):
         self._validate_btn.setEnabled(True)
@@ -432,7 +455,7 @@ class LoginDialog(QDialog):
         if self._validation_source == "qr":
             self._qr_status.setText("登录验证异常，请重试")
             self._refresh_btn.show()
-        QMessageBox.warning(self, "验证", f"验证失败：{error}")
+        MessageBox("验证", f"验证失败：{error}", self, tone="danger").exec()
 
     def get_sessdata(self) -> Optional[str]:
         """Return the SESSDATA from login."""

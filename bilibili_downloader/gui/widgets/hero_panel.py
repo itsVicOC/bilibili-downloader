@@ -19,7 +19,7 @@ class HeroPanel(QWidget):
 
     def set_compact(self, compact: bool) -> None:
         """Switch between the branded empty state and task-focused toolbar."""
-        height = 92 if compact else 190
+        height = 120 if compact else 190
         self.setMinimumHeight(height)
         self.setMaximumHeight(height if compact else 16777215)
         self.setProperty("compact", compact)
@@ -31,7 +31,7 @@ class HeroPanel(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
 
         clip = QPainterPath()
-        clip.addRoundedRect(self.rect(), 8, 8)
+        clip.addRoundedRect(self.rect(), 14, 14)
         painter.setClipPath(clip)
 
         if not self._background.isNull():
@@ -41,7 +41,9 @@ class HeroPanel(QWidget):
             source_x = max(0, (scaled.width() - self.width()) // 2)
             source_y = max(0, (scaled.height() - self.height()) // 2)
             painter.drawPixmap(
-                self.rect(), scaled, QRect(source_x, source_y, self.width(), self.height())
+                self.rect(),
+                scaled,
+                QRect(source_x, source_y, self.width(), self.height()),
             )
 
         app = QApplication.instance()
@@ -60,13 +62,10 @@ class HeroPanel(QWidget):
         painter.setPen(Qt.NoPen)
         painter.setBrush(QColor(255, 95, 162, 42 if is_dark else 34))
         painter.drawEllipse(self.width() - 170, -62, 230, 230)
-        painter.setBrush(QColor(98, 213, 255, 34 if is_dark else 42))
+        painter.setBrush(QColor(155, 138, 251, 34 if is_dark else 42))
         painter.drawEllipse(self.width() - 300, 92, 190, 190)
 
-        painter.setPen(
-            QColor(255, 255, 255, 34)
-            if is_dark else QColor(75, 60, 85, 28)
-        )
+        painter.setPen(QColor(255, 255, 255, 34) if is_dark else QColor(75, 60, 85, 28))
         for offset in range(-160, self.width(), 56):
             painter.drawLine(offset, self.height(), offset + 160, 0)
 

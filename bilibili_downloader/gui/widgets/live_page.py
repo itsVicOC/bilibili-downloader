@@ -1,37 +1,50 @@
-"""Live subscriptions and recordings, driven by a non-Qt background service."""
+"""Live room workspace backed by the shared live UI controller."""
 
-from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
-from threading import Event
-
-from PySide6.QtCore import QLockFile, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QBoxLayout,
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
-    QFormLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
-    QMessageBox,
+    QMenu,
     QPushButton,
     QSpinBox,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
-    QTreeWidget,
-    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
-from bilibili_downloader.core.errors import redact_sensitive_text
-from bilibili_downloader.core.ffmpeg import FFmpegManager
-from bilibili_downloader.core.live_models import LiveSettings
-from bilibili_downloader.core.live_repository import LiveRepository
-from bilibili_downloader.core.live_service import LiveService
+from bilibili_downloader.core.live_models import LiveState
+from bilibili_downloader.core.models import AppSettings
+from bilibili_downloader.core.recorder import find_recorder
+from bilibili_downloader.gui.dialogs.settings_dialog import SettingsDialog
+from bilibili_downloader.gui.live_controller import LiveUiController
+from bilibili_downloader.gui.resources.styles import UI_METRICS
+from bilibili_downloader.gui.widgets.chinese_input import ChineseLineEdit
+from bilibili_downloader.gui.widgets.components import (
+    EmptyState,
+    FieldRow,
+    Notice,
+    PageHeader,
+    SectionCard,
+    StatusBadge,
+    repolish,
+    scroll_area,
+    stepper,
+)
+from bilibili_downloader.gui.widgets.download_list import (
+    STATUS_TONE_ROLE,
+    _StatusDelegate,
+)
+from bilibili_downloader.gui.widgets.hero_panel import HeroPanel
 
 
 def _size(value):
@@ -45,244 +58,366 @@ def _duration(value):
     return f"{seconds // 3600:02d}:{seconds // 60 % 60:02d}:{seconds % 60:02d}"
 
 
-class LiveSettingsDialog(QDialog):
+def live_tone(state):
+    if state == LiveState.ERROR.value:
+        return "danger"
+    if state == LiveState.RECONNECTING.value:
+        return "warning"
+    if state in {
+        LiveState.RECORDING.value,
+        LiveState.PREPARING.value,
+        LiveState.FINALIZING.value,
+    }:
+        return "active"
+    return "muted"
+
+
+class LiveSettingsDialog(SettingsDialog):
+    """Compatibility dialog using the same settings content as the page."""
+
     def __init__(self, settings, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("直播录制设置")
-        self.setMinimumWidth(560)
-        layout = QFormLayout(self)
-        self.directory = QLineEdit(settings.output_dir)
-        self.recorder = QLineEdit(settings.recorder_path)
-        self.recorder.setPlaceholderText("full 包自动检测；lite 包请选择配套引擎")
-        for label, entry, folder in (
-            ("保存目录", self.directory, True),
-            ("录制引擎", self.recorder, False),
-        ):
-            row = QHBoxLayout()
-            row.addWidget(entry)
-            button = QPushButton("选择…")
-            button.clicked.connect(
-                lambda checked=False, field=entry, is_folder=folder: self._browse(
-                    field, is_folder
-                )
-            )
-            row.addWidget(button)
-            layout.addRow(label, row)
-        self.concurrent = QSpinBox()
-        self.concurrent.setRange(1, 4)
-        self.concurrent.setValue(settings.max_concurrent)
-        layout.addRow("同时录制", self.concurrent)
-        self.segment = QSpinBox()
-        self.segment.setRange(1, 1440)
-        self.segment.setValue(settings.segment_seconds // 60)
-        self.segment.setSuffix(" 分钟")
-        layout.addRow("分段时长", self.segment)
-        self.free_space = QSpinBox()
-        self.free_space.setRange(1, 1024)
-        self.free_space.setValue(settings.minimum_free_bytes // 1024**3)
-        self.free_space.setSuffix(" GiB")
-        layout.addRow("保留可用空间", self.free_space)
-        note = QLabel(
-            "目录与分段时长用于新添加的直播间。应用退出或电脑睡眠时无法录制。"
-        )
-        note.setWordWrap(True)
-        layout.addRow(note)
-        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self._accept)
-        buttons.rejected.connect(self.reject)
-        layout.addRow(buttons)
-
-    def _browse(self, entry, folder):
-        value = (
-            QFileDialog.getExistingDirectory(self, "选择录制目录", entry.text())
-            if folder
-            else QFileDialog.getOpenFileName(
-                self, "选择 biliflow-recorder", entry.text()
-            )[0]
-        )
-        if value:
-            entry.setText(value)
-
-    def _accept(self):
-        if not self.directory.text().strip():
-            QMessageBox.warning(self, "保存目录", "请选择录制保存目录")
-            return
-        self.accept()
+        super().__init__(AppSettings(live=settings), parent)
+        self.tabs.setCurrentIndex(1)
 
     def settings(self):
-        return LiveSettings(
-            recorder_path=self.recorder.text().strip(),
-            output_dir=str(Path(self.directory.text().strip()).expanduser().resolve()),
-            max_concurrent=self.concurrent.value(),
-            segment_seconds=self.segment.value() * 60,
-            minimum_free_bytes=self.free_space.value() * 1024**3,
-        )
+        return self.get_settings().live
 
 
 class LivePage(QWidget):
     settings_changed = Signal(object)
+    settings_requested = Signal(int)
+    history_requested = Signal()
 
-    def __init__(self, config, confirm_copyright, parent=None):
+    def __init__(self, config, confirm_copyright, parent=None, controller=None):
         super().__init__(parent)
         self._config = config
         self._confirm_copyright = confirm_copyright
-        self.service = None
-        self._exports = ThreadPoolExecutor(
-            max_workers=1, thread_name_prefix="live-export"
-        )
-        self._export = None
-        self._export_cancel = Event()
-        self._history_fingerprint = None
-        self._history_revision = -1
+        self._own_controller = controller is None
+        self.controller = controller or LiveUiController(config, self)
+        self._selected_id = None
+        self._rows = []
         self._quality_fingerprint = None
-        self._lock_file = QLockFile(str(config.data_dir / "live.lock"))
-        config.data_dir.mkdir(parents=True, exist_ok=True)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(26, 22, 26, 16)
-        title = QLabel("直播录制")
-        title.setObjectName("PageTitle")
-        layout.addWidget(title)
-        caption = QLabel(
-            "应用运行期间开播自动录制 · AVC/AAC · 断线后重新拉流，缺失内容无法补录"
-        )
-        caption.setWordWrap(True)
-        caption.setObjectName("Caption")
-        layout.addWidget(caption)
-        row = QHBoxLayout()
-        self.source = QLineEdit()
-        self.source.setPlaceholderText("粘贴直播间链接、房间号或 b23 短链")
-        self.source.returnPressed.connect(self._add)
-        row.addWidget(self.source, 1)
-        add = QPushButton("添加并监控")
-        add.setObjectName("PrimaryButton")
-        add.clicked.connect(self._add)
-        row.addWidget(add)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(24, 24, 24, 24)
+        root.setSpacing(20)
+        header = PageHeader("直播录制", "守候开播，记录每一场喜欢的直播")
+        history = QPushButton("录制历史")
+        history.setObjectName("TextButton")
+        history.clicked.connect(self.history_requested.emit)
+        header.actions.addWidget(history)
         settings = QPushButton("录制设置")
         settings.clicked.connect(self._settings)
-        row.addWidget(settings)
-        layout.addLayout(row)
-        self.rooms = QTableWidget(0, 5)
+        header.actions.addWidget(settings)
+        root.addWidget(header)
+        body = QWidget()
+        column = QVBoxLayout(body)
+        column.setContentsMargins(0, 0, 4, 0)
+        column.setSpacing(20)
+        hero = HeroPanel()
+        hero.set_compact(True)
+        hero_layout = QVBoxLayout(hero)
+        hero_layout.setContentsMargins(20, 16, 20, 16)
+        hero_layout.setSpacing(10)
+        hint = QLabel("添加直播间 · 应用运行期间开播自动录制")
+        hint.setObjectName("HeroTitle")
+        hero_layout.addWidget(hint)
+        input_row = QHBoxLayout()
+        input_row.setSpacing(12)
+        self.source = ChineseLineEdit()
+        self.source.setPlaceholderText("直播间链接、房间号或 b23.tv 短链")
+        self.source.returnPressed.connect(self._add)
+        self.source.textChanged.connect(
+            lambda text: self.add_button.setEnabled(
+                bool(text.strip())
+                and self.service is not None
+                and not self.controller.adding
+            )
+        )
+        input_row.addWidget(self.source, 1)
+        self.add_button = QPushButton("添加并监控")
+        self.add_button.setObjectName("PrimaryButton")
+        self.add_button.clicked.connect(self._add)
+        input_row.addWidget(self.add_button)
+        hero_layout.addLayout(input_row)
+        column.addWidget(hero)
+        self.engine_notice = Notice()
+        column.addWidget(self.engine_notice)
+        self._content = QWidget()
+        self._content_layout = QBoxLayout(QBoxLayout.LeftToRight, self._content)
+        self._content_layout.setContentsMargins(0, 0, 0, 0)
+        self._content_layout.setSpacing(20)
+        self._rooms_card = SectionCard("监控列表")
+        self._count = StatusBadge("0 个直播间")
+        self._rooms_card.header.addWidget(self._count)
+        self.rooms = QTableWidget(0, 4)
         self.rooms.setHorizontalHeaderLabels(
-            ["直播间", "状态", "已录时长", "大小 / 速度", "详情"]
+            ["直播间", "状态 / 监控", "已录时长", "大小 / 速度"]
         )
         self.rooms.setSelectionBehavior(QTableWidget.SelectRows)
         self.rooms.setSelectionMode(QTableWidget.SingleSelection)
         self.rooms.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.rooms.setShowGrid(False)
         self.rooms.verticalHeader().hide()
-        self.rooms.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.rooms.horizontalHeader().setSectionResizeMode(0, QHeaderView.Interactive)
-        self.rooms.setColumnWidth(0, 220)
-        self.rooms.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
+        self.rooms.verticalHeader().setDefaultSectionSize(UI_METRICS.row_height)
+        table_header = self.rooms.horizontalHeader()
+        table_header.setMinimumSectionSize(40)
+        table_header.setSectionResizeMode(0, QHeaderView.Stretch)
+        for index, width in ((1, 142), (2, 110), (3, 120)):
+            table_header.setSectionResizeMode(index, QHeaderView.Fixed)
+            table_header.resizeSection(index, width)
+        self.rooms.setItemDelegateForColumn(1, _StatusDelegate(self.rooms))
         self.rooms.itemSelectionChanged.connect(self._selection_changed)
-        layout.addWidget(self.rooms, 2)
-        actions = QHBoxLayout()
-        for text, action in (
-            ("立即开始", "start"),
-            ("停止本场", "stop"),
-            ("开启监控", "enable"),
-            ("关闭监控", "disable"),
-            ("移除", "remove"),
-        ):
-            button = QPushButton(text)
-            button.clicked.connect(lambda checked=False, op=action: self._command(op))
-            actions.addWidget(button)
-        layout.addLayout(actions)
-        quality_row = QHBoxLayout()
-        quality_row.addWidget(QLabel("下次录制画质"))
+        self._room_stack = QStackedWidget()
+        self._room_stack.addWidget(self.rooms)
+        self._room_stack.addWidget(
+            EmptyState("等待下一场星光", "在上方添加直播间，开播后可自动录制。")
+        )
+        self._room_stack.setMinimumHeight(240)
+        self._rooms_card.body.addWidget(self._room_stack, 1)
+        self._content_layout.addWidget(self._rooms_card, 1)
+        self._detail_card = SectionCard("房间详情")
+        self._detail_card.setMinimumWidth(300)
+        self._detail_badge = StatusBadge("未选择房间")
+        self._detail_card.header.addWidget(self._detail_badge)
+        self._detail_empty = QLabel("选择一个直播间，查看状态与录制设置")
+        self._detail_empty.setObjectName("MetaLabel")
+        self._detail_empty.setWordWrap(True)
+        self._detail_card.body.addWidget(self._detail_empty)
+        self._detail_controls = QWidget()
+        details = QVBoxLayout(self._detail_controls)
+        details.setContentsMargins(0, 0, 0, 0)
+        details.setSpacing(12)
+        self._room_name = QLabel()
+        self._room_name.setObjectName("SectionTitle")
+        self._room_name.setWordWrap(True)
+        self._room_name.setTextFormat(Qt.PlainText)
+        details.addWidget(self._room_name)
+        self._room_id_label = QLabel()
+        self._room_id_label.setObjectName("MetaLabel")
+        details.addWidget(self._room_id_label)
+        self._detail = QLabel()
+        self._detail.setTextFormat(Qt.PlainText)
+        self._detail.setWordWrap(True)
+        details.addWidget(self._detail)
         self.quality = QComboBox()
-        self.quality.addItem("当前可用最高画质", 0)
         self.quality.activated.connect(self._set_quality)
-        quality_row.addWidget(self.quality)
-        room_settings = QPushButton("房间设置…")
-        room_settings.clicked.connect(self._room_settings)
-        quality_row.addWidget(room_settings)
-        quality_row.addStretch()
-        layout.addLayout(quality_row)
-        layout.addWidget(QLabel("录制历史 · 选择已完成片段可打开或导出 MP4"))
-        self.history = QTreeWidget()
-        self.history.setHeaderLabels(["场次 / 文件", "状态 / 时长", "大小"])
-        self.history.setColumnWidth(0, 330)
-        layout.addWidget(self.history, 2)
-        history_actions = QHBoxLayout()
-        for text, handler in (
-            ("打开文件 / 目录", self._open),
-            ("导出 MP4", self._export_mp4),
-        ):
-            button = QPushButton(text)
-            button.clicked.connect(handler)
-            history_actions.addWidget(button)
-        history_actions.addStretch()
-        layout.addLayout(history_actions)
-        self.message = QLabel("")
-        self.message.setTextFormat(Qt.PlainText)
-        self.message.setWordWrap(True)
-        layout.addWidget(self.message)
+        details.addWidget(FieldRow("下次拉流画质", self.quality))
+        self._directory = QLineEdit()
+        self._directory.setReadOnly(True)
+        details.addWidget(FieldRow("保存目录", self._directory))
+        self._segment = QLabel()
+        self._segment.setObjectName("MetaLabel")
+        details.addWidget(self._segment)
+        self.monitor = QCheckBox("自动监控并录制")
+        self.monitor.setToolTip("关闭监控会停止本场录制；开启后等待下一场开播")
+        self.monitor.toggled.connect(self._toggle_monitor)
+        self._monitor_hint = QLabel(
+            "停止本场会保留下次自动录制；关闭监控会同时停止本场。"
+        )
+        self._monitor_hint.setObjectName("MetaLabel")
+        self._monitor_hint.setWordWrap(True)
+        details.addWidget(self._monitor_hint)
+        buttons = QHBoxLayout()
+        buttons.setSpacing(8)
+        self.start_stop = QPushButton("立即开始")
+        self.start_stop.setObjectName("PrimaryButton")
+        self.start_stop.clicked.connect(self._start_stop)
+        buttons.addWidget(self.start_stop)
+        self.room_settings = QPushButton("房间设置")
+        self.room_settings.clicked.connect(self._room_settings)
+        buttons.addWidget(self.room_settings)
+        more = QPushButton("更多")
+        more.setObjectName("TextButton")
+        menu = QMenu(more)
+        self.remove_action = menu.addAction("移除直播间")
+        self.remove_action.triggered.connect(lambda: self._command("remove"))
+        more.setMenu(menu)
+        buttons.addWidget(more)
+        self._detail_card.body.addWidget(self._detail_controls)
+        self._detail_card.body.addStretch()
+        self._content_layout.addWidget(self._detail_card)
+        column.addWidget(self._content, 1)
+        self._scroll = scroll_area(body)
+        root.addWidget(self._scroll, 1)
+        self._action_bar = QWidget()
+        action_bar = QHBoxLayout(self._action_bar)
+        action_bar.setContentsMargins(0, 0, 0, 0)
+        action_bar.setSpacing(12)
+        action_bar.addWidget(self.monitor)
+        action_bar.addStretch()
+        action_bar.addLayout(buttons)
+        root.addWidget(self._action_bar)
+        self._notice = Notice()
+        self.message = self._notice.label
+        root.addWidget(self._notice)
+        self.controller.snapshot_changed.connect(self._update_rows)
+        self.controller.message_changed.connect(self._notice.set_message)
+        self.controller.addition_changed.connect(self._addition_changed)
+        self._notice.set_message(self.controller.message, self.controller.message_tone)
+        self.add_button.setEnabled(False)
+        self._update_rows(self.controller.rows)
+        self.check_engine()
+
+    @property
+    def service(self):
+        return self.controller.service
+
+    @property
+    def repository(self):
+        return self.controller.repository
+
+    @property
+    def _lock_file(self):
+        return self.controller.lock
+
+    def check_engine(self):
         try:
-            if not self._lock_file.tryLock(0):
-                raise RuntimeError(
-                    "另一个 BiliFlow 实例正在管理直播录制，请在该实例中操作"
-                )
-            self.repository = LiveRepository(config.data_dir / "live.sqlite3")
-            self.service = LiveService(
-                self.repository, config.load().live, config.auth_cookies
-            )
-            self.service.start()
-            self.destroyed.connect(self.service.request_shutdown)
-            if self.repository.recovered_database_path:
-                self.message.setText("损坏的直播数据库已隔离备份，请重新添加直播间")
-            elif self.repository.invalid_records:
-                self.message.setText("部分直播记录无法读取，原始记录已保留在数据库中")
-        except Exception as exc:
-            self.message.setText(redact_sensitive_text(str(exc)))
-            add.setEnabled(False)
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.refresh)
-        self.timer.start(1000)
-        self.refresh()
+            find_recorder(self._config.load().live.recorder_path)
+            self.engine_notice.set_message("")
+        except (OSError, ValueError) as exc:
+            self.engine_notice.set_message(str(exc), "warning")
+
+    def resizeEvent(self, event):
+        narrow = event.size().width() < 1000 or event.size().height() < 700
+        self._stacked_details = narrow
+        self._content_layout.setDirection(
+            QBoxLayout.TopToBottom if narrow else QBoxLayout.LeftToRight
+        )
+        self._detail_card.setMaximumWidth(16777215 if narrow else 380)
+        self._room_stack.setMinimumHeight(180 if narrow else 280)
+        self._update_table_height()
+        super().resizeEvent(event)
+
+    def _update_table_height(self):
+        stacked = getattr(self, "_stacked_details", True)
+        self.rooms.setVerticalScrollBarPolicy(
+            Qt.ScrollBarAlwaysOff if stacked else Qt.ScrollBarAsNeeded
+        )
+        height = (
+            max(40, self.rooms.horizontalHeader().height())
+            + sum(self.rooms.rowHeight(i) for i in range(self.rooms.rowCount()))
+            + self.rooms.frameWidth() * 2
+        )
+        # Stacked content scrolls as one page; never nest the room table's scroll.
+        self.rooms.setMinimumHeight(max(140, height) if stacked else 140)
 
     def _room_id(self):
-        row = self.rooms.currentRow()
-        item = self.rooms.item(row, 0)
+        item = self.rooms.item(self.rooms.currentRow(), 0)
         return item.data(Qt.UserRole) if item else None
 
+    def _selected_row(self):
+        return next(
+            (row for row in self._rows if row["room_id"] == self._room_id()), None
+        )
+
     def _add(self):
-        if self.service and self.source.text().strip() and self._confirm_copyright():
-            self.service.command("add", source=self.source.text().strip())
-            self.source.clear()
-            self.message.setText("正在查询直播间…")
+        if (
+            self.service
+            and not self.controller.adding
+            and self.source.text().strip()
+            and self._confirm_copyright()
+        ):
+            self.controller.add(self.source.text().strip())
+
+    def _addition_changed(self, adding):
+        self.add_button.setEnabled(
+            not adding and self.service is not None and bool(self.source.text().strip())
+        )
+        self.add_button.setText("查询中…" if adding else "添加并监控")
 
     def _command(self, action):
         room_id = self._room_id()
-        if self.service and room_id:
-            if action in {"start", "enable"} and not self._confirm_copyright():
-                return
-            self.service.command(action, room_id=room_id)
+        if room_id is None or not self.service:
+            return
+        if action in {"start", "enable"} and not self._confirm_copyright():
+            self._selection_changed()
+            return
+        self.controller.command(action, room_id=room_id)
+        self.start_stop.setEnabled(False)
+
+    def _start_stop(self):
+        row = self._selected_row()
+        if row:
+            self._command(
+                "stop"
+                if row["active"]
+                or row["state"] in {"preparing", "queued", "reconnecting", "recording"}
+                else "start"
+            )
+
+    def _toggle_monitor(self, enabled):
+        self._command("enable" if enabled else "disable")
 
     def _selection_changed(self):
-        room_id = self._room_id()
-        row = (
-            next((r for r in self.service.snapshot() if r["room_id"] == room_id), None)
-            if self.service
-            else None
+        row = self._selected_row()
+        self._selected_id = row["room_id"] if row else None
+        self._detail_controls.setVisible(row is not None)
+        self._action_bar.setVisible(row is not None)
+        self._detail_empty.setVisible(row is None)
+        if not row:
+            self._detail_badge.setText("未选择房间")
+            self._detail_badge.set_tone("muted")
+            self._quality_fingerprint = None
+            return
+        self._room_name.setText(row["author"] or "未命名直播间")
+        self._room_id_label.setText(f"房间 {row['room_id']} · {row['title']}")
+        self._room_id_label.setWordWrap(True)
+        self._room_id_label.setTextFormat(Qt.PlainText)
+        self._detail_badge.setText(row["state_label"])
+        self._detail_badge.set_tone(live_tone(row["state"]))
+        self._detail.setText(row["detail"] or "等待直播状态更新")
+        self._directory.setText(row["output_dir"])
+        self._directory.setToolTip(row["output_dir"])
+        self._directory.setCursorPosition(0)
+        self._segment.setText(
+            f"分段时长 {row['segment_seconds'] // 60} 分钟 · 画质修改在下次拉流生效"
         )
-        self._quality_fingerprint = (
-            (room_id, row["quality"], row["qualities"]) if row else None
-        )
-        self.quality.clear()
-        self.quality.addItem("当前可用最高画质", 0)
-        if row:
+        self._segment.setWordWrap(True)
+        fingerprint = (row["room_id"], row["quality"], row["qualities"])
+        if fingerprint != self._quality_fingerprint:
+            self._quality_fingerprint = fingerprint
+            self.quality.clear()
+            self.quality.addItem("当前可用最高画质", 0)
             for quality in row["qualities"]:
                 self.quality.addItem(quality["label"], quality["qn"])
-            index = self.quality.findData(row["quality"])
-            self.quality.setCurrentIndex(max(index, 0))
+            self.quality.setCurrentIndex(max(0, self.quality.findData(row["quality"])))
+        self.monitor.blockSignals(True)
+        self.monitor.setChecked(row["enabled"])
+        self.monitor.blockSignals(False)
+        active = row["active"] or row["state"] in {
+            "recording",
+            "preparing",
+            "queued",
+            "reconnecting",
+        }
+        finalizing = row["state"] == "finalizing"
+        self.start_stop.setText(
+            "正在收尾…" if finalizing else "停止本场" if active else "立即开始"
+        )
+        role = "SubtleButton" if active else "PrimaryButton"
+        if self.start_stop.objectName() != role:
+            self.start_stop.setObjectName(role)
+            repolish(self.start_stop)
+        self.start_stop.setEnabled(not finalizing)
+        self.monitor.setEnabled(not finalizing)
+        locked = row["active"] or row["state"] in {
+            "recording",
+            "reconnecting",
+            "finalizing",
+        }
+        self.room_settings.setEnabled(not locked)
+        self.remove_action.setEnabled(not locked)
 
     def _set_quality(self):
-        if self.service and self._room_id():
-            self.service.command(
+        if self._room_id():
+            self.controller.command(
                 "quality", room_id=self._room_id(), quality=self.quality.currentData()
             )
 
     def _settings(self):
+        if not self._own_controller:
+            self.settings_requested.emit(1)
+            return
         dialog = LiveSettingsDialog(self._config.load().live, self)
         if dialog.exec():
             settings = self._config.load().model_copy(deep=True)
@@ -290,174 +425,153 @@ class LivePage(QWidget):
             try:
                 self._config.save(settings)
             except OSError as exc:
-                self.message.setText(str(exc))
+                self.controller.notify(str(exc), "danger")
                 return
             self.settings_changed.emit(settings)
-            if self.service:
-                self.service.command("settings", settings=settings.live)
+            self.controller.command("settings", settings=settings.live)
+            self.check_engine()
 
     def _room_settings(self):
-        room_id = self._room_id()
-        row = (
-            next((r for r in self.service.snapshot() if r["room_id"] == room_id), None)
-            if self.service
-            else None
-        )
-        if not row:
+        row = self._selected_row()
+        if not row or not self.room_settings.isEnabled():
             return
+        dialog = self._build_room_settings_dialog(row)
+        if dialog.exec():
+            self.controller.command(
+                "room_settings",
+                room_id=row["room_id"],
+                output_dir=dialog.directory.text().strip(),
+                segment_seconds=(
+                    row["segment_seconds"]
+                    if dialog.segment.value() == row["segment_seconds"] // 60
+                    else dialog.segment.value() * 60
+                ),
+            )
+
+    def _build_room_settings_dialog(self, row):
         dialog = QDialog(self)
-        dialog.setWindowTitle(f"直播间 {room_id} 设置")
-        form = QFormLayout(dialog)
+        dialog.setWindowTitle(f"直播间 {row['room_id']} 设置")
+        dialog.setMinimumWidth(560)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(20)
+        card = SectionCard("房间录制设置")
         directory = QLineEdit(row["output_dir"])
+        directory.setToolTip(row["output_dir"])
+        directory.setCursorPosition(0)
+        dialog.directory = directory
+        path_row = QWidget()
+        path_layout = QHBoxLayout(path_row)
+        path_layout.setContentsMargins(0, 0, 0, 0)
+        path_layout.addWidget(directory, 1)
+        browse = QPushButton("选择…")
+
+        def select_directory():
+            value = QFileDialog.getExistingDirectory(
+                dialog, "选择录制目录", directory.text()
+            )
+            if value:
+                directory.setText(value)
+
+        browse.clicked.connect(select_directory)
+        path_layout.addWidget(browse)
+        directory_field = FieldRow("保存目录", path_row)
+        card.body.addWidget(directory_field)
         segment = QSpinBox()
+        dialog.segment = segment
         segment.setRange(1, 1440)
         segment.setValue(row["segment_seconds"] // 60)
         segment.setSuffix(" 分钟")
-        form.addRow("保存目录", directory)
-        form.addRow("分段时长", segment)
-        form.addRow(QLabel("请先停止本场并等待收尾，再修改这些设置。"))
+        segment_row, _, _ = stepper(segment)
+        card.body.addWidget(FieldRow("分段时长", segment_row))
+        card.body.addWidget(Notice("修改仅影响这个直播间；录制或收尾期间无法保存。"))
+        layout.addWidget(card)
+        notice = Notice()
+        layout.addWidget(notice)
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
-        form.addRow(buttons)
-        if dialog.exec() and directory.text().strip():
-            self.service.command(
-                "room_settings",
-                room_id=room_id,
-                output_dir=directory.text().strip(),
-                segment_seconds=segment.value() * 60,
-            )
+        buttons.button(QDialogButtonBox.Save).setText("保存")
+        buttons.button(QDialogButtonBox.Save).setObjectName("PrimaryButton")
+        buttons.button(QDialogButtonBox.Cancel).setText("取消")
 
-    def refresh(self):
-        if not self.service:
-            return
+        def save():
+            current = next(
+                (r for r in self.controller.rows if r["room_id"] == row["room_id"]),
+                None,
+            )
+            if (
+                not current
+                or current["active"]
+                or current["state"] in {"recording", "reconnecting", "finalizing"}
+            ):
+                notice.set_message("请先停止本场并等待收尾完成。", "warning")
+                return
+            if not directory.text().strip():
+                notice.set_message("请选择有效的录制保存目录。", "danger")
+                directory_field.set_error("请选择有效的录制保存目录。")
+                directory.setFocus()
+                return
+            dialog.accept()
+
+        buttons.accepted.connect(save)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        return dialog
+
+    def _update_rows(self, rows):
         selected = self._room_id()
-        rows = self.service.snapshot()
+        scroll = self.rooms.verticalScrollBar().value()
+        self._rows = rows
         self.rooms.blockSignals(True)
         self.rooms.setRowCount(len(rows))
         for index, row in enumerate(rows):
             values = [
-                f"{row['author']} · {row['room_id']}\n{row['title']}",
-                row["state_label"] + (" · 自动" if row["enabled"] else ""),
+                f"{row['author']} · {row['room_id']}\\n{row['title']}",
+                row["state_label"]
+                + ("\\n自动监控" if row["enabled"] else "\\n手动录制"),
                 _duration(row["duration"]),
-                f"{_size(row['size'])}\n{_size(row['speed'])}/s",
-                row["detail"],
+                f"{_size(row['size'])}\\n{_size(row['speed'])}/s",
             ]
             for column, value in enumerate(values):
-                item = QTableWidgetItem(value)
-                item.setToolTip(value)
+                item = self.rooms.item(index, column)
+                if item is None:
+                    item = QTableWidgetItem()
+                    self.rooms.setItem(index, column, item)
+                item.setText(value.replace("\\n", "\n"))
+                item.setToolTip(
+                    value.replace("\\n", "\n")
+                    + ("\n" + row["detail"] if column == 1 else "")
+                )
                 if column == 0:
                     item.setData(Qt.UserRole, row["room_id"])
-                self.rooms.setItem(index, column, item)
+                elif column == 1:
+                    item.setData(STATUS_TONE_ROLE, live_tone(row["state"]))
+            self.rooms.setRowHeight(
+                index,
+                max(UI_METRICS.row_height, self.rooms.fontMetrics().height() * 2 + 20),
+            )
             if row["room_id"] == selected:
                 self.rooms.selectRow(index)
-        self.rooms.resizeRowsToContents()
+        if selected is not None and not any(row["room_id"] == selected for row in rows):
+            self.rooms.clearSelection()
+            self.rooms.setCurrentCell(-1, -1)
         self.rooms.blockSignals(False)
-        selected_row = next((r for r in rows if r["room_id"] == selected), None)
-        if selected_row and self._quality_fingerprint != (
-            selected,
-            selected_row["quality"],
-            selected_row["qualities"],
-        ):
-            self._selection_changed()
-        for message in self.service.messages():
-            self.message.setText(message)
-        try:
-            revision = self.repository.history_revision
-            sessions = (
-                self.repository.sessions()
-                if revision != self._history_revision
-                else None
-            )
-            self._history_revision = revision
-            if sessions is None:
-                sessions = []
-                fingerprint = self._history_fingerprint
-            else:
-                fingerprint = [
-                    (s.id, s.status, len(s.segments), len(s.gaps), len(s.warnings))
-                    for s in sessions
-                ]
-            if fingerprint != self._history_fingerprint:
-                self._history_fingerprint = fingerprint
-                self.history.clear()
-                labels = {
-                    "recording": "录制中",
-                    "completed": "已结束",
-                    "stopped": "已停止",
-                    "failed": "失败",
-                    "interrupted": "中断",
-                }
-                for session in sessions:
-                    summary = labels.get(session.status, session.status)
-                    if session.gaps or session.warnings:
-                        summary += f" · {len(session.gaps)} 处缺口 / {len(session.warnings)} 条提示"
-                    parent = QTreeWidgetItem(
-                        [
-                            f"{session.room.author} · {session.started_at}",
-                            summary,
-                            _size(session.total_size),
-                        ]
-                    )
-                    parent.setData(0, Qt.UserRole, session.directory)
-                    parent.setToolTip(
-                        0, "\n".join(session.warnings + [str(g) for g in session.gaps])
-                    )
-                    self.history.addTopLevelItem(parent)
-                    for segment in session.segments:
-                        item = QTreeWidgetItem(
-                            [
-                                str(Path(segment.path).relative_to(session.directory)),
-                                _duration(segment.duration),
-                                _size(segment.size),
-                            ]
-                        )
-                        item.setData(0, Qt.UserRole, segment.path)
-                        parent.addChild(item)
-        except (OSError, ValueError) as exc:
-            self.message.setText(redact_sensitive_text(str(exc)))
-        if self._export and self._export.done():
-            try:
-                ok, result = self._export.result()
-                self.message.setText(
-                    "MP4 导出完成" if ok else redact_sensitive_text(result)
-                )
-            except Exception as exc:
-                self.message.setText(redact_sensitive_text(str(exc)))
-            self._export = None
+        self._update_table_height()
+        self.rooms.verticalScrollBar().setValue(scroll)
+        self._room_stack.setCurrentIndex(0 if rows else 1)
+        self._count.setText(f"{len(rows)} 个直播间")
+        self._selection_changed()
 
-    def _selected_path(self):
-        item = self.history.currentItem()
-        return Path(item.data(0, Qt.UserRole)) if item else None
+    def select_room(self, room_id):
+        for index, row in enumerate(self._rows):
+            if row["room_id"] == room_id:
+                self.rooms.selectRow(index)
+                self.rooms.scrollToItem(self.rooms.item(index, 0))
+                if getattr(self, "_stacked_details", False):
+                    self._scroll.ensureWidgetVisible(self._detail_card)
+                break
 
-    def _open(self):
-        path = self._selected_path()
-        if path and path.exists():
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
-
-    def _export_mp4(self):
-        path = self._selected_path()
-        if not path or not path.is_file() or self._export:
-            return
-        output, _ = QFileDialog.getSaveFileName(
-            self, "导出 MP4", str(path.with_suffix(".mp4")), "MP4 (*.mp4)"
-        )
-        if output and Path(output).resolve() != path.resolve():
-            self._export_cancel.clear()
-            self._export = self._exports.submit(
-                FFmpegManager.remux_live,
-                path,
-                Path(output),
-                self._config.load().ffmpeg_path or None,
-                self._export_cancel.is_set,
-            )
-            self.message.setText("正在无损转封装，源文件会保留…")
+    def refresh(self):
+        self.controller.refresh()
 
     def shutdown(self):
-        self.timer.stop()
-        self._export_cancel.set()
-        if self.service:
-            self.service.request_shutdown()
-            if self.service.stopped:
-                self._lock_file.unlock()
-        self._exports.shutdown(wait=False, cancel_futures=True)
+        self.controller.shutdown()

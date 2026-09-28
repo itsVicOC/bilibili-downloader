@@ -46,8 +46,7 @@ def test_settings_dialog_keeps_long_path_in_tooltip(qtbot):
     assert dialog.minimumWidth() == 620
     assert dialog._max_concurrent.buttonSymbols() == QAbstractSpinBox.NoButtons
     assert (
-        dialog._max_concurrent.sizePolicy().horizontalPolicy()
-        == QSizePolicy.Expanding
+        dialog._max_concurrent.sizePolicy().horizontalPolicy() == QSizePolicy.Expanding
     )
     assert dialog._concurrency_down.toolTip() == "减少并发数"
     assert dialog._concurrency_up.toolTip() == "增加并发数"
@@ -88,8 +87,9 @@ def test_main_window_separates_download_and_service_pools(qtbot, tmp_path):
     assert window.minimumHeight() == 640
 
     controls = window.findChild(QWidget, "ControlPanel")
-    assert controls.minimumHeight() == 340
-    assert controls.layout().verticalSpacing() == 8
+    assert controls.layout().contentsMargins().left() == 20
+    assert controls.layout().spacing() == 12
+    assert not window._download_btn.isEnabled()
 
     audio_index = window._output_mode_combo.findData(OutputMode.AUDIO)
     window._output_mode_combo.setCurrentIndex(audio_index)
