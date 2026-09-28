@@ -248,6 +248,30 @@ async fn record(
                 .start_hls(request)
                 .await
                 .map_err(|_| "media_open_failed")?;
+            #[cfg(feature = "test-fixtures")]
+            tokio::spawn(async move {
+                let mut diagnostics = session.events;
+                while let Some(event) = diagnostics.next().await {
+                    use mesio_engine::session::DownloadEvent;
+                    match event {
+                        DownloadEvent::ResourceStarted { content_length, .. } => {
+                            eprintln!("fixture resource started: {content_length:?} bytes")
+                        }
+                        DownloadEvent::ResourceFinished { bytes, .. } => {
+                            eprintln!("fixture resource finished: {bytes} bytes")
+                        }
+                        DownloadEvent::GapSkipped {
+                            from_sequence,
+                            to_sequence,
+                            reason,
+                        } => eprintln!("fixture gap: {from_sequence}-{to_sequence} {reason:?}"),
+                        DownloadEvent::RetryScheduled { attempt, delay, .. } => {
+                            eprintln!("fixture retry: {attempt} after {delay:?}")
+                        }
+                        _ => (),
+                    }
+                }
+            });
             let mut writer = HlsWriter::new(HlsWriterConfig {
                 output_dir: start.output_dir,
                 base_name: "part_%i".into(),

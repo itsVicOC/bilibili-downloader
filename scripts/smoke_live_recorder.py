@@ -164,7 +164,8 @@ def generate(root, ffmpeg):
 
 class Handler(SimpleHTTPRequestHandler):
     def log_message(self, *_args):
-        pass
+        if len(_args) > 2 and str(_args[2]) != "200":
+            print(f"Fixture HTTP response: {_args[1:]}", flush=True)
 
     def do_GET(self):
         if self.path == "/continuous.flv":
@@ -257,7 +258,7 @@ def run_recording(
             return []
         assert not errors, received
         segments = [e for e in received if e["event"] == "segment_finalized"]
-        assert segments, received
+        assert segments, (received, process.stderr.read().decode(errors="replace"))
         if not stop_mode:
             assert len(segments) >= 2, received
         return segments
@@ -313,6 +314,15 @@ def main():
         root = Path(temporary)
         root.mkdir(parents=True, exist_ok=True)
         generate(root, args.ffmpeg)
+        print(
+            subprocess.check_output([args.ffmpeg, "-version"]).decode().splitlines()[0],
+            flush=True,
+        )
+        print(
+            "Fixture fMP4 playlist:\n"
+            + (root / "fmp4/index.m3u8").read_text(encoding="utf-8"),
+            flush=True,
+        )
         (root / "encrypted.m3u8").write_text(
             '#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXT-X-KEY:METHOD=AES-128,URI="key?sign=fixture-secret"\n#EXTINF:2,\nmpegts/index0.ts\n#EXT-X-ENDLIST\n'
         )
