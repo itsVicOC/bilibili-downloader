@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPlainTextEdit,
     QPushButton,
+    QSizePolicy,
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -30,6 +31,7 @@ from bilibili_downloader.gui.widgets.components import (
     Notice,
     PageHeader,
     PopupMenu,
+    repolish,
 )
 from bilibili_downloader.gui.widgets.download_list import (
     STATUS_TONE_ROLE,
@@ -265,16 +267,21 @@ class TaskPage(QWidget):
                     item.setData(STATUS_TONE_ROLE, live_tone(row["state"]))
             controls = self.current.cellWidget(index, 4)
             if controls is None or controls.property("roomId") != row["room_id"]:
+                if controls is not None:
+                    # Qt deletes replaced cell widgets on a later event-loop
+                    # turn; hide immediately to avoid stale controls flashing.
+                    controls.hide()
                 controls = QWidget()
                 controls.setProperty("roomId", row["room_id"])
                 actions = QHBoxLayout(controls)
                 actions.setContentsMargins(8, 0, 8, 0)
-                actions.setSpacing(6)
+                actions.setSpacing(8)
+                actions.setAlignment(Qt.AlignCenter)
                 stop = QPushButton("停止本场")
-                stop.setObjectName("TableSubtleButton")
+                stop.setObjectName("TableDangerButton")
                 stop.clicked.connect(
                     lambda _checked=False, rid=row["room_id"], button=stop: (
-                        self._stop_recording(rid, button)
+                        self._recording_action(rid, button)
                     )
                 )
                 view = QPushButton("查看房间")
@@ -287,13 +294,35 @@ class TaskPage(QWidget):
                 actions.addWidget(stop)
                 actions.addWidget(view)
                 self.current.setCellWidget(index, 4, controls)
-            controls.findChildren(QPushButton)[0].setEnabled(
+            stop, view = controls.findChildren(QPushButton)
+            retry = row["state"] == "error"
+            stop.setText("重试录制" if retry else "停止本场")
+            button_style = "TablePrimaryButton" if retry else "TableDangerButton"
+            if stop.objectName() != button_style:
+                stop.setObjectName(button_style)
+                repolish(stop)
+            stop.setProperty("liveAction", "start" if retry else "stop")
+            stop.setToolTip(
+                "重新获取直播地址并尝试录制" if retry
+                else "停止当前场次，保留监控，下次开播自动录制"
+            )
+            view.setToolTip("在直播录制页面查看房间与完整状态")
+            stop.setEnabled(
                 row["state"] != "finalizing"
                 and (
-                    row["active"]
+                    retry
+                    or row["active"]
                     or row["state"]
                     in {"preparing", "queued", "reconnecting", "recording"}
                 )
+            )
+            for button in (stop, view):
+                button.ensurePolished()
+                button.setFixedHeight(UI_METRICS.compact_button_height)
+                button.setMinimumWidth(button.sizeHint().width())
+                button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+            self.current.horizontalHeader().resizeSection(
+                4, max(180, controls.layout().minimumSize().width())
             )
             self.current.setRowHeight(
                 index,
@@ -311,9 +340,9 @@ class TaskPage(QWidget):
         self._current_stack.setCurrentIndex(0 if self._live_rows else 1)
         self._recording_selection()
 
-    def _stop_recording(self, room_id, button):
+    def _recording_action(self, room_id, button):
         button.setEnabled(False)
-        self.controller.command("stop", room_id=room_id)
+        self.controller.command(button.property("liveAction"), room_id=room_id)
 
     def _recording_selection(self):
         item = self.current.item(self.current.currentRow(), 0)

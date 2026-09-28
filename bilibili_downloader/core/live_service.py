@@ -10,6 +10,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
 
@@ -20,6 +21,7 @@ from bilibili_downloader.core.live_models import (
     LIVE_STATE_LABELS,
     LiveSettings,
     LiveState,
+    LiveStream,
     LiveSubscription,
     RecordingSegment,
     RecordingSession,
@@ -35,13 +37,17 @@ ENGINE_ERROR_MESSAGES = {
     "writer_failed": "录制文件写入失败，请检查输出磁盘",
     "output_directory_failed": "无法访问录制目录，请检查目录权限",
     "output_directory_not_empty": "录制目录已有文件，已停止以避免覆盖",
-    "untrusted_media_url": "媒体地址不符合当前支持范围，已停止录制",
+    "untrusted_media_url": "当前线路的媒体地址不符合支持范围，将自动切换其他线路",
     "encrypted_media_unsupported": "当前不支持加密直播流，已停止录制",
     "invalid_playlist": "直播播放列表无效，将重新获取地址",
     "shutdown_timeout": "录制未能及时收尾；未封口文件已保留",
     "recorder_protocol_error": "录制引擎响应异常，请检查是否使用配套版本",
     "relay_bind_failed": "无法启动本机录制连接，请检查系统网络限制",
 }
+
+
+class _UnsupportedStreamsError(LiveAccessError):
+    """All advertised routes were rejected for this broadcast."""
 
 
 @dataclass
@@ -56,6 +62,7 @@ class _Runtime:
     session: RecordingSession | None = None
     manual: bool = False
     blocked: bool = False
+    blocked_broadcast: str = ""
     retries: int = 0
     offline_checks: int = 0
     stop_reason: str = ""
@@ -72,6 +79,15 @@ class _Runtime:
     engine_failed: bool = False
     qualities: list = field(default_factory=list)
     previous_interruption: RecordingSession | None = None
+    stream: LiveStream | None = None
+    rejected_streams: set[tuple[str, str, str]] = field(default_factory=set)
+
+
+def _stream_key(stream):
+    # Ignore expiring query signatures so a refreshed URL cannot loop forever
+    # through the same unsupported CDN/format during one broadcast.
+    url = urlparse(stream.url)
+    return stream.format, url.hostname or "", url.path
 
 
 class LiveService:
@@ -252,7 +268,7 @@ class LiveService:
                         runtime.detail = "直播流长时间无数据，重新连接"
                         runtime.backend.stop()
                 if (
-                    not runtime.blocked
+                    (not runtime.blocked or runtime.blocked_broadcast)
                     and runtime.future is None
                     and now >= max(runtime.next_check, runtime.cooldown_until)
                     and (runtime.subscription.enabled or runtime.manual)
@@ -261,7 +277,7 @@ class LiveService:
                         self._query,
                         runtime.subscription.room.room_id,
                         runtime.subscription.quality,
-                        runtime.backend is None,
+                        runtime.backend is None and not runtime.blocked,
                     )
                     runtime.next_check = now + 60 + random.uniform(-10, 10)
             except Exception as exc:
@@ -287,6 +303,8 @@ class LiveService:
                     self._auth = dict(args["cookies"])
                     for runtime in self._rooms.values():
                         runtime.blocked = False
+                        runtime.blocked_broadcast = ""
+                        runtime.rejected_streams.clear()
                         runtime.next_check = 0
                     continue
                 runtime = self._rooms[args["room_id"]]
@@ -294,6 +312,8 @@ class LiveService:
                     raise ValueError("请先停止录制，收尾完成后再移除直播间")
                 if action in {"start", "enable"}:
                     runtime.blocked = False
+                    runtime.blocked_broadcast = ""
+                    runtime.rejected_streams.clear()
                     runtime.skip_pending_broadcast = False
                     runtime.detail = ""
                     if self._clock() < runtime.cooldown_until:
@@ -342,6 +362,7 @@ class LiveService:
                         continue
                 elif action == "quality":
                     runtime.subscription.quality = int(args["quality"])
+                    runtime.rejected_streams.clear()
                     runtime.detail = "画质设置将在下一次拉流时生效"
                 elif action == "room_settings":
                     if runtime.backend or runtime.session:
@@ -388,6 +409,8 @@ class LiveService:
 
     def _apply_query(self, runtime, room, streams):
         old_room = runtime.subscription.room
+        if room.broadcast_key != old_room.broadcast_key:
+            runtime.rejected_streams.clear()
         room.author = room.author or old_room.author
         room.title = room.title or old_room.title
         runtime.subscription.room = room
@@ -399,6 +422,17 @@ class LiveService:
         self.repository.save_subscription(runtime.subscription)
         if not runtime.subscription.enabled and not runtime.manual:
             return
+        if runtime.blocked_broadcast:
+            if room.live_status == 1 and room.broadcast_key == runtime.blocked_broadcast:
+                return
+            runtime.blocked = False
+            runtime.blocked_broadcast = ""
+            runtime.rejected_streams.clear()
+            if room.live_status == 1:
+                runtime.state = LiveState.PREPARING
+                runtime.detail = "检测到新一场直播，重新获取录制地址"
+                runtime.next_check = self._clock()
+                return
         if self._clock() < runtime.cooldown_until:
             runtime.state = (
                 LiveState.RECORDING if runtime.backend else LiveState.RECONNECTING
@@ -455,6 +489,15 @@ class LiveService:
             raise OSError("磁盘剩余空间不足，已停止录制；释放空间后点击开始或开启监控")
 
     def _begin(self, runtime, streams):
+        streams = [
+            stream
+            for stream in streams
+            if _stream_key(stream) not in runtime.rejected_streams
+        ]
+        if not streams:
+            raise _UnsupportedStreamsError(
+                "本场直播的可用线路均不受支持；可更新应用后重试，下次开播仍会自动尝试"
+            )
         self._ensure_space(runtime)
         runtime.state = LiveState.PREPARING
         stream = streams[runtime.retries % len(streams)]
@@ -511,6 +554,7 @@ class LiveService:
             backend.kill()
             raise
         runtime.backend = backend
+        runtime.stream = stream
         runtime.engine_failed = False
         runtime.attempt_bytes = 0
         runtime.attempt_duration = 0
@@ -582,8 +626,10 @@ class LiveService:
                 runtime.detail = ENGINE_ERROR_MESSAGES.get(
                     code, "录制引擎发生异常，将重新连接"
                 )
+                if code == "untrusted_media_url" and runtime.stream:
+                    runtime.rejected_streams.add(_stream_key(runtime.stream))
+                    runtime.backend.stop()
                 if code in {
-                    "untrusted_media_url",
                     "encrypted_media_unsupported",
                     "output_directory_not_empty",
                 }:
@@ -669,6 +715,10 @@ class LiveService:
             runtime.stop_reason = "failed"
             runtime.backend.stop()
         runtime.blocked = permanent
+        runtime.blocked_broadcast = (
+            runtime.subscription.room.broadcast_key
+            if isinstance(exc, _UnsupportedStreamsError) else ""
+        )
         runtime.state = (
             LiveState.ERROR
             if permanent

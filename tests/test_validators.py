@@ -184,3 +184,14 @@ def test_trusted_https_url_does_not_trust_partner_parent_domain():
         trusted_https_url(
             "https://mountaintoys.cn/video.m4s", BILIBILI_RESOURCE_HOSTS
         )
+
+
+def test_smtcdn_media_zone_is_trusted_without_trusting_parent_or_suffix_tricks():
+    url = "https://6cd5024e4e589521b85d1e73f3f94e4e.v.smtcdns.net/segment.m4s"
+    assert trusted_https_url(url, BILIBILI_RESOURCE_HOSTS) == url
+    for url in (
+        "https://other.smtcdns.net/segment.m4s",
+        "https://v.smtcdns.net.evil.test/segment.m4s",
+    ):
+        with pytest.raises(ValueError):
+            trusted_https_url(url, BILIBILI_RESOURCE_HOSTS)

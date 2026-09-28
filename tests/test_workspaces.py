@@ -396,6 +396,59 @@ def test_live_messages_are_shared_and_consumed_once(workspace):
     assert workspace._task_page.notice.label.text() == "录制重连提示"
 
 
+@pytest.mark.parametrize("dark", [True, False])
+@pytest.mark.parametrize("size", [(900, 640), (1120, 760), (1320, 860)])
+def test_recording_task_actions_fit_and_retry_works(workspace, qapp, dark, size):
+    previous = (
+        qapp.styleSheet(), QFont(qapp.font()), QPalette(qapp.palette()),
+        qapp.property("darkTheme"),
+    )
+    theme = ThemeManager(qapp)
+    try:
+        theme.apply_theme(dark)
+        workspace.resize(*size)
+        workspace.show()
+        workspace._show_tasks()
+        page = workspace._task_page
+        page.tabs.setCurrentIndex(1)
+        controller = workspace._live_controller
+        controller.service.rows = [room("recording")]
+        controller.refresh()
+        flush()
+        controls = page.current.cellWidget(0, 4)
+        stop, view = controls.findChildren(QPushButton)
+        for button in (stop, view):
+            assert button.height() == 32
+            assert button.width() >= button.sizeHint().width()
+            assert contained(button, controls)
+        assert not stop.geometry().intersects(view.geometry())
+        assert page.current.horizontalScrollBar().maximum() == 0
+        stop.click()
+        assert controller.service.commands[-1] == ("stop", {"room_id": 1})
+        controller.service.rows = [room("error")]
+        controller.refresh()
+        flush()
+        assert stop.isEnabled()
+        assert stop.text() == "重试录制"
+        stop.click()
+        assert controller.service.commands[-1] == ("start", {"room_id": 1})
+        controller.service.rows = [room("finalizing")]
+        controller.refresh()
+        assert not stop.isEnabled()
+        assert view.isEnabled()
+        controller.service.rows = [room("recording", room_id=2)]
+        controller.refresh()
+        assert controls.isHidden()
+        assert page.current.cellWidget(0, 4).property("roomId") == 2
+    finally:
+        qapp.styleHints().colorSchemeChanged.disconnect(theme._on_color_scheme_changed)
+        theme.deleteLater()
+        qapp.setStyleSheet(previous[0])
+        qapp.setFont(previous[1])
+        qapp.setPalette(previous[2])
+        qapp.setProperty("darkTheme", previous[3])
+
+
 def test_room_settings_rechecks_recording_state_before_save(workspace, qtbot):
     controller = workspace._live_controller
     controller.service.rows = [room()]

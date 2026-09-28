@@ -9,7 +9,10 @@ from bilibili_downloader.api.auth import filter_auth_cookies
 from bilibili_downloader.api.client import USER_AGENT, BilibiliAPIError
 from bilibili_downloader.api.wbi import WBIKeyCache, WBISigner
 from bilibili_downloader.core.live_models import LiveQuality, LiveRoom, LiveStream
-from bilibili_downloader.utils.network import BILIBILI_RESOURCE_HOSTS, trusted_https_url
+from bilibili_downloader.utils.network import (
+    BILIBILI_RESOURCE_HOSTS,
+    trusted_https_url,
+)
 from bilibili_downloader.utils.validators import is_short_link, resolve_short_url
 
 BASE = "https://api.live.bilibili.com"
@@ -177,9 +180,13 @@ class BilibiliLiveClient:
                     qn = int(codec.get("current_qn", 0))
                     for address in codec.get("url_info", []):
                         url = f"{address.get('host', '')}{codec.get('base_url', '')}{address.get('extra', '')}"
-                        url = trusted_https_url(
-                            url, BILIBILI_RESOURCE_HOSTS, upgrade_http=True
-                        )
+                        try:
+                            url = trusted_https_url(
+                                url, BILIBILI_RESOURCE_HOSTS, upgrade_http=True
+                            )
+                        except ValueError:
+                            # A bad CDN candidate must not hide valid alternatives.
+                            continue
                         streams.append(
                             LiveStream(
                                 url=url,

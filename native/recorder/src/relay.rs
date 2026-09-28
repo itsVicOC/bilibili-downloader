@@ -44,6 +44,7 @@ pub fn validate_url(value: &str) -> Result<Url, String> {
         "bilibili.com",
         "hdslb.com",
         "edge.mountaintoys.cn",
+        "v.smtcdns.net",
     ]
     .iter()
     .any(|d| host == *d || host.ends_with(&format!(".{d}")));
@@ -268,6 +269,14 @@ mod tests {
             assert!(validate_url(url).is_err());
         }
         assert!(validate_url("https://a.bilivideo.com/a?secret=x").is_ok());
+        assert!(validate_url("https://6cd5024e4e589521b85d1e73f3f94e4e.v.smtcdns.net/a").is_ok());
+        for url in [
+            "https://v.smtcdns.net.evil.test/a",
+            "https://other.smtcdns.net/a",
+            "http://cdn.v.smtcdns.net/a",
+        ] {
+            assert!(validate_url(url).is_err());
+        }
     }
     #[test]
     fn rewrites_every_playlist_resource_and_rejects_encryption() {
@@ -279,5 +288,13 @@ mod tests {
             rewrite_playlist("#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"key\"", &base, "p").is_err()
         );
         assert!(rewrite_playlist("#EXTM3U\nhttps://evil.test/seg.ts", &base, "p").is_err());
+        assert!(
+            rewrite_playlist(
+                "#EXTM3U\n#EXT-X-MAP:URI=\"https://cdn.v.smtcdns.net/init.mp4\"\n#EXTINF:1,\nhttps://cdn.v.smtcdns.net/seg.m4s\n",
+                &base,
+                "http://127.0.0.1:1/token",
+            )
+            .is_ok()
+        );
     }
 }

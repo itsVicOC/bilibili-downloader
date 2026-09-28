@@ -9,6 +9,7 @@ BILIBILI_RESOURCE_HOSTS = (
     "bilivideo.cn",
     "hdslb.com",
     "edge.mountaintoys.cn",
+    "v.smtcdns.net",
 )
 
 

@@ -153,6 +153,28 @@ def test_live_quality_selection_and_cookie_boundary():
     assert seen[0].url.params["codec"] == "0"
 
 
+def test_live_skips_bad_cdn_candidates_and_accepts_smtcdn():
+    payload = play_payload()
+    codec = payload["data"]["playurl_info"]["playurl"]["stream"][1]["format"][0]["codec"][0]
+    codec["url_info"] = [
+        {"host": "https://evil.test", "extra": "?sign=secret"},
+        {"host": "https://a.bilivideo.com:invalid", "extra": "?sign=secret"},
+        {"host": "https://cdn.v.smtcdns.net", "extra": "?sign=secret"},
+    ]
+    client = BilibiliLiveClient(transport=httpx.MockTransport(
+        lambda request: httpx.Response(
+            200, json=nav_payload() if request.url.path.endswith("/nav") else payload
+        )
+    ))
+    try:
+        streams = client.get_streams(6963590)
+    finally:
+        client.close()
+    assert len(streams) == 2
+    assert streams[0].url.startswith("https://cdn.v.smtcdns.net/")
+    assert all("evil.test" not in stream.url for stream in streams)
+
+
 def test_short_id_is_normalized(monkeypatch):
     monkeypatch.setattr(
         "bilibili_downloader.api.live.resolve_short_url",
@@ -542,6 +564,87 @@ def test_disconnect_refreshes_url_and_records_gap(service):
     )
     service.tick()
     assert runtime.session.gaps
+
+
+def test_unsupported_cdn_switches_routes_without_manual_start(service, monkeypatch):
+    candidates = [
+        LiveStream(url="https://a.bilivideo.com/live.flv?sign=old", format="flv", quality=10000),
+        LiveStream(url="https://b.bilivideo.com/live.m3u8", format="ts", quality=10000),
+    ]
+    monkeypatch.setattr(service._client_factory, "get_streams", lambda *_: candidates)
+    runtime = connect(service)
+    session_id = runtime.session.id
+    first = runtime.backend
+    first.pending.append({"event": "error", "code": "untrusted_media_url"})
+    service.tick()
+    assert first.stopping
+    assert not runtime.blocked
+    first.exit_code = 1
+    service.tick()
+    assert runtime.state == LiveState.RECONNECTING
+    candidates[0].url = "https://a.bilivideo.com/live.flv?sign=new"
+    service.test_clock[0] = runtime.next_check
+    service.tick()
+    service.tick()
+    assert runtime.backend is not first
+    assert runtime.backend.stream.format == "ts"
+    assert runtime.state == LiveState.RECORDING
+    assert runtime.session.id == session_id
+
+
+def test_all_unsupported_routes_stop_instead_of_looping(service):
+    runtime = connect(service)
+    runtime.backend.pending.append({"event": "error", "code": "untrusted_media_url"})
+    runtime.backend.exit_code = 1
+    service.tick()
+    service.test_clock[0] = runtime.next_check
+    service.tick()
+    service.tick()
+    assert runtime.blocked
+    assert runtime.state == LiveState.ERROR
+    assert "可用线路均不受支持" in runtime.detail
+    assert service.repository.sessions()[0].status == "failed"
+    service.command("start", room_id=1)
+    service.tick()
+    service.tick()
+    assert runtime.backend is not None
+    assert runtime.state == LiveState.RECORDING
+
+
+def test_new_broadcast_can_reuse_previously_rejected_route(service):
+    runtime = connect(service)
+    runtime.rejected_streams.add(("flv", "a.bilivideo.com", "/a"))
+    runtime.backend.exit_code = 0
+    service.tick()
+    service.client_state["live_time"] = "456"
+    service.test_clock[0] = runtime.next_check
+    service.tick()
+    service.tick()
+    assert not runtime.rejected_streams
+    assert runtime.backend is not None
+
+
+def test_exhausted_routes_keep_monitoring_and_resume_on_new_broadcast(service):
+    runtime = connect(service)
+    runtime.backend.pending.append({"event": "error", "code": "untrusted_media_url"})
+    runtime.backend.exit_code = 1
+    service.tick()
+    service.test_clock[0] = runtime.next_check
+    service.tick()
+    service.tick()
+    assert runtime.blocked_broadcast == "1:123"
+    service.test_clock[0] = runtime.next_check
+    service.tick()
+    service.tick()
+    assert runtime.state == LiveState.ERROR
+    assert runtime.backend is None
+    service.client_state["live_time"] = "456"
+    service.test_clock[0] = runtime.next_check
+    for _ in range(3):
+        service.tick()
+    assert not runtime.blocked
+    assert runtime.backend is not None
+    assert runtime.session.room.live_time == "456"
 
 
 def test_offline_needs_two_checks_before_ending(service):
