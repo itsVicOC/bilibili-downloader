@@ -15,7 +15,7 @@ import httpx
 
 from bilibili_downloader.api.client import BilibiliAPIError
 from bilibili_downloader.api.live import BilibiliLiveClient, LiveAccessError
-from bilibili_downloader.core.errors import redact_sensitive_text
+from bilibili_downloader.core.errors import redact_sensitive_text, user_error_message
 from bilibili_downloader.core.live_models import (
     LIVE_STATE_LABELS,
     LiveSettings,
@@ -384,7 +384,7 @@ class LiveService:
                     else LiveState.DISABLED,
                 )
             except Exception as exc:
-                self._messages.put(redact_sensitive_text(str(exc)))
+                self._messages.put(user_error_message(exc))
 
     def _apply_query(self, runtime, room, streams):
         old_room = runtime.subscription.room

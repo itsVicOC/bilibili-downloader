@@ -7,11 +7,13 @@ import httpx
 
 from bilibili_downloader.api.auth import filter_auth_cookies
 from bilibili_downloader.api.client import USER_AGENT, BilibiliAPIError
+from bilibili_downloader.api.wbi import WBIKeyCache, WBISigner
 from bilibili_downloader.core.live_models import LiveQuality, LiveRoom, LiveStream
 from bilibili_downloader.utils.network import BILIBILI_RESOURCE_HOSTS, trusted_https_url
 from bilibili_downloader.utils.validators import is_short_link, resolve_short_url
 
 BASE = "https://api.live.bilibili.com"
+_WBI_KEYS = WBIKeyCache()
 
 
 class LiveAccessError(ValueError):
@@ -19,7 +21,8 @@ class LiveAccessError(ValueError):
 
 
 class BilibiliLiveClient:
-    def __init__(self, auth_cookies=None, transport=None):
+    def __init__(self, auth_cookies=None, transport=None, *, wbi_cache=None):
+        self._wbi_keys = wbi_cache if wbi_cache is not None else _WBI_KEYS
         self._client = httpx.Client(
             base_url=BASE,
             headers={"User-Agent": USER_AGENT, "Referer": "https://live.bilibili.com/"},
@@ -32,7 +35,35 @@ class BilibiliLiveClient:
     def close(self):
         self._client.close()
 
-    def _get(self, endpoint, **params):
+    def _get(self, endpoint, *, signed=False, **params):
+        if not signed:
+            return self._request(endpoint, params)
+        for attempt in range(2):
+            key = self._wbi_keys.get(self._fetch_wbi_keys)
+            signed_params = WBISigner.sign({**params, "web_location": "444.8"}, key)
+            try:
+                return self._request(endpoint, signed_params)
+            except BilibiliAPIError as exc:
+                if exc.code != -352 or attempt:
+                    raise
+                self._wbi_keys.invalidate(key)
+
+    def _fetch_wbi_keys(self):
+        response = self._client.get("https://api.bilibili.com/x/web-interface/nav")
+        response.raise_for_status()
+        payload = response.json()
+        # Anonymous nav responses use -101 but still supply public WBI keys.
+        if payload.get("code") not in {0, -101}:
+            raise BilibiliAPIError(
+                payload.get("code", -1), payload.get("message", "签名密钥获取失败")
+            )
+        images = (payload.get("data") or {}).get("wbi_img") or {}
+        return tuple(
+            WBISigner.extract_key_from_url(str(images.get(name) or ""))
+            for name in ("img_url", "sub_url")
+        )
+
+    def _request(self, endpoint, params):
         response = self._client.get(endpoint, params=params)
         response.raise_for_status()
         payload = response.json()
@@ -74,10 +105,13 @@ class BilibiliLiveClient:
     def _check_access(data):
         if data.get("is_locked") or data.get("is_hidden"):
             raise LiveAccessError("直播间不可访问或已被锁定")
-        if data.get("encrypted") or data.get("is_sp") or data.get("special_type") == 1:
+        # The player API uses 1 for paid access; other feature tags also occur
+        # on public rooms and are not access restrictions.
+        paid = data.get("special_type") == 1 or 1 in (
+            data.get("all_special_types") or []
+        )
+        if data.get("encrypted") or data.get("is_sp") or paid:
             raise LiveAccessError("首版不支持加密或付费特殊直播间")
-        if data.get("all_special_types"):
-            raise LiveAccessError("首版不支持特殊权限直播间")
 
     def get_status(self, room_id: int) -> LiveRoom:
         data = self._get("/room/v1/Room/room_init", id=room_id)
@@ -95,7 +129,9 @@ class BilibiliLiveClient:
         return self.refresh_metadata(room)
 
     def refresh_metadata(self, room: LiveRoom) -> LiveRoom:
-        data = self._get("/xlive/web-room/v1/index/getInfoByRoom", room_id=room.room_id)
+        data = self._get(
+            "/xlive/web-room/v1/index/getInfoByRoom", signed=True, room_id=room.room_id
+        )
         info = data.get("room_info") or {}
         self._check_access(info)
         room.title = str(info.get("title") or f"直播间 {room.room_id}")
@@ -108,6 +144,7 @@ class BilibiliLiveClient:
     def get_streams(self, room_id: int, quality: int = 0) -> list[LiveStream]:
         data = self._get(
             "/xlive/web-room/v2/index/getRoomPlayInfo",
+            signed=True,
             room_id=room_id,
             protocol="0,1",
             format="0,1,2",

@@ -1,6 +1,7 @@
 """WBI (Web Interface) signature module for Bilibili API anti-scraping."""
 
 import hashlib
+import threading
 import time
 import urllib.parse
 
@@ -73,3 +74,30 @@ class WBISigner:
 def _urlencode(params: dict) -> str:
     """URL-encode params without using urllib (avoids + for spaces)."""
     return urllib.parse.urlencode(params, safe="")
+
+
+class WBIKeyCache:
+    """Share public signing keys across short-lived clients without storing cookies."""
+
+    def __init__(self, ttl=24 * 3600, clock=None):
+        self._ttl = ttl
+        self._clock = clock or time.monotonic
+        self._lock = threading.Lock()
+        self._key = None
+        self._cached_at = 0
+
+    def get(self, fetch_keys):
+        with self._lock:
+            if self._key is None or self._clock() - self._cached_at >= self._ttl:
+                img_key, sub_key = fetch_keys()
+                if len(img_key) != 32 or len(sub_key) != 32:
+                    raise RuntimeError("Bilibili 未返回有效的 WBI 签名密钥，请稍后重试")
+                self._key = WBISigner.compute_mixin_key(img_key, sub_key)
+                self._cached_at = self._clock()
+            return self._key
+
+    def invalidate(self, key):
+        with self._lock:
+            # An older failed request must not discard keys another worker refreshed.
+            if self._key == key:
+                self._key = None

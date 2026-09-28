@@ -1,6 +1,27 @@
 """Tests for WBI signature module."""
 
-from bilibili_downloader.api.wbi import WBISigner
+from bilibili_downloader.api.wbi import WBIKeyCache, WBISigner
+
+
+def test_wbi_key_cache_expiry_and_stale_invalidation():
+    now = [0]
+    count = [0]
+    cache = WBIKeyCache(ttl=60, clock=lambda: now[0])
+
+    def fetch():
+        count[0] += 1
+        return ("a" if count[0] == 1 else "c") * 32, "b" * 32
+
+    old = cache.get(fetch)
+    assert cache.get(fetch) == old and count[0] == 1
+    now[0] = 60
+    current = cache.get(fetch)
+    assert current != old and count[0] == 2
+    cache.invalidate(old)
+    assert cache.get(fetch) == current and count[0] == 2
+    cache.invalidate(current)
+    cache.get(fetch)
+    assert count[0] == 3
 
 
 class TestWBIKeyExtraction:

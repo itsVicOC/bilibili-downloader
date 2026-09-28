@@ -17,6 +17,7 @@ import pytest
 
 from bilibili_downloader.api.client import BilibiliAPIError
 from bilibili_downloader.api.live import BilibiliLiveClient, LiveAccessError
+from bilibili_downloader.api.wbi import WBIKeyCache
 from bilibili_downloader.core.live_models import (
     LiveRoom,
     LiveSettings,
@@ -33,6 +34,23 @@ from bilibili_downloader.core.recorder import (
     check_recorder,
 )
 from bilibili_downloader.core.task_repository import TaskDatabaseVersionError
+
+
+def nav_payload(img_key="a" * 32, sub_key="b" * 32):
+    return {
+        "code": -101,
+        "data": {
+            "wbi_img": {
+                "img_url": f"https://i0.hdslb.com/bfs/wbi/{img_key}.png",
+                "sub_url": f"https://i0.hdslb.com/bfs/wbi/{sub_key}.png",
+            }
+        },
+    }
+
+
+@pytest.fixture(autouse=True)
+def fresh_live_wbi_keys(monkeypatch):
+    monkeypatch.setattr("bilibili_downloader.api.live._WBI_KEYS", WBIKeyCache())
 
 
 @pytest.mark.parametrize(
@@ -111,8 +129,12 @@ def test_live_quality_selection_and_cookie_boundary():
     seen = []
 
     def respond(request):
+        if request.url.path.endswith("/nav"):
+            return httpx.Response(200, json=nav_payload())
         seen.append(request)
-        return httpx.Response(200, json=play_payload())
+        payload = play_payload()
+        payload["data"]["all_special_types"] = [50]
+        return httpx.Response(200, json=payload)
 
     client = BilibiliLiveClient(
         {"SESSDATA": "secret", "bad": "discard"}, httpx.MockTransport(respond)
@@ -127,6 +149,7 @@ def test_live_quality_selection_and_cookie_boundary():
     assert "secret" not in repr(streams[0])
     assert seen[0].url.host == "api.live.bilibili.com"
     assert seen[0].headers["cookie"] == "SESSDATA=secret"
+    assert "w_rid" in seen[0].url.params and "wts" in seen[0].url.params
     assert seen[0].url.params["codec"] == "0"
 
 
@@ -137,6 +160,8 @@ def test_short_id_is_normalized(monkeypatch):
     )
 
     def respond(request):
+        if request.url.path.endswith("/nav"):
+            return httpx.Response(200, json=nav_payload())
         data = (
             {"room_id": 23058, "short_id": 3, "uid": 1, "live_status": 0}
             if request.url.path.endswith("room_init")
@@ -155,12 +180,168 @@ def test_short_id_is_normalized(monkeypatch):
         client.close()
 
 
+def test_anonymous_room_resolution_and_play_info_are_wbi_signed(monkeypatch):
+    monkeypatch.setattr("bilibili_downloader.api.wbi.time.time", lambda: 1700000000)
+    seen = []
+
+    def respond(request):
+        seen.append(request)
+        assert "cookie" not in request.headers
+        if request.url.path.endswith("/nav"):
+            return httpx.Response(200, json=nav_payload())
+        if request.url.path.endswith("room_init"):
+            return httpx.Response(
+                200,
+                json={
+                    "code": 0,
+                    "data": {"room_id": 21414905, "uid": 123, "live_status": 1},
+                },
+            )
+        assert request.url.params["wts"] == "1700000000"
+        assert request.url.params["web_location"] == "444.8"
+        assert len(request.url.params["w_rid"]) == 32
+        if request.url.path.endswith("getInfoByRoom"):
+            assert request.url.params["w_rid"] == "da0af1fda46e1290f260466755dc8bba"
+            return httpx.Response(
+                200,
+                json={
+                    "code": 0,
+                    "data": {
+                        "room_info": {"title": "公开直播间"},
+                        "anchor_info": {"base_info": {"uname": "主播"}},
+                    },
+                },
+            )
+        payload = play_payload()
+        payload["data"]["all_special_types"] = [50]
+        return httpx.Response(200, json=payload)
+
+    with_client = BilibiliLiveClient(transport=httpx.MockTransport(respond))
+    try:
+        room = with_client.resolve_room("21414905")
+        assert room.room_id == 21414905 and room.author == "主播"
+        assert with_client.get_streams(room.room_id)
+    finally:
+        with_client.close()
+    assert sum(request.url.path.endswith("/nav") for request in seen) == 1
+
+
+def test_live_clients_reuse_public_wbi_keys_and_refresh_rotation(monkeypatch):
+    monkeypatch.setattr("bilibili_downloader.api.wbi.time.time", lambda: 1700000000)
+    nav_count = 0
+    signatures = []
+
+    def respond(request):
+        nonlocal nav_count
+        if request.url.path.endswith("/nav"):
+            nav_count += 1
+            return httpx.Response(
+                200, json=nav_payload("a" * 32 if nav_count == 1 else "c" * 32)
+            )
+        signatures.append(request.url.params["w_rid"])
+        return httpx.Response(
+            200,
+            json={"code": -352, "message": "-352"}
+            if len(signatures) == 1
+            else play_payload(),
+        )
+
+    for _ in range(2):
+        client = BilibiliLiveClient(transport=httpx.MockTransport(respond))
+        try:
+            assert client.get_streams(21414905)
+        finally:
+            client.close()
+    assert nav_count == 2 and len(signatures) == 3
+    assert signatures[0] != signatures[1]
+    assert signatures[1] == signatures[2]
+
+
+@pytest.mark.parametrize("code,attempts", [(-352, 2), (-412, 1), (-101, 1), (-403, 1)])
+def test_live_signed_request_retries_only_one_signature_rejection(code, attempts):
+    seen = []
+
+    def respond(request):
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json=nav_payload()
+            if request.url.path.endswith("/nav")
+            else {"code": code, "message": "rejected"},
+        )
+
+    client = BilibiliLiveClient(transport=httpx.MockTransport(respond))
+    try:
+        with pytest.raises(BilibiliAPIError) as error:
+            client.get_streams(21414905)
+        assert error.value.code == code
+    finally:
+        client.close()
+    assert len(seen) == 2 * attempts
+
+
+def test_live_http_rate_limit_does_not_refresh_keys_or_retry():
+    seen = []
+
+    def respond(request):
+        seen.append(request)
+        return (
+            httpx.Response(200, json=nav_payload())
+            if request.url.path.endswith("/nav")
+            else httpx.Response(429)
+        )
+
+    client = BilibiliLiveClient(transport=httpx.MockTransport(respond))
+    try:
+        with pytest.raises(httpx.HTTPStatusError):
+            client.get_streams(21414905)
+    finally:
+        client.close()
+    assert len(seen) == 2
+
+
+def test_invalid_nav_keys_are_not_cached():
+    calls = []
+
+    def respond(request):
+        calls.append(request)
+        if request.url.path.endswith("/nav"):
+            return httpx.Response(
+                200,
+                json={"code": -101, "data": {}} if len(calls) == 1 else nav_payload(),
+            )
+        return httpx.Response(200, json=play_payload())
+
+    client = BilibiliLiveClient(transport=httpx.MockTransport(respond))
+    try:
+        with pytest.raises(RuntimeError, match="WBI"):
+            client.get_streams(21414905)
+        assert client.get_streams(21414905)
+    finally:
+        client.close()
+    assert len(calls) == 3
+
+
 @pytest.mark.parametrize(
-    "change", [{"encrypted": True}, {"is_locked": True}, {"is_sp": 1}]
+    "change",
+    [
+        {"encrypted": True},
+        {"is_locked": True},
+        {"is_hidden": True},
+        {"is_sp": 1},
+        {"special_type": 1},
+        {"all_special_types": [1]},
+        {"all_special_types": [50, 1]},
+    ],
 )
 def test_live_access_failures(change):
     with pytest.raises(LiveAccessError):
         BilibiliLiveClient._check_access(change)
+
+
+@pytest.mark.parametrize("features", [[], [50], [3, 50]])
+def test_public_room_features_are_not_access_restrictions(features):
+    BilibiliLiveClient._check_access({"all_special_types": features})
 
 
 def test_repository_recovers_sessions_and_does_not_store_credentials(tmp_path):
@@ -307,10 +488,9 @@ def test_automatic_recording_normalizes_and_deduplicates(service):
     service.tick()
     assert len(service.repository.subscriptions()) == 1
     assert "已在列表中" in service.messages()[0]
-    assert (
-        "sign=secret"
-        not in Path(runtime.session.directory, "manifest.json").read_text(encoding="utf-8")
-    )
+    assert "sign=secret" not in Path(
+        runtime.session.directory, "manifest.json"
+    ).read_text(encoding="utf-8")
 
 
 def test_stop_current_does_not_restart_until_new_broadcast(service):
@@ -394,8 +574,9 @@ def test_disk_full_stops_and_requires_user_action(service):
     assert runtime.backend is None
 
 
-def test_rate_limit_cools_down(service):
-    service.client_state["failure"] = BilibiliAPIError(-412, "rate limited")
+@pytest.mark.parametrize("code", [-352, -412])
+def test_rate_limit_cools_down(service, code):
+    service.client_state["failure"] = BilibiliAPIError(code, "rate limited")
     service.tick()
     service.tick()
     runtime = service._rooms[1]
@@ -404,6 +585,21 @@ def test_rate_limit_cools_down(service):
     service.test_clock[0] = 399
     service.tick()
     assert service.client_state["calls"] == 1
+
+
+def test_failed_room_addition_shows_actionable_redacted_error(service, monkeypatch):
+    def resolve(_source):
+        raise BilibiliAPIError(
+            -352, "SESSDATA=secret https://a.bilivideo.com/a?sign=secret"
+        )
+
+    monkeypatch.setattr(service, "_resolve", resolve)
+    service.command("add", source="21414905")
+    service.tick()
+    messages = service.messages()
+    assert len(messages) == 1
+    assert "风控或限流" in messages[0] and "建议" in messages[0]
+    assert "secret" not in messages[0] and "api error" not in messages[0].lower()
 
 
 def test_media_server_rate_limit_also_cools_down(service):
