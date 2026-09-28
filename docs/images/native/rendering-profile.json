@@ -1,0 +1,189 @@
+{
+  "platform": "darwin",
+  "qt": "6.11.2",
+  "backend": "cocoa",
+  "logical_dpi": 72.0,
+  "device_pixel_ratio": 2.0,
+  "available_screen": [
+    0,
+    30,
+    1920,
+    960
+  ],
+  "checks": [
+    {
+      "theme": "dark",
+      "window": [
+        900,
+        640
+      ],
+      "body_font": {
+        "family": "PingFang SC",
+        "pixels": 15
+      },
+      "title_font": {
+        "family": "PingFang SC",
+        "pixels": 31
+      },
+      "field": [
+        221,
+        517,
+        620,
+        40
+      ],
+      "popup": [
+        221,
+        561,
+        620,
+        334
+      ],
+      "inside_screen": true,
+      "overlaps_field": false
+    },
+    {
+      "theme": "dark",
+      "window": [
+        1120,
+        760
+      ],
+      "body_font": {
+        "family": "PingFang SC",
+        "pixels": 15
+      },
+      "title_font": {
+        "family": "PingFang SC",
+        "pixels": 31
+      },
+      "field": [
+        357,
+        637,
+        704,
+        40
+      ],
+      "popup": [
+        357,
+        299,
+        704,
+        334
+      ],
+      "inside_screen": true,
+      "overlaps_field": false
+    },
+    {
+      "theme": "dark",
+      "window": [
+        1320,
+        860
+      ],
+      "body_font": {
+        "family": "PingFang SC",
+        "pixels": 15
+      },
+      "title_font": {
+        "family": "PingFang SC",
+        "pixels": 31
+      },
+      "field": [
+        955,
+        523,
+        316,
+        40
+      ],
+      "popup": [
+        955,
+        567,
+        316,
+        334
+      ],
+      "inside_screen": true,
+      "overlaps_field": false
+    },
+    {
+      "theme": "light",
+      "window": [
+        900,
+        640
+      ],
+      "body_font": {
+        "family": "PingFang SC",
+        "pixels": 15
+      },
+      "title_font": {
+        "family": "PingFang SC",
+        "pixels": 31
+      },
+      "field": [
+        221,
+        517,
+        620,
+        40
+      ],
+      "popup": [
+        221,
+        561,
+        620,
+        334
+      ],
+      "inside_screen": true,
+      "overlaps_field": false
+    },
+    {
+      "theme": "light",
+      "window": [
+        1120,
+        760
+      ],
+      "body_font": {
+        "family": "PingFang SC",
+        "pixels": 15
+      },
+      "title_font": {
+        "family": "PingFang SC",
+        "pixels": 31
+      },
+      "field": [
+        357,
+        637,
+        704,
+        40
+      ],
+      "popup": [
+        357,
+        299,
+        704,
+        334
+      ],
+      "inside_screen": true,
+      "overlaps_field": false
+    },
+    {
+      "theme": "light",
+      "window": [
+        1320,
+        860
+      ],
+      "body_font": {
+        "family": "PingFang SC",
+        "pixels": 15
+      },
+      "title_font": {
+        "family": "PingFang SC",
+        "pixels": 31
+      },
+      "field": [
+        955,
+        523,
+        316,
+        40
+      ],
+      "popup": [
+        955,
+        567,
+        316,
+        334
+      ],
+      "inside_screen": true,
+      "overlaps_field": false
+    }
+  ]
+}

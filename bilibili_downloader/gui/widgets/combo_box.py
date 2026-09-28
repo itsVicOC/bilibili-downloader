@@ -1,7 +1,7 @@
-"""Theme-aware selectors using Qt's popup placement and keyboard handling."""
+"""Theme-aware selectors with anchored popups and Qt's input handling."""
 
-from PySide6.QtCore import QEvent, QRect, QSize, Qt
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
+from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt
+from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -16,6 +16,26 @@ from PySide6.QtWidgets import (
 
 from bilibili_downloader.gui.resources.styles import UI_METRICS
 from bilibili_downloader.gui.widgets.components import palette, repolish
+
+
+def popup_geometry(anchor: QRect, preferred: QSize, available: QRect) -> QRect:
+    """Align with the field and choose the side with enough screen space.
+
+    All coordinates are logical pixels, including on Retina and mixed-DPI screens.
+    """
+    gap = 4
+    width = min(anchor.width(), available.width())
+    x = max(available.left(), min(anchor.left(), available.right() + 1 - width))
+    below_y = anchor.bottom() + 1 + gap
+    below = max(0, available.bottom() + 1 - below_y)
+    above_bottom = anchor.top() - gap
+    above = max(0, above_bottom - available.top())
+    height = preferred.height()
+    opens_below = height <= below or (height > above and below >= above)
+    height = max(1, min(height, below if opens_below else above))
+    y = below_y if opens_below else above_bottom - height
+    y = max(available.top(), min(y, available.bottom() + 1 - height))
+    return QRect(x, y, width, height)
 
 
 class _OptionDelegate(QStyledItemDelegate):
@@ -128,7 +148,29 @@ class ComboBox(QComboBox):
         if not self.isEnabled() or not self.count():
             return
         super().showPopup()
+        self._position_popup()
         self._sync_popup_state()
+
+    def _position_popup(self):
+        """Replace native list-box offsets while retaining Qt's input handling."""
+        view = self.view()
+        popup = view.window()
+        anchor = QRect(self.mapToGlobal(QPoint()), self.size())
+        screen = QGuiApplication.screenAt(anchor.center()) or self.screen()
+        if not screen or not popup.isVisible():
+            return
+        rows = min(self.count(), self.maxVisibleItems())
+        height = sum(max(1, view.sizeHintForRow(row)) for row in range(rows))
+        for margins in (view.contentsMargins(), popup.contentsMargins()):
+            height += margins.top() + margins.bottom()
+        if popup.layout():
+            margins = popup.layout().contentsMargins()
+            height += margins.top() + margins.bottom()
+        popup.setGeometry(
+            popup_geometry(anchor, QSize(self.width(), height), screen.availableGeometry())
+        )
+        view.doItemsLayout()
+        view.scrollTo(view.currentIndex(), QAbstractItemView.EnsureVisible)
 
     def hidePopup(self):
         super().hidePopup()

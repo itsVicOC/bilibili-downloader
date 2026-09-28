@@ -1,5 +1,11 @@
 """Tests for day and night stylesheet generation."""
 
+import sys
+
+import pytest
+from PySide6.QtGui import QFont, QFontInfo
+from PySide6.QtWidgets import QLabel, QLineEdit
+
 from bilibili_downloader.gui.resources import load_stylesheet
 from bilibili_downloader.gui.resources.styles import (
     DARK_PALETTE,
@@ -8,6 +14,7 @@ from bilibili_downloader.gui.resources.styles import (
     readable_fill_text,
     scale_font_sizes,
 )
+from bilibili_downloader.gui.resources.theme import ThemeManager, platform_font_scale
 
 
 def test_dark_and_light_styles_are_distinct():
@@ -25,6 +32,42 @@ def test_macos_typography_scale_increases_all_point_sizes():
     assert "font-size: 11.5pt;" in scaled
     assert "font-size: 23pt;" in scaled
     assert scale_font_sizes("font-size: 10pt;", 1.0) == "font-size: 10pt;"
+
+
+@pytest.mark.parametrize("dpi", [72.0, 96.0, 144.0])
+def test_macos_point_conversion_preserves_reference_size(dpi):
+    scale = platform_font_scale("darwin", dpi)
+    assert 10 * scale * dpi / 72 == pytest.approx(10 * 1.15 * 96 / 72)
+    assert platform_font_scale("win32", dpi) == 1.0
+    assert platform_font_scale("linux", dpi) == 1.0
+
+
+def test_theme_applies_same_font_to_body_and_native_bold_labels(qapp, qtbot):
+    previous = (
+        QFont(qapp.font()), qapp.styleSheet(), qapp.palette(), qapp.property("darkTheme")
+    )
+    theme = ThemeManager(qapp)
+    try:
+        body = QLineEdit("1080P60")
+        heading = QLabel("视频下载")
+        heading.setObjectName("PageTitle")
+        for widget in (body, heading):
+            qtbot.addWidget(widget)
+            widget.ensurePolished()
+        factor = 1.15 if sys.platform == "darwin" else 1.0
+        dpi = qapp.primaryScreen().logicalDotsPerInchY()
+        reference_dpi = 96 if sys.platform == "darwin" else dpi
+        for widget, points in ((body, 10), (heading, 20)):
+            info = QFontInfo(widget.font())
+            assert info.family() == QFontInfo(qapp.font()).family()
+            assert abs(info.pixelSize() - points * factor * reference_dpi / 72) <= 1
+    finally:
+        qapp.styleHints().colorSchemeChanged.disconnect(theme._on_color_scheme_changed)
+        theme.deleteLater()
+        qapp.setFont(previous[0])
+        qapp.setPalette(previous[2])
+        qapp.setProperty("darkTheme", previous[3])
+        qapp.setStyleSheet(previous[1])
 
 
 def test_light_theme_overrides_core_surfaces():

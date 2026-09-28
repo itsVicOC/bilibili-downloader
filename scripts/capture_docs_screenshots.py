@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -17,10 +18,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from PySide6.QtCore import QPoint, QRect
-from PySide6.QtGui import QCloseEvent, QColor, QIcon, QPainter, QPixmap
+from PySide6.QtCore import QPoint, QRect, qVersion
+from PySide6.QtGui import QCloseEvent, QColor, QFontInfo, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QLabel,
     QLineEdit,
     QMessageBox,
     QPlainTextEdit,
@@ -83,7 +85,9 @@ def _save_widget(app: QApplication, widget, filename: str, popup=None) -> None:
     _flush_events(app)
     output = OUTPUT_DIR / filename
     captured = widget.grab()
-    bounds = QRect(QPoint(), captured.size())
+    # QWidget.grab is physical pixels on Retina; popup positions are logical.
+    # Export at one pixel per logical pixel so native/offscreen images compare.
+    bounds = QRect(QPoint(), captured.deviceIndependentSize().toSize())
     popup_rect = None
     if popup is not None:
         popup_rect = QRect(
@@ -435,6 +439,76 @@ def _capture_dropdowns(app, theme, window):
             menu.hide()
 
 
+def _capture_platform_checks(app, theme, window):
+    """Match the unparsed download form and long list seen on a real desktop."""
+    checks = []
+    combo = window._quality_combo
+    combo.setCurrentIndex(combo.findData(VideoQuality.Q1080P60))
+    for dark in (True, False):
+        theme.apply_theme(dark)
+        for width, height in ((900, 640), (1120, 760), (1320, 860)):
+            window.resize(width, height)
+            window.show()
+            _flush_events(app)
+            _save_widget(
+                app,
+                window,
+                f"biliflow-platform-download-{'dark' if dark else 'light'}-{width}.png",
+            )
+            window.show()
+            _flush_events(app)
+            window._workspace_scroll.ensureWidgetVisible(combo, 0, 16)
+            _flush_events(app)
+            combo.showPopup()
+            _flush_events(app)
+            popup = combo.view().window()
+            field = QRect(combo.mapToGlobal(QPoint()), combo.size())
+            title = window.findChild(QLabel, "PageTitle")
+            body_font, title_font = QFontInfo(combo.font()), QFontInfo(title.font())
+            checks.append(
+                {
+                    "theme": "dark" if dark else "light",
+                    "window": [width, height],
+                    "body_font": {
+                        "family": body_font.family(), "pixels": body_font.pixelSize()
+                    },
+                    "title_font": {
+                        "family": title_font.family(), "pixels": title_font.pixelSize()
+                    },
+                    "field": field.getRect(),
+                    "popup": popup.geometry().getRect(),
+                    "inside_screen": combo.screen().availableGeometry().contains(
+                        popup.geometry()
+                    ),
+                    "overlaps_field": field.intersects(popup.geometry()),
+                }
+            )
+            _save_widget(
+                app,
+                window,
+                f"biliflow-platform-dropdown-{'dark' if dark else 'light'}-{width}.png",
+                popup=popup,
+            )
+            combo.hidePopup()
+            window._workspace_scroll.verticalScrollBar().setValue(0)
+    screen = app.primaryScreen()
+    (OUTPUT_DIR / "rendering-profile.json").write_text(
+        json.dumps(
+            {
+                "platform": sys.platform,
+                "qt": qVersion(),
+                "backend": app.platformName(),
+                "logical_dpi": screen.logicalDotsPerInchY(),
+                "device_pixel_ratio": screen.devicePixelRatio(),
+                "available_screen": screen.availableGeometry().getRect(),
+                "checks": checks,
+            },
+            ensure_ascii=False, indent=2,
+        ) + "\n",
+        encoding="utf-8",
+    )
+
+
 def _capture_states(app, theme, window, temp_root):
     """Render real UI components with deterministic edge states, without workers."""
     theme.apply_theme(True)
@@ -580,7 +654,22 @@ def _capture_dialogs(app, window, suffix=""):
         window.closeEvent(QCloseEvent())
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    global OUTPUT_DIR
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--native", action="store_true",
+        help="Use the native desktop Qt backend instead of offscreen",
+    )
+    parser.add_argument(
+        "--checks-only", action="store_true",
+        help="Capture font and long-dropdown checks at all three sizes",
+    )
+    parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
+    args = parser.parse_args(argv)
+    OUTPUT_DIR = args.output_dir.resolve()
+    if args.native:
+        os.environ.pop("QT_QPA_PLATFORM", None)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="biliflow-docs-") as temp_dir:
         temp_root = Path(temp_dir)
@@ -616,6 +705,10 @@ def main() -> int:
         app.setProperty("docsTempRoot", str(temp_root))
 
         window = _make_main_window(temp_root / "workspace")
+        if args.checks_only:
+            _capture_platform_checks(app, theme, window)
+            window._live_controller.shutdown()
+            return 0
         _populate_main_window(window)
         _populate_live_page(window, temp_root / "workspace" / "demo-recording")
         preview = _make_batch_dialog()

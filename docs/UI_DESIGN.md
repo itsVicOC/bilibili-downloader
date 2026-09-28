@@ -22,7 +22,23 @@
 
 ## 主题资源
 
-颜色与尺寸集中在 `gui/resources/styles.py`，通过单一生成式 QSS 应用。系统深浅主题同步更新 QPalette、SVG 图标与绘制组件。字体沿用平台中文字体和 DPI 缩放；基准字号为标题 20pt、区块 12pt、正文 10pt、辅助 9pt，macOS 保留原有 1.15 倍字号修正。
+颜色与尺寸集中在 `gui/resources/styles.py`，通过单一生成式 QSS 应用。系统深浅主题同步更新 QPalette、SVG 图标与绘制组件。字体沿用平台中文字体；基准字号为标题 20pt、区块 12pt、正文 10pt、辅助 9pt，macOS 保留原有 1.15 倍字号修正，并以 96 逻辑 DPI 为预览基准补偿 Cocoa 的 72 DPI。Retina 的 2× 像素缩放由 Qt 处理，不再乘到字号上。Windows / Linux 保留系统点数字号与文字缩放行为。全局 QSS 明确指定所选字体族，确保加粗标题、表单和列表也使用同一中文字体。
+
+### 原生显示差异分析与复核（2026-09-28）
+
+用户提供的实机截图暴露了此前仅用 offscreen 检查的不足。原生 Cocoa 下，同样的 `11.5pt` 正文换算为 12 个逻辑像素，96 DPI offscreen 下为 15 个；原生加粗标题还回退到 `.AppleSystemUIFont`，而离线环境使用 `PingFang SC`。现在同时修正 DPI 换算与字体族，两个环境的正文都解析为 15px、页头为 31px，并均使用 `PingFang SC`。
+
+浮层探测中，380×40 的选择框在原生样式下生成了宽 362px、向左偏 7px 且覆盖选择框的菜单。Qt 使用样式的 `SC_ComboBoxListBoxPopup` 子控件区域定位浮层（见 [Qt 实现](https://github.com/qt/qtbase/blob/6.11/src/widgets/widgets/qcombobox.cpp#L2726)）。共享组件现在按完整输入框和所在屏幕的可用区域重新定位，宽度 380px，留出 4px 间距；原有 Qt 键盘、鼠标、模型与取消流程继续使用。
+
+以下为真实 macOS Cocoa、72 DPI、Retina 2× 渲染后按逻辑尺寸导出的截图，不使用生产账号、配置或录制服务。对应的 [渲染记录](images/native/rendering-profile.json) 包含字体解析、浮层位置、屏幕边界与遮挡检查。页签也已显式左对齐。
+
+| 尺寸 | 深色工作台 | 浅色工作台 | 深色长菜单 | 浅色长菜单 |
+|---|---|---|---|---|
+| 900×640 | [查看](images/native/biliflow-platform-download-dark-900.png) | [查看](images/native/biliflow-platform-download-light-900.png) | [查看](images/native/biliflow-platform-dropdown-dark-900.png) | [查看](images/native/biliflow-platform-dropdown-light-900.png) |
+| 1120×760 | [查看](images/native/biliflow-platform-download-dark-1120.png) | [查看](images/native/biliflow-platform-download-light-1120.png) | [查看](images/native/biliflow-platform-dropdown-dark-1120.png) | [查看](images/native/biliflow-platform-dropdown-light-1120.png) |
+| 1320×860 | [查看](images/native/biliflow-platform-download-dark-1320.png) | [查看](images/native/biliflow-platform-download-light-1320.png) | [查看](images/native/biliflow-platform-dropdown-dark-1320.png) | [查看](images/native/biliflow-platform-dropdown-light-1320.png) |
+
+可使用 `python scripts/capture_docs_screenshots.py --native --checks-only --output-dir docs/images/native` 重新生成原生检查。普通离线截图仍使用默认命令。原生检查额外覆盖字体族、实际像素字号、鼠标选择与关闭动画；屏幕边界回归覆盖上翻、空间不足及负坐标副屏。355 项 Python 测试通过，字体、浮层与布局的 32 项测试另在原生 macOS 环境通过；本机 Qt 版本为 6.11.2，具体环境以渲染记录为准。
 
 | 语义 | 深色 | 浅色 |
 |---|---|---|
@@ -55,7 +71,7 @@
 
 下载规格、直播画质、任务筛选和设置共用 `gui/widgets/combo_box.py` 的下拉组件。选择框保持 40px 高度与 2px 固定焦点边界；箭头随深浅主题、禁用及展开状态更新。展开列表使用 10px 圆角、6px 内边距和至少 40px 的选项行，当前项以淡粉背景、粉色文字与勾选标记展示；悬停和键盘移动使用局部描边，不改变已选值。
 
-最多同时展示 8 项，更多选项纵向滚动。长标题右侧省略，展开项及选择框均提供完整文字提示，避免长文本撑宽窗口。保留 Qt 的屏幕边界定位、鼠标选择、键盘上下选择、Enter 提交和 Esc 取消；禁用选项无法选择。取消、点击外部或切页关闭浮层后，箭头恢复收起状态。
+最多同时展示 8 项，更多选项纵向滚动。长标题右侧省略，展开项及选择框均提供完整文字提示，避免长文本撑宽窗口。菜单和输入框等宽对齐并保留 4px 间距，优先下方展开；所在屏幕的可用区域不足时上翻或缩短列表，避开系统菜单栏和 Dock，确保当前项仍可见。保留 Qt 的鼠标选择、键盘上下选择、Enter 提交和 Esc 取消；禁用选项无法选择。取消、点击外部或切页关闭浮层后，箭头恢复收起状态。
 
 「更多」及中文输入框右键菜单共用圆角表面、主题箭头、选中颜色、禁用文字和分隔线。菜单按钮给箭头单独留出空间，避免与文案重叠。
 
@@ -115,4 +131,4 @@
 
 布局回归覆盖两种主题、三种窗口尺寸、所有导航与页签，检查固定操作可见、主体无横向滚动。行为回归覆盖页面状态保留、单一直播服务、稳定 ID、批量失效与去重、设置草稿合并和离开提示、直播状态限制、历史展开与导出防重复。已有下载恢复、账号、版权、API、CLI 与录制测试一并执行。
 
-本轮 GUI 渲染与人工截图检查在 macOS 的 PySide6 offscreen 环境完成。Windows / Linux 原生窗口边框、平台字体替代、系统文件选择器及不同 DPI 的实际显示仍需对应平台检查；这些差异不由离线截图确认。直播原生引擎和真实长时录制的既有发布验收范围见[直播录制](LIVE_RECORDING.md#发布验收状态2026-09-28)。
+全页面 GUI 渲染在 macOS 的 PySide6 offscreen 和原生 Cocoa 环境完成。字体与长下拉列表另在真实 macOS Cocoa、72 DPI、Retina 2× 环境验证三种尺寸和深浅主题，并逐图检查；其余原生截图复看下载、直播、任务、设置及辅助弹窗的代表状态。Windows / Linux 原生窗口边框、平台字体替代、系统文件选择器及不同 DPI 的实际显示仍需对应平台检查；这些差异不由离线截图确认。直播原生引擎和真实长时录制的既有发布验收范围见[直播录制](LIVE_RECORDING.md#发布验收状态2026-09-28)。

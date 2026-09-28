@@ -7,10 +7,16 @@ from bilibili_downloader.gui.resources.styles import (
 )
 
 
-def load_stylesheet(is_dark: bool = True, font_scale: float = 1.0) -> str:
+def load_stylesheet(
+    is_dark: bool = True, font_scale: float = 1.0, font_family: str = ""
+) -> str:
     """Return the complete stylesheet for the requested system theme."""
     stylesheet = build_component_overrides(is_dark)
     stylesheet = scale_font_sizes(stylesheet, font_scale)
+    if font_family:
+        # Native bold labels can otherwise fall back to the platform widget font.
+        family = font_family.replace("\\", "\\\\").replace('"', '\\"')
+        stylesheet = f'* {{ font-family: "{family}"; }}\n' + stylesheet
     assets = {
         "__CHECKMARK_ICON__": "checkmark.svg",
         "__CHEVRON_ICON__": f"chevron-{'dark' if is_dark else 'light'}.svg",

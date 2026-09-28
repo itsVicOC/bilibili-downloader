@@ -232,6 +232,7 @@ def build_component_overrides(is_dark: bool) -> str:
     QProgressBar#ErrorProgress::chunk {{ background: {p.danger_border}; }}
     QProgressBar#WarningProgress::chunk {{ background: {p.warning}; }}
     QTabWidget::pane {{ border: none; background: transparent; padding-top: 16px; }}
+    QTabWidget::tab-bar {{ alignment: left; }}
     QTabBar::tab {{
         background: {p.surface_raised}; color: {p.muted}; border: 2px solid transparent;
         border-radius: 8px; min-height: 36px; padding: 0 18px; margin-right: 6px;
