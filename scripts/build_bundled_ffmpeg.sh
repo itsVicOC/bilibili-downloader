@@ -38,6 +38,13 @@ configure_args=(
     --enable-ffmpeg
     --enable-protocol=file
     --enable-demuxer=mov
+    --enable-demuxer=flv
+    --enable-demuxer=mpegts
+    --enable-parser=h264
+    --enable-parser=aac
+    --enable-decoder=aac
+    --enable-bsf=aac_adtstoasc
+    --enable-bsf=extract_extradata
     --enable-muxer=mp4
     --enable-muxer=ipod
     --enable-muxer=flac

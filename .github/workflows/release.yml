@@ -42,14 +42,18 @@ jobs:
             artifact_name: BilibiliDownloader-macOS
             archive_name: BilibiliDownloader-macOS
             ffmpeg_binary: ffmpeg
+            recorder_binary: biliflow-recorder
           - os: windows-latest
             label: Windows
             artifact_name: BilibiliDownloader-Windows
             archive_name: BilibiliDownloader-Windows
             ffmpeg_binary: ffmpeg.exe
+            recorder_binary: biliflow-recorder.exe
 
     env:
       QT_QPA_PLATFORM: offscreen
+      MACOSX_DEPLOYMENT_TARGET: '12.0'
+      RUSTFLAGS: ${{ matrix.label == 'Windows' && '-C target-feature=+crt-static' || '' }}
 
     steps:
       - name: Checkout
@@ -89,6 +93,14 @@ jobs:
       - name: Run tests
         run: pytest -q
 
+      - name: Set up pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.96.0 --profile minimal
+          rustup default 1.96.0
+
+      - name: Build production recorder
+        run: cargo build --release --locked --manifest-path native/recorder/Cargo.toml
+
       - name: Build application
         run: pyinstaller --noconfirm --clean BilibiliDownloader.spec
 
@@ -127,6 +139,23 @@ jobs:
           cyclonedx-py environment --output-format JSON
           --output-file ffmpeg-build/base.cdx.json
 
+      - name: Install fixture FFmpeg on macOS
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+
+      - name: Install fixture FFmpeg on Windows
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg --yes --no-progress
+
+      - name: Verify recorder fixtures and bundled MP4 export
+        shell: bash
+        run: |
+          cargo test --locked --manifest-path native/recorder/Cargo.toml
+          cargo build --locked --features test-fixtures --manifest-path native/recorder/Cargo.toml
+          python scripts/smoke_live_recorder.py \
+            --binary "native/recorder/target/debug/${{ matrix.recorder_binary }}" \
+            --remux-ffmpeg "ffmpeg-build/output/${{ matrix.ffmpeg_binary }}"
+
       - name: Prepare FFmpeg notice and variant SBOMs
         shell: bash
         run: |
@@ -136,6 +165,14 @@ jobs:
             --lite-sbom "${{ matrix.archive_name }}-lite-${RELEASE_ID}.cdx.json" \
             --full-sbom "${{ matrix.archive_name }}-full-${RELEASE_ID}.cdx.json" \
             --notice ffmpeg-build/output/FFMPEG-NOTICE.txt
+
+      - name: Prepare recorder notice and Rust dependency SBOM
+        shell: bash
+        run: |
+          python scripts/prepare_bundled_recorder.py \
+            --binary "native/recorder/target/release/${{ matrix.recorder_binary }}" \
+            --sbom "${{ matrix.archive_name }}-full-${RELEASE_ID}.cdx.json" \
+            --notice native/recorder/target/RECORDER-NOTICE.txt
 
       - name: Prepare macOS variants
         if: runner.os == 'macOS'
@@ -150,6 +187,8 @@ jobs:
           install -m 644 ffmpeg-build/output/FFMPEG-NOTICE.txt "$resources/FFMPEG-NOTICE.txt"
           install -m 644 ffmpeg-build/output/COPYING.LGPLv2.1 "$resources/COPYING.LGPLv2.1"
           install -m 644 ffmpeg-build/output/FFMPEG-LICENSE.md "$resources/FFMPEG-LICENSE.md"
+          install -m 755 native/recorder/target/release/biliflow-recorder "$resources/biliflow-recorder"
+          install -m 644 native/recorder/target/RECORDER-NOTICE.txt "$resources/RECORDER-NOTICE.txt"
 
       - name: Prepare Windows variants
         if: runner.os == 'Windows'
@@ -163,6 +202,8 @@ jobs:
           Copy-Item "ffmpeg-build/output/FFMPEG-NOTICE.txt" "$resources/FFMPEG-NOTICE.txt"
           Copy-Item "ffmpeg-build/output/COPYING.LGPLv2.1" "$resources/COPYING.LGPLv2.1"
           Copy-Item "ffmpeg-build/output/FFMPEG-LICENSE.md" "$resources/FFMPEG-LICENSE.md"
+          Copy-Item "native/recorder/target/release/biliflow-recorder.exe" "$resources/biliflow-recorder.exe"
+          Copy-Item "native/recorder/target/RECORDER-NOTICE.txt" "$resources/RECORDER-NOTICE.txt"
 
       - name: Verify bundled Windows FFmpeg is self-contained
         if: runner.os == 'Windows'
@@ -171,6 +212,7 @@ jobs:
           $smokeDir = Join-Path $env:RUNNER_TEMP "biliflow-ffmpeg-smoke"
           New-Item -ItemType Directory -Force -Path $smokeDir | Out-Null
           Copy-Item "dist/variants/full/BilibiliDownloader/ffmpeg.exe" "$smokeDir/ffmpeg.exe"
+          Copy-Item "dist/variants/full/BilibiliDownloader/biliflow-recorder.exe" "$smokeDir/biliflow-recorder.exe"
           $objdump = (Get-Command objdump.exe -ErrorAction Stop).Source
           & $objdump -p "$smokeDir/ffmpeg.exe" | Select-String "DLL Name:"
           $savedPath = $env:PATH
@@ -179,6 +221,10 @@ jobs:
             & "$smokeDir/ffmpeg.exe" -version
             if ($LASTEXITCODE -ne 0) {
               throw "Bundled FFmpeg failed outside the MSYS2 toolchain environment."
+            }
+            & "$smokeDir/biliflow-recorder.exe" --check
+            if ($LASTEXITCODE -ne 0) {
+              throw "Bundled recorder failed without the development environment."
             }
           } finally {
             $env:PATH = $savedPath
@@ -196,11 +242,34 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
+          refresh_media_metadata() {
+            resources="dist/variants/full/BilibiliDownloader.app/Contents/Resources"
+            python scripts/prepare_bundled_ffmpeg.py prepare \
+              --binary "$resources/ffmpeg" \
+              --base-sbom ffmpeg-build/base.cdx.json \
+              --lite-sbom "${{ matrix.archive_name }}-lite-${RELEASE_ID}.cdx.json" \
+              --full-sbom "${{ matrix.archive_name }}-full-${RELEASE_ID}.cdx.json" \
+              --notice "$resources/FFMPEG-NOTICE.txt"
+            python scripts/prepare_bundled_recorder.py \
+              --binary "$resources/biliflow-recorder" \
+              --sbom "${{ matrix.archive_name }}-full-${RELEASE_ID}.cdx.json" \
+              --notice "$resources/RECORDER-NOTICE.txt"
+          }
           if [ -z "$MACOS_CERTIFICATE" ]; then
             echo "macOS signing secrets are not configured; applying ad-hoc signatures."
             for variant in lite full; do
               app_path="dist/variants/$variant/BilibiliDownloader.app"
+              if [ "$variant" = "full" ]; then
+                for tool in ffmpeg biliflow-recorder; do
+                  codesign --force --sign - "$app_path/Contents/Resources/$tool"
+                done
+              fi
               codesign --force --deep --sign - "$app_path"
+              if [ "$variant" = "full" ]; then
+                refresh_media_metadata
+                # Re-seal resources without changing signed nested executables.
+                codesign --force --sign - "$app_path"
+              fi
               codesign --verify --deep --strict --verbose=2 "$app_path"
             done
             exit 0
@@ -228,8 +297,19 @@ jobs:
           for variant in lite full; do
             app_path="dist/variants/$variant/BilibiliDownloader.app"
             notarize_zip="$RUNNER_TEMP/BilibiliDownloader-$variant-notarize.zip"
+            if [ "$variant" = "full" ]; then
+              for tool in ffmpeg biliflow-recorder; do
+                codesign --force --options runtime --timestamp \
+                  --sign "$MACOS_SIGNING_IDENTITY" "$app_path/Contents/Resources/$tool"
+              done
+            fi
             codesign --force --deep --options runtime --timestamp \
               --sign "$MACOS_SIGNING_IDENTITY" "$app_path"
+            if [ "$variant" = "full" ]; then
+              refresh_media_metadata
+              codesign --force --options runtime --timestamp \
+                --sign "$MACOS_SIGNING_IDENTITY" "$app_path"
+            fi
             codesign --verify --deep --strict --verbose=2 "$app_path"
             ditto -c -k --sequesterRsrc --keepParent "$app_path" "$notarize_zip"
             xcrun notarytool submit "$notarize_zip" \

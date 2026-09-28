@@ -21,3 +21,4 @@ test_qr*.png
 .pytest_cache/
 .mypy_cache/
 .claude/
+native/recorder/target/

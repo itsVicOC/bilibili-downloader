@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, QThreadPool, QUrl
+from PySide6.QtCore import QSize, Qt, QThreadPool, QTimer, QUrl
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
@@ -69,6 +69,7 @@ from bilibili_downloader.gui.threads.resolve_worker import ResolveRunner, Resolv
 from bilibili_downloader.gui.widgets.chinese_input import ChineseLineEdit
 from bilibili_downloader.gui.widgets.download_list import DownloadListWidget
 from bilibili_downloader.gui.widgets.hero_panel import HeroPanel
+from bilibili_downloader.gui.widgets.live_page import LivePage
 from bilibili_downloader.gui.widgets.video_info import VideoInfoWidget
 from bilibili_downloader.utils.config import ConfigManager
 from bilibili_downloader.utils.validators import is_bilibili_url
@@ -133,6 +134,8 @@ class MainWindow(QMainWindow):
         previous = self._api_client
         self._api_client = self._create_api_client()
         self._retired_api_clients.append(previous)
+        if self._live_page.service:
+            self._live_page.service.command("auth", cookies=self._config.auth_cookies)
 
     def _setup_ui(self):
         """Build the main UI layout."""
@@ -173,7 +176,13 @@ class MainWindow(QMainWindow):
         side_layout.addWidget(section_label)
         home_btn = QPushButton("首页")
         home_btn.setObjectName("NavButtonActive")
+        home_btn.clicked.connect(lambda: self._show_workspace(0))
+        self._home_nav = home_btn
         side_layout.addWidget(home_btn)
+        self._live_nav = QPushButton("直播录制")
+        self._live_nav.setObjectName("NavButton")
+        self._live_nav.clicked.connect(lambda: self._show_workspace(1))
+        side_layout.addWidget(self._live_nav)
         batch_nav = QPushButton("批量导入")
         batch_nav.setObjectName("NavButton")
         batch_nav.clicked.connect(self._on_batch_clicked)
@@ -440,8 +449,23 @@ class MainWindow(QMainWindow):
         self._workspace_scroll.setFrameShape(QFrame.NoFrame)
         self._workspace_scroll.setAttribute(Qt.WA_MacShowFocusRect, False)
         self._workspace_scroll.setWidget(workspace)
-        shell.addWidget(self._workspace_scroll, 1)
+        self._workspace_pages = QStackedWidget()
+        self._workspace_pages.addWidget(self._workspace_scroll)
+        self._live_page = LivePage(self._config, self._confirm_copyright_acknowledgement, self)
+        self._live_page.settings_changed.connect(self._live_settings_changed)
+        self._workspace_pages.addWidget(self._live_page)
+        shell.addWidget(self._workspace_pages, 1)
         self._update_responsive_layout(self.width())
+
+    def _show_workspace(self, index):
+        self._workspace_pages.setCurrentIndex(index)
+        for button, active in ((self._home_nav, index == 0), (self._live_nav, index == 1)):
+            button.setObjectName("NavButtonActive" if active else "NavButton")
+            button.style().unpolish(button)
+            button.style().polish(button)
+
+    def _live_settings_changed(self, settings):
+        self._settings = settings
 
     def _create_checkbox(self, text: str, checked: bool):
         cb = QCheckBox(text)
@@ -1243,11 +1267,12 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent):
         """Cancel running downloads and close API client on window close."""
-        if self._download_list.has_active_workers and not self._close_confirmed:
+        live_service = self._live_page.service
+        if (self._download_list.has_active_workers or (live_service and live_service.active)) and not self._close_confirmed:
             answer = QMessageBox.question(
                 self,
                 "退出 BiliFlow",
-                "仍有下载任务正在运行。退出将保留断点数据，确认停止并退出吗？",
+                "仍有下载或直播录制正在运行。退出将停止录制并保留文件；直播离线期间无法补录。确认退出吗？",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No,
             )
@@ -1256,6 +1281,15 @@ class MainWindow(QMainWindow):
                 return
             self._close_confirmed = True
 
+        if live_service and not live_service.stopped:
+            self._close_confirmed = True
+            self._live_page.shutdown()
+            self._download_list.pause_all_workers()
+            event.ignore()
+            QTimer.singleShot(100, self.close)
+            return
+
+        self._live_page.shutdown()
         # Pause active workers so their durable tasks remain resumable.
         self._download_list.pause_all_workers()
         # Give both pools a short grace period before closing their shared clients.

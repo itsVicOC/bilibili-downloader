@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -126,6 +127,39 @@ class FFmpegManager:
             return False, f"FFmpeg check failed: {e}"
 
     @staticmethod
+    def build_live_remux_command(source: Path, output: Path, executable="ffmpeg") -> list[str]:
+        return [executable, "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+                "-protocol_whitelist", "file", "-i", str(source.resolve()),
+                "-map", "0:v:0", "-map", "0:a:0?", "-c", "copy",
+                "-movflags", "+faststart", str(output.resolve())]
+
+    @classmethod
+    def remux_live(cls, source: Path, output: Path, custom_path=None, cancel_checker=None):
+        exe = cls.find_executable(custom_path)
+        if exe is None:
+            return False, "未找到 FFmpeg，请安装 full 包或选择 FFmpeg 路径"
+        if source.resolve() == output.resolve():
+            return False, "导出路径不能覆盖录制源文件"
+        if output.suffix.lower() != ".mp4":
+            return False, "导出文件必须使用 .mp4 扩展名"
+        demuxer = {".flv": "flv", ".ts": "mpegts", ".m4s": "mov", ".mp4": "mov"}.get(source.suffix.lower())
+        if demuxer is None:
+            return False, "不支持此录制文件格式"
+        try:
+            result = subprocess.run([str(exe), "-hide_banner", "-demuxers"],
+                capture_output=True, timeout=5, **_subprocess_window_kwargs())
+            formats = (result.stdout + result.stderr).decode("utf-8", errors="replace")
+            if result.returncode or not any(demuxer in line.split()[1].split(',')
+                    for line in formats.splitlines() if len(line.split()) >= 2 and line.split()[0] == "D"):
+                return False, f"当前 FFmpeg 缺少 {demuxer} 输入支持，请更新 full 包或选择完整 FFmpeg"
+        except (OSError, subprocess.TimeoutExpired):
+            return False, "FFmpeg 能力检查失败"
+        output.parent.mkdir(parents=True, exist_ok=True)
+        temporary = output.with_name(f".{output.stem}.live-{uuid.uuid4().hex}.part.mp4")
+        return cls._execute_command(cls.build_live_remux_command(source, output, str(exe)),
+                                    output, cancel_checker, temporary_path=temporary)
+
+    @staticmethod
     def build_merge_command(
         video_path: Path,
         audio_path: Path,
@@ -216,9 +250,11 @@ class FFmpegManager:
         command: list[str],
         output_path: Path,
         cancel_checker: Optional[Callable[[], bool]],
+        *,
+        temporary_path: Optional[Path] = None,
     ) -> tuple[bool, str]:
         # Keep the media suffix so FFmpeg can infer the output container.
-        safe_output = output_path.with_name(
+        safe_output = temporary_path or output_path.with_name(
             f"{output_path.stem}.part{output_path.suffix}"
         )
         command = [*command[:-1], str(safe_output.resolve())]

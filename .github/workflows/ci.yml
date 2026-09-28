@@ -58,6 +58,48 @@ jobs:
       - name: Run static checks
         run: ruff check bilibili_downloader tests packaging_hooks scripts
 
+  recorder:
+    name: Native recorder (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '12.0'
+      RUSTFLAGS: ${{ matrix.os == 'windows-latest' && '-C target-feature=+crt-static' || '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+      - name: Install pinned Rust
+        run: |
+          rustup toolchain install 1.96.0 --profile minimal --component rustfmt --component clippy
+          rustup default 1.96.0
+      - name: Install fixture FFmpeg on macOS
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+      - name: Install fixture FFmpeg on Windows
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg --yes --no-progress
+      - name: Install fixture FFmpeg on Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Check native code
+        run: |
+          cargo fmt --manifest-path native/recorder/Cargo.toml -- --check
+          cargo clippy --manifest-path native/recorder/Cargo.toml --locked -- -D warnings
+          cargo test --manifest-path native/recorder/Cargo.toml --locked
+      - name: Build fixture-only recorder
+        run: cargo build --manifest-path native/recorder/Cargo.toml --locked --features test-fixtures
+      - name: Verify FLV, HLS-TS, HLS-fMP4 and stop/parent-exit handling
+        shell: bash
+        run: |
+          binary=native/recorder/target/debug/biliflow-recorder
+          if [ "$RUNNER_OS" = "Windows" ]; then binary="$binary.exe"; fi
+          python scripts/smoke_live_recorder.py --binary "$binary"
+
   dependency-audit:
     runs-on: ubuntu-latest
     steps:

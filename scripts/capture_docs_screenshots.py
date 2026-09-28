@@ -17,6 +17,11 @@ if str(PROJECT_ROOT) not in sys.path:
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication
 
+from bilibili_downloader.core.live_models import (
+    LiveRoom,
+    RecordingSegment,
+    RecordingSession,
+)
 from bilibili_downloader.core.models import (
     AppSettings,
     ContentKind,
@@ -228,6 +233,31 @@ def _make_settings_dialog() -> SettingsDialog:
     return dialog
 
 
+def _populate_live_page(window: MainWindow, workdir: Path) -> None:
+    page = window._live_page
+    page.service.shutdown()
+    page.service._snapshots = [
+        {"room_id": 100001, "author": "城市漫游（演示）", "title": "夜间散步 · 离线界面演示",
+         "enabled": True, "active": False, "state": "recording", "state_label": "录制中",
+         "detail": "原画 · AVC/AAC · FLV", "duration": 2592, "size": 2480000000,
+         "speed": 1300000, "qualities": [], "quality": 0,
+         "output_dir": str(workdir), "segment_seconds": 1800},
+        {"room_id": 100002, "author": "星轨电台（演示）", "title": "音乐与日常",
+         "enabled": True, "active": False, "state": "waiting", "state_label": "等待开播",
+         "detail": "等待下一场直播", "duration": 0, "size": 0, "speed": 0,
+         "qualities": [], "quality": 0, "output_dir": str(workdir), "segment_seconds": 1800},
+    ]
+    session = RecordingSession(id="demo-recording", room=LiveRoom(room_id=100001, author="城市漫游（演示）"),
+        directory=str(workdir), started_at="2026-09-27T12:00:00+00:00", status="completed",
+        ended_at="2026-09-27T13:00:00+00:00", quality_label="原画", format="flv",
+        segments=[RecordingSegment(path=str(workdir / "attempt_0001/part_000.flv"),
+            duration=1800, size=1700000000, finalized_at="2026-09-27T12:30:00+00:00")])
+    page.repository.save_session(session)
+    page.refresh()
+    page.history.expandAll()
+    window._show_workspace(1)
+
+
 def main() -> int:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     app = QApplication.instance() or QApplication(sys.argv)
@@ -249,6 +279,10 @@ def main() -> int:
         _populate_main_window(tasks_window)
         _save_widget(app, tasks_window, "biliflow-tasks.png")
 
+        live_window = _make_main_window(temp_root / "live")
+        _populate_live_page(live_window, temp_root / "live" / "demo-recording")
+        _save_widget(app, live_window, "biliflow-live.png")
+
         batch_dialog = _make_batch_dialog()
         _save_widget(app, batch_dialog, "biliflow-batch.png")
 
@@ -258,6 +292,10 @@ def main() -> int:
         login_dialog = LoginDialog(None)
         login_dialog.resize(560, 660)
         _save_widget(app, login_dialog, "biliflow-login.png")
+
+        for window in (empty_window, tasks_window, live_window):
+            window._live_page.service.shutdown()
+            window._live_page._lock_file.unlock()
 
     return 0
 

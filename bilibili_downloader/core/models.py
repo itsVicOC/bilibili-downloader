@@ -6,6 +6,8 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from bilibili_downloader.core.live_models import LiveSettings
+
 _VIDEO_QUALITY_LABELS = {
     6: "240P",
     16: "360P",
@@ -301,6 +303,8 @@ class DownloadOutcome(BaseModel):
 class AppSettings(BaseModel):
     """Application settings persisted to JSON."""
     model_config = ConfigDict(validate_assignment=True)
+
+    live: LiveSettings = Field(default_factory=LiveSettings)
 
     output_dir: str = Field(default_factory=lambda: str(Path.home() / "Downloads" / "bilibili"))
     default_quality: VideoQuality = VideoQuality.Q1080P

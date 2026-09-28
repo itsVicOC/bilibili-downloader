@@ -11,7 +11,19 @@ Release 中名称带 `full` 的 macOS 与 Windows 包包含独立的 FFmpeg 7.1 
 - 许可证：LGPL 2.1 or later
 - 对应源码：每个 Release 中的 `FFmpeg-7.1-source.tar.gz`
 
-发布构建禁用 GPL、nonfree、外部库、网络协议、编码器与解码器，只启用本项目需要的本地 MOV/MP4 读取和 MP4/M4A/FLAC 封装。每个 full 包内的 `FFMPEG-NOTICE.txt`、`COPYING.LGPLv2.1` 和 `FFMPEG-LICENSE.md` 分别记录实际构建信息、许可证全文和上游许可说明。FFmpeg 是由 BiliFlow 作为子进程调用的独立程序，不适用本项目的 MIT License。
+发布构建禁用 GPL、nonfree、外部库、网络协议与编码器，启用本地 MOV/MP4、FLV、MPEG-TS 读取和 MP4/M4A/FLAC 封装，以及 H.264/AAC parser、用于参数探测的 AAC 解码器和必要的 bitstream filters。每个 full 包内的 `FFMPEG-NOTICE.txt`、`COPYING.LGPLv2.1` 和 `FFMPEG-LICENSE.md` 分别记录实际构建信息、许可证全文和上游许可说明。FFmpeg 是由 BiliFlow 作为子进程调用的独立程序，不适用本项目的 MIT License。
+
+## Mesio / Rust live recorder
+
+开发分支的 full 构建包含 `biliflow-recorder`，通过管道调用固定 Mesio 库。lite 构建不携带该程序。
+
+- 上游：[hua0512/rust-srec](https://github.com/hua0512/rust-srec)
+- 固定提交：`1897d736a4560f267700d7c4c1cf02dffc3c4c56`（`mesio-v0.6.0`）
+- 工作区许可证声明：`MIT OR Apache-2.0`；发行通知保存对应源码中的 MIT 许可证全文。
+- 使用的核心 crate：`mesio-engine`、`flv-fix`、`hls-fix`、`pipeline-common`；确切版本和传递依赖见 `native/recorder/Cargo.lock`。
+- `RECORDER-NOTICE.txt` 包含每个已解析依赖的许可证/通知全文、源码标识、引擎版本与二进制及锁文件摘要。full CycloneDX SBOM 保存 Rust 组件、许可证表达式与依赖边。
+
+`alloc-stdlib` 0.2.4 的 crates.io 包未包含许可证文件；仓库在 `native/recorder/licenses/` 保存了其固定源码提交中的 BSD-3-Clause 文本，并在生成的发行通知中包含该文本。
 
 ## Microsoft Fluent Emoji
 

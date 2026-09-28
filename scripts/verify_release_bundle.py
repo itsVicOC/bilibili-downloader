@@ -100,6 +100,15 @@ def _verify_sbom(path: Path, requires_ffmpeg: bool) -> int:
             raise VerificationError(f"{path.name} has no FFmpeg binary hash")
     elif ffmpeg_components:
         raise VerificationError(f"{path.name} unexpectedly contains FFmpeg")
+    recorders = [c for c in components if c.get("name") == "biliflow-recorder"]
+    if requires_ffmpeg:
+        if len(recorders) != 1 or not recorders[0].get("hashes"):
+            raise VerificationError(f"{path.name} must contain the recorder and its binary hash")
+        properties = {p["name"]: p["value"] for p in recorders[0].get("properties", [])}
+        if properties.get("biliflow:mesio-revision") != "1897d736a4560f267700d7c4c1cf02dffc3c4c56":
+            raise VerificationError(f"{path.name} has an unpinned recorder engine")
+    elif recorders:
+        raise VerificationError(f"{path.name} unexpectedly contains the recorder")
     return len(components)
 
 
@@ -120,6 +129,26 @@ def _verify_source_archive(path: Path) -> int:
         if not any(name.name == suffix for name in names):
             raise VerificationError(f"{path.name} does not contain {suffix!r}")
     return len(members)
+
+
+def _verify_media_hashes(archive_path: Path, sbom_path: Path, platform_root: str) -> None:
+    try:
+        payload = json.loads(sbom_path.read_text(encoding="utf-8"))
+        components = {c["name"]: c for c in payload["components"]}
+        suffix = "" if "macOS" in archive_path.name else ".exe"
+        with zipfile.ZipFile(archive_path) as archive:
+            for component, filename in (("FFmpeg", "ffmpeg"), ("biliflow-recorder", "biliflow-recorder")):
+                expected = next(h["content"] for h in components[component]["hashes"] if h["alg"] == "SHA-256")
+                digest = hashlib.sha256()
+                with archive.open(platform_root + filename + suffix) as binary:
+                    for chunk in iter(lambda: binary.read(1024 * 1024), b""):
+                        digest.update(chunk)
+                if digest.hexdigest() != expected:
+                    raise VerificationError(f"{archive_path.name}: {component} hash differs from SBOM (check post-signing metadata)")
+    except (KeyError, StopIteration, ValueError) as exc:
+        if isinstance(exc, VerificationError):
+            raise
+        raise VerificationError(f"{sbom_path.name} has invalid media component hashes") from exc
 
 
 def _read_checksums(path: Path) -> dict[str, str]:
@@ -217,6 +246,8 @@ def verify_release_bundle(directory: Path, release_id: str) -> dict[str, int]:
                         "FFMPEG-NOTICE.txt",
                         "COPYING.LGPLv2.1",
                         "FFMPEG-LICENSE.md",
+                        "biliflow-recorder" if "macOS" in filename else "biliflow-recorder.exe",
+                        "RECORDER-NOTICE.txt",
                     )
                 )
                 forbidden = ()
@@ -225,10 +256,14 @@ def verify_release_bundle(directory: Path, release_id: str) -> dict[str, int]:
                 forbidden = (
                     "Contents/Resources/ffmpeg",
                     "BilibiliDownloader/ffmpeg.exe",
+                    "Contents/Resources/biliflow-recorder",
+                    "BilibiliDownloader/biliflow-recorder.exe",
                 )
             counts["archive_members"] += _verify_archive(
                 path, expected, required, forbidden
             )
+            if includes_ffmpeg:
+                _verify_media_hashes(path, path.with_suffix(".cdx.json"), platform_root)
         elif kind == "sbom":
             counts["sboms"] += 1
             counts["components"] += _verify_sbom(path, includes_ffmpeg)

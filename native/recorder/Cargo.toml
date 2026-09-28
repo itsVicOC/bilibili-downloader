@@ -1,0 +1,33 @@
+[package]
+name = "biliflow-recorder"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+
+[features]
+# Local HTTP fixtures are deliberately unavailable in distributed builds.
+test-fixtures = []
+
+[dependencies]
+mesio-engine = { git = "https://github.com/hua0512/rust-srec", rev = "1897d736a4560f267700d7c4c1cf02dffc3c4c56" }
+flv-fix = { git = "https://github.com/hua0512/rust-srec", rev = "1897d736a4560f267700d7c4c1cf02dffc3c4c56", default-features = false }
+hls-fix = { git = "https://github.com/hua0512/rust-srec", rev = "1897d736a4560f267700d7c4c1cf02dffc3c4c56", default-features = false }
+pipeline-common = { git = "https://github.com/hua0512/rust-srec", rev = "1897d736a4560f267700d7c4c1cf02dffc3c4c56" }
+flv = { git = "https://github.com/hua0512/rust-srec", rev = "1897d736a4560f267700d7c4c1cf02dffc3c4c56" }
+tokio = { version = "1.51", features = ["full"] }
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+url = "2.5"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots-no-provider", "stream"] }
+axum = "0.8"
+base64 = "0.22"
+regex = "1"
+uuid = { version = "1", features = ["v4"] }
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std", "tls12"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

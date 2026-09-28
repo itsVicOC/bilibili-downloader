@@ -31,6 +31,8 @@ def _write_zip(path: Path, executable: str, includes_ffmpeg: bool) -> None:
             archive.writestr(root + "FFMPEG-NOTICE.txt", b"notice")
             archive.writestr(root + "COPYING.LGPLv2.1", b"license")
             archive.writestr(root + "FFMPEG-LICENSE.md", b"upstream")
+            archive.writestr(root + ("biliflow-recorder" if "macOS" in path.name else "biliflow-recorder.exe"), b"recorder")
+            archive.writestr(root + "RECORDER-NOTICE.txt", b"recorder notice")
 
 
 def _write_source_archive(path: Path) -> None:
@@ -76,9 +78,13 @@ def _write_bundle(directory: Path, monkeypatch: pytest.MonkeyPatch) -> None:
                     {
                         "name": "FFmpeg",
                         "version": "7.1",
-                        "hashes": [{"alg": "SHA-256", "content": "0" * 64}],
+                        "hashes": [{"alg": "SHA-256", "content": hashlib.sha256(b"ffmpeg").hexdigest()}],
                     }
                 )
+                payload["components"].append({"name": "biliflow-recorder", "version": "0.1.0",
+                    "hashes": [{"alg": "SHA-256", "content": hashlib.sha256(b"recorder").hexdigest()}],
+                    "properties": [{"name": "biliflow:mesio-revision",
+                                    "value": "1897d736a4560f267700d7c4c1cf02dffc3c4c56"}]})
             path = directory / (
                 f"BilibiliDownloader-{platform}-{variant}-{RELEASE_ID}.cdx.json"
             )
@@ -115,7 +121,7 @@ def test_verify_release_bundle_accepts_complete_bundle(
 
     assert counts["archives"] == 4
     assert counts["sboms"] == 4
-    assert counts["components"] == 6
+    assert counts["components"] == 8
     assert counts["source_files"] == 3
 
 
@@ -206,4 +212,14 @@ def test_verify_release_bundle_rejects_incomplete_full_archive(
         )
 
     with pytest.raises(VerificationError, match="required file"):
+        verify_release_bundle(tmp_path, RELEASE_ID)
+
+
+def test_verify_release_bundle_rejects_pre_signing_media_hash(tmp_path, monkeypatch):
+    _write_bundle(tmp_path, monkeypatch)
+    sbom = tmp_path / f"BilibiliDownloader-macOS-full-{RELEASE_ID}.cdx.json"
+    payload = json.loads(sbom.read_text())
+    next(c for c in payload["components"] if c["name"] == "biliflow-recorder")["hashes"][0]["content"] = "0" * 64
+    sbom.write_text(json.dumps(payload))
+    with pytest.raises(VerificationError, match="hash differs from SBOM"):
         verify_release_bundle(tmp_path, RELEASE_ID)

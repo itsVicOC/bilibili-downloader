@@ -2,6 +2,20 @@
 
 本项目遵循语义化版本。日期使用 `YYYY-MM-DD` 格式。
 
+## Unreleased
+
+### Added
+
+- 新增直播录制页、房间订阅、自动/手动录制、停止本场、并发控制、分段、重连、空间保护、历史与 MP4 导出。
+- 新增基于固定 Mesio 源码的 Rust 适配程序、JSON Lines 进程协议及独立 `live.sqlite3`，应用退出时封口，异常中断保留文件并记录缺口。
+- full 构建包含生产录制引擎和 Rust 依赖许可证/SBOM；lite 可选择外部引擎。新增跨平台原生和媒体夹具测试。
+
+### Changed
+
+- 最小 LGPL FFmpeg 增加本地 FLV、MPEG-TS 输入、H.264/AAC 解析、AAC 参数探测和 MP4 所需 bitstream filters，继续禁用网络与编码器。
+
+直播功能尚待双平台安装包实机与双路 8 小时测试，通过前不声明可正式发布，详见 `docs/LIVE_RECORDING.md`。
+
 ## v0.7.1 - 2026-09-22
 
 ### Fixed

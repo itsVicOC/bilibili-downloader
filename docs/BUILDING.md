@@ -24,6 +24,7 @@ bilibili_downloader/
 ├── gui/          # PySide6 窗口、对话框、控件、线程与视觉资源
 └── utils/        # 配置和输入验证
 scripts/          # 可复现的资源构建脚本
+native/recorder/  # Rust / Mesio 直播适配程序与 Cargo.lock
 tests/            # 单元与回归测试
 ```
 
@@ -92,7 +93,7 @@ pyinstaller --noconfirm --clean BilibiliDownloader.spec
 - spec 根据平台选择 `app_icon.icns`、`app_icon.ico` 或 `app_icon.png`。
 - `packaging_hooks/hook-keyring.py` 只收集目标系统的凭据库后端，避免携带其他平台实现。
 
-Release 的 full 变体还会从锁定的 FFmpeg 7.1 提交构建最小 LGPL 可执行文件。下载脚本会先核对源码 SHA-256，构建仅启用本地文件协议、MOV/MP4 输入以及 MP4、M4A、FLAC 输出，不包含网络协议、编码器、解码器、GPL 或 nonfree 组件；macOS 编译和链接部署目标固定为 12.0：
+Release 的 full 变体还会从锁定的 FFmpeg 7.1 提交构建最小 LGPL 可执行文件。下载脚本会先核对源码 SHA-256。构建启用本地文件协议、MOV/MP4、FLV、MPEG-TS 输入和 MP4、M4A、FLAC 输出，包含 H.264/AAC parser、AAC 解码器（用于 MPEG-TS 音频参数探测）及转封装所需 bitstream filters；导出始终使用 `-c copy`，不启用网络协议、编码器、GPL 或 nonfree 组件。macOS 编译和链接部署目标固定为 12.0：
 
 ```bash
 python scripts/prepare_bundled_ffmpeg.py download-source \
@@ -102,6 +103,10 @@ bash scripts/build_bundled_ffmpeg.sh \
 ```
 
 `prepare_bundled_ffmpeg.py prepare` 会验证版本、构建参数和 LGPL 声明，再生成构建通知及 full/lite SBOM。不要用未经该检查的预编译 FFmpeg 替换发布输入。
+
+full 构建还包含 `biliflow-recorder`。使用 Rust 1.96.0 和 `cargo build --release --locked --manifest-path native/recorder/Cargo.toml` 构建；Windows 设置 `RUSTFLAGS=-C target-feature=+crt-static`，macOS 设置 `MACOSX_DEPLOYMENT_TARGET=12.0`。源码与所有 crate 版本已固定。运行 `scripts/prepare_bundled_recorder.py` 为 full SBOM 添加 Rust 依赖图、二进制/锁文件摘要，并从实际依赖源收集 `RECORDER-NOTICE.txt`。具体命令和验收状态见[直播录制](LIVE_RECORDING.md)。
+
+原生 CI 在 macOS、Windows、Linux 上运行协议策略测试和生成媒体测试；Release 工作流用刚编译的最小 FFmpeg 再次检查 FLV/HLS 导出。夹具构建的 `test-fixtures` 特性只用于本机 HTTP 样本，禁止分发，准备包时会拒绝此类二进制。正式发布前必须完成直播文档列出的双平台实机和双路 8 小时门槛。
 
 构建后至少验证冻结 CLI 和包版本。macOS 还应验证应用包签名结构：
 
