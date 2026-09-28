@@ -8,6 +8,7 @@ import sys
 import threading
 import time
 from concurrent.futures import Future
+from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -174,9 +175,9 @@ def test_repository_recovers_sessions_and_does_not_store_credentials(tmp_path):
     repository.save_session(session)
     assert repository.recover_interrupted()[0].status == "interrupted"
     assert repository.sessions()[0].warnings
-    contents = (tmp_path / "manifest.json").read_text()
+    contents = (tmp_path / "manifest.json").read_text(encoding="utf-8")
     assert "hidden" not in contents and "sign=secret" not in contents
-    with sqlite3.connect(repository.path) as db:
+    with closing(sqlite3.connect(repository.path)) as db, db:
         assert (
             "secret"
             not in db.execute("SELECT payload FROM subscriptions").fetchone()[0]
@@ -185,11 +186,11 @@ def test_repository_recovers_sessions_and_does_not_store_credentials(tmp_path):
 
 def test_repository_preserves_newer_database_and_quarantines_corruption(tmp_path):
     path = tmp_path / "live.sqlite3"
-    with sqlite3.connect(path) as db:
+    with closing(sqlite3.connect(path)) as db, db:
         db.execute("PRAGMA user_version=9")
     with pytest.raises(TaskDatabaseVersionError):
         LiveRepository(path)
-    with sqlite3.connect(path) as db:
+    with closing(sqlite3.connect(path)) as db, db:
         assert db.execute("PRAGMA user_version").fetchone()[0] == 9
     path.unlink()
     path.write_bytes(b"broken database")
@@ -308,7 +309,7 @@ def test_automatic_recording_normalizes_and_deduplicates(service):
     assert "已在列表中" in service.messages()[0]
     assert (
         "sign=secret"
-        not in Path(runtime.session.directory, "manifest.json").read_text()
+        not in Path(runtime.session.directory, "manifest.json").read_text(encoding="utf-8")
     )
 
 
@@ -540,7 +541,7 @@ def test_corrupt_history_row_does_not_hide_valid_rows(tmp_path):
     repository.save_subscription(
         LiveSubscription(room=LiveRoom(room_id=1), output_dir=str(tmp_path))
     )
-    with sqlite3.connect(repository.path) as db:
+    with closing(sqlite3.connect(repository.path)) as db, db:
         db.execute("INSERT INTO subscriptions VALUES (2, 'not json')")
     assert len(repository.subscriptions()) == 1
     assert repository.invalid_records
