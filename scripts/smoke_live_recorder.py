@@ -8,6 +8,7 @@ import argparse
 import functools
 import json
 import queue
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -18,6 +19,10 @@ from pathlib import Path
 
 
 def generate(root, ffmpeg):
+    executable = shutil.which(ffmpeg)
+    if executable is None:
+        raise FileNotFoundError(f"Fixture FFmpeg not found: {ffmpeg}")
+    ffmpeg = str(Path(executable).resolve())
     base = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y"]
     subprocess.run(
         [
@@ -66,10 +71,15 @@ def generate(root, ffmpeg):
                 "0",
                 "-hls_segment_type",
                 kind,
-                str(directory / "index.m3u8"),
+                "index.m3u8",
             ],
+            cwd=directory,
             check=True,
         )
+        if kind == "fmp4":
+            assert (directory / "init.mp4").is_file(), (
+                "Missing fMP4 fixture initialization segment"
+            )
     second = root / "changed"
     second.mkdir()
     subprocess.run(
@@ -129,10 +139,15 @@ def generate(root, ffmpeg):
                 "0",
                 "-hls_segment_type",
                 kind,
-                str(directory / "index.m3u8"),
+                "index.m3u8",
             ],
+            cwd=directory,
             check=True,
         )
+        if kind == "fmp4":
+            assert (directory / "init.mp4").is_file(), (
+                "Missing changed fMP4 fixture initialization segment"
+            )
 
         def lines(path, prefix):
             result = []
@@ -311,7 +326,7 @@ def main():
         if args.work_dir
         else tempfile.TemporaryDirectory(prefix="biliflow-live-smoke-")
     ) as temporary:
-        root = Path(temporary)
+        root = Path(temporary).resolve()
         root.mkdir(parents=True, exist_ok=True)
         generate(root, args.ffmpeg)
         print(
