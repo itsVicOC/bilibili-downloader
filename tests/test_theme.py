@@ -3,7 +3,7 @@
 import sys
 
 import pytest
-from PySide6.QtGui import QFont, QFontInfo
+from PySide6.QtGui import QFont, QFontInfo, QFontMetricsF
 from PySide6.QtWidgets import QLabel, QLineEdit
 
 from bilibili_downloader.gui.resources import load_stylesheet
@@ -60,7 +60,19 @@ def test_theme_applies_same_font_to_body_and_native_bold_labels(qapp, qtbot):
         for widget, points in ((body, 10), (heading, 20)):
             info = QFontInfo(widget.font())
             assert info.family() == QFontInfo(qapp.font()).family()
-            assert abs(info.pixelSize() - points * factor * reference_dpi / 72) <= 1
+            # Windows can report -1 for a point-sized font's pixelSize().
+            # Compare actual paint-device metrics against the intended size.
+            expected = QFont(qapp.font())
+            expected.setPointSizeF(points * factor * reference_dpi / dpi)
+            expected.setWeight(widget.font().weight())
+            actual_metrics = QFontMetricsF(widget.font(), widget)
+            expected_metrics = QFontMetricsF(expected, widget)
+            assert actual_metrics.height() == pytest.approx(
+                expected_metrics.height(), abs=0.5
+            )
+            assert actual_metrics.horizontalAdvance("视频下载1080P60") == pytest.approx(
+                expected_metrics.horizontalAdvance("视频下载1080P60"), abs=0.5
+            )
     finally:
         qapp.styleHints().colorSchemeChanged.disconnect(theme._on_color_scheme_changed)
         theme.deleteLater()
