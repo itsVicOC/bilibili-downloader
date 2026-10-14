@@ -97,7 +97,7 @@
 
 ## 全页面截图矩阵
 
-运行 `python scripts/capture_docs_screenshots.py` 可重新生成。脚本使用临时配置、临时数据库、模拟直播服务和离线作品；不启动下载、直播拉流或真实 MP4 导出。以下 54 张截图覆盖每个工作区页签与三种尺寸。
+运行 `python scripts/capture_docs_screenshots.py` 可重新生成；`--updates-only` 只更新设置页签和更新弹窗。脚本使用临时配置、临时数据库、模拟直播服务和离线作品；不启动下载、直播拉流或真实 MP4 导出。以下 60 张截图覆盖每个工作区页签与三种尺寸。
 
 | 页面 | 深色 900×640 | 浅色 900×640 | 深色 1120×760 | 浅色 1120×760 | 深色 1320×860 | 浅色 1320×860 |
 |---|---|---|---|---|---|---|
@@ -110,6 +110,9 @@
 | 下载设置 | [查看](images/biliflow-settings-dark-900.png) | [查看](images/biliflow-settings-light-900.png) | [查看](images/biliflow-settings-dark-1120.png) | [查看](images/biliflow-settings-light-1120.png) | [查看](images/biliflow-settings-dark-1320.png) | [查看](images/biliflow-settings-light-1320.png) |
 | 直播设置 | [查看](images/biliflow-live-settings-dark-900.png) | [查看](images/biliflow-live-settings-light-900.png) | [查看](images/biliflow-live-settings-dark-1120.png) | [查看](images/biliflow-live-settings-light-1120.png) | [查看](images/biliflow-live-settings-dark-1320.png) | [查看](images/biliflow-live-settings-light-1320.png) |
 | 工具与存储 | [查看](images/biliflow-tools-dark-900.png) | [查看](images/biliflow-tools-light-900.png) | [查看](images/biliflow-tools-dark-1120.png) | [查看](images/biliflow-tools-light-1120.png) | [查看](images/biliflow-tools-dark-1320.png) | [查看](images/biliflow-tools-light-1320.png) |
+| 软件更新 | [查看](images/biliflow-updates-dark-900.png) | [查看](images/biliflow-updates-light-900.png) | [查看](images/biliflow-updates-dark-1120.png) | [查看](images/biliflow-updates-light-1120.png) | [查看](images/biliflow-updates-dark-1320.png) | [查看](images/biliflow-updates-light-1320.png) |
+
+更新选择弹窗提供可滚动的纯文本说明和三种操作：[深色](images/biliflow-dialog-update.png)、[浅色](images/biliflow-dialog-update-light.png)。软件更新页支持后台检查状态、下载进度、取消下载、稍后安装和手动安装入口；沿用现有卡片、按钮和主题。
 
 ## 关键状态与弹窗
 

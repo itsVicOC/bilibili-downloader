@@ -104,6 +104,9 @@ jobs:
       - name: Build application
         run: pyinstaller --noconfirm --clean BilibiliDownloader.spec
 
+      - name: Build standalone updater
+        run: pyinstaller --noconfirm --clean BiliFlowUpdater.spec
+
       - name: Verify frozen CLI
         shell: bash
         run: |
@@ -230,6 +233,40 @@ jobs:
             $env:PATH = $savedPath
           }
 
+      - name: Embed updater and build descriptors
+        shell: bash
+        run: |
+          for variant in lite full; do
+            if [ "$RUNNER_OS" = "macOS" ]; then
+              root="dist/variants/$variant/BilibiliDownloader.app"
+              helper="dist/biliflow-updater"
+            else
+              root="dist/variants/$variant/BilibiliDownloader"
+              helper="dist/biliflow-updater.exe"
+            fi
+            python -m scripts.prepare_update_bundle --root "$root" --helper "$helper" \
+              --platform "${{ matrix.label }}" --variant "$variant"
+          done
+
+      - name: Verify standalone updater
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            dist/biliflow-updater.exe --help
+          else
+            dist/biliflow-updater --help
+          fi
+
+      - name: Verify frozen update installation and rollback
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            helper="dist/biliflow-updater.exe"
+          else
+            helper="dist/biliflow-updater"
+          fi
+          python -m scripts.smoke_updater --helper "$helper" --platform "${{ matrix.label }}"
+
       - name: Sign and notarize macOS variants
         if: runner.os == 'macOS'
         shell: bash
@@ -259,6 +296,7 @@ jobs:
             echo "macOS signing secrets are not configured; applying ad-hoc signatures."
             for variant in lite full; do
               app_path="dist/variants/$variant/BilibiliDownloader.app"
+              codesign --force --sign - "$app_path/Contents/Resources/biliflow-updater"
               if [ "$variant" = "full" ]; then
                 for tool in ffmpeg biliflow-recorder; do
                   codesign --force --sign - "$app_path/Contents/Resources/$tool"
@@ -294,9 +332,16 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain_path"
           security list-keychains -d user -s "$keychain_path"
 
+          # One-file helpers must sign their embedded libraries before packaging.
+          MACOS_UPDATER_SIGNING_IDENTITY="$MACOS_SIGNING_IDENTITY" \
+            pyinstaller --noconfirm --clean BiliFlowUpdater.spec
+
           for variant in lite full; do
             app_path="dist/variants/$variant/BilibiliDownloader.app"
             notarize_zip="$RUNNER_TEMP/BilibiliDownloader-$variant-notarize.zip"
+            install -m 755 dist/biliflow-updater "$app_path/Contents/Resources/biliflow-updater"
+            codesign --force --options runtime --timestamp \
+              --sign "$MACOS_SIGNING_IDENTITY" "$app_path/Contents/Resources/biliflow-updater"
             if [ "$variant" = "full" ]; then
               for tool in ffmpeg biliflow-recorder; do
                 codesign --force --options runtime --timestamp \
@@ -361,6 +406,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      - name: Set up Python for bundle verification
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+
+      - name: Install bundle verification dependency
+        run: python -m pip install packaging==26.2
+
       - name: Download build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -383,7 +436,7 @@ jobs:
           shasum -a 256 *.zip *.cdx.json *.tar.gz > SHA256SUMS.txt
 
       - name: Verify release bundle
-        run: python3 scripts/verify_release_bundle.py release-assets --release-id "$RELEASE_ID"
+        run: python -m scripts.verify_release_bundle release-assets --release-id "$RELEASE_ID"
 
       - name: Upload verified release bundle
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -409,12 +462,30 @@ jobs:
           name: BilibiliDownloader-release-${{ env.RELEASE_ID }}
           path: release-assets
 
+      - name: Set up Python for release version parsing
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+
+      - name: Detect release channel
+        id: version
+        shell: bash
+        run: |
+          python -m pip install packaging==26.2
+          python - <<'PY'
+          import os
+          from packaging.version import Version
+          prerelease = Version(os.environ["GITHUB_REF_NAME"]).is_prerelease
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"prerelease={str(prerelease).lower()}\n")
+          PY
+
       - name: Publish release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
           name: Bilibili Downloader ${{ github.ref_name }}
           body_path: release-assets/release-notes.md
-          prerelease: ${{ contains(github.ref_name, 'rc') }}
+          prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
           files: |
             release-assets/*.zip
             release-assets/*.cdx.json

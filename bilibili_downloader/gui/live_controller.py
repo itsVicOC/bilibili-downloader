@@ -19,9 +19,10 @@ class LiveUiController(QObject):
     export_changed = Signal(bool, str)
     addition_changed = Signal(bool)
 
-    def __init__(self, config, parent=None, service_factory=LiveService):
+    def __init__(self, config, parent=None, service_factory=LiveService, *, autostart=True):
         super().__init__(parent)
         self.config = config
+        self._service_factory = service_factory
         self.service = None
         self.repository = None
         self.rows = []
@@ -29,6 +30,7 @@ class LiveUiController(QObject):
         self.message = ""
         self.message_tone = "info"
         self.export_path = ""
+        self.export_destination = ""
         self.exporting = False
         self.adding = False
         self._addition_ids = set()
@@ -50,7 +52,8 @@ class LiveUiController(QObject):
             self.service = service_factory(
                 self.repository, config.load().live, config.auth_cookies
             )
-            self.service.start()
+            if autostart:
+                self.service.start()
             self.destroyed.connect(self.service.request_shutdown)
             if self.repository.recovered_database_path:
                 self.notify("损坏的直播数据库已隔离备份，请重新添加直播间", "warning")
@@ -129,6 +132,7 @@ class LiveUiController(QObject):
             return
         self._cancel.clear()
         self.export_path = ""
+        self.export_destination = str(output)
         self.exporting = True
         self._export = self._exports.submit(
             FFmpegManager.remux_live,
@@ -151,3 +155,34 @@ class LiveUiController(QObject):
         else:
             self.lock.unlock()
         self._exports.shutdown(wait=False, cancel_futures=True)
+
+    @property
+    def background_stopped(self):
+        return (self.service is None or self.service.stopped) and (
+            self._export is None or self._export.done()
+        )
+
+    def start_background(self):
+        if self.service and not self._closed:
+            self.service.start()
+
+    def restart_after_update_abort(self):
+        if not self.background_stopped:
+            return False
+        self.lock.unlock()
+        self._closed = False
+        self._cancel.clear()
+        self._export = None
+        self.exporting = False
+        self._exports = ThreadPoolExecutor(max_workers=1, thread_name_prefix="live-export")
+        try:
+            if not self.lock.tryLock(0):
+                raise RuntimeError("另一个实例正在管理直播录制，请重新打开软件")
+            self.service = self._service_factory(self.repository, self.config.load().live, self.config.auth_cookies)
+            self.service.start()
+            self.destroyed.connect(self.service.request_shutdown)
+        except Exception as exc:
+            self.notify(str(exc), "danger")
+            self.service = None
+        self.timer.start(1000)
+        return True

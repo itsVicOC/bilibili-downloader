@@ -9,6 +9,12 @@ from pathlib import Path
 
 import pytest
 
+from bilibili_downloader import __version__
+from bilibili_downloader.core.update_protocol import (
+    BUILD_INFO_FILENAME,
+    BuildInfo,
+    build_payload,
+)
 from scripts import verify_release_bundle as verifier
 from scripts.prepare_bundled_ffmpeg import FFMPEG_SOURCE_FILENAME
 from scripts.verify_release_bundle import VerificationError, verify_release_bundle
@@ -19,7 +25,13 @@ RELEASE_ID = "dry-run-42"
 def _write_zip(path: Path, executable: str, includes_ffmpeg: bool) -> None:
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr(executable, b"binary")
-        archive.writestr("README.txt", b"release")
+        system = "macOS" if "macOS" in path.name else "Windows"
+        build = BuildInfo(__version__, system, "x86_64", "full" if includes_ffmpeg else "lite")
+        root = build.archive_root + "/"
+        resources = root + (build.resource_dir + "/" if build.resource_dir else "")
+        archive.writestr(root + "README.txt", b"release")
+        archive.writestr(resources + BUILD_INFO_FILENAME, json.dumps(build_payload(build)))
+        archive.writestr(resources + build.helper, b"helper")
         if includes_ffmpeg:
             if "macOS" in path.name:
                 root = "BilibiliDownloader.app/Contents/Resources/"

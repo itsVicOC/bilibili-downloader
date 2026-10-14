@@ -122,9 +122,15 @@ def main():
     args = parser.parse_args()
 
     if args.command == "test":
-        _cli_test(args.source)
+        from bilibili_downloader.core.update_protocol import RuntimeLease
+        from bilibili_downloader.utils.config import DEFAULT_CONFIG_PATH
+        with RuntimeLease(DEFAULT_CONFIG_PATH.parent / "runtime.lock"):
+            _cli_test(args.source)
     elif args.command == "download":
-        _cli_download(args)
+        from bilibili_downloader.core.update_protocol import RuntimeLease
+        from bilibili_downloader.utils.config import DEFAULT_CONFIG_PATH
+        with RuntimeLease(DEFAULT_CONFIG_PATH.parent / "runtime.lock"):
+            _cli_download(args)
     else:
         # Default: launch GUI
         _launch_gui()
@@ -343,12 +349,19 @@ def _confirm_cli_copyright(flag_acknowledged: bool) -> bool:
 def _launch_gui():
     """Launch the PySide6 GUI application."""
     try:
+        from PySide6.QtCore import QTimer
         from PySide6.QtGui import QIcon
         from PySide6.QtWidgets import QApplication
 
+        from bilibili_downloader.core.update_protocol import RuntimeLease, atomic_json
         from bilibili_downloader.gui.main_window import MainWindow
         from bilibili_downloader.gui.resources.paths import asset_path
         from bilibili_downloader.gui.resources.theme import ThemeManager
+        from bilibili_downloader.utils.config import ConfigManager
+        from bilibili_downloader.utils.update_startup import (
+            startup_failure,
+            startup_transaction,
+        )
     except ImportError:
         print("PySide6 not installed. Install with: pip install PySide6")
         print("Or use CLI mode: python -m bilibili_downloader test <BV_number>")
@@ -360,12 +373,47 @@ def _launch_gui():
     app.setWindowIcon(QIcon(asset_path("app_icon.png")))
     theme_manager = ThemeManager(app)
 
-    window = MainWindow()
-    window.show()
+    config = ConfigManager()
+    transaction = startup_transaction(config.data_dir)
+    failure = startup_failure(config.data_dir)
+    lease = RuntimeLease(config.data_dir / "runtime.lock")
+    if transaction is None and not lease.acquire():
+        from bilibili_downloader.gui.widgets.components import MessageBox
+        MessageBox("正在安装更新", "更新程序正在替换应用，请稍后重新打开。", tone="warning").exec()
+        return
+    try:
+        window = MainWindow(config, startup_paused=transaction is not None)
+        window.show()
+        if transaction:
+            path, value = transaction
+            window.centralWidget().setEnabled(False)
+            QTimer.singleShot(0, lambda: atomic_json(path.parent / "startup-ready.json", {"token": value["token"], "version": value["build"]["version"]}))
+            timer = QTimer(window)
+            timer.setInterval(100)
 
-    # Keep the controller alive for system theme change notifications.
-    app._theme_manager = theme_manager
-    sys.exit(app.exec())
+            def finish_update_startup():
+                import json
+                try:
+                    commit = json.loads((path.parent / "commit.json").read_text("utf-8"))
+                except (OSError, ValueError):
+                    return
+                if commit.get("token") == value["token"] and lease.acquire():
+                    timer.stop()
+                    window.resume_startup()
+                    window._settings_page._update_notice.set_message("更新安装成功", "success")
+                    window._status_bar.showMessage("更新安装成功")
+
+            timer.timeout.connect(finish_update_startup)
+            timer.start()
+        elif failure:
+            QTimer.singleShot(0, lambda: window._on_update_failed(failure, True))
+        else:
+            QTimer.singleShot(1000, window.start_startup_update_check)
+        # Keep the controller alive for system theme change notifications.
+        app._theme_manager = theme_manager
+        sys.exit(app.exec())
+    finally:
+        lease.release()
 
 
 if __name__ == "__main__":

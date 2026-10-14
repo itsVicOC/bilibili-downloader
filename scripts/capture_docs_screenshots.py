@@ -46,8 +46,10 @@ from bilibili_downloader.core.models import (
     VideoQuality,
 )
 from bilibili_downloader.core.task_repository import TaskRepository
+from bilibili_downloader.core.updater import UpdateRelease
 from bilibili_downloader.gui.dialogs.batch_dialog import BatchDialog
 from bilibili_downloader.gui.dialogs.login_dialog import LoginDialog
+from bilibili_downloader.gui.dialogs.update_dialog import UpdateDialog
 from bilibili_downloader.gui.live_controller import LiveUiController
 from bilibili_downloader.gui.main_window import MainWindow
 from bilibili_downloader.gui.resources.paths import asset_path
@@ -666,6 +668,7 @@ def main(argv=None) -> int:
         help="Capture font and long-dropdown checks at all three sizes",
     )
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
+    parser.add_argument("--updates-only", action="store_true", help="Capture settings tabs and update dialogs only")
     args = parser.parse_args(argv)
     OUTPUT_DIR = args.output_dir.resolve()
     if args.native:
@@ -742,7 +745,10 @@ def main(argv=None) -> int:
             "settings": lambda: window._show_settings_tab(0),
             "live-settings": lambda: window._show_settings_tab(1),
             "tools": lambda: window._show_settings_tab(2),
+            "updates": lambda: window._show_settings_tab(3),
         }
+        if args.updates_only:
+            pages = {name: pages[name] for name in ("settings", "live-settings", "tools", "updates")}
         for dark in (True, False):
             theme.apply_theme(dark)
             for width, height in ((900, 640), (1120, 760), (1320, 860)):
@@ -754,6 +760,21 @@ def main(argv=None) -> int:
                         window,
                         f"biliflow-{name}-{'dark' if dark else 'light'}-{width}.png",
                     )
+        for dark in (True, False):
+            theme.apply_theme(dark)
+            dialog = UpdateDialog(UpdateRelease(
+                "0.9.0b1", "v0.9.0b1", "2026-10-14T00:00:00Z",
+                "更新说明（离线演示）\n\n新增启动自动检查与手动检查更新。\n支持正式版和包含 beta、rc 的最新版通道。\n立即更新将下载、校验、安装并重启。\n跳过版本只影响自动提醒，手动检查仍可更新。", (),
+            ), window)
+            _save_widget(app, dialog, f"biliflow-dialog-update{'-light' if not dark else ''}.png")
+            dialog.hide()
+        if args.updates_only:
+            theme.apply_theme(True)
+            window.resize(1320, 860)
+            pages["settings"]()
+            _save_widget(app, window, "biliflow-settings.png")
+            window._live_controller.shutdown()
+            return 0
         window.resize(1320, 860)
         theme.apply_theme(True)
         for name in ("live", "tasks", "batch", "settings"):
