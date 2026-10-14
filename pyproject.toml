@@ -8,10 +8,10 @@ dynamic = ["version"]
 description = "Bilibili video downloader with desktop GUI and CLI modes"
 requires-python = ">=3.10"
 dependencies = [
-    "PySide6>=6.6",
+    "PySide6>=6.12.0",
     "certifi>=2024.7.4",
     "httpx[http2]>=0.27",
-    "pydantic>=2.0",
+    "pydantic>=2.14.0",
     "qrcode[pil]>=7.4",
     "Pillow>=10.0",
     "defusedxml>=0.7",
