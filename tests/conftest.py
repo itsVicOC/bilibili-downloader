@@ -3,6 +3,20 @@
 import pytest
 
 
+@pytest.hookimpl(hookwrapper=True, tryfirst=True)
+def pytest_runtest_teardown(item):
+    yield
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    app = QCoreApplication.instance()
+    if app is not None:
+        # pytest-qt closes widgets with deleteLater(), but processEvents() alone
+        # does not deliver DeferredDelete outside the main event loop. Finish
+        # destruction before another test changes the application's stylesheet.
+        app.sendPostedEvents(None, QEvent.DeferredDelete)
+        app.processEvents()
+
+
 @pytest.fixture
 def mock_api_responses(responses):
     """Register mock Bilibili API responses for testing."""
