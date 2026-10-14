@@ -13,6 +13,7 @@ import tempfile
 import time
 import uuid
 import zipfile
+from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
 
@@ -34,6 +35,7 @@ from scripts.update_helper import process_alive
 
 APPLICATION = """
 import json, os, sqlite3, time
+from contextlib import closing
 from pathlib import Path
 from bilibili_downloader.core.update_protocol import RuntimeLease, atomic_json
 markers = Path(os.environ["BILIFLOW_SMOKE_MARKERS"])
@@ -45,7 +47,7 @@ if transaction:
     value = json.loads(path.read_text("utf-8"))
     if os.environ.get("BILIFLOW_SMOKE_FAIL"):
         (data / "config.json").write_text("failed migration")
-        with sqlite3.connect(data / "tasks.sqlite3") as db:
+        with closing(sqlite3.connect(data / "tasks.sqlite3")) as db, db:
             db.execute("UPDATE fixture SET value='failed migration'")
         raise SystemExit(3)
     atomic_json(path.parent / "startup-ready.json", {"token": value["token"], "version": value["build"]["version"]})
@@ -89,7 +91,7 @@ def exercise(directory, executable, helper, system, variant, fail):
     data.mkdir(parents=True)
     markers.mkdir()
     (data / "config.json").write_text('{"original": true}')
-    with sqlite3.connect(data / "tasks.sqlite3") as db:
+    with closing(sqlite3.connect(data / "tasks.sqlite3")) as db, db:
         db.execute("CREATE TABLE fixture (value TEXT)")
         db.execute("INSERT INTO fixture VALUES ('original')")
     media = directory / "saved-media.mp4"
@@ -196,7 +198,7 @@ def exercise(directory, executable, helper, system, variant, fail):
         actual = new_build.read_from(target)
         assert actual == (build if fail else new_build)
         assert (data / "config.json").read_text() == '{"original": true}'
-        with sqlite3.connect(data / "tasks.sqlite3") as db:
+        with closing(sqlite3.connect(data / "tasks.sqlite3")) as db:
             assert db.execute("SELECT value FROM fixture").fetchone()[0] == "original"
         assert media.read_bytes() == b"preserve media"
         if system == "macOS":

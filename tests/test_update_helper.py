@@ -1,6 +1,8 @@
+import gc
 import json
 import sqlite3
 import uuid
+from contextlib import closing
 from dataclasses import replace
 
 import pytest
@@ -54,7 +56,7 @@ def transaction(tmp_path, monkeypatch):
     (stage / new.helper).write_bytes(b"helper")
     atomic_json(stage / "biliflow-build.json", build_payload(new))
     (data / "config.json").write_text('{"original": true}')
-    with sqlite3.connect(data / "tasks.sqlite3") as db:
+    with closing(sqlite3.connect(data / "tasks.sqlite3")) as db, db:
         db.execute("CREATE TABLE example (value TEXT)")
         db.execute("INSERT INTO example VALUES ('original')")
     path = directory / "transaction.json"
@@ -110,7 +112,7 @@ def test_startup_failure_or_timeout_restores_program_and_databases(
         launched.append(probation)
         if probation:
             (data / "config.json").write_text("changed")
-            with sqlite3.connect(data / "tasks.sqlite3") as db:
+            with closing(sqlite3.connect(data / "tasks.sqlite3")) as db, db:
                 db.execute("UPDATE example SET value='changed'")
             (data / "live.sqlite3").write_bytes(b"new database")
             atomic_json(
@@ -125,11 +127,31 @@ def test_startup_failure_or_timeout_restores_program_and_databases(
     assert helper.run_transaction(path, health_timeout=0) == 1
     assert launched == [True, False]
     assert (data / "config.json").read_text() == '{"original": true}'
-    with sqlite3.connect(data / "tasks.sqlite3") as db:
+    with closing(sqlite3.connect(data / "tasks.sqlite3")) as db:
         assert db.execute("SELECT value FROM example").fetchone()[0] == "original"
     assert not (data / "live.sqlite3").exists()
     assert not (path.parent / "commit.json").exists()
     assert json.loads((path.parent / "status.json").read_text("utf-8"))["state"] == "failed"
+
+
+def test_snapshot_can_be_restored_without_waiting_for_garbage_collection(transaction):
+    path, _value = transaction
+    data = path.parent.parent.parent
+    snapshot = path.parent / "snapshot"
+    enabled = gc.isenabled()
+    gc.disable()
+    try:
+        helper._snapshot(data, snapshot)
+        # Windows refuses to delete this file while an SQLite handle is open.
+        # Restore must not depend on when cyclic garbage collection runs.
+        (data / "tasks.sqlite3").unlink()
+        helper._restore_snapshot(data, snapshot)
+        (snapshot / "tasks.sqlite3").unlink()
+        with closing(sqlite3.connect(data / "tasks.sqlite3")) as db:
+            assert db.execute("SELECT value FROM example").fetchone()[0] == "original"
+    finally:
+        if enabled:
+            gc.enable()
 
 
 def test_running_other_instance_prevents_replacement(transaction, monkeypatch):

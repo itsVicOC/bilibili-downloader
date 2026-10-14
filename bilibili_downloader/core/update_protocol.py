@@ -12,6 +12,7 @@ import stat
 import sys
 import uuid
 import zipfile
+from contextlib import closing
 from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
 
@@ -425,8 +426,8 @@ def ensure_install_data_outside(
             database = data / name
             if not database.is_file():
                 continue
-            with sqlite3.connect(
-                database.as_uri() + "?mode=ro", uri=True
+            with closing(
+                sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)
             ) as connection:
                 present = {
                     row[0]

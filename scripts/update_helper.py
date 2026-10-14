@@ -12,6 +12,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+from contextlib import closing
 from pathlib import Path
 
 from bilibili_downloader.core.update_protocol import (
@@ -137,8 +138,10 @@ def _snapshot(data, directory):
         if not existed[name]:
             continue
         if name.endswith(".sqlite3"):
-            with sqlite3.connect(source.as_uri() + "?mode=ro", uri=True) as original:
-                with sqlite3.connect(directory / name) as backup:
+            with closing(
+                sqlite3.connect(source.as_uri() + "?mode=ro", uri=True)
+            ) as original:
+                with closing(sqlite3.connect(directory / name)) as backup:
                     original.backup(backup)
         else:
             shutil.copy2(source, directory / name)

@@ -5,6 +5,7 @@ import sqlite3
 import stat
 import threading
 import zipfile
+from contextlib import closing
 from dataclasses import replace
 
 import httpx
@@ -397,7 +398,7 @@ def test_recorded_media_inside_installation_is_protected_after_output_setting_ch
     media.write_bytes(b"recording")
     data = tmp_path / "data"
     data.mkdir()
-    with sqlite3.connect(data / "live.sqlite3") as db:
+    with closing(sqlite3.connect(data / "live.sqlite3")) as db, db:
         db.execute("CREATE TABLE sessions (payload TEXT)")
         db.execute(
             "INSERT INTO sessions VALUES (?)",
