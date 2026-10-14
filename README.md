@@ -1,13 +1,50 @@
-# BiliFlow / Bilibili Downloader
+<p align="center">
+  <a href="https://1008.si/">
+    <img src="bilibili_downloader/gui/assets/app_icon.png" alt="BiliFlow 软件图标" width="128" height="128">
+  </a>
+</p>
 
-[![CI](https://github.com/itsVicOC/bilibili-downloader/actions/workflows/ci.yml/badge.svg)](https://github.com/itsVicOC/bilibili-downloader/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/itsVicOC/bilibili-downloader)](https://github.com/itsVicOC/bilibili-downloader/releases/latest)
-[![Python](https://img.shields.io/badge/Python-3.10%20--%203.12-3776AB?logo=python&logoColor=white)](docs/BUILDING.md)
-[![License](https://img.shields.io/github/license/itsVicOC/bilibili-downloader)](LICENSE)
+<h1 align="center">BiliFlow</h1>
 
-BiliFlow 是一款面向个人归档场景的 B 站桌面下载工具，同时提供 GUI 与 CLI。它可以解析视频、番剧、合集、系列和收藏夹，持久保存可恢复的任务，并将当前账号已获完整播放权限的未加密媒体流连同字幕、弹幕、封面和元数据保存到本地。
+<p align="center">
+  B 站视频下载 · 直播录制 · 本地归档<br>
+  用一个桌面工作台，整理你有权保存的影音内容。
+</p>
 
-![BiliFlow 夜间主界面](docs/images/biliflow-dark.png)
+<p align="center">
+  <strong>简体中文</strong> · <a href="README.en.md">English</a>
+</p>
+
+<p align="center">
+  <a href="https://1008.si/">官方网站</a> ·
+  <a href="https://github.com/itsVicOC/bilibili-downloader/releases/latest">下载正式版</a> ·
+  <a href="docs/README.md">使用文档</a> ·
+  <a href="CHANGELOG.md">更新日志</a> ·
+  <a href="https://github.com/itsVicOC/bilibili-downloader/issues">反馈与建议</a>
+</p>
+
+<p align="center">
+  <a href="https://1008.si/"><img src="https://img.shields.io/badge/Website-1008.si-8B5CF6" alt="官方网站：1008.si"></a>
+  <a href="https://github.com/itsVicOC/bilibili-downloader/releases/latest"><img src="https://img.shields.io/github/v/release/itsVicOC/bilibili-downloader" alt="最新正式版"></a>
+  <a href="https://github.com/itsVicOC/bilibili-downloader/releases"><img src="https://img.shields.io/github/downloads/itsVicOC/bilibili-downloader/total" alt="GitHub Release 累计下载量"></a>
+  <a href="https://github.com/itsVicOC/bilibili-downloader/actions/workflows/ci.yml"><img src="https://github.com/itsVicOC/bilibili-downloader/actions/workflows/ci.yml/badge.svg" alt="CI 状态"></a>
+  <a href="docs/BUILDING.md"><img src="https://img.shields.io/badge/Python-3.10%20--%203.12-3776AB?logo=python&amp;logoColor=white" alt="Python 3.10–3.12"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/itsVicOC/bilibili-downloader" alt="MIT License"></a>
+</p>
+
+**BiliFlow**（仓库名 `bilibili-downloader`）是一款开源的 B 站桌面下载与直播录制工具，同时提供 **GUI 与 CLI**。从单个视频、多 P、番剧到合集、系列和收藏夹，你可以筛选批量任务、暂停后继续下载，并将视频或音频与字幕、弹幕、封面、元数据一起整理到本地。
+
+支持 Windows、macOS 和 Linux；Windows 与 Apple Silicon Mac 提供预构建包，Linux 可从源码运行。项目代码采用 MIT License。
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/biliflow-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/images/biliflow-light.png">
+    <img src="docs/images/biliflow-dark.png" alt="BiliFlow 视频下载工作台，支持跟随系统的深浅主题" width="960">
+  </picture>
+</p>
+
+**快速导航：** [项目亮点](#项目亮点) · [下载与安装](#下载与安装) · [五分钟上手](#五分钟上手) · [界面预览](#界面预览) · [支持范围](#支持范围) · [从源码运行](#从源码运行) · [常见问题](#常见问题) · [文档](#文档) · [参与和支持](#参与和支持)
 
 > BiliFlow 不会绕过会员、付费、地区、DRM 或账号权限。账号可观看不等于拥有永久复制、传播或商业使用权；使用前请阅读[版权与合规说明](docs/COPYRIGHT.md)。
 
@@ -25,42 +62,15 @@ BiliFlow 是一款面向个人归档场景的 B 站桌面下载工具，同时�
 | 跨平台界面 | PySide6 桌面界面，支持 900×640 响应式布局，并实时跟随系统日间/夜间主题 |
 | 检查与安装更新 | 启动自动检查或手动检查，正式版/含 beta 通道；官方 macOS/Windows 包支持校验、安装、重启和启动失败恢复 |
 
-## 界面预览
-
-视频下载与直播录制使用统一工作台；加入下载队列后保留当前页，任务中心集中展示下载队列、当前录制和录制历史。底部设置统一管理下载、直播、工具与存储、软件更新。
-
-![BiliFlow 任务中心](docs/images/biliflow-tasks.png)
-
-<table>
-  <tr>
-    <td width="50%"><img src="docs/images/biliflow-batch.png" alt="BiliFlow 批量导入预览"></td>
-    <td width="50%"><img src="docs/images/biliflow-settings.png" alt="BiliFlow 下载设置"></td>
-  </tr>
-  <tr>
-    <td align="center">批量导入：解析、筛选与同源任务提示</td>
-    <td align="center">下载设置：目录模板、规格与附加内容</td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/images/biliflow-light.png" alt="BiliFlow 日间主界面"></td>
-    <td width="50%"><img src="docs/images/biliflow-login.png" alt="BiliFlow 登录界面"></td>
-  </tr>
-  <tr>
-    <td align="center">跟随系统的日间主题</td>
-    <td align="center">登录说明与敏感信息保护</td>
-  </tr>
-</table>
-
-截图中的作品、任务和账号状态均为离线演示数据，不包含真实 Cookie、下载地址或媒体内容。
-
-![BiliFlow 直播工作台](docs/images/biliflow-live.png)
-
-完整深浅主题、900×640／1120×760／1320×860 布局及关键状态见[视觉规范与验证](docs/UI_DESIGN.md)。
+自动更新从 `v0.8.1b1` 起提供，目前属于 beta 功能。请先手动安装包含该功能的版本；正式版与预发布版状态以 [Releases](https://github.com/itsVicOC/bilibili-downloader/releases) 为准。
 
 ## 下载与安装
 
-普通用户建议从 [GitHub Releases](https://github.com/itsVicOC/bilibili-downloader/releases/latest) 下载预构建包。`full` 包已经内置从固定源码构建的最小 LGPL FFmpeg，适合直接使用；`lite` 包体积更小，但需要系统另行安装 FFmpeg。
+访问 **[BiliFlow 官网 · 1008.si](https://1008.si/)** 了解项目，或直接从 **[GitHub Releases 下载最新正式版](https://github.com/itsVicOC/bilibili-downloader/releases/latest)**。想体验 beta 功能，可查看[全部版本](https://github.com/itsVicOC/bilibili-downloader/releases)；预发布版会带有 `Pre-release` 标记。
 
-从 `v0.8.0` 起，正式版支持直播录制。full 包同时内置 Mesio 录制引擎；lite 包可在直播设置中选择配套引擎。使用方法见[直播录制指南](docs/LIVE_RECORDING.md)。
+**首次使用推荐 `full` 包**：内置从固定源码构建的最小 LGPL FFmpeg 和配套直播录制引擎，无需安装 Python。`lite` 包体积更小，需要自行安装 FFmpeg；使用直播功能时还需配置配套录制引擎。
+
+从 `v0.8.0` 起，正式版支持直播录制。引擎路径在「设置 → 工具与存储」中配置，使用方法见[直播录制指南](docs/LIVE_RECORDING.md)。
 
 | 系统 | 下载文件 | 说明 |
 |---|---|---|
@@ -112,6 +122,39 @@ Release 还包含 FFmpeg 固定源码归档、各安装包的 CycloneDX SBOM 和
 
 更完整的界面说明、任务状态、目录模板和配置位置见[用户指南](docs/USER_GUIDE.md)。遇到启动、解析、FFmpeg 或登录问题时查看[故障排查](docs/TROUBLESHOOTING.md)。
 
+**想录制直播？** 在「直播录制」页添加房间号或直播间 URL 并开启监控；在任务中心查看当前录制、历史片段并导出 MP4。自动监控需要保持应用运行，退出、睡眠或断网期间的内容无法补录。详细步骤见[直播录制指南](docs/LIVE_RECORDING.md)。
+
+## 界面预览
+
+视频下载与直播录制使用统一工作台；加入下载队列后保留当前页，任务中心集中展示下载队列、当前录制和录制历史。底部设置统一管理下载、直播、工具与存储、软件更新。
+
+![BiliFlow 任务中心](docs/images/biliflow-tasks.png)
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/biliflow-batch.png" alt="BiliFlow 批量导入预览"></td>
+    <td width="50%"><img src="docs/images/biliflow-settings.png" alt="BiliFlow 下载设置"></td>
+  </tr>
+  <tr>
+    <td align="center">批量导入：解析、筛选与同源任务提示</td>
+    <td align="center">下载设置：目录模板、规格与附加内容</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/biliflow-light.png" alt="BiliFlow 日间主界面"></td>
+    <td width="50%"><img src="docs/images/biliflow-login.png" alt="BiliFlow 登录界面"></td>
+  </tr>
+  <tr>
+    <td align="center">跟随系统的日间主题</td>
+    <td align="center">登录说明与敏感信息保护</td>
+  </tr>
+</table>
+
+截图中的作品、任务和账号状态均为离线演示数据，不包含真实 Cookie、下载地址或媒体内容。
+
+![BiliFlow 直播工作台](docs/images/biliflow-live.png)
+
+完整深浅主题、900×640／1120×760／1320×860 布局及关键状态见[视觉规范与验证](docs/UI_DESIGN.md)。
+
 ## 支持范围
 
 | 来源 | 单个解析 | 批量导入 | 备注 |
@@ -140,11 +183,31 @@ python -m bilibili_downloader
 
 Windows PowerShell 使用 `.\.venv\Scripts\Activate.ps1` 激活环境。
 
+<details>
+<summary>从源码启用直播录制</summary>
+
+源码运行还需要构建配套 Rust / Mesio 录制引擎。安装 Rust 工具链后运行：
+
+```bash
+cargo build --release --locked --manifest-path native/recorder/Cargo.toml
+```
+
+应用会自动检测 `native/recorder/target/release/biliflow-recorder`（Windows 为 `.exe`）。已验证的工具链版本、依赖与完整流程见[直播录制开发说明](docs/LIVE_RECORDING.md#开发与验证)。
+
+</details>
+
 ### CLI 示例
 
 ```bash
 # 只解析元数据
 python -m bilibili_downloader test BV1GJ411x7h7
+
+# 下载 1080P 视频，并保存弹幕与字幕
+python -m bilibili_downloader download BV1GJ411x7h7 \
+  --quality 80 --danmaku --subtitle
+
+# 仅保存音频
+python -m bilibili_downloader download BV1GJ411x7h7 --audio-only
 
 # 下载当前账号可完整播放的番剧单集
 python -m bilibili_downloader download ep123 --quality 80
@@ -170,12 +233,53 @@ python -m bilibili_downloader download \
 
 运行 `python -m bilibili_downloader --help` 或阅读[用户指南的 CLI 章节](docs/USER_GUIDE.md#cli)查看全部参数。
 
+`ep123`、`ss123` 和合集 URL 中的数字是格式示例，请替换为实际来源。CLI 首次交互下载会要求确认版权提示；非交互环境需显式传入 `--acknowledge-copyright`。
+
+## 常见问题
+
+<details>
+<summary>full 和 lite 怎么选？需要安装 Python 吗？</summary>
+
+预构建包无需安装 Python。首次使用推荐 full，已包含 FFmpeg 与直播录制引擎；lite 适合希望自行管理这些工具的用户。只有从源码运行才需要 Python 环境。
+
+</details>
+
+<details>
+<summary>不登录能用吗？为什么没有 4K、HDR 或 8K？</summary>
+
+无需登录即可解析和下载可完整播放的公开视频。高画质、会员或账号专属内容取决于作品本身和当前账号权限；BiliFlow 只显示接口实际返回的规格，不会解锁账号未获授权的内容。详见[画质排查](docs/TROUBLESHOOTING.md#看不到高画质或指定编码)。
+
+</details>
+
+<details>
+<summary>下载中断后要重新开始吗？</summary>
+
+任务和断点会保存在本地。重新启动应用后，在任务中心继续已暂停的任务即可；请保留任务数据库和输出目录中的 `.biliflow-parts/`，清理缓存会删除未完成的断点。
+
+</details>
+
+<details>
+<summary>支持 Intel Mac、Linux 或手机吗？</summary>
+
+当前预构建包面向 Apple Silicon Mac 和 Windows x64。Linux 和 Intel Mac 可尝试从源码运行；Intel Mac 暂无预构建包，兼容性请自行验证。本项目目前不提供 Android 或 iOS 客户端。
+
+</details>
+
+<details>
+<summary>软件打不开或 FFmpeg 找不到怎么办？</summary>
+
+先确认完整解压了正确的安装包。full 包可核对 Release 校验文件；lite 或源码运行可在「设置 → 工具与存储」选择 FFmpeg 可执行文件。macOS 首次打开和 Windows 安全提示的处理方式见[故障排查](docs/TROUBLESHOOTING.md)。
+
+</details>
+
 ## 文档
 
 | 文档 | 适合谁 | 内容 |
 |---|---|---|
 | [文档中心](docs/README.md) | 所有人 | 按安装、使用、排障、开发和发布组织全部文档 |
 | [用户指南](docs/USER_GUIDE.md) | 使用者 | GUI、CLI、登录、任务、配置与数据存储 |
+| [直播录制](docs/LIVE_RECORDING.md) | 使用者、开发者 | 房间监控、录制历史、引擎配置与验收范围 |
+| [视觉规范与验证](docs/UI_DESIGN.md) | 使用者、开发者 | 深浅主题、响应式布局、关键状态与截图索引 |
 | [故障排查](docs/TROUBLESHOOTING.md) | 使用者 | 启动、解析、画质、FFmpeg、登录与任务恢复 |
 | [版权与合规说明](docs/COPYRIGHT.md) | 所有人 | 授权边界、禁止用途与权利人反馈 |
 | [构建与发布](docs/BUILDING.md) | 开发者 | 开发环境、测试、截图、打包和 Release 流程 |
@@ -200,6 +304,16 @@ pyinstaller --noconfirm --clean BilibiliDownloader.spec
 ```
 
 项目结构、文档截图生成方式与完整发布流程见[构建与发布](docs/BUILDING.md)。
+
+## 参与和支持
+
+如果 BiliFlow 对你有帮助，欢迎在 [GitHub](https://github.com/itsVicOC/bilibili-downloader) 点亮 Star，或分享[官网](https://1008.si/)和本仓库，让更多需要桌面下载与归档工具的人找到它。
+
+- **报告问题或建议功能**：先查看[故障排查](docs/TROUBLESHOOTING.md)和[已有 Issues](https://github.com/itsVicOC/bilibili-downloader/issues)，再[提交 Issue](https://github.com/itsVicOC/bilibili-downloader/issues/new)。请附版本、系统和复现步骤，移除 Cookie、签名播放 URL 与个人信息。
+- **改进代码、文档或翻译**：阅读[贡献指南](CONTRIBUTING.md)，欢迎通过 Pull Request 参与；中英文 README 的功能、安装说明和链接应同步维护。
+- **报告安全漏洞**：使用[安全策略](SECURITY.md)中的私密报告渠道。
+
+感谢 [PySide6 / Qt](https://doc.qt.io/qtforpython-6/)、[FFmpeg](https://ffmpeg.org/)、[Mesio / rust-srec](https://github.com/hua0512/rust-srec) 及其他开源依赖的贡献者。图标、素材与第三方许可证见[第三方声明](THIRD_PARTY_NOTICES.md)。
 
 ## 隐私与免责声明
 
