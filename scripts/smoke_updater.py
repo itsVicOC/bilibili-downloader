@@ -53,12 +53,12 @@ if transaction:
     atomic_json(path.parent / "startup-ready.json", {"token": value["token"], "version": value["build"]["version"]})
     while not (path.parent / "commit.json").is_file() or not lease.acquire():
         time.sleep(0.05)
-    atomic_json(markers / "new-ready.json", {"pid": os.getpid()})
+    atomic_json(markers / "new-ready.json", {"pid": os.getpid(), "bootloader_pid": os.getppid()})
 else:
     if not lease.acquire():
         raise SystemExit(4)
     name = "rollback-ready.json" if os.environ.get("BILIFLOW_UPDATE_FAILURE") else "old-ready.json"
-    atomic_json(markers / name, {"pid": os.getpid()})
+    atomic_json(markers / name, {"pid": os.getpid(), "bootloader_pid": os.getppid()})
 sentinel = "old-quit" if os.environ.get("BILIFLOW_SMOKE_OLD") else "new-quit"
 while not (markers / sentinel).exists():
     time.sleep(0.05)
@@ -72,6 +72,14 @@ def wait_until(predicate, timeout=90):
         if time.monotonic() > deadline:
             raise RuntimeError("Frozen updater smoke test timed out")
         time.sleep(0.1)
+
+
+def _wait_for_application_exit(marker):
+    receipt = json.loads(marker.read_text("utf-8"))
+    # One-file applications keep their executable open in the bootloader parent
+    # while it removes extracted DLLs, even after the Python child has exited.
+    pids = (receipt["pid"], receipt["bootloader_pid"])
+    wait_until(lambda: all(not process_alive(pid) for pid in pids), timeout=30)
 
 
 def _application(root, build, executable, helper):
@@ -219,9 +227,7 @@ def exercise(directory, executable, helper, system, variant, fail):
         for name in ("new-ready.json", "rollback-ready.json"):
             marker = markers / name
             if marker.exists():
-                pid = json.loads(marker.read_text())["pid"]
-                wait_until(lambda: not process_alive(pid), timeout=20)
-        time.sleep(0.3)  # Allow the one-file parent to remove its temporary DLLs.
+                _wait_for_application_exit(marker)
 
 
 def main():
