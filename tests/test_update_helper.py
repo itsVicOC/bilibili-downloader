@@ -129,7 +129,7 @@ def test_startup_failure_or_timeout_restores_program_and_databases(
         assert db.execute("SELECT value FROM example").fetchone()[0] == "original"
     assert not (data / "live.sqlite3").exists()
     assert not (path.parent / "commit.json").exists()
-    assert json.loads((path.parent / "status.json").read_text())["state"] == "failed"
+    assert json.loads((path.parent / "status.json").read_text("utf-8"))["state"] == "failed"
 
 
 def test_running_other_instance_prevents_replacement(transaction, monkeypatch):
