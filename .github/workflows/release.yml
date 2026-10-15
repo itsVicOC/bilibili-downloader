@@ -387,7 +387,7 @@ jobs:
           }
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: ${{ matrix.artifact_name }}-${{ env.RELEASE_ID }}
           path: |
@@ -415,7 +415,7 @@ jobs:
         run: python -m pip install packaging==26.2
 
       - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           path: release-assets
           merge-multiple: true
@@ -439,7 +439,7 @@ jobs:
         run: python -m scripts.verify_release_bundle release-assets --release-id "$RELEASE_ID"
 
       - name: Upload verified release bundle
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: BilibiliDownloader-release-${{ env.RELEASE_ID }}
           path: release-assets
@@ -457,7 +457,7 @@ jobs:
       contents: write
     steps:
       - name: Download verified release bundle
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: BilibiliDownloader-release-${{ env.RELEASE_ID }}
           path: release-assets
@@ -481,7 +481,7 @@ jobs:
           PY
 
       - name: Publish release
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           name: Bilibili Downloader ${{ github.ref_name }}
           body_path: release-assets/release-notes.md
