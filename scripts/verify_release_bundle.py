@@ -9,6 +9,15 @@ import tarfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
+from packaging.version import Version
+
+from bilibili_downloader.core.update_protocol import (
+    BUILD_INFO_FILENAME,
+    BuildInfo,
+    UpdateError,
+    validate_archive,
+)
+
 try:
     from scripts.prepare_bundled_ffmpeg import (
         FFMPEG_SOURCE_FILENAME,
@@ -262,6 +271,21 @@ def verify_release_bundle(directory: Path, release_id: str) -> dict[str, int]:
             counts["archive_members"] += _verify_archive(
                 path, expected, required, forbidden
             )
+            system = "macOS" if "macOS" in filename else "Windows"
+            marker = (
+                f"BilibiliDownloader.app/Contents/Resources/{BUILD_INFO_FILENAME}"
+                if system == "macOS" else f"BilibiliDownloader/{BUILD_INFO_FILENAME}"
+            )
+            try:
+                with zipfile.ZipFile(path) as archive:
+                    build = BuildInfo.parse(json.loads(archive.read(marker)))
+                if build.platform != system or build.variant != ("full" if includes_ffmpeg else "lite"):
+                    raise UpdateError("Incorrect platform or variant descriptor")
+                if release_id.startswith("v") and Version(build.version) != Version(release_id):
+                    raise UpdateError("Build version does not match release tag")
+                validate_archive(path, build)
+            except (UpdateError, KeyError, ValueError) as exc:
+                raise VerificationError(f"{path.name}: invalid updater bundle: {exc}") from exc
             if includes_ffmpeg:
                 _verify_media_hashes(path, path.with_suffix(".cdx.json"), platform_root)
         elif kind == "sbom":

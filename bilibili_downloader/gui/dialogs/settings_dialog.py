@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QProgressBar,
     QPushButton,
     QSpinBox,
     QTabWidget,
@@ -19,12 +20,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from bilibili_downloader import __version__
 from bilibili_downloader.core.errors import redact_sensitive_text
 from bilibili_downloader.core.ffmpeg import FFmpegManager
 from bilibili_downloader.core.models import (
     AUDIO_CODEC_MAP,
     AppSettings,
     OutputMode,
+    UpdateChannel,
     VideoQuality,
 )
 from bilibili_downloader.core.recorder import check_recorder, find_recorder
@@ -80,6 +83,12 @@ class SettingsDialog(QDialog):
 
     save_requested = Signal()
     cache_requested = Signal()
+    update_check_requested = Signal(object)
+    update_install_requested = Signal()
+    update_cancel_requested = Signal()
+    update_archive_requested = Signal()
+    update_page_requested = Signal()
+    update_channel_changed = Signal()
     dirty_changed = Signal(bool)
 
     def __init__(self, settings: AppSettings, parent=None, embedded=False):
@@ -118,8 +127,8 @@ class SettingsDialog(QDialog):
         layout.setSpacing(16)
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs, 1)
-        download, live, tools = [
-            self._tab(name) for name in ("下载", "直播", "工具与存储")
+        download, live, tools, updates = [
+            self._tab(name) for name in ("下载", "直播", "工具与存储", "软件更新")
         ]
         paths = SectionCard("保存位置与目录模板")
         self._output_dir = _LeadingPathLineEdit()
@@ -277,7 +286,50 @@ class SettingsDialog(QDialog):
         clear.clicked.connect(self.cache_requested.emit)
         storage.body.addWidget(clear, alignment=Qt.AlignLeft)
         tools.addWidget(storage)
-        for column in (download, live, tools):
+        update_card = SectionCard("软件更新")
+        version = QLabel(f"当前版本：v{__version__}")
+        version.setObjectName("MetaLabel")
+        update_card.body.addWidget(version)
+        self._auto_update_check = QCheckBox("打开软件时自动检查更新")
+        self._controls["auto_check_updates"] = self._auto_update_check
+        update_card.body.addWidget(self._auto_update_check)
+        self._update_channel = self._combo(
+            "update_channel", update_card, "更新通道",
+            [("仅更新正式版", UpdateChannel.STABLE), ("更新最新版（包含 beta、rc 版）", UpdateChannel.LATEST)],
+        )
+        self._update_channel.currentIndexChanged.connect(lambda *_args: self.update_channel_changed.emit())
+        update_card.body.addWidget(Notice("启动检查使用已保存设置；手动检查使用当前选中的通道。跳过版本只影响自动提醒。"))
+        self._update_notice = Notice("手动检查可查看已跳过的版本。")
+        update_card.body.addWidget(self._update_notice)
+        self._update_progress = QProgressBar()
+        self._update_progress.setRange(0, 100)
+        self._update_progress.hide()
+        update_card.body.addWidget(self._update_progress)
+        update_actions = QHBoxLayout()
+        self._check_update_btn = QPushButton("检查更新")
+        self._check_update_btn.setObjectName("PrimaryButton")
+        self._check_update_btn.clicked.connect(lambda: self.update_check_requested.emit(self._update_channel.currentData()))
+        self._install_update_btn = QPushButton("安装并重启")
+        self._install_update_btn.setObjectName("PrimaryButton")
+        self._install_update_btn.clicked.connect(self.update_install_requested.emit)
+        self._install_update_btn.hide()
+        self._cancel_update_btn = QPushButton("取消下载")
+        self._cancel_update_btn.clicked.connect(self.update_cancel_requested.emit)
+        self._cancel_update_btn.hide()
+        for button in (self._check_update_btn, self._install_update_btn, self._cancel_update_btn):
+            update_actions.addWidget(button)
+        update_actions.addStretch()
+        update_card.body.addLayout(update_actions)
+        self._open_update_archive = QPushButton("打开已下载更新包")
+        self._open_update_archive.clicked.connect(self.update_archive_requested.emit)
+        self._open_update_archive.hide()
+        update_card.body.addWidget(self._open_update_archive, alignment=Qt.AlignLeft)
+        release_page = QPushButton("打开版本下载页")
+        release_page.setObjectName("TextButton")
+        release_page.clicked.connect(self.update_page_requested.emit)
+        update_card.body.addWidget(release_page, alignment=Qt.AlignLeft)
+        updates.addWidget(update_card)
+        for column in (download, live, tools, updates):
             column.addStretch()
         self._notice = Notice()
         layout.addWidget(self._notice)
@@ -297,6 +349,18 @@ class SettingsDialog(QDialog):
             cancel.clicked.connect(self.reject)
             footer.addWidget(cancel)
         layout.addLayout(footer)
+
+    def set_update_busy(self, busy, kind):
+        self._check_update_btn.setEnabled(not busy)
+        self._install_update_btn.setEnabled(not busy)
+        self._update_progress.setRange(0, 0 if busy and kind == "stage" else 100)
+        self._update_progress.setVisible(busy and kind in ("download", "stage"))
+        self._cancel_update_btn.setVisible(busy and kind in ("download", "stage"))
+        self._cancel_update_btn.setText("取消下载" if kind == "download" else "取消准备")
+
+    def set_pending_update(self, prepared):
+        self._install_update_btn.setVisible(prepared is not None and not prepared.reason)
+        self._open_update_archive.setVisible(prepared is not None)
 
     def _tab(self, name):
         body = QWidget()
@@ -358,6 +422,7 @@ class SettingsDialog(QDialog):
             entry.setCursorPosition(0)
 
     def load_settings(self, settings):
+        previous_channel = self._update_channel.currentData()
         self._settings = settings.model_copy(deep=True)
         for key, control in self._controls.items():
             value = (
@@ -388,6 +453,8 @@ class SettingsDialog(QDialog):
             row.set_error("")
         self._notice.set_message("")
         self._draft_changed()
+        if previous_channel != self._update_channel.currentData():
+            self.update_channel_changed.emit()
 
     def _draft_values(self):
         values = {}

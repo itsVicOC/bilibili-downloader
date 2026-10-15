@@ -1,6 +1,8 @@
 """Main application window for the Bilibili Downloader."""
 
+import json
 import logging
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -49,9 +51,12 @@ from bilibili_downloader.core.models import (
     VideoQuality,
 )
 from bilibili_downloader.core.task_repository import TaskRepository
+from bilibili_downloader.core.update_protocol import UpdateError, atomic_json
+from bilibili_downloader.core.updater import RELEASES_PAGE
 from bilibili_downloader.gui.dialogs.batch_dialog import BatchDialog
 from bilibili_downloader.gui.dialogs.login_dialog import LoginDialog
 from bilibili_downloader.gui.dialogs.settings_dialog import SettingsDialog
+from bilibili_downloader.gui.dialogs.update_dialog import UpdateDialog
 from bilibili_downloader.gui.live_controller import LiveUiController
 from bilibili_downloader.gui.resources.paths import asset_path
 from bilibili_downloader.gui.threads.download_worker import (
@@ -67,6 +72,7 @@ from bilibili_downloader.gui.threads.login_status_worker import (
     LoginStatusWorker,
 )
 from bilibili_downloader.gui.threads.resolve_worker import ResolveRunner, ResolveWorker
+from bilibili_downloader.gui.update_controller import UpdateController
 from bilibili_downloader.gui.widgets.chinese_input import ChineseLineEdit
 from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
@@ -93,7 +99,7 @@ logger = logging.getLogger(__name__)
 class MainWindow(QMainWindow):
     """Main application window."""
 
-    def __init__(self, config_manager=None, task_repository=None, live_controller=None):
+    def __init__(self, config_manager=None, task_repository=None, live_controller=None, *, update_service=None, startup_paused=False):
         super().__init__()
         self.setWindowTitle("BiliFlow · 星轨下载站")
         self.setMinimumSize(900, 640)
@@ -115,15 +121,23 @@ class MainWindow(QMainWindow):
         self._current_video: VideoInfo | None = None
         self._login_status_request_id = 0
         self._close_confirmed = False
+        self._startup_paused = startup_paused
+        self._startup_downloads = []
+        self._update_in_progress = False
+        self._update_ready_to_close = False
+        self._update_mutex = None
+        self._update_transaction = None
+        self._update_helper = None
         self._provided_live_controller = live_controller
         self._setup_ui()
         self._setup_menu()
         self._setup_status_bar()
+        self._setup_updates(update_service)
         self._restore_tasks()
 
         # Check login status on startup
         self._user_face = ""
-        if getattr(self._config, "auth_cookies", None) or self._settings.sessdata:
+        if not startup_paused and (getattr(self._config, "auth_cookies", None) or self._settings.sessdata):
             if not getattr(self._config, "credentials_persistent", True):
                 self._status_bar.showMessage(
                     "系统凭据库不可用：登录仅在本次运行有效，重启后需重新登录"
@@ -221,7 +235,7 @@ class MainWindow(QMainWindow):
         shell.addWidget(self._workspace_pages, 1)
         self._build_download_page()
         self._live_controller = self._provided_live_controller or LiveUiController(
-            self._config, self
+            self._config, self, autostart=not self._startup_paused
         )
         self._live_page = LivePage(
             self._config,
@@ -641,6 +655,167 @@ class MainWindow(QMainWindow):
         about_action = QAction("关于(&A)", self)
         about_action.triggered.connect(self._on_about_triggered)
         help_menu.addAction(about_action)
+        update_action = QAction("检查更新", self)
+        update_action.triggered.connect(lambda: self._updates.check(self._settings.update_channel))
+        help_menu.addAction(update_action)
+
+    def _setup_updates(self, service):
+        self._updates = UpdateController(self._config, self, service=service)
+        panel = self._settings_page
+        panel.update_check_requested.connect(self._updates.check)
+        panel.update_install_requested.connect(self._updates.prepare_install)
+        panel.update_cancel_requested.connect(self._updates.cancel)
+        panel.update_archive_requested.connect(self._open_update_archive)
+        panel.update_page_requested.connect(self._open_release_page)
+        panel.update_channel_changed.connect(self._updates.invalidate_check)
+        self._updates.status_changed.connect(panel._update_notice.set_message)
+        self._updates.busy_changed.connect(panel.set_update_busy)
+        self._updates.progress_changed.connect(panel._update_progress.setValue)
+        self._updates.pending_changed.connect(panel.set_pending_update)
+        self._updates.available.connect(self._on_update_available)
+        self._updates.prepared.connect(self._on_update_prepared)
+        self._updates.failed.connect(self._on_update_failed)
+        panel.set_pending_update(self._updates.pending)
+        if self._updates.pending:
+            panel._update_notice.set_message(
+                self._updates.pending.reason or f"v{self._updates.pending.release.version} 已下载，可安装并重启。",
+                "warning" if self._updates.pending.reason else "success",
+            )
+
+    def start_startup_update_check(self):
+        # Called by the real entry point after show(); standalone widgets/tests stay offline.
+        if self._settings.auto_check_updates and not self._startup_paused and not self._updates.busy and not self._updates.has_checked:
+            self._updates.check(self._settings.update_channel, manual=False)
+
+    def resume_startup(self):
+        self._startup_paused = False
+        self.centralWidget().setEnabled(True)
+        self._live_controller.start_background()
+        for item, task_id in self._startup_downloads:
+            self._start_download(item, task_id)
+        self._startup_downloads.clear()
+        if self._settings.sessdata:
+            self._update_login_status()
+
+    def _on_update_available(self, release):
+        if self._update_in_progress:
+            return
+        choice = UpdateDialog(release, self).exec()
+        if choice == UpdateDialog.SKIP:
+            latest = self._config.load().model_copy(deep=True)
+            if release.version not in latest.skipped_update_versions:
+                latest.skipped_update_versions.append(release.version)
+            try:
+                self._config.save(latest)
+                self._settings = latest
+                self._settings_page._update_notice.set_message(f"已跳过 v{release.version}；手动检查仍可更新。")
+            except OSError as exc:
+                self._show_error(f"无法保存跳过版本记录：{exc}")
+        elif choice == UpdateDialog.UPDATE:
+            self._show_settings_tab(3)
+            self._updates.download(release)
+
+    def _open_release_page(self):
+        release = self._updates.release
+        QDesktopServices.openUrl(QUrl(release.page_url if release else RELEASES_PAGE))
+
+    def _open_update_archive(self):
+        if self._updates.pending and self._updates.pending.archive.is_file():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._updates.pending.archive)))
+
+    def _on_update_failed(self, message, manual):
+        if manual:
+            box = MessageBox("更新未完成", message, self, tone="warning", buttons=QMessageBox.Ok | QMessageBox.Open, default=QMessageBox.Ok)
+            box.button(QMessageBox.Open).setText("版本下载页")
+            if box.exec() == QMessageBox.Open:
+                self._open_release_page()
+
+    def _on_update_prepared(self, prepared):
+        if prepared.reason:
+            self._on_update_failed(prepared.reason, True)
+            return
+        active = self._download_list.has_active_workers or self._live_controller.exporting or (
+            self._live_controller.service and self._live_controller.service.active
+        )
+        if active:
+            box = MessageBox(
+                "更新已准备好", "安装更新需要重启：下载将暂停并保留断点，直播录制将停止并保留文件，正在导出的任务将取消。",
+                self, tone="warning", buttons=QMessageBox.Yes | QMessageBox.No, default=QMessageBox.No,
+            )
+            box.button(QMessageBox.Yes).setText("停止任务并重启")
+            box.button(QMessageBox.No).setText("稍后重启")
+            if box.exec() != QMessageBox.Yes:
+                return
+        if not self._can_leave_settings():
+            return
+        self._update_mutex = self._updates.service.install_mutex()
+        try:
+            if not self._update_mutex.acquire():
+                raise UpdateError("另一个实例正在安装更新，请稍后重试")
+        except (OSError, UpdateError) as exc:
+            self._on_update_failed(str(exc), True)
+            return
+        self._update_in_progress = True
+        self.centralWidget().setEnabled(False)
+        self._update_deadline = time.monotonic() + 120
+        self._download_list.pause_all_workers()
+        self._live_controller.shutdown()
+        self._settings_page._update_notice.set_message("正在停止后台任务并完成录制收尾…")
+        self._update_shutdown_timer = QTimer(self)
+        self._update_shutdown_timer.setInterval(100)
+        self._update_shutdown_timer.timeout.connect(self._wait_update_shutdown)
+        self._update_shutdown_timer.start()
+
+    def _wait_update_shutdown(self):
+        if time.monotonic() > self._update_deadline:
+            self._abort_update_install("后台任务未能及时停止，更新已中止；已下载更新包仍保留。")
+            return
+        if not (self._download_pool.waitForDone(0) and self._service_pool.waitForDone(0) and self._live_controller.background_stopped):
+            return
+        if self._update_helper is None:
+            try:
+                self._update_helper, self._update_transaction = self._updates.service.launch_helper(
+                    self._updates.pending,
+                    protected_paths=(self._live_controller.export_path, self._live_controller.export_destination),
+                )
+                self._helper_deadline = time.monotonic() + 20
+                self._settings_page._update_notice.set_message("正在启动独立更新程序…")
+            except (OSError, UpdateError) as exc:
+                self._abort_update_install(str(exc))
+            return
+        directory = self._update_transaction.parent
+        try:
+            expected = json.loads(self._update_transaction.read_text("utf-8"))["token"]
+            ready = json.loads((directory / "helper-ready.json").read_text("utf-8"))
+            initialized = ready.get("token") == expected
+        except (OSError, ValueError, KeyError):
+            initialized = False
+        if initialized:
+            self._update_shutdown_timer.stop()
+            self._close_confirmed = True
+            self._update_ready_to_close = True
+            self.close()
+        elif self._update_helper.poll() is not None or time.monotonic() > self._helper_deadline:
+            try:
+                message = json.loads((directory / "status.json").read_text("utf-8"))["message"]
+            except (OSError, ValueError, KeyError):
+                message = "独立更新程序未能启动，当前程序已保留。"
+            self._abort_update_install(message)
+
+    def _abort_update_install(self, message):
+        self._update_shutdown_timer.stop()
+        if self._update_transaction:
+            atomic_json(self._update_transaction.parent / "cancel.json", {})
+        if self._update_mutex:
+            self._update_mutex.release()
+        self._update_in_progress = False
+        self._update_helper = None
+        self._update_transaction = None
+        self.centralWidget().setEnabled(True)
+        if not self._live_controller.restart_after_update_abort():
+            self._status_bar.showMessage("后台任务仍在收尾，请稍后重新打开软件。")
+        self._settings_page._update_notice.set_message(message, "danger")
+        self._on_update_failed(message, True)
 
     def _setup_status_bar(self):
         self._status_bar = QStatusBar()
@@ -719,7 +894,10 @@ class MainWindow(QMainWindow):
             if record.status == TaskStatus.QUEUED:
                 queued.append((item, record.id))
         for item, task_id in queued:
-            self._start_download(item, task_id)
+            if self._startup_paused:
+                self._startup_downloads.append((item, task_id))
+            else:
+                self._start_download(item, task_id)
         recovered_database = getattr(
             self._task_repository, "recovered_database_path", None
         )
@@ -1346,6 +1524,9 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent):
         """Cancel running downloads and close API client on window close."""
+        if self._update_in_progress and not self._update_ready_to_close:
+            event.ignore()
+            return
         if self._settings_page.dirty and not self._can_leave_settings():
             event.ignore()
             return
@@ -1369,6 +1550,7 @@ class MainWindow(QMainWindow):
                 return
             self._close_confirmed = True
 
+        self._updates.shutdown()
         if live_service and not live_service.stopped:
             self._close_confirmed = True
             self._live_page.shutdown()

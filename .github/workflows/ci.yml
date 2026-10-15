@@ -58,6 +58,33 @@ jobs:
       - name: Run static checks
         run: ruff check bilibili_downloader tests packaging_hooks scripts
 
+  updater:
+    name: Native updater (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macOS
+          - os: windows-latest
+            platform: Windows
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+      - name: Install updater test dependencies
+        run: pip install -c constraints.txt -e . pyinstaller
+      - name: Build standalone updater
+        run: python -m PyInstaller --noconfirm --clean BiliFlowUpdater.spec
+      - name: Verify full/lite installation, rollback and resource cleanup
+        shell: bash
+        run: |
+          helper=dist/biliflow-updater
+          if [ "$RUNNER_OS" = "Windows" ]; then helper="$helper.exe"; fi
+          python -m scripts.smoke_updater --helper "$helper" --platform "${{ matrix.platform }}"
+
   recorder:
     name: Native recorder (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

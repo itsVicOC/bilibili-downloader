@@ -61,6 +61,11 @@ class OutputMode(str, Enum):
     AUDIO = "audio"
 
 
+class UpdateChannel(str, Enum):
+    STABLE = "stable"
+    LATEST = "latest"
+
+
 class ContentKind(str, Enum):
     """Origin-specific media identity used by resolvers and downloaders."""
 
@@ -325,6 +330,9 @@ class AppSettings(BaseModel):
     max_concurrent_downloads: int = Field(default=3, ge=1, le=8)
     last_login_at: Optional[str] = None
     copyright_notice_version: int = Field(default=0, ge=0)
+    auto_check_updates: bool = True
+    update_channel: UpdateChannel = UpdateChannel.STABLE
+    skipped_update_versions: list[str] = Field(default_factory=list)
 
     @field_validator("output_dir")
     @classmethod

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=83.0.0", "wheel"]
+requires = ["setuptools>=84.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -16,6 +16,7 @@ dependencies = [
     "Pillow>=10.0",
     "defusedxml>=0.7",
     "keyring>=25.0",
+    "packaging>=26.2",
 ]
 
 [project.optional-dependencies]
@@ -24,7 +25,7 @@ dev = [
     "pytest-qt>=4.2",
     "responses>=0.24",
     "PyInstaller>=6.0",
-    "ruff>=0.16.0",
+    "ruff>=0.17.0",
 ]
 
 [project.scripts]

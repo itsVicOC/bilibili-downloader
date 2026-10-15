@@ -85,6 +85,7 @@ python -m bilibili_downloader download <公开BV号> \
 
 ```bash
 pyinstaller --noconfirm --clean BilibiliDownloader.spec
+pyinstaller --noconfirm --clean BiliFlowUpdater.spec
 ```
 
 - macOS：生成 `dist/BilibiliDownloader.app` 和目录构建。
@@ -92,6 +93,14 @@ pyinstaller --noconfirm --clean BilibiliDownloader.spec
 - 视觉素材会收集到冻结应用中；运行时路径统一由 `gui/resources/paths.py` 解析。
 - spec 根据平台选择 `app_icon.icns`、`app_icon.ico` 或 `app_icon.png`。
 - `packaging_hooks/hook-keyring.py` 只收集目标系统的凭据库后端，避免携带其他平台实现。
+
+独立更新程序只依赖 Python 标准库，不包含 Qt。Release 流水线通过 `python -m scripts.prepare_update_bundle` 为每个 full/lite 变体加入 `biliflow-updater`（Windows 为 `.exe`）和 `biliflow-build.json`；构建信息包含规范化版本、平台、架构、变体和更新协议。macOS 必须在嵌入这些文件之后签名。直接用应用 spec 构建的目录没有发行描述文件，自动安装会转为手动安装。
+
+使用 Developer ID 时，导入证书后通过 `MACOS_UPDATER_SIGNING_IDENTITY` 重新构建更新程序，使单文件程序内嵌的 Python 库也使用同一身份签名，再嵌入应用并公证。仅对更新程序外层执行 `codesign` 无法替代内嵌库的签名。无证书时沿用 ad-hoc 签名。
+
+发布流水线运行 `python -m scripts.smoke_updater --helper <更新程序路径> --platform macOS|Windows`，在临时目录用冻结夹具验证 full/lite 的替换、重启和启动失败回滚；夹具不会进入发布包，也不会读取真实配置、凭据或媒体。可在本地运行同一命令验证实际平台。
+
+更新协议使用用户配置目录下 `updates/<事务 ID>/transaction.json`、启动确认和提交文件。主程序确认新版窗口及数据库初始化成功之前，不启动下载或直播后台服务；独立更新程序等待最多 60 秒，失败时恢复旧程序及配置、SQLite 数据快照。程序生命周期使用共享锁，安装使用独占锁；不要删除运行中的锁文件。
 
 Release 的 full 变体还会从锁定的 FFmpeg 7.1 提交构建最小 LGPL 可执行文件。下载脚本会先核对源码 SHA-256。构建启用本地文件协议、MOV/MP4、FLV、MPEG-TS 输入和 MP4、M4A、FLAC 输出，包含 H.264/AAC parser、AAC 解码器（用于 MPEG-TS 音频参数探测）及转封装所需 bitstream filters；导出始终使用 `-c copy`，不启用网络协议、编码器、GPL 或 nonfree 组件。macOS 编译和链接部署目标固定为 12.0：
 
@@ -142,7 +151,7 @@ gh run watch <run-id> --exit-status
 该模式会在 GitHub 托管的 macOS 与 Windows runner 上完成测试、PyInstaller 构建、冻结 CLI 冒烟、SBOM 生成、artifact 上传/下载、SHA-256 生成和统一验证，但不会创建 GitHub Release。下载运行产生的 `BilibiliDownloader-release-dry-run-<run-number>` artifact 后可重复执行同一验证器：
 
 ```bash
-python scripts/verify_release_bundle.py <解压目录> \
+python -m scripts.verify_release_bundle <解压目录> \
   --release-id dry-run-<run-number>
 ```
 
@@ -156,7 +165,7 @@ python scripts/verify_release_bundle.py <解压目录> \
 - `CHANGELOG.md` 顶部版本、日期与变更。
 - README 中受支持平台或安装方式发生的变化。
 
-候选版使用 Python 兼容的 `X.Y.ZrcN` 版本与 `vX.Y.ZrcN` 标签。Release workflow 会把包含 `rc` 的标签自动标记为 GitHub prerelease。候选版验证完成后，再把版本和 Changelog 更新为 `X.Y.Z` 并发布正式标签。
+候选版使用 Python 兼容的 `X.Y.ZbN`、`X.Y.ZrcN` 版本与对应 `v` 标签。Release workflow 通过 `packaging.version.Version.is_prerelease` 标记预发布版，包含 beta、rc 等形式。候选版验证完成后，再把版本和 Changelog 更新为 `X.Y.Z` 并发布正式标签。
 
 `v0.7.0` 应先发布 `v0.7.0rc1`。候选版除常规 full/lite 包验证外，还要使用不提交到仓库的测试账号完成两项手工冒烟：一个免费完整单集，以及一个该账号已经获得完整播放权限的会员或已购单集。确认解析、权限判断、DASH 合并和附加项正常后立即删除测试产物；不得保存或上传媒体、Cookie、签名播放 URL、页面初始状态或包含账号标识的日志。另用无权限或试看剧集确认应用在创建 `.biliflow-parts` 媒体文件前拒绝下载。
 
@@ -182,7 +191,7 @@ git push origin vX.Y.Z
 
 发布任务从 `CHANGELOG.md` 提取最上方版本作为 Release 正文。工作流默认只有读取仓库内容的权限，只有真正的 publish job 获得 `contents: write`。手动运行时从分支选择 `publish=true` 会被拒绝；只能在 tag ref 上显式发布。任一平台构建或验证失败时不会创建不完整 Release；应修复后发布新补丁版本，不覆盖已公开的版本资产。
 
-发布完成后应确认 Release 不是草稿或预发布版本，四个 full/lite 安装包、四个 SBOM、FFmpeg 源码归档与 `SHA256SUMS.txt` 均存在，并从校验文件抽查至少一个安装包。最后在干净环境中启动应用，确认“关于”窗口版本与标签一致。
+发布完成后应确认 Release 不是草稿，正式版未标为预发布、beta/rc 版已标为预发布，四个 full/lite 安装包、四个 SBOM、FFmpeg 源码归档与 `SHA256SUMS.txt` 均存在，并从校验文件抽查至少一个安装包。最后在干净环境中启动应用，确认“关于”窗口版本与标签一致。
 
 默认 macOS/Windows 构建没有商业代码签名。macOS Release 工作流支持可选的 Developer ID 签名与 Apple 公证；在受保护的 GitHub Environment 中配置以下 Secrets 后会自动启用：
 
