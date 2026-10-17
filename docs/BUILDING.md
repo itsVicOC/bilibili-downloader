@@ -163,6 +163,17 @@ python scripts/build_app_icons.py
 
 ## 发布流程
 
+### 本轮验证记录（2026-10-17）
+
+源代码提交 `604d089` 的[发布演练 dry-run-35](https://github.com/itsVicOC/bilibili-downloader/actions/runs/38996475166) 已通过；`publish=false`，没有创建 Release。
+
+- macOS、Windows 各通过 457 项 Python 测试；本地 Ruff、编译与空白检查通过。
+- 两端冻结更新程序完成 full/lite 替换、重启和失败回滚验证，媒体样本与 MP4 导出验证通过。
+- macOS DMG 挂载、Applications 入口、复制、签名结构、载荷与 ZIP 对比、冻结 CLI 均通过。
+- Windows EXE 首次安装、覆盖安装、运行中拦截、目录替换后的卸载及用户媒体保留通过；卸载器延迟自清理也已纳入等待。
+- 两个平台的安装包、ZIP、SBOM、原生验证报告、FFmpeg 源码与 SHA-256 清单通过统一校验。
+- Windows 原生后端的 100%/150%/200% 字体与下拉检查、macOS Retina 菜单/快捷键/全屏复核见[视觉规范](UI_DESIGN.md)。Windows 系统边框、文件选择器及实际多屏切换仍需桌面人工复核。
+
 ### 无发布演练
 
 每次修改发布工作流或依赖后，先从 `main` 手动运行 Release workflow。`publish` 默认值必须保持为 `false`：
