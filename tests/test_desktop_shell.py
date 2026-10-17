@@ -68,3 +68,17 @@ def test_bulk_actions_only_enable_for_eligible_tasks(qtbot, tmp_path):
     _add_task(window, 3, TaskStatus.DOWNLOADING)
     window._task_page.refresh_downloads()
     assert all(button.isEnabled() for button in buttons)
+
+
+def test_cancelled_navigation_keeps_current_menu_selection_and_draft(qtbot, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    window = _make_window(tmp_path)
+    qtbot.addWidget(window)
+    window._show_workspace(3)
+    window._settings_page._output_dir.setText("/edited/path")
+    monkeypatch.setattr(QMessageBox, "exec", lambda box: QMessageBox.Cancel)
+    window._workspace_actions[0].trigger()
+    assert window._workspace_pages.currentIndex() == 3
+    assert [item.isChecked() for item in window._workspace_actions] == [False, False, False, True]
+    assert window._settings_page._output_dir.text() == "/edited/path"
+    window._settings_page.load_settings(window._settings)

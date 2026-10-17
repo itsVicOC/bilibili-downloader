@@ -126,7 +126,7 @@ def build_component_overrides(is_dark: bool) -> str:
     QLabel#NavSection {{ color: {p.muted}; font-size: 9pt; padding: 8px; }}
     QLabel#HeroEyebrow {{ color: {p.muted}; font-size: 9pt; }}
     QLabel#HeroTitle {{ font-size: 12pt; font-weight: 700; }}
-    QToolBar#WorkspaceToolbar {{ background: {p.background}; border: none; border-bottom: 1px solid {p.divider}; padding: 8px 24px; spacing: 8px; }}
+    QToolBar#WorkspaceToolbar {{ background: {p.background}; border: none; border-bottom: 1px solid {p.divider}; padding: 0; spacing: 8px; }}
     #WorkspaceHeaders {{ background: transparent; min-height: 52px; }}
     QMenuBar {{ background: {p.sidebar}; color: {p.text}; border-bottom: 1px solid {p.divider}; padding: 2px 8px; }}
     QMenuBar::item {{ padding: 5px 10px; background: transparent; border-radius: 5px; }}

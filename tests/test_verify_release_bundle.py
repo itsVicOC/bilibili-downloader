@@ -157,6 +157,22 @@ def test_verify_release_bundle_accepts_complete_bundle(
     assert counts["installers"] == 2
 
 
+@pytest.mark.parametrize("missing", [".dmg", "-setup.exe", ".verification.json"])
+def test_native_installers_and_reports_are_required(tmp_path, monkeypatch, missing):
+    _write_bundle(tmp_path, monkeypatch)
+    next(tmp_path.glob(f"*{missing}")).unlink()
+    with pytest.raises(VerificationError, match="missing release asset"):
+        verify_release_bundle(tmp_path, RELEASE_ID)
+
+
+def test_native_report_cannot_be_reused_for_another_installer(tmp_path, monkeypatch):
+    _write_bundle(tmp_path, monkeypatch)
+    installer = tmp_path / installer_filename("Windows", RELEASE_ID)
+    installer.write_bytes(b"different installer")
+    with pytest.raises(VerificationError, match="invalid native verification"):
+        verify_release_bundle(tmp_path, RELEASE_ID)
+
+
 def test_verify_release_bundle_rejects_checksum_mismatch(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

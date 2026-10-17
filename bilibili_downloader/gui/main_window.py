@@ -10,6 +10,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QThreadPool, QTimer, QUrl
 from PySide6.QtGui import (
     QAction,
+    QActionGroup,
     QCloseEvent,
     QDesktopServices,
     QIcon,
@@ -25,11 +26,13 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QSizePolicy,
     QStackedWidget,
     QStatusBar,
     QTabWidget,
+    QTextEdit,
     QToolBar,
     QVBoxLayout,
     QWidget,
@@ -454,18 +457,22 @@ class MainWindow(QMainWindow):
             and index != 3
             and not self._can_leave_settings()
         ):
+            self._sync_workspace_actions()
             return False
         if index == 3 and not self._settings_page.dirty:
             self._settings_page.load_settings(self._settings)
         self._workspace_pages.setCurrentIndex(index)
         if hasattr(self, "_header_stack"):
             self._header_stack.setCurrentIndex(index)
-        for i, action in enumerate(getattr(self, "_workspace_actions", ())):
-            action.setChecked(i == index)
+        self._sync_workspace_actions()
         for i, button in enumerate([*self._nav_buttons, self._settings_nav]):
             button.setObjectName("NavButtonActive" if i == index else "NavButton")
             repolish(button)
         return True
+
+    def _sync_workspace_actions(self):
+        for index, action in enumerate(getattr(self, "_workspace_actions", ())):
+            action.setChecked(index == self._workspace_pages.currentIndex())
 
     def _setup_workspace_toolbar(self, headers):
         """Keep one native, fixed toolbar while preserving each page's actions."""
@@ -479,6 +486,7 @@ class MainWindow(QMainWindow):
         self._header_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         for header in headers:
             header.parentWidget().layout().removeWidget(header)
+            header.layout().setContentsMargins(24, 8, 24, 8)
             header.caption.setWordWrap(False)
             self._header_stack.addWidget(header)
         self._workspace_toolbar.addWidget(self._header_stack)
@@ -696,10 +704,12 @@ class MainWindow(QMainWindow):
             edit_menu.addAction(action(key, label, edit, standard))
 
         view_menu = menubar.addMenu("显示(&V)")
+        workspace_group = QActionGroup(self)
         self._workspace_actions = []
         for index, text in enumerate(("视频下载", "直播录制", "任务中心", "设置")):
             item = action(f"workspace_{index}", text, lambda _checked=False, page=index: self._show_workspace(page), QKeySequence(f"Ctrl+{index + 1}"))
             item.setCheckable(True)
+            workspace_group.addAction(item)
             item.setChecked(self._workspace_pages.currentIndex() == index)
             self._workspace_actions.append(item)
             view_menu.addAction(item)
@@ -715,6 +725,32 @@ class MainWindow(QMainWindow):
             button.clicked.disconnect()
             button.clicked.connect(self._actions[key].trigger)
             self._actions[key].changed.connect(lambda b=button, a=self._actions[key]: b.setEnabled(a.isEnabled()))
+        edit_menu.aboutToShow.connect(self._sync_edit_actions)
+        QApplication.instance().focusChanged.connect(self._sync_edit_actions)
+        QApplication.clipboard().dataChanged.connect(self._sync_edit_actions)
+        for editor in self.findChildren(QLineEdit) + self.findChildren(QPlainTextEdit) + self.findChildren(QTextEdit):
+            editor.selectionChanged.connect(self._sync_edit_actions)
+            editor.textChanged.connect(self._sync_edit_actions)
+        self._sync_edit_actions()
+
+    def _sync_edit_actions(self, *_args):
+        from PySide6.QtWidgets import QApplication
+        editor = QApplication.focusWidget()
+        editable = isinstance(editor, (QLineEdit, QPlainTextEdit, QTextEdit))
+        writable = editable and not editor.isReadOnly()
+        line = isinstance(editor, QLineEdit)
+        selected = editable and (editor.hasSelectedText() if line else editor.textCursor().hasSelection())
+        history = editor if line else editor.document() if editable else None
+        states = {
+            "undo": writable and history.isUndoAvailable(),
+            "redo": writable and history.isRedoAvailable(),
+            "cut": writable and selected,
+            "copy": selected,
+            "paste": writable and bool(QApplication.clipboard().text()),
+            "selectAll": editable and bool(editor.text() if line else editor.toPlainText()),
+        }
+        for name, enabled in states.items():
+            self._actions[name].setEnabled(bool(enabled))
 
     def _setup_updates(self, service):
         self._updates = UpdateController(self._config, self, service=service)

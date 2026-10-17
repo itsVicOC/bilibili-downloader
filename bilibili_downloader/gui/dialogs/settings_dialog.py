@@ -341,6 +341,8 @@ class SettingsDialog(QDialog):
         self._reset_btn.clicked.connect(lambda: self.load_settings(self._settings))
         footer.addWidget(self._reset_btn)
         self._save_btn = QPushButton("保存设置")
+        self._save_btn.setAutoDefault(not self._embedded)
+        self._save_btn.setDefault(not self._embedded)
         self._save_btn.setObjectName("PrimaryButton")
         self._save_btn.clicked.connect(self._accept_if_valid)
         footer.addWidget(self._save_btn)

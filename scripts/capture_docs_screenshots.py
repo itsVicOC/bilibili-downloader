@@ -4,10 +4,8 @@
 from __future__ import annotations
 
 import argparse
-import ctypes
 import json
 import os
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -90,35 +88,6 @@ def _save_widget(app: QApplication, widget, filename: str, popup=None) -> None:
     output = OUTPUT_DIR / filename
     captured = widget.grab()
     capture_origin = widget.mapToGlobal(QPoint())
-    if app.property("captureWindowFrames") and widget.isWindow():
-        from PySide6.QtTest import QTest
-        if popup is None:
-            widget.raise_()
-            widget.activateWindow()
-        QTest.qWait(160)
-        if sys.platform == "darwin":
-            # Capture this NSWindow by ID. Desktop-region capture can include
-            # unrelated windows when Cocoa's unified toolbar changes coordinates.
-            objc = ctypes.CDLL("/usr/lib/libobjc.A.dylib")
-            objc.sel_registerName.argtypes = [ctypes.c_char_p]
-            objc.sel_registerName.restype = ctypes.c_void_p
-            send = objc.objc_msgSend
-            send.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-            send.restype = ctypes.c_void_p
-            native_window = send(int(widget.winId()), objc.sel_registerName(b"window"))
-            send.restype = ctypes.c_long
-            window_number = send(native_window, objc.sel_registerName(b"windowNumber"))
-            with tempfile.TemporaryDirectory(prefix="biliflow-window-") as temporary:
-                shot = Path(temporary) / "window.png"
-                subprocess.run(["/usr/sbin/screencapture", "-x", "-o", "-l", str(window_number), str(shot)], check=True)
-                captured = QPixmap(str(shot))
-                captured.setDevicePixelRatio(widget.devicePixelRatioF())
-        else:
-            captured = widget.screen().grabWindow(widget.winId())
-        if captured.isNull():
-            raise RuntimeError("Native window capture unavailable; check screen recording permission")
-        extra_height = round(captured.height() / captured.devicePixelRatio()) - widget.height()
-        capture_origin = widget.mapToGlobal(QPoint()) - QPoint(0, extra_height)
     # QWidget.grab is physical pixels on Retina; popup positions are logical.
     # Export at one pixel per logical pixel so native/offscreen images compare.
     bounds = QRect(QPoint(), captured.deviceIndependentSize().toSize())
@@ -700,11 +669,8 @@ def main(argv=None) -> int:
         help="Capture font and long-dropdown checks at all three sizes",
     )
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
-    parser.add_argument("--window-frames", action="store_true", help="Capture native title bars too (requires --native and screen recording access)")
     parser.add_argument("--updates-only", action="store_true", help="Capture settings tabs and update dialogs only")
     args = parser.parse_args(argv)
-    if args.window_frames and not args.native:
-        parser.error("--window-frames requires --native")
     OUTPUT_DIR = args.output_dir.resolve()
     if args.native:
         os.environ.pop("QT_QPA_PLATFORM", None)
@@ -741,7 +707,6 @@ def main(argv=None) -> int:
         app.setWindowIcon(QIcon(asset_path("app_icon.png")))
         theme = ThemeManager(app)
         app.setProperty("docsTempRoot", str(temp_root))
-        app.setProperty("captureWindowFrames", args.window_frames)
 
         window = _make_main_window(temp_root / "workspace")
         if args.checks_only:

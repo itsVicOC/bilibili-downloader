@@ -107,6 +107,7 @@ def remove_managed_files(root: Path):
 
 def macos_installation_notice(executable: Path) -> str:
     """Explain running an application on a read-only disk image/translocation."""
-    if "/AppTranslocation/" in str(executable) or str(executable).startswith("/Volumes/"):
+    location = executable.as_posix()
+    if "/AppTranslocation/" in location or location.startswith("/Volumes/"):
         return "请将 BiliFlow 拖入“应用程序”文件夹后再打开，以便正常保存程序更新。"
     return ""
