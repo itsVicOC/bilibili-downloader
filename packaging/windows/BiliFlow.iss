@@ -43,7 +43,7 @@ Name: "{userprograms}\BiliFlow"; Filename: "{app}\BilibiliDownloader\BilibiliDow
 Name: "{userdesktop}\BiliFlow"; Filename: "{app}\BilibiliDownloader\BilibiliDownloader.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [UninstallRun]
-Filename: "{app}\uninst\biliflow-maintenance.exe"; Parameters: "--remove-managed-files ""{app}\BilibiliDownloader"""; Flags: runhidden waituntilterminated
+Filename: "{app}\uninst\biliflow-maintenance.exe"; Parameters: "--remove-managed-files ""{app}\BilibiliDownloader"""; Flags: runhidden waituntilterminated; RunOnceId: "RemoveManagedPayload"
 
 [Code]
 function InitializeUninstall(): Boolean;

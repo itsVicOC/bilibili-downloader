@@ -1,5 +1,8 @@
+import io
 import json
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -11,7 +14,8 @@ from bilibili_downloader.core.installation import (
     remove_managed_files,
     write_payload_manifest,
 )
-from bilibili_downloader.core.update_protocol import atomic_json
+from bilibili_downloader.core.update_protocol import BuildInfo, atomic_json
+from scripts import verify_native_installer as native
 from scripts.package_installers import installer_filename
 
 
@@ -86,3 +90,49 @@ def test_installer_filenames_keep_update_zip_namespace_and_reject_paths():
     assert installer_filename("macOS", "dry-run-42").endswith("-full-dry-run-42.dmg")
     with pytest.raises(ValueError):
         installer_filename("macOS", "../escape")
+
+
+def test_verifier_does_not_uninstall_twice_during_inno_self_cleanup(tmp_path, monkeypatch):
+    def missing_key(*args):
+        raise FileNotFoundError()
+    monkeypatch.setitem(sys.modules, "winreg", SimpleNamespace(HKEY_CURRENT_USER=0, OpenKey=missing_key))
+    installer = tmp_path / "setup.exe"
+    parent = tmp_path / "中文 installation with spaces"
+    root = parent / "BilibiliDownloader"
+    blocked = [False]
+    uninstalls = []
+
+    class Blocker:
+        stdout = io.StringIO("ready\n")
+        def terminate(self):
+            blocked[0] = False
+        def wait(self, **kwargs):
+            return 0
+
+    def launch(*args, **kwargs):
+        blocked[0] = True
+        return Blocker()
+
+    def install(command, **kwargs):
+        assert command[0] == str(installer)
+        if blocked[0]:
+            return SimpleNamespace(returncode=1)
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "BilibiliDownloader.exe").write_bytes(b"program")
+        (parent / "uninst").mkdir(exist_ok=True)
+        (parent / "uninst/unins000.exe").touch()
+        (parent / INSTALL_MARKER).write_text(INSTALL_ID)
+        return SimpleNamespace(returncode=0)
+
+    def uninstall(path):
+        uninstalls.append(path)
+        remove_managed_files(root)
+        # The original executable can linger even after successful uninstall.
+        assert path.exists()
+
+    monkeypatch.setattr(native.subprocess, "run", install)
+    monkeypatch.setattr(native.subprocess, "Popen", launch)
+    monkeypatch.setattr(native, "verify_payload", lambda *args: (BuildInfo("0.8.1b1", "Windows", "x86_64", "full"), 1))
+    monkeypatch.setattr(native, "_uninstall_windows", uninstall)
+    native.verify_windows(installer, tmp_path / "update.zip", tmp_path)
+    assert len(uninstalls) == 1

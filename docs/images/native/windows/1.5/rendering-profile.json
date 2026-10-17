@@ -1,0 +1,196 @@
+{
+  "platform": "win32",
+  "qt": "6.11.1",
+  "backend": "windows",
+  "logical_dpi": 96.0,
+  "device_pixel_ratio": 1.5,
+  "scale_factor": "1.5",
+  "available_screen": [
+    0,
+    0,
+    683,
+    480
+  ],
+  "checks": [
+    {
+      "theme": "dark",
+      "window": [
+        900,
+        640
+      ],
+      "body_font": {
+        "family": "Microsoft YaHei UI",
+        "pixels": 14,
+        "line_height": 17.765625
+      },
+      "title_font": {
+        "family": "Microsoft YaHei UI",
+        "pixels": 24
+      },
+      "field": [
+        226,
+        480,
+        620,
+        40
+      ],
+      "popup": [
+        63,
+        142,
+        620,
+        334
+      ],
+      "inside_screen": true,
+      "overlaps_field": false
+    },
+    {
+      "theme": "dark",
+      "window": [
+        1120,
+        760
+      ],
+      "body_font": {
+        "family": "Microsoft YaHei UI",
+        "pixels": 14,
+        "line_height": 17.765625
+      },
+      "title_font": {
+        "family": "Microsoft YaHei UI",
+        "pixels": 24
+      },
+      "field": [
+        362,
+        600,
+        704,
+        40
+      ],
+      "popup": [
+        0,
+        146,
+        683,
+        334
+      ],
+      "inside_screen": true,
+      "overlaps_field": false
+    },
+    {
+      "theme": "dark",
+      "window": [
+        1320,
+        860
+      ],
+      "body_font": {
+        "family": "Microsoft YaHei UI",
+        "pixels": 14,
+        "line_height": 17.765625
+      },
+      "title_font": {
+        "family": "Microsoft YaHei UI",
+        "pixels": 24
+      },
+      "field": [
+        954,
+        499,
+        312,
+        40
+      ],
+      "popup": [
+        371,
+        146,
+        312,
+        334
+      ],
+      "inside_screen": true,
+      "overlaps_field": false
+    },
+    {
+      "theme": "light",
+      "window": [
+        900,
+        640
+      ],
+      "body_font": {
+        "family": "Microsoft YaHei UI",
+        "pixels": 14,
+        "line_height": 17.765625
+      },
+      "title_font": {
+        "family": "Microsoft YaHei UI",
+        "pixels": 24
+      },
+      "field": [
+        226,
+        480,
+        620,
+        40
+      ],
+      "popup": [
+        63,
+        142,
+        620,
+        334
+      ],
+      "inside_screen": true,
+      "overlaps_field": false
+    },
+    {
+      "theme": "light",
+      "window": [
+        1120,
+        760
+      ],
+      "body_font": {
+        "family": "Microsoft YaHei UI",
+        "pixels": 14,
+        "line_height": 17.765625
+      },
+      "title_font": {
+        "family": "Microsoft YaHei UI",
+        "pixels": 24
+      },
+      "field": [
+        362,
+        600,
+        704,
+        40
+      ],
+      "popup": [
+        0,
+        146,
+        683,
+        334
+      ],
+      "inside_screen": true,
+      "overlaps_field": false
+    },
+    {
+      "theme": "light",
+      "window": [
+        1320,
+        860
+      ],
+      "body_font": {
+        "family": "Microsoft YaHei UI",
+        "pixels": 14,
+        "line_height": 17.765625
+      },
+      "title_font": {
+        "family": "Microsoft YaHei UI",
+        "pixels": 24
+      },
+      "field": [
+        954,
+        499,
+        312,
+        40
+      ],
+      "popup": [
+        371,
+        146,
+        312,
+        334
+      ],
+      "inside_screen": true,
+      "overlaps_field": false
+    }
+  ]
+}

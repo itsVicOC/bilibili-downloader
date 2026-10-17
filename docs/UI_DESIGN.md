@@ -103,6 +103,18 @@
 
 ## 全页面截图矩阵
 
+### Windows 原生缩放复核（2026-10-17）
+
+发布演练 `dry-run-34` 使用 Windows 原生后端分别在 100%、150%、200% 下运行字体与下拉检查。三种缩放均使用 `Microsoft YaHei UI`，正文 14 个逻辑像素；每种缩放的深浅主题和三种尺寸均满足浮层在可用屏幕内且不遮挡输入框。以下图片按逻辑尺寸导出，原始 DPR 与六组数据保存在对应记录中。
+
+| 缩放 | 浅色 1320px 工作区 | 深色 900px 下拉 | 渲染记录 |
+|---|---|---|---|
+| 100% | [查看](images/native/windows/1/biliflow-platform-download-light-1320.png) | [查看](images/native/windows/1/biliflow-platform-dropdown-dark-900.png) | [JSON](images/native/windows/1/rendering-profile.json) |
+| 150% | [查看](images/native/windows/1.5/biliflow-platform-download-light-1320.png) | [查看](images/native/windows/1.5/biliflow-platform-dropdown-dark-900.png) | [JSON](images/native/windows/1.5/rendering-profile.json) |
+| 200% | [查看](images/native/windows/2/biliflow-platform-download-light-1320.png) | [查看](images/native/windows/2/biliflow-platform-dropdown-dark-900.png) | [JSON](images/native/windows/2/rendering-profile.json) |
+
+Windows 构建机桌面的物理分辨率有限，较大逻辑窗口可能超出可用屏幕；菜单仍按所在屏幕约束定位。这里验证 Qt 原生字体和控件布局，系统边框、文件选择器及真实多屏切换仍需 Windows 桌面复核。
+
 运行 `python scripts/capture_docs_screenshots.py` 可重新生成；`--updates-only` 只更新设置页签和更新弹窗。脚本使用临时配置、临时数据库、模拟直播服务和离线作品；不启动下载、直播拉流或真实 MP4 导出。以下 60 张截图覆盖每个工作区页签与三种尺寸。
 
 | 页面 | 深色 900×640 | 浅色 900×640 | 深色 1120×760 | 浅色 1120×760 | 深色 1320×860 | 浅色 1320×860 |

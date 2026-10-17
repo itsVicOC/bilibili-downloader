@@ -14,6 +14,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import zipfile
 from pathlib import Path
 
@@ -91,6 +92,17 @@ def verify_macos(installer: Path, archive: Path, temporary: Path):
         subprocess.run(["/usr/bin/hdiutil", "detach", str(mount)], check=True)
 
 
+def _uninstall_windows(uninstall: Path):
+    subprocess.run([str(uninstall), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"], check=True, timeout=120)
+    # Inno's temporary uninstaller can finish before its original executable
+    # removes itself. Do not mistake that file for a still-installed app.
+    deadline = time.monotonic() + 15
+    while uninstall.exists() and time.monotonic() < deadline:
+        time.sleep(0.1)
+    if uninstall.exists():
+        raise ValueError("Uninstaller did not finish its self-cleanup")
+
+
 def verify_windows(installer: Path, archive: Path, temporary: Path):
     import winreg
 
@@ -104,6 +116,7 @@ def verify_windows(installer: Path, archive: Path, temporary: Path):
     root = parent / "BilibiliDownloader"
     command = [str(installer), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/NOICONS", "/TASKS=", f"/DIR={parent}"]
     uninstall = parent / "uninst/unins000.exe"
+    uninstalled = False
     try:
         subprocess.run(command, check=True, timeout=300)
         result = verify_payload(root, archive, "Windows")
@@ -136,15 +149,19 @@ def verify_windows(installer: Path, archive: Path, temporary: Path):
         media.write_bytes(b"user data")
         shutil.rmtree(root)
         replacement.rename(root)
-        subprocess.run([str(uninstall), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"], check=True, timeout=120)
+        _uninstall_windows(uninstall)
+        uninstalled = True
         if (root / introduced.name).exists() or (root / "BilibiliDownloader.exe").exists():
             raise ValueError("Updated program files survived uninstall")
         if (root / media.name).read_bytes() != b"user data":
             raise ValueError("Uninstall removed user media")
         return result, ["install", "payload", "cli", "reinstall", "running-guard", "updated-uninstall", "preserve-media"]
     finally:
-        if uninstall.exists():
-            subprocess.run([str(uninstall), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"], timeout=120, check=True)
+        if not uninstalled and uninstall.exists():
+            try:
+                _uninstall_windows(uninstall)
+            except (OSError, ValueError, subprocess.SubprocessError) as exc:
+                print(f"Native installer cleanup failed: {exc}", file=sys.stderr)
 
 
 def main():
