@@ -101,6 +101,7 @@ class LivePage(QWidget):
         root.setContentsMargins(24, 24, 24, 24)
         root.setSpacing(20)
         header = PageHeader("直播录制", "守候开播，记录每一场喜欢的直播")
+        self.header = header
         history = QPushButton("录制历史")
         history.setObjectName("TextButton")
         history.clicked.connect(self.history_requested.emit)

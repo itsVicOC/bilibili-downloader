@@ -62,6 +62,7 @@ if sys.platform == 'darwin':
         bundle_identifier='com.itsvicoc.bilibili-downloader',
         info_plist={
             'CFBundleDisplayName': 'BiliFlow',
+            'CFBundleName': 'BiliFlow',
             'CFBundleShortVersionString': __version__,
             'CFBundleVersion': __version__,
             'NSHighResolutionCapable': True,

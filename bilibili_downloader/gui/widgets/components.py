@@ -314,6 +314,9 @@ class FieldRow(QWidget):
         row.setSpacing(12)
         self.label = QLabel(label)
         self.label.setObjectName("FieldLabel")
+        self.label.setBuddy(control)
+        if not control.accessibleName():
+            control.setAccessibleName(label)
         self.label.setFixedWidth(92)
         row.addWidget(self.label)
         row.addWidget(control, 1)
@@ -351,6 +354,7 @@ def stepper(spin: QSpinBox):
     spin.setAlignment(Qt.AlignCenter)
     spin.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
     row = QWidget()
+    row.setFocusProxy(spin)
     layout = QHBoxLayout(row)
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(8)

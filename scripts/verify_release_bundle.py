@@ -17,6 +17,7 @@ from bilibili_downloader.core.update_protocol import (
     UpdateError,
     validate_archive,
 )
+from scripts.package_installers import installer_filename
 
 try:
     from scripts.prepare_bundled_ffmpeg import (
@@ -225,6 +226,10 @@ def verify_release_bundle(directory: Path, release_id: str) -> dict[str, int]:
         FFMPEG_SOURCE_FILENAME: ("source", "", True),
     }
 
+    for system in ("macOS", "Windows"):
+        name = installer_filename(system, release_id)
+        assets[name] = ("installer", "", True)
+        assets[str(Path(name).with_suffix(".verification.json"))] = ("verification", system, True)
     notes_path = directory / "release-notes.md"
     if not notes_path.is_file() or not notes_path.read_text(encoding="utf-8").strip():
         raise VerificationError("release-notes.md is missing or empty")
@@ -235,6 +240,7 @@ def verify_release_bundle(directory: Path, release_id: str) -> dict[str, int]:
         "sboms": 0,
         "components": 0,
         "source_files": 0,
+        "installers": 0,
     }
     for filename, (kind, expected, includes_ffmpeg) in assets.items():
         path = directory / filename
@@ -291,6 +297,12 @@ def verify_release_bundle(directory: Path, release_id: str) -> dict[str, int]:
         elif kind == "sbom":
             counts["sboms"] += 1
             counts["components"] += _verify_sbom(path, includes_ffmpeg)
+        elif kind == "installer":
+            if path.stat().st_size == 0:
+                raise VerificationError(f"{filename}: empty installer")
+            counts["installers"] += 1
+        elif kind == "verification":
+            _verify_native_report(path, directory, expected, release_id)
         else:
             counts["source_files"] += _verify_source_archive(path)
 
@@ -312,6 +324,34 @@ def verify_release_bundle(directory: Path, release_id: str) -> dict[str, int]:
     return counts
 
 
+def _verify_native_report(path: Path, directory: Path, system: str, release_id: str):
+    try:
+        report = json.loads(path.read_text("utf-8"))
+        installer = installer_filename(system, release_id)
+        archive_name = f"BilibiliDownloader-{system}-full-{release_id}.zip"
+        build = BuildInfo.parse(report["build"])
+        with zipfile.ZipFile(directory / archive_name) as archive:
+            marker = f"{build.archive_root}/{build.resource_dir + '/' if build.resource_dir else ''}{BUILD_INFO_FILENAME}"
+            archived_build = BuildInfo.parse(json.loads(archive.read(marker)))
+        required = (
+            {"mount", "applications-link", "copy", "signature", "payload", "cli"}
+            if system == "macOS" else
+            {"install", "payload", "cli", "reinstall", "running-guard", "updated-uninstall", "preserve-media"}
+        )
+        if (
+            report.get("protocol") != 1 or build != archived_build
+            or build.platform != system or build.variant != "full"
+            or type(report.get("files")) is not int or report["files"] <= 0
+            or not required.issubset(set(report.get("checks", [])))
+            or report.get("installer") != installer or report.get("archive") != archive_name
+            or report.get("installer_sha256") != _sha256(directory / installer)
+            or report.get("archive_sha256") != _sha256(directory / archive_name)
+        ):
+            raise ValueError("native verification does not match release assets")
+    except (OSError, KeyError, TypeError, ValueError, zipfile.BadZipFile) as exc:
+        raise VerificationError(f"{path.name}: invalid native verification: {exc}") from exc
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Verify a BiliFlow release bundle")
     parser.add_argument("directory", type=Path)
@@ -328,6 +368,7 @@ def main(argv: list[str] | None = None) -> int:
         "release bundle verified: "
         f"{counts['archives']} archives/{counts['archive_members']} files, "
         f"{counts['sboms']} SBOMs/{counts['components']} components, "
+        f"{counts['installers']} installers, "
         f"{counts['source_files']} FFmpeg source files"
     )
     return 0

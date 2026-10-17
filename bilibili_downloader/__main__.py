@@ -121,6 +121,14 @@ def main():
 
     args = parser.parse_args()
 
+    if args.command and getattr(sys, "frozen", False):
+        from bilibili_downloader.core.installation import WindowsInstallationGuard
+        installation_guard = WindowsInstallationGuard()
+        try:
+            installation_guard.acquire()
+        except OSError as exc:
+            parser.error(str(exc))
+
     if args.command == "test":
         from bilibili_downloader.core.update_protocol import RuntimeLease
         from bilibili_downloader.utils.config import DEFAULT_CONFIG_PATH
@@ -368,10 +376,23 @@ def _launch_gui():
         sys.exit(1)
 
     app = QApplication(sys.argv)
-    app.setApplicationName("Bilibili Downloader")
+    app.setApplicationName("BiliFlow")
     app.setOrganizationName("bilibili-downloader")
     app.setWindowIcon(QIcon(asset_path("app_icon.png")))
     theme_manager = ThemeManager(app)
+
+    from bilibili_downloader.core.installation import (
+        WindowsInstallationGuard,
+        macos_installation_notice,
+    )
+    installation_guard = WindowsInstallationGuard()
+    if getattr(sys, "frozen", False):
+        try:
+            installation_guard.acquire()
+        except OSError as exc:
+            from bilibili_downloader.gui.widgets.components import MessageBox
+            MessageBox("暂时无法启动", str(exc), tone="warning").exec()
+            return
 
     config = ConfigManager()
     transaction = startup_transaction(config.data_dir)
@@ -384,6 +405,12 @@ def _launch_gui():
     try:
         window = MainWindow(config, startup_paused=transaction is not None)
         window.show()
+        if sys.platform == "darwin" and getattr(sys, "frozen", False):
+            from pathlib import Path
+            notice = macos_installation_notice(Path(sys.executable))
+            if notice:
+                window._settings_page._update_notice.set_message(notice, "warning")
+                window._status_bar.showMessage(notice)
         if transaction:
             path, value = transaction
             window.centralWidget().setEnabled(False)

@@ -2,6 +2,7 @@
 
 import json
 import logging
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,9 +26,11 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QStackedWidget,
     QStatusBar,
     QTabWidget,
+    QToolBar,
     QVBoxLayout,
     QWidget,
 )
@@ -274,6 +277,10 @@ class MainWindow(QMainWindow):
         self._settings_page.cache_requested.connect(self._on_clear_cache)
         settings_layout.addWidget(self._settings_page, 1)
         self._workspace_pages.addWidget(settings_page)
+        self._setup_workspace_toolbar((
+            self._download_header, self._live_page.header,
+            self._task_page.header, settings_header,
+        ))
         self._live_controller.snapshot_changed.connect(self._refresh_activity)
         self._activity_timer = QTimer(self)
         self._activity_timer.timeout.connect(self._refresh_activity)
@@ -286,7 +293,8 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(20)
-        layout.addWidget(PageHeader("视频下载", "把喜欢的作品，带回自己的收藏空间"))
+        self._download_header = PageHeader("视频下载", "把喜欢的作品，带回自己的收藏空间")
+        layout.addWidget(self._download_header)
         self._download_tabs = QTabWidget()
         layout.addWidget(self._download_tabs, 1)
         body = QWidget()
@@ -305,6 +313,7 @@ class MainWindow(QMainWindow):
         row.setSpacing(12)
         self._url_input = ChineseLineEdit()
         self._url_input.setPlaceholderText("B 站链接、BV / AV / ep 号或 b23.tv 短链")
+        self._url_input.setAccessibleName("视频链接或作品编号")
         self._url_input.returnPressed.connect(self._on_resolve_clicked)
         self._url_input.textChanged.connect(self._source_changed)
         row.addWidget(self._url_input, 1)
@@ -449,10 +458,39 @@ class MainWindow(QMainWindow):
         if index == 3 and not self._settings_page.dirty:
             self._settings_page.load_settings(self._settings)
         self._workspace_pages.setCurrentIndex(index)
+        if hasattr(self, "_header_stack"):
+            self._header_stack.setCurrentIndex(index)
+        for i, action in enumerate(getattr(self, "_workspace_actions", ())):
+            action.setChecked(i == index)
         for i, button in enumerate([*self._nav_buttons, self._settings_nav]):
             button.setObjectName("NavButtonActive" if i == index else "NavButton")
             repolish(button)
         return True
+
+    def _setup_workspace_toolbar(self, headers):
+        """Keep one native, fixed toolbar while preserving each page's actions."""
+        self._workspace_toolbar = QToolBar("工作区", self)
+        self._workspace_toolbar.setObjectName("WorkspaceToolbar")
+        self._workspace_toolbar.setMovable(False)
+        self._workspace_toolbar.setFloatable(False)
+        self._workspace_toolbar.setAllowedAreas(Qt.TopToolBarArea)
+        self._header_stack = QStackedWidget()
+        self._header_stack.setObjectName("WorkspaceHeaders")
+        self._header_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        for header in headers:
+            header.parentWidget().layout().removeWidget(header)
+            header.caption.setWordWrap(False)
+            self._header_stack.addWidget(header)
+        self._workspace_toolbar.addWidget(self._header_stack)
+        self.addToolBar(Qt.TopToolBarArea, self._workspace_toolbar)
+        if sys.platform == "darwin":
+            self.setUnifiedTitleAndToolBarOnMac(True)
+
+    def _focus_download_input(self):
+        if self._show_workspace(0):
+            self._download_tabs.setCurrentIndex(0)
+            self._url_input.setFocus(Qt.ShortcutFocusReason)
+            self._url_input.selectAll()
 
     def _show_tasks(self, tab=0):
         if self._show_workspace(2):
@@ -619,45 +657,64 @@ class MainWindow(QMainWindow):
         super().resizeEvent(event)
 
     def _setup_menu(self):
-        """Create menu bar."""
+        """Share actions between system menus, navigation and keyboard access."""
         menubar = self.menuBar()
-        menubar.hide()
+        menubar.setNativeMenuBar(sys.platform == "darwin")
+        self._actions = {}
+
+        def action(key, text, callback, shortcut=None, role=QAction.NoRole):
+            item = QAction(text, self)
+            item.setMenuRole(role)
+            if shortcut is not None:
+                item.setShortcut(shortcut)
+            item.triggered.connect(callback)
+            self.addAction(item)
+            self._actions[key] = item
+            return item
 
         # File menu
         file_menu = menubar.addMenu("文件(&F)")
-
-        settings_action = QAction("设置(&S)", self)
-        settings_action.setShortcut(QKeySequence.StandardKey.Preferences)
-        settings_action.triggered.connect(self._on_settings_triggered)
-        file_menu.addAction(settings_action)
-
+        file_menu.addAction(action("focus_source", "输入下载链接", self._focus_download_input, QKeySequence("Ctrl+L")))
+        file_menu.addAction(action("batch", "批量导入…", self._on_batch_clicked))
         file_menu.addSeparator()
+        preferences = QKeySequence.StandardKey.Preferences if sys.platform == "darwin" else QKeySequence("Ctrl+,")
+        file_menu.addAction(action("settings", "设置…", self._on_settings_triggered, preferences, QAction.PreferencesRole))
+        file_menu.addAction(action("quit", "退出 BiliFlow", self.close, QKeySequence.StandardKey.Quit, QAction.QuitRole))
 
-        exit_action = QAction("退出(&X)", self)
-        exit_action.setShortcut(QKeySequence.StandardKey.Quit)
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
+        edit_menu = menubar.addMenu("编辑(&E)")
+        from PySide6.QtWidgets import QApplication
+        for key, label, standard in (
+            ("undo", "撤销", QKeySequence.Undo), ("redo", "重做", QKeySequence.Redo),
+            ("cut", "剪切", QKeySequence.Cut), ("copy", "复制", QKeySequence.Copy),
+            ("paste", "粘贴", QKeySequence.Paste), ("selectAll", "全选", QKeySequence.SelectAll),
+        ):
+            def edit(_checked=False, method=key):
+                editor = QApplication.focusWidget()
+                handler = getattr(editor, method, None)
+                if callable(handler):
+                    handler()
+            edit_menu.addAction(action(key, label, edit, standard))
 
-        # Tools menu
+        view_menu = menubar.addMenu("显示(&V)")
+        self._workspace_actions = []
+        for index, text in enumerate(("视频下载", "直播录制", "任务中心", "设置")):
+            item = action(f"workspace_{index}", text, lambda _checked=False, page=index: self._show_workspace(page), QKeySequence(f"Ctrl+{index + 1}"))
+            item.setCheckable(True)
+            item.setChecked(self._workspace_pages.currentIndex() == index)
+            self._workspace_actions.append(item)
+            view_menu.addAction(item)
         tools_menu = menubar.addMenu("工具(&T)")
-
-        login_action = QAction("登录(&L)", self)
-        login_action.triggered.connect(self._on_login_triggered)
-        tools_menu.addAction(login_action)
-
-        ffmpeg_action = QAction("检查 FFmpeg(&F)", self)
-        ffmpeg_action.triggered.connect(self._on_check_ffmpeg)
-        tools_menu.addAction(ffmpeg_action)
-
-        # Help menu
+        tools_menu.addAction(action("login", "账号与登录…", self._on_login_triggered))
+        tools_menu.addAction(action("ffmpeg", "检查 FFmpeg", self._on_check_ffmpeg))
+        tools_menu.addAction(action("updates", "检查更新…", lambda: self._updates.check(self._settings.update_channel)))
         help_menu = menubar.addMenu("帮助(&H)")
-
-        about_action = QAction("关于(&A)", self)
-        about_action.triggered.connect(self._on_about_triggered)
-        help_menu.addAction(about_action)
-        update_action = QAction("检查更新", self)
-        update_action.triggered.connect(lambda: self._updates.check(self._settings.update_channel))
-        help_menu.addAction(update_action)
+        help_menu.addAction(action("about", "关于 BiliFlow", self._on_about_triggered, role=QAction.AboutRole))
+        # Buttons consume the same QAction; signals already connected above are
+        # disconnected to avoid executing an operation twice.
+        for button, key in ((self._settings_nav, "settings"), (self._header_login, "login")):
+            button.clicked.disconnect()
+            button.clicked.connect(self._actions[key].trigger)
+            self._actions[key].changed.connect(lambda b=button, a=self._actions[key]: b.setEnabled(a.isEnabled()))
 
     def _setup_updates(self, service):
         self._updates = UpdateController(self._config, self, service=service)
@@ -670,6 +727,7 @@ class MainWindow(QMainWindow):
         panel.update_channel_changed.connect(self._updates.invalidate_check)
         self._updates.status_changed.connect(panel._update_notice.set_message)
         self._updates.busy_changed.connect(panel.set_update_busy)
+        self._updates.busy_changed.connect(lambda busy, _kind: self._actions["updates"].setEnabled(not busy))
         self._updates.progress_changed.connect(panel._update_progress.setValue)
         self._updates.pending_changed.connect(panel.set_pending_update)
         self._updates.available.connect(self._on_update_available)
@@ -1490,6 +1548,9 @@ class MainWindow(QMainWindow):
 
     def _on_check_ffmpeg(self):
         """Check FFmpeg availability."""
+        if not self._actions["ffmpeg"].isEnabled():
+            return
+        self._actions["ffmpeg"].setEnabled(False)
         self._status_bar.showMessage("正在检查 FFmpeg...")
         self._ffmpeg_check_worker = FFmpegCheckWorker()
         self._ffmpeg_check_worker.finished.connect(self._on_ffmpeg_checked)
@@ -1501,10 +1562,12 @@ class MainWindow(QMainWindow):
 
     def _on_ffmpeg_checked(self, available: bool, msg: str):
         self._status_bar.showMessage("FFmpeg 检查完成")
-        if available:
-            self._show_info(f"FFmpeg 可用：\n{msg}")
-        else:
-            self._show_error(f"FFmpeg 不可用：\n{msg}")
+        self._actions["ffmpeg"].setEnabled(True)
+        self._show_settings_tab(2)
+        self._settings_page._probe_notice.set_message(
+            f"FFmpeg {'可用' if available else '不可用，请选择有效路径后重试'}：{msg}",
+            "success" if available else "danger",
+        )
 
     def _on_about_triggered(self):
         """Show about dialog."""

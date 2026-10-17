@@ -8,8 +8,7 @@ from PySide6.QtGui import QColor, QFont, QFontDatabase, QPalette
 from bilibili_downloader.gui.resources import load_stylesheet
 from bilibili_downloader.gui.resources.styles import DARK_PALETTE, LIGHT_PALETTE
 
-DEFAULT_FONT_POINT_SIZE = 10.0
-MACOS_FONT_SCALE = 1.15
+DEFAULT_FONT_POINT_SIZE = 10.5
 REFERENCE_LOGICAL_DPI = 96.0
 
 
@@ -23,7 +22,7 @@ def platform_font_scale(platform: str, logical_dpi: float) -> float:
     if logical_dpi <= 0:
         raise ValueError("logical DPI must be positive")
     if platform == "darwin":
-        return MACOS_FONT_SCALE * REFERENCE_LOGICAL_DPI / logical_dpi
+        return REFERENCE_LOGICAL_DPI / logical_dpi
     return 1.0
 
 

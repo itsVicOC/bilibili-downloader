@@ -310,8 +310,7 @@ jobs:
               fi
               codesign --verify --deep --strict --verbose=2 "$app_path"
             done
-            exit 0
-          fi
+          else
           cert_path="$RUNNER_TEMP/biliflow-signing.p12"
           keychain_path="$RUNNER_TEMP/biliflow-signing.keychain-db"
           keychain_password="$(openssl rand -hex 24)"
@@ -364,6 +363,19 @@ jobs:
               --wait
             xcrun stapler staple "$app_path"
           done
+          fi
+          python -m scripts.package_installers \
+            --root dist/variants/full/BilibiliDownloader.app \
+            --platform macOS --release-id "$RELEASE_ID"
+          if [ -n "$MACOS_CERTIFICATE" ]; then
+            dmg="BilibiliDownloader-macOS-full-${RELEASE_ID}.dmg"
+            codesign --force --timestamp --sign "$MACOS_SIGNING_IDENTITY" "$dmg"
+            xcrun notarytool submit "$dmg" \
+              --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" --wait
+            xcrun stapler staple "$dmg"
+            xcrun stapler validate "$dmg"
+          fi
 
       - name: Package macOS variants
         if: runner.os == 'macOS'
@@ -386,6 +398,25 @@ jobs:
               -Force
           }
 
+      - name: Install pinned Inno Setup and build Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $compilerSetup = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.3.exe'
+          Invoke-WebRequest 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe' -OutFile $compilerSetup
+          if ((Get-FileHash $compilerSetup -Algorithm SHA256).Hash.ToLowerInvariant() -ne '9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732') {
+            throw 'Inno Setup checksum mismatch'
+          }
+          $compilerDir = Join-Path $env:RUNNER_TEMP 'biliflow-inno'
+          $setup = Start-Process $compilerSetup -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=`"$compilerDir`"") -Wait -PassThru
+          if ($setup.ExitCode -ne 0) { throw "Inno Setup install failed: $($setup.ExitCode)" }
+          python -m scripts.package_installers --root dist/variants/full/BilibiliDownloader --platform Windows --release-id "$env:RELEASE_ID" --compiler "$compilerDir/ISCC.exe"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify native full installer against ZIP
+        shell: bash
+        run: python -m scripts.verify_native_installer --directory . --platform "${{ matrix.label }}" --release-id "$RELEASE_ID"
+
       - name: Upload build artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
@@ -395,6 +426,9 @@ jobs:
             ${{ matrix.archive_name }}-full-${{ env.RELEASE_ID }}.zip
             ${{ matrix.archive_name }}-lite-${{ env.RELEASE_ID }}.cdx.json
             ${{ matrix.archive_name }}-full-${{ env.RELEASE_ID }}.cdx.json
+            ${{ matrix.archive_name }}-full-${{ env.RELEASE_ID }}.dmg
+            ${{ matrix.archive_name }}-full-${{ env.RELEASE_ID }}-setup.exe
+            ${{ matrix.archive_name }}-full-${{ env.RELEASE_ID }}*.verification.json
           if-no-files-found: error
           retention-days: 14
 
@@ -433,7 +467,7 @@ jobs:
         shell: bash
         run: |
           cd release-assets
-          shasum -a 256 *.zip *.cdx.json *.tar.gz > SHA256SUMS.txt
+          shasum -a 256 *.zip *.dmg *.exe *.cdx.json *.verification.json *.tar.gz > SHA256SUMS.txt
 
       - name: Verify release bundle
         run: python -m scripts.verify_release_bundle release-assets --release-id "$RELEASE_ID"
@@ -488,6 +522,9 @@ jobs:
           prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
           files: |
             release-assets/*.zip
+            release-assets/*.dmg
+            release-assets/*-setup.exe
+            release-assets/*.verification.json
             release-assets/*.cdx.json
             release-assets/*.tar.gz
             release-assets/SHA256SUMS.txt

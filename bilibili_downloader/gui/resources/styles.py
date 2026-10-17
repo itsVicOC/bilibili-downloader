@@ -114,18 +114,23 @@ def build_component_overrides(is_dark: bool) -> str:
     notice = "#342c22" if is_dark else "#fff5e0"
     success_surface = "#20362e" if is_dark else "#edf8f2"
     return f"""
-    * {{ font-size: 10pt; color: {p.text}; }}
+    * {{ font-size: 10.5pt; color: {p.text}; }}
     QWidget {{ background: transparent; }}
     QMainWindow, QDialog, #AppSurface, #Workspace {{ background: {p.background}; }}
     #Sidebar {{ background: {p.sidebar}; border-right: 1px solid {p.divider}; }}
     QLabel#BrandTitle {{ font-size: 15pt; font-weight: 800; }}
-    QLabel#PageTitle, QLabel#DialogTitle {{ font-size: 20pt; font-weight: 700; }}
+    QLabel#PageTitle, QLabel#DialogTitle {{ font-size: 18pt; font-weight: 600; }}
     QLabel#SectionTitle, QLabel#VideoTitle {{ font-size: 12pt; font-weight: 700; }}
     QLabel#Caption, QLabel#DialogCaption, QLabel#MetaLabel, QLabel#MutedLabel,
     QLabel#SidebarCaption, QLabel#FieldLabel, QLabel#InfoChip {{ color: {p.muted}; font-size: 9pt; }}
     QLabel#NavSection {{ color: {p.muted}; font-size: 9pt; padding: 8px; }}
     QLabel#HeroEyebrow {{ color: {p.muted}; font-size: 9pt; }}
     QLabel#HeroTitle {{ font-size: 12pt; font-weight: 700; }}
+    QToolBar#WorkspaceToolbar {{ background: {p.background}; border: none; border-bottom: 1px solid {p.divider}; padding: 8px 24px; spacing: 8px; }}
+    #WorkspaceHeaders {{ background: transparent; min-height: 52px; }}
+    QMenuBar {{ background: {p.sidebar}; color: {p.text}; border-bottom: 1px solid {p.divider}; padding: 2px 8px; }}
+    QMenuBar::item {{ padding: 5px 10px; background: transparent; border-radius: 5px; }}
+    QMenuBar::item:selected {{ background: {p.selection}; }}
     #Panel, #SectionCard, #ControlPanel, #MascotCard {{
         background: {p.surface}; border: 1px solid {p.divider}; border-radius: {m.card_radius}px;
     }}
@@ -235,9 +240,9 @@ def build_component_overrides(is_dark: bool) -> str:
     QTabWidget::tab-bar {{ alignment: left; }}
     QTabBar::tab {{
         background: {p.surface_raised}; color: {p.muted}; border: 2px solid transparent;
-        border-radius: 8px; min-height: 36px; padding: 0 18px; margin-right: 6px;
+        border-radius: 7px; min-height: 36px; padding: 0 16px; margin-right: 4px;
     }}
-    QTabBar::tab:selected {{ background: {p.selection}; color: {p.text}; border-bottom-color: {p.accent}; }}
+    QTabBar::tab:selected {{ background: {p.selection}; color: {p.active_text}; border-bottom-color: {p.accent}; }}
     QTabBar::tab:hover {{ color: {p.text}; }}
     QTabBar::tab:focus {{ border-color: {p.focus}; }}
     QScrollArea, QScrollArea > QWidget > QWidget {{ background: transparent; border: none; }}

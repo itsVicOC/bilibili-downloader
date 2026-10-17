@@ -2,6 +2,15 @@
 
 项目代码使用 MIT License。以下文件来自公共素材库，继续受各自许可证约束。
 
+## Inno Setup
+
+Windows 安装器使用固定的 Inno Setup 6.7.3 编译。简体中文翻译文件
+`packaging/windows/ChineseSimplified.isl` 原样取自上游提交
+`4adf37ed7f3fd2bd11c6836ba056e3de170fbabf` 的
+`Files/Languages/Unofficial/ChineseSimplified.isl`，保留其作者说明。
+上游项目：[jrsoftware/issrc](https://github.com/jrsoftware/issrc/tree/4adf37ed7f3fd2bd11c6836ba056e3de170fbabf)。
+Inno Setup 及翻译适用上游许可，参见[上游许可文件](https://github.com/jrsoftware/issrc/blob/4adf37ed7f3fd2bd11c6836ba056e3de170fbabf/Files/License.txt)。
+
 ## FFmpeg
 
 Release 中名称带 `full` 的 macOS 与 Windows 包包含独立的 FFmpeg 7.1 可执行程序，用于本地无损合并或封装下载流。名称带 `lite` 的包不包含 FFmpeg。

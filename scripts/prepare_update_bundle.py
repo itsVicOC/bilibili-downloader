@@ -8,6 +8,7 @@ from pathlib import Path
 from packaging.version import Version
 
 from bilibili_downloader import __version__
+from bilibili_downloader.core.installation import write_payload_manifest
 from bilibili_downloader.core.update_protocol import (
     BUILD_INFO_FILENAME,
     BuildInfo,
@@ -32,6 +33,8 @@ def prepare_update_bundle(
     shutil.copy2(helper, destination)
     destination.chmod(0o755)
     atomic_json(resources / BUILD_INFO_FILENAME, build_payload(info))
+    if system == "Windows":
+        write_payload_manifest(root)
     return info
 
 

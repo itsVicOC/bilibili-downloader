@@ -15,6 +15,10 @@ import time
 from contextlib import closing
 from pathlib import Path
 
+from bilibili_downloader.core.installation import (
+    WindowsInstallationGuard,
+    remove_managed_files,
+)
 from bilibili_downloader.core.update_protocol import (
     DATA_FILES,
     BuildInfo,
@@ -305,9 +309,19 @@ def run_transaction(path: Path, *, parent_timeout=120, health_timeout=60) -> int
 
 def main():
     parser = argparse.ArgumentParser(description="BiliFlow update installer")
-    parser.add_argument("--transaction", type=Path, required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--transaction", type=Path)
+    mode.add_argument("--remove-managed-files", type=Path)
     args = parser.parse_args()
+    if args.remove_managed_files:
+        try:
+            remove_managed_files(args.remove_managed_files)
+            return 0
+        except (OSError, ValueError):
+            return 1
     try:
+        guard = WindowsInstallationGuard()
+        guard.acquire()
         return run_transaction(args.transaction)
     except Exception as exc:
         # Validation failures occur before the parent receives helper-ready.

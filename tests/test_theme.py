@@ -29,15 +29,15 @@ def test_dark_and_light_styles_are_distinct():
 def test_macos_typography_scale_increases_all_point_sizes():
     scaled = load_stylesheet(True, font_scale=1.15)
 
-    assert "font-size: 11.5pt;" in scaled
-    assert "font-size: 23pt;" in scaled
+    assert "font-size: 12.075pt;" in scaled
+    assert "font-size: 20.7pt;" in scaled
     assert scale_font_sizes("font-size: 10pt;", 1.0) == "font-size: 10pt;"
 
 
 @pytest.mark.parametrize("dpi", [72.0, 96.0, 144.0])
 def test_macos_point_conversion_preserves_reference_size(dpi):
     scale = platform_font_scale("darwin", dpi)
-    assert 10 * scale * dpi / 72 == pytest.approx(10 * 1.15 * 96 / 72)
+    assert 10.5 * scale * dpi / 72 == pytest.approx(14)
     assert platform_font_scale("win32", dpi) == 1.0
     assert platform_font_scale("linux", dpi) == 1.0
 
@@ -54,16 +54,15 @@ def test_theme_applies_same_font_to_body_and_native_bold_labels(qapp, qtbot):
         for widget in (body, heading):
             qtbot.addWidget(widget)
             widget.ensurePolished()
-        factor = 1.15 if sys.platform == "darwin" else 1.0
         dpi = qapp.primaryScreen().logicalDotsPerInchY()
         reference_dpi = 96 if sys.platform == "darwin" else dpi
-        for widget, points in ((body, 10), (heading, 20)):
+        for widget, points in ((body, 10.5), (heading, 18)):
             info = QFontInfo(widget.font())
             assert info.family() == QFontInfo(qapp.font()).family()
             # Windows can report -1 for a point-sized font's pixelSize().
             # Compare actual paint-device metrics against the intended size.
             expected = QFont(qapp.font())
-            expected.setPointSizeF(points * factor * reference_dpi / dpi)
+            expected.setPointSizeF(points * reference_dpi / dpi)
             expected.setWeight(widget.font().weight())
             actual_metrics = QFontMetricsF(widget.font(), widget)
             expected_metrics = QFontMetricsF(expected, widget)

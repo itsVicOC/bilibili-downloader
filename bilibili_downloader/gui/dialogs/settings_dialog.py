@@ -401,6 +401,7 @@ class SettingsDialog(QDialog):
 
     def _path_row(self, entry, folder):
         row = QWidget()
+        row.setFocusProxy(entry)
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)

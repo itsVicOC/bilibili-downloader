@@ -72,9 +72,8 @@ class TaskPage(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(20)
-        layout.addWidget(
-            PageHeader("任务中心", "下载进度、正在录制与本地历史，一处查看")
-        )
+        self.header = PageHeader("任务中心", "下载进度、正在录制与本地历史，一处查看")
+        layout.addWidget(self.header)
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs, 1)
         self._download_tab()
@@ -116,6 +115,7 @@ class TaskPage(QWidget):
         self._download_count.setObjectName("MetaLabel")
         toolbar.addWidget(self._download_count)
         toolbar.addStretch()
+        self._bulk_buttons = []
         for text, signal in (
             ("全部暂停", self.pause_all_requested),
             ("全部继续", self.resume_all_requested),
@@ -124,6 +124,7 @@ class TaskPage(QWidget):
             button = QPushButton(text)
             button.setObjectName("TableSubtleButton")
             button.clicked.connect(signal.emit)
+            self._bulk_buttons.append(button)
             toolbar.addWidget(button)
         more = QPushButton("更多")
         more.setObjectName("TableSubtleButton")
@@ -178,6 +179,14 @@ class TaskPage(QWidget):
             self.downloads.setRowHidden(row, not visible)
             count += bool(visible)
         total = len(self.downloads._states)
+        states = set(self.downloads._states.values())
+        eligible = (
+            bool(states & {TaskStatus.QUEUED, TaskStatus.DOWNLOADING}),
+            TaskStatus.PAUSED in states,
+            TaskStatus.COMPLETED in states,
+        )
+        for button, enabled in zip(self._bulk_buttons, eligible):
+            button.setEnabled(enabled)
         self._download_count.setText(f"{count} / {total} 项")
         self._download_stack.setCurrentIndex(1 if not total else 0 if count else 2)
         self._download_selection()

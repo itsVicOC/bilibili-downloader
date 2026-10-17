@@ -16,6 +16,7 @@ from bilibili_downloader.core.update_protocol import (
     build_payload,
 )
 from scripts import verify_release_bundle as verifier
+from scripts.package_installers import installer_filename
 from scripts.prepare_bundled_ffmpeg import FFMPEG_SOURCE_FILENAME
 from scripts.verify_release_bundle import VerificationError, verify_release_bundle
 
@@ -111,11 +112,29 @@ def _write_bundle(directory: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     (directory / "release-notes.md").write_text("## Release\n", encoding="utf-8")
+    for system in ("macOS", "Windows"):
+        name = installer_filename(system, RELEASE_ID)
+        installer = directory / name
+        installer.write_bytes(b"native installer fixture")
+        archive = directory / f"BilibiliDownloader-{system}-full-{RELEASE_ID}.zip"
+        report = {
+            "protocol": 1,
+            "build": build_payload(BuildInfo(__version__, system, "x86_64", "full")),
+            "files": 10,
+            "installer": installer.name, "archive": archive.name,
+            "installer_sha256": hashlib.sha256(installer.read_bytes()).hexdigest(),
+            "archive_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+            "checks": ["mount", "applications-link", "copy", "signature", "payload", "cli", "install", "reinstall", "running-guard", "updated-uninstall", "preserve-media"],
+        }
+        installer.with_suffix(".verification.json").write_text(json.dumps(report), encoding="utf-8")
     checksum_lines = []
     checksum_assets = (
         sorted(directory.glob("*.zip"))
         + sorted(directory.glob("*.cdx.json"))
         + sorted(directory.glob("*.tar.gz"))
+        + sorted(directory.glob("*.dmg"))
+        + sorted(directory.glob("*.exe"))
+        + sorted(directory.glob("*.verification.json"))
     )
     for path in checksum_assets:
         checksum_lines.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}")
@@ -135,6 +154,7 @@ def test_verify_release_bundle_accepts_complete_bundle(
     assert counts["sboms"] == 4
     assert counts["components"] == 8
     assert counts["source_files"] == 3
+    assert counts["installers"] == 2
 
 
 def test_verify_release_bundle_rejects_checksum_mismatch(
