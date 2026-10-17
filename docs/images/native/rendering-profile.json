@@ -19,11 +19,11 @@
       ],
       "body_font": {
         "family": "PingFang SC",
-        "pixels": 15
+        "pixels": 14
       },
       "title_font": {
         "family": "PingFang SC",
-        "pixels": 31
+        "pixels": 24
       },
       "field": [
         221,
@@ -48,11 +48,11 @@
       ],
       "body_font": {
         "family": "PingFang SC",
-        "pixels": 15
+        "pixels": 14
       },
       "title_font": {
         "family": "PingFang SC",
-        "pixels": 31
+        "pixels": 24
       },
       "field": [
         357,
@@ -77,21 +77,21 @@
       ],
       "body_font": {
         "family": "PingFang SC",
-        "pixels": 15
+        "pixels": 14
       },
       "title_font": {
         "family": "PingFang SC",
-        "pixels": 31
+        "pixels": 24
       },
       "field": [
         955,
-        523,
+        503,
         316,
         40
       ],
       "popup": [
         955,
-        567,
+        547,
         316,
         334
       ],
@@ -106,11 +106,11 @@
       ],
       "body_font": {
         "family": "PingFang SC",
-        "pixels": 15
+        "pixels": 14
       },
       "title_font": {
         "family": "PingFang SC",
-        "pixels": 31
+        "pixels": 24
       },
       "field": [
         221,
@@ -135,11 +135,11 @@
       ],
       "body_font": {
         "family": "PingFang SC",
-        "pixels": 15
+        "pixels": 14
       },
       "title_font": {
         "family": "PingFang SC",
-        "pixels": 31
+        "pixels": 24
       },
       "field": [
         357,
@@ -164,21 +164,21 @@
       ],
       "body_font": {
         "family": "PingFang SC",
-        "pixels": 15
+        "pixels": 14
       },
       "title_font": {
         "family": "PingFang SC",
-        "pixels": 31
+        "pixels": 24
       },
       "field": [
         955,
-        523,
+        503,
         316,
         40
       ],
       "popup": [
         955,
-        567,
+        547,
         316,
         334
       ],

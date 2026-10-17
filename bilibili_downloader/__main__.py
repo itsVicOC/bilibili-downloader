@@ -413,7 +413,7 @@ def _launch_gui():
                 window._status_bar.showMessage(notice)
         if transaction:
             path, value = transaction
-            window.centralWidget().setEnabled(False)
+            window._set_shell_enabled(False)
             QTimer.singleShot(0, lambda: atomic_json(path.parent / "startup-ready.json", {"token": value["token"], "version": value["build"]["version"]}))
             timer = QTimer(window)
             timer.setInterval(100)

@@ -19,7 +19,15 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from PySide6.QtCore import QPoint, QRect, qVersion
-from PySide6.QtGui import QCloseEvent, QColor, QFontInfo, QIcon, QPainter, QPixmap
+from PySide6.QtGui import (
+    QCloseEvent,
+    QColor,
+    QFontInfo,
+    QFontMetricsF,
+    QIcon,
+    QPainter,
+    QPixmap,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QLabel,
@@ -473,7 +481,8 @@ def _capture_platform_checks(app, theme, window):
                     "theme": "dark" if dark else "light",
                     "window": [width, height],
                     "body_font": {
-                        "family": body_font.family(), "pixels": body_font.pixelSize()
+                        "family": body_font.family(), "pixels": body_font.pixelSize(),
+                        "line_height": QFontMetricsF(window._url_input.font(), window._url_input).height(),
                     },
                     "title_font": {
                         "family": title_font.family(), "pixels": title_font.pixelSize()
@@ -503,6 +512,7 @@ def _capture_platform_checks(app, theme, window):
                 "backend": app.platformName(),
                 "logical_dpi": screen.logicalDotsPerInchY(),
                 "device_pixel_ratio": screen.devicePixelRatio(),
+                "scale_factor": os.environ.get("QT_SCALE_FACTOR", "system"),
                 "available_screen": screen.availableGeometry().getRect(),
                 "checks": checks,
             },

@@ -139,6 +139,7 @@ class MainWindow(QMainWindow):
         self._setup_menu()
         self._setup_status_bar()
         self._setup_updates(update_service)
+        self._set_shell_enabled(not startup_paused)
         self._restore_tasks()
 
         # Check login status on startup
@@ -452,6 +453,8 @@ class MainWindow(QMainWindow):
         self._content_layout.addWidget(controls, 4)
 
     def _show_workspace(self, index):
+        if not getattr(self, "_shell_enabled", True):
+            return False
         if (
             self._workspace_pages.currentIndex() == 3
             and index != 3
@@ -499,6 +502,17 @@ class MainWindow(QMainWindow):
             self._download_tabs.setCurrentIndex(0)
             self._url_input.setFocus(Qt.ShortcutFocusReason)
             self._url_input.selectAll()
+
+    def _set_shell_enabled(self, enabled):
+        """Include the native toolbar, menus and shortcuts in update isolation."""
+        self._shell_enabled = enabled
+        for widget in (self.centralWidget(), self._workspace_toolbar, self.menuBar(), self._status_bar):
+            widget.setEnabled(enabled)
+        for item in self._actions.values():
+            item.setEnabled(enabled)
+        if enabled:
+            self._actions["updates"].setEnabled(not self._updates.busy)
+        self._sync_edit_actions()
 
     def _show_tasks(self, tab=0):
         if self._show_workspace(2):
@@ -551,6 +565,7 @@ class MainWindow(QMainWindow):
         self._codec_stack.setCurrentWidget(
             self._codec_combo if video_mode else self._audio_combo
         )
+        self._codec_stack.setFocusProxy(self._codec_stack.currentWidget())
 
     def _populate_quality_combo(self):
         """Fill quality combo box with all available qualities."""
@@ -716,7 +731,7 @@ class MainWindow(QMainWindow):
         tools_menu = menubar.addMenu("工具(&T)")
         tools_menu.addAction(action("login", "账号与登录…", self._on_login_triggered))
         tools_menu.addAction(action("ffmpeg", "检查 FFmpeg", self._on_check_ffmpeg))
-        tools_menu.addAction(action("updates", "检查更新…", lambda: self._updates.check(self._settings.update_channel)))
+        tools_menu.addAction(action("updates", "检查更新…", lambda: self._updates.check(self._settings_page._update_channel.currentData())))
         help_menu = menubar.addMenu("帮助(&H)")
         help_menu.addAction(action("about", "关于 BiliFlow", self._on_about_triggered, role=QAction.AboutRole))
         # Buttons consume the same QAction; signals already connected above are
@@ -750,7 +765,7 @@ class MainWindow(QMainWindow):
             "selectAll": editable and bool(editor.text() if line else editor.toPlainText()),
         }
         for name, enabled in states.items():
-            self._actions[name].setEnabled(bool(enabled))
+            self._actions[name].setEnabled(bool(enabled) and getattr(self, "_shell_enabled", True))
 
     def _setup_updates(self, service):
         self._updates = UpdateController(self._config, self, service=service)
@@ -763,7 +778,7 @@ class MainWindow(QMainWindow):
         panel.update_channel_changed.connect(self._updates.invalidate_check)
         self._updates.status_changed.connect(panel._update_notice.set_message)
         self._updates.busy_changed.connect(panel.set_update_busy)
-        self._updates.busy_changed.connect(lambda busy, _kind: self._actions["updates"].setEnabled(not busy))
+        self._updates.busy_changed.connect(lambda busy, _kind: self._actions["updates"].setEnabled(not busy and self._shell_enabled))
         self._updates.progress_changed.connect(panel._update_progress.setValue)
         self._updates.pending_changed.connect(panel.set_pending_update)
         self._updates.available.connect(self._on_update_available)
@@ -783,7 +798,7 @@ class MainWindow(QMainWindow):
 
     def resume_startup(self):
         self._startup_paused = False
-        self.centralWidget().setEnabled(True)
+        self._set_shell_enabled(True)
         self._live_controller.start_background()
         for item, task_id in self._startup_downloads:
             self._start_download(item, task_id)
@@ -850,7 +865,7 @@ class MainWindow(QMainWindow):
             self._on_update_failed(str(exc), True)
             return
         self._update_in_progress = True
-        self.centralWidget().setEnabled(False)
+        self._set_shell_enabled(False)
         self._update_deadline = time.monotonic() + 120
         self._download_list.pause_all_workers()
         self._live_controller.shutdown()
@@ -905,7 +920,7 @@ class MainWindow(QMainWindow):
         self._update_in_progress = False
         self._update_helper = None
         self._update_transaction = None
-        self.centralWidget().setEnabled(True)
+        self._set_shell_enabled(True)
         if not self._live_controller.restart_after_update_abort():
             self._status_bar.showMessage("后台任务仍在收尾，请稍后重新打开软件。")
         self._settings_page._update_notice.set_message(message, "danger")
@@ -1598,7 +1613,7 @@ class MainWindow(QMainWindow):
 
     def _on_ffmpeg_checked(self, available: bool, msg: str):
         self._status_bar.showMessage("FFmpeg 检查完成")
-        self._actions["ffmpeg"].setEnabled(True)
+        self._actions["ffmpeg"].setEnabled(self._shell_enabled)
         self._show_settings_tab(2)
         self._settings_page._probe_notice.set_message(
             f"FFmpeg {'可用' if available else '不可用，请选择有效路径后重试'}：{msg}",

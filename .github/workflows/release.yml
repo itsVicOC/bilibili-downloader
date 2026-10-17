@@ -93,6 +93,26 @@ jobs:
       - name: Run tests
         run: pytest -q
 
+      - name: Capture Windows native typography at three scales
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          foreach ($scale in @('1', '1.5', '2')) {
+            $env:QT_SCALE_FACTOR = $scale
+            python scripts/capture_docs_screenshots.py --native --checks-only --output-dir "$env:RUNNER_TEMP/biliflow-visuals/$scale"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          Remove-Item Env:QT_SCALE_FACTOR
+
+      - name: Upload Windows native visual checks
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: BiliFlow-Windows-visuals-${{ env.RELEASE_ID }}
+          path: ${{ runner.temp }}/biliflow-visuals
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Set up pinned Rust toolchain
         run: |
           rustup toolchain install 1.96.0 --profile minimal

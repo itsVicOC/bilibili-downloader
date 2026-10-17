@@ -181,8 +181,8 @@ class TaskPage(QWidget):
         total = len(self.downloads._states)
         states = set(self.downloads._states.values())
         eligible = (
-            bool(states & {TaskStatus.QUEUED, TaskStatus.DOWNLOADING}),
-            TaskStatus.PAUSED in states,
+            bool(states & {TaskStatus.QUEUED, TaskStatus.DOWNLOADING, TaskStatus.MERGING}),
+            bool(self.downloads.resumable_ids),
             TaskStatus.COMPLETED in states,
         )
         for button, enabled in zip(self._bulk_buttons, eligible):

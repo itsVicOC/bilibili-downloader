@@ -42,9 +42,6 @@ Source: "biliflow-installed"; DestDir: "{app}"; DestName: ".biliflow-installed";
 Name: "{userprograms}\BiliFlow"; Filename: "{app}\BilibiliDownloader\BilibiliDownloader.exe"; WorkingDir: "{app}"
 Name: "{userdesktop}\BiliFlow"; Filename: "{app}\BilibiliDownloader\BilibiliDownloader.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
-[Run]
-Filename: "{app}\BilibiliDownloader\BilibiliDownloader.exe"; Description: "打开 BiliFlow"; Flags: nowait postinstall skipifsilent
-
 [UninstallRun]
 Filename: "{app}\uninst\biliflow-maintenance.exe"; Parameters: "--remove-managed-files ""{app}\BilibiliDownloader"""; Flags: runhidden waituntilterminated
 

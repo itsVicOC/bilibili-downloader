@@ -94,6 +94,31 @@ pyinstaller --noconfirm --clean BiliFlowUpdater.spec
 - spec 根据平台选择 `app_icon.icns`、`app_icon.ico` 或 `app_icon.png`。
 - `packaging_hooks/hook-keyring.py` 只收集目标系统的凭据库后端，避免携带其他平台实现。
 
+### 原生安装包（full）
+
+先按 Release 流程生成 `dist/variants/full`，嵌入 FFmpeg、录制引擎、许可证、独立更新程序与构建描述，再生成安装包。Windows 目录还包含 `biliflow-payload.json`：它记录受管理程序文件的 SHA-256，供更新后的卸载清理使用，不包含用户配置或媒体。
+
+```bash
+python -m scripts.package_installers \
+  --root dist/variants/full/BilibiliDownloader.app \
+  --platform macOS --release-id vX.Y.Z
+```
+
+Windows 在本机使用相同命令，将 root 改为 `dist/variants/full/BilibiliDownloader`、platform 改为 `Windows`，并通过 `--compiler <ISCC.exe>` 指定 Inno Setup 6.7.3。流水线从官方固定版本下载编译器并核对 SHA-256，中文翻译随仓库保存。安装默认无需提权，程序位于 `%LOCALAPPDATA%\Programs\BiliFlow\BilibiliDownloader`，卸载程序和维护工具位于父目录的 `uninst`，因此 ZIP 更新不会替换卸载组件。应用和独立更新程序持有运行标识；安装及卸载持有安装标识，防止同时替换程序。
+
+macOS 使用系统 `hdiutil`，无需额外打包依赖。DMG 在应用签名完成后生成；配置 Developer ID 时，在临时签名钥匙串销毁前完成 DMG 签名、公证和票据装订。无证书构建仍验证应用 ad-hoc 签名，不宣称完成公证。
+
+原生校验必须在对应平台运行：
+
+```bash
+python -m scripts.verify_native_installer \
+  --directory . --platform macOS --release-id vX.Y.Z
+```
+
+校验器将安装/复制得到的文件与同次构建的 full ZIP 按路径、摘要和符号链接目标逐项比较，运行冻结 CLI，并生成绑定 ZIP 与安装包 SHA-256 的 `*.verification.json`。Windows 还测试覆盖安装、运行中拦截、目录替换后的卸载与用户媒体保留；脚本会实际写入临时目录和当前用户的卸载注册表，只能在没有既有 BiliFlow 安装的干净测试账号中运行。macOS 检查镜像、Applications 链接、拖拽等效复制和应用签名。验证器不启动真实下载、录制或 GUI，也不读取账号。
+
+GUI 的原生验收单独执行：macOS 检查系统菜单、红黄绿按钮、融合工具栏、全屏和 Retina；Windows 检查 100%/150%/200% 缩放、窗口按钮、快捷键和文件选择器。发布演练另外上传 `BiliFlow-Windows-visuals-<release-id>`，其中三个缩放目录保存原生 Windows 后端的字体、下拉截图及渲染记录。Qt 控件截图用于布局比较；包含系统标题栏的截图应使用只捕获目标窗口的工具另行保存，避免带入其他应用或桌面内容。原生安装验证报告不代表 GUI 人工验收通过。
+
 独立更新程序只依赖 Python 标准库，不包含 Qt。Release 流水线通过 `python -m scripts.prepare_update_bundle` 为每个 full/lite 变体加入 `biliflow-updater`（Windows 为 `.exe`）和 `biliflow-build.json`；构建信息包含规范化版本、平台、架构、变体和更新协议。macOS 必须在嵌入这些文件之后签名。直接用应用 spec 构建的目录没有发行描述文件，自动安装会转为手动安装。
 
 使用 Developer ID 时，导入证书后通过 `MACOS_UPDATER_SIGNING_IDENTITY` 重新构建更新程序，使单文件程序内嵌的 Python 库也使用同一身份签名，再嵌入应用并公证。仅对更新程序外层执行 `codesign` 无法替代内嵌库的签名。无证书时沿用 ad-hoc 签名。
@@ -155,7 +180,7 @@ python -m scripts.verify_release_bundle <解压目录> \
   --release-id dry-run-<run-number>
 ```
 
-验证器要求两个平台各有 full/lite ZIP 和对应 CycloneDX SBOM。full 必须包含 FFmpeg、构建通知与 LGPL 文件，lite 必须不含 FFmpeg；固定提交的 FFmpeg 源码归档也必须存在。验证器会逐项核对 `SHA256SUMS.txt`，任何一项缺失、路径不安全或摘要不匹配都会阻止后续发布。
+验证器要求两个平台各有 full/lite ZIP、对应 CycloneDX SBOM、full 原生安装包和原生验证报告。full 必须包含 FFmpeg、构建通知与 LGPL 文件，lite 必须不含 FFmpeg；固定提交的 FFmpeg 源码归档也必须存在。验证器会逐项核对 `SHA256SUMS.txt`，任何一项缺失、路径不安全或摘要不匹配都会阻止后续发布。
 
 ### 候选版与正式版
 
@@ -185,13 +210,16 @@ git push origin vX.Y.Z
 
 - `BilibiliDownloader-macOS-{full,lite}-vX.Y.Z.zip`
 - `BilibiliDownloader-Windows-{full,lite}-vX.Y.Z.zip`
+- `BilibiliDownloader-macOS-full-vX.Y.Z.dmg`
+- `BilibiliDownloader-Windows-full-vX.Y.Z-setup.exe`
+- 两份绑定原生安装验证结果的 `*.verification.json`
 - 每个平台和变体对应的 `*.cdx.json` CycloneDX 依赖清单
 - `FFmpeg-7.1-source.tar.gz` 对应源码归档
 - `SHA256SUMS.txt` 完整性校验文件
 
 发布任务从 `CHANGELOG.md` 提取最上方版本作为 Release 正文。工作流默认只有读取仓库内容的权限，只有真正的 publish job 获得 `contents: write`。手动运行时从分支选择 `publish=true` 会被拒绝；只能在 tag ref 上显式发布。任一平台构建或验证失败时不会创建不完整 Release；应修复后发布新补丁版本，不覆盖已公开的版本资产。
 
-发布完成后应确认 Release 不是草稿，正式版未标为预发布、beta/rc 版已标为预发布，四个 full/lite 安装包、四个 SBOM、FFmpeg 源码归档与 `SHA256SUMS.txt` 均存在，并从校验文件抽查至少一个安装包。最后在干净环境中启动应用，确认“关于”窗口版本与标签一致。
+发布完成后应确认 Release 不是草稿，正式版未标为预发布、beta/rc 版已标为预发布，四个 full/lite ZIP、两个原生安装包、两份原生验证报告、四个 SBOM、FFmpeg 源码归档与 `SHA256SUMS.txt` 均存在，并从校验文件抽查至少一个安装包。最后在干净环境中启动应用，确认“关于”窗口版本与标签一致。
 
 默认 macOS/Windows 构建没有商业代码签名。macOS Release 工作流支持可选的 Developer ID 签名与 Apple 公证；在受保护的 GitHub Environment 中配置以下 Secrets 后会自动启用：
 

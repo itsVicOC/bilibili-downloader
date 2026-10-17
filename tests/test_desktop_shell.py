@@ -1,3 +1,4 @@
+import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QApplication, QToolBar
@@ -82,3 +83,30 @@ def test_cancelled_navigation_keeps_current_menu_selection_and_draft(qtbot, tmp_
     assert [item.isChecked() for item in window._workspace_actions] == [False, False, False, True]
     assert window._settings_page._output_dir.text() == "/edited/path"
     window._settings_page.load_settings(window._settings)
+
+
+@pytest.mark.parametrize("status,enabled", [
+    (TaskStatus.MERGING, [True, False, False]),
+    (TaskStatus.FAILED, [False, True, False]),
+    (TaskStatus.CANCELLED, [False, True, False]),
+])
+def test_bulk_controls_cover_merging_failed_and_cancelled(qtbot, tmp_path, status, enabled):
+    window = _make_window(tmp_path)
+    qtbot.addWidget(window)
+    _add_task(window, 1, status)
+    window._task_page.refresh_downloads()
+    assert [button.isEnabled() for button in window._task_page._bulk_buttons] == enabled
+
+
+def test_update_isolation_disables_native_toolbar_menus_and_shortcuts(qtbot, tmp_path):
+    window = _make_window(tmp_path)
+    qtbot.addWidget(window)
+    window._set_shell_enabled(False)
+    window._sync_edit_actions()
+    assert not window._workspace_toolbar.isEnabled()
+    assert not window.menuBar().isEnabled()
+    assert not any(item.isEnabled() for item in window._actions.values())
+    assert not window._show_workspace(2)
+    window._set_shell_enabled(True)
+    assert window._actions["focus_source"].isEnabled()
+    assert window._show_workspace(2)
