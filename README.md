@@ -74,15 +74,15 @@
 
 | 系统 | 下载文件 | 说明 |
 |---|---|---|
-| macOS 12+（Apple Silicon） | `BilibiliDownloader-macOS-full-<version>.dmg` | 新构建提供；拖入 Applications 后打开 |
-| Windows 10/11（x64） | `BilibiliDownloader-Windows-full-<version>-setup.exe` | 新构建提供；当前用户安装，无需管理员权限 |
+| macOS 12+（Apple Silicon） | `BilibiliDownloader-macOS-full-<version>.dmg` | 从 v0.8.1 提供；拖入 Applications 后打开 |
+| Windows 10/11（x64） | `BilibiliDownloader-Windows-full-<version>-setup.exe` | 从 v0.8.1 提供；当前用户安装，无需管理员权限 |
 | macOS 12+（Apple Silicon） | `BilibiliDownloader-macOS-full-<version>.zip` | 保留；解压后将应用移入应用程序文件夹 |
 | macOS 12+（Apple Silicon） | `BilibiliDownloader-macOS-lite-<version>.zip` | 需要自行安装 FFmpeg |
 | Windows 10/11（x64） | `BilibiliDownloader-Windows-full-<version>.zip` | 保留便携包；完整解压后运行 |
 | Windows 10/11（x64） | `BilibiliDownloader-Windows-lite-<version>.zip` | 需要自行安装 FFmpeg |
 | Linux | 暂无预构建包 | 按“从源码运行”操作 |
 
-EXE/DMG 从本轮开发构建开始提供，已发布版本以 Release 资产为准。Windows 默认安装到 `%LOCALAPPDATA%\Programs\BiliFlow`，在系统应用列表中卸载；卸载保留配置、任务记录和用户媒体。macOS 请先将应用拖入 Applications，再启动。应用内自动更新继续使用对应的 full/lite ZIP。
+EXE/DMG 从 `v0.8.1` 正式版开始提供。Windows 默认安装到 `%LOCALAPPDATA%\Programs\BiliFlow`，在系统应用列表中卸载；卸载保留配置、任务记录和用户媒体。macOS 请先将应用拖入 Applications，再启动。应用内自动更新继续使用对应的 full/lite ZIP。
 
 lite 包、源码运行和 Linux 环境可使用以下方式安装 FFmpeg：
 

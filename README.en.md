@@ -78,15 +78,15 @@ Live recording is included in stable releases from `v0.8.0`. Configure engine pa
 
 | Platform | Release file | Notes |
 |---|---|---|
-| macOS 12+ · Apple Silicon | `BilibiliDownloader-macOS-full-<version>.dmg` | New builds; drag into Applications before opening |
-| Windows 10/11 · x64 | `BilibiliDownloader-Windows-full-<version>-setup.exe` | New builds; per-user installation without administrator rights |
+| macOS 12+ · Apple Silicon | `BilibiliDownloader-macOS-full-<version>.dmg` | From v0.8.1; drag into Applications before opening |
+| Windows 10/11 · x64 | `BilibiliDownloader-Windows-full-<version>-setup.exe` | From v0.8.1; per-user installation without administrator rights |
 | macOS 12+ · Apple Silicon | `BilibiliDownloader-macOS-full-<version>.zip` | Portable archive; move the app into Applications |
 | macOS 12+ · Apple Silicon | `BilibiliDownloader-macOS-lite-<version>.zip` | Install FFmpeg separately |
 | Windows 10/11 · x64 | `BilibiliDownloader-Windows-full-<version>.zip` | Portable archive; extract the entire archive before running |
 | Windows 10/11 · x64 | `BilibiliDownloader-Windows-lite-<version>.zip` | Install FFmpeg separately |
 | Linux | No prebuilt package yet | Follow [Run from source](#run-from-source) |
 
-EXE/DMG assets are available in new development builds; check each release for its actual assets. Windows installs into `%LOCALAPPDATA%\Programs\BiliFlow` by default and provides Start menu and system uninstall entries. Uninstall preserves configuration, task records, and user media. On macOS, install into Applications before launching. In-app updates continue using the corresponding full/lite ZIP.
+EXE/DMG assets are available starting with the stable `v0.8.1` release. Windows installs into `%LOCALAPPDATA%\Programs\BiliFlow` by default and provides Start menu and system uninstall entries. Uninstall preserves configuration, task records, and user media. On macOS, install into Applications before launching. In-app updates continue using the corresponding full/lite ZIP.
 
 For `lite`, source installations, or Linux, install FFmpeg using your package manager:
 
