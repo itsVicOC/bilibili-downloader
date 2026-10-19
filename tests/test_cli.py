@@ -2,16 +2,25 @@
 
 import argparse
 
+import pytest
+
 from bilibili_downloader import __main__ as cli
 from bilibili_downloader.core.models import (
     AppSettings,
+    ContentCollection,
     DownloadOutcome,
     VideoInfo,
     VideoPage,
 )
 
 
-def test_cli_download_expands_all_pages_and_forwards_options(monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+    ("errors", "has_items"),
+    [([], True), (["BV1xx411x7h8：视频已失效"], True), (["视频已失效"], False)],
+)
+def test_cli_download_handles_collection_results_and_forwards_options(
+    monkeypatch, tmp_path, capsys, errors, has_items
+):
     info = VideoInfo(
         bvid="BV1GJ411x7h7",
         cid=11,
@@ -42,8 +51,10 @@ def test_cli_download_expands_all_pages_and_forwards_options(monkeypatch, tmp_pa
         "bilibili_downloader.api.client.BilibiliAPIClient", FakeClient
     )
     monkeypatch.setattr(
-        "bilibili_downloader.core.batch.BatchResolver.resolve_one",
-        lambda self, source: info,
+        "bilibili_downloader.core.batch.ContentSourceResolver.resolve",
+        lambda self, source: ContentCollection(
+            items=[info] if has_items else [], errors=errors
+        ),
     )
     monkeypatch.setattr(
         "bilibili_downloader.core.download_service.DownloadService", FakeService
@@ -71,6 +82,16 @@ def test_cli_download_expands_all_pages_and_forwards_options(monkeypatch, tmp_pa
         path_template="{author}/{title}{part_suffix}",
     )
 
+    if not has_items:
+        with pytest.raises(SystemExit) as exc:
+            cli._cli_download(args)
+        assert exc.value.code == 1
+        assert captured == []
+        output = capsys.readouterr().out
+        assert "该来源没有可下载的作品" in output
+        assert f"Skipped: {errors[0]}" in output
+        return
+
     cli._cli_download(args)
 
     assert [item.video_info.cid for item in captured] == [11, 22]
@@ -82,6 +103,9 @@ def test_cli_download_expands_all_pages_and_forwards_options(monkeypatch, tmp_pa
     assert all(item.selected_audio_quality == 0 for item in captured)
     assert all(item.path_template == "{author}/{title}{part_suffix}" for item in captured)
     assert all(item.selected_subtitle_lan == "en-US" for item in captured)
+    output = capsys.readouterr().out
+    for error in errors:
+        assert f"Skipped: {error}" in output
 
 
 def test_noninteractive_copyright_requires_explicit_flag():

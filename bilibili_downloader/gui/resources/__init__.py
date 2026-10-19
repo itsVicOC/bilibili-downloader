@@ -8,10 +8,11 @@ from bilibili_downloader.gui.resources.styles import (
 
 
 def load_stylesheet(
-    is_dark: bool = True, font_scale: float = 1.0, font_family: str = ""
+    is_dark: bool = True, font_scale: float = 1.0, font_family: str = "",
+    *, theme_id: str = "star_trail",
 ) -> str:
     """Return the complete stylesheet for the requested system theme."""
-    stylesheet = build_component_overrides(is_dark)
+    stylesheet = build_component_overrides(is_dark, theme_id)
     stylesheet = scale_font_sizes(stylesheet, font_scale)
     if font_family:
         # Native bold labels can otherwise fall back to the platform widget font.

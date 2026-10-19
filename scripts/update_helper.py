@@ -20,6 +20,7 @@ from bilibili_downloader.core.installation import (
     remove_managed_files,
 )
 from bilibili_downloader.core.update_protocol import (
+    DATA_DIRECTORIES,
     DATA_FILES,
     BuildInfo,
     RuntimeLease,
@@ -151,11 +152,33 @@ def _snapshot(data, directory):
             shutil.copy2(source, directory / name)
         if os.name != "nt":
             (directory / name).chmod(0o600)
+    for name in DATA_DIRECTORIES:
+        source = data / name
+        if source.is_symlink() or (source.exists() and not source.is_dir()):
+            raise UpdateError("用户背景目录无效，请检查后重试")
+        existed[name] = source.is_dir()
+        if existed[name]:
+            if any(path.is_symlink() for path in source.rglob("*")):
+                raise UpdateError("背景目录包含符号链接，请检查后重试")
+            shutil.copytree(source, directory / name)
     atomic_json(directory / "files.json", existed)
 
 
 def _restore_snapshot(data, directory):
     existed = json.loads((directory / "files.json").read_text("utf-8"))
+    for name in DATA_DIRECTORIES:
+        # Older snapshots predate custom backgrounds; leave their data alone.
+        if name not in existed:
+            continue
+        destination = data / name
+        if destination.is_symlink():
+            destination.unlink()
+        elif destination.is_dir():
+            shutil.rmtree(destination)
+        elif destination.exists():
+            destination.unlink()
+        if existed[name]:
+            shutil.copytree(directory / name, destination)
     for name in DATA_FILES:
         destination = data / name
         if name.endswith(".sqlite3"):

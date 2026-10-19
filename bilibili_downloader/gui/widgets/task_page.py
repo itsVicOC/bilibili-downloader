@@ -7,6 +7,7 @@ from PySide6.QtCore import QSize, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QFileDialog,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -63,6 +64,7 @@ class TaskPage(QWidget):
     resume_all_requested = Signal()
     clear_completed_requested = Signal()
     clear_cache_requested = Signal()
+    undo_remove_requested = Signal()
 
     def __init__(self, downloads, controller, parent=None):
         super().__init__(parent)
@@ -79,6 +81,8 @@ class TaskPage(QWidget):
         self._download_tab()
         self._current_tab()
         self._history_tab()
+        self.undo_notice = Notice(action="撤销", callback=self.undo_remove_requested.emit)
+        layout.addWidget(self.undo_notice)
         self.notice = Notice()
         layout.addWidget(self.notice)
         downloads.content_state_changed.connect(self.refresh_downloads)
@@ -98,7 +102,12 @@ class TaskPage(QWidget):
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
-        toolbar = QHBoxLayout()
+        self._download_tools = QFrame()
+        self._download_tools.setObjectName("ToolSurface")
+        self._download_tools.setAttribute(Qt.WA_StyledBackground, True)
+        toolbar = QHBoxLayout(self._download_tools)
+        toolbar.setContentsMargins(10, 8, 10, 8)
+        toolbar.setSpacing(8)
         self.filter = ComboBox()
         for text, key in (
             ("全部任务", "all"),
@@ -111,15 +120,23 @@ class TaskPage(QWidget):
         self.filter.setFixedWidth(132)
         self.filter.currentIndexChanged.connect(self.refresh_downloads)
         toolbar.addWidget(self.filter)
+        self.scope = ComboBox()
+        self.scope.addItem("当前筛选", "visible")
+        self.scope.addItem("所有任务", "all")
+        self.scope.setFixedWidth(112)
+        self.scope.setAccessibleName("批量操作范围")
+        self.scope.setToolTip("批量操作仅作用于所选范围；当前筛选不会修改隐藏任务")
+        self.scope.currentIndexChanged.connect(self.refresh_downloads)
+        toolbar.addWidget(self.scope)
         self._download_count = QLabel("0 项")
         self._download_count.setObjectName("MetaLabel")
         toolbar.addWidget(self._download_count)
         toolbar.addStretch()
         self._bulk_buttons = []
         for text, signal in (
-            ("全部暂停", self.pause_all_requested),
-            ("全部继续", self.resume_all_requested),
-            ("清除完成", self.clear_completed_requested),
+            ("暂停", self.pause_all_requested),
+            ("继续", self.resume_all_requested),
+            ("移除完成", self.clear_completed_requested),
         ):
             button = QPushButton(text)
             button.setObjectName("TableSubtleButton")
@@ -133,7 +150,7 @@ class TaskPage(QWidget):
         menu.addAction("清理下载缓存", self.clear_cache_requested.emit)
         more.setMenu(menu)
         toolbar.addWidget(more)
-        layout.addLayout(toolbar)
+        layout.addWidget(self._download_tools)
         self._download_stack = QStackedWidget()
         self._download_stack.addWidget(self.downloads)
         self._download_stack.addWidget(
@@ -179,17 +196,24 @@ class TaskPage(QWidget):
             self.downloads.setRowHidden(row, not visible)
             count += bool(visible)
         total = len(self.downloads._states)
-        states = set(self.downloads._states.values())
-        eligible = (
-            bool(states & {TaskStatus.QUEUED, TaskStatus.DOWNLOADING, TaskStatus.MERGING}),
-            bool(self.downloads.resumable_ids),
-            TaskStatus.COMPLETED in states,
-        )
-        for button, enabled in zip(self._bulk_buttons, eligible):
-            button.setEnabled(enabled)
+        for button, action, title in zip(self._bulk_buttons, ("pause", "resume", "clear"), ("暂停", "继续", "移除完成")):
+            count_action = len(self.bulk_ids(action))
+            button.setEnabled(count_action > 0)
+            button.setText(f"{title} {count_action}")
+            button.setToolTip(f"{title}{self.scope.currentText()}中的 {count_action} 项任务" + ("，保留媒体文件" if action == "clear" else ""))
         self._download_count.setText(f"{count} / {total} 项")
         self._download_stack.setCurrentIndex(1 if not total else 0 if count else 2)
         self._download_selection()
+
+    def bulk_ids(self, action):
+        states = {
+            "pause": {TaskStatus.QUEUED, TaskStatus.DOWNLOADING, TaskStatus.MERGING},
+            "resume": {TaskStatus.PAUSED, TaskStatus.FAILED, TaskStatus.CANCELLED},
+            "clear": {TaskStatus.COMPLETED},
+        }[action]
+        return [task_id for task_id, state in self.downloads._states.items()
+                if state in states and (self.scope.currentData() == "all" or
+                not self.downloads.isRowHidden(self.downloads._row_for(task_id)))]
 
     def _download_selection(self):
         row = self.downloads.currentRow()
@@ -203,7 +227,8 @@ class TaskPage(QWidget):
             return
         task_id = item.data(Qt.UserRole)
         status = self.downloads.item(row, 3)
-        text = [item.text(), status.text() if status else ""]
+        specification = self.downloads.item(row, 1)
+        text = [item.text(), specification.toolTip() if specification else "", status.text() if status else ""]
         if status and status.toolTip() and status.toolTip() != status.text():
             text.append(status.toolTip())
         if self.downloads._output_paths.get(task_id):

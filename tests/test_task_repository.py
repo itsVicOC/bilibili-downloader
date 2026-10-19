@@ -24,6 +24,21 @@ def _item(cid: int = 1) -> DownloadItem:
     )
 
 
+def test_record_removal_can_be_undone_with_exact_snapshot_and_stable_id(tmp_path):
+    repository = TaskRepository(tmp_path / "tasks.sqlite3")
+    task_id = repository.add(_item(), TaskStatus.PAUSED)
+    repository.update(task_id, progress=0.42, warnings=["demo-warning"], output_path="/demo/output.mp4")
+    record = repository.get(task_id)
+    repository.delete_many([task_id])
+    assert repository.get(task_id) is None
+    assert repository.restore_record(record)
+    assert repository.get(task_id) == record
+    repository.delete(task_id)
+    replacement = repository.add(_item(), TaskStatus.COMPLETED)
+    assert not repository.restore_record(record)
+    assert repository.get(replacement) is not None
+
+
 def test_repository_round_trips_task_and_output(tmp_path):
     repository = TaskRepository(tmp_path / "tasks.sqlite3")
     task_id = repository.add(_item())

@@ -1,8 +1,10 @@
 """Behavior and geometry regressions for the unified desktop workspaces."""
 
+import io
 from pathlib import Path
 
 import pytest
+from PIL import Image
 from PySide6.QtCore import QPoint, QRect, Qt
 from PySide6.QtGui import QFont, QPalette
 from PySide6.QtWidgets import QApplication, QDialogButtonBox, QMessageBox, QPushButton
@@ -15,9 +17,11 @@ from bilibili_downloader.core.live_models import (
 from bilibili_downloader.core.models import (
     AppSettings,
     DownloadItem,
+    OutputMode,
     StreamInfo,
     TaskStatus,
     VideoInfo,
+    VideoQuality,
 )
 from bilibili_downloader.core.task_repository import TaskRepository
 from bilibili_downloader.gui.dialogs.batch_dialog import BatchDialog
@@ -112,9 +116,10 @@ def contained(widget, ancestor):
 
 
 @pytest.mark.parametrize("dark", [True, False])
+@pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])
 @pytest.mark.parametrize("size", [(900, 640), (1120, 760), (1320, 860)])
 def test_all_workspaces_fit_and_fixed_actions_remain_visible(
-    workspace, qapp, dark, size
+    workspace, qapp, dark, size, theme_id
 ):
     previous_style, previous_font, previous_palette = (
         qapp.styleSheet(),
@@ -122,7 +127,8 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
         QPalette(qapp.palette()),
     )
     previous_dark = qapp.property("darkTheme")
-    theme = ThemeManager(qapp)
+    previous_color_theme = qapp.property("colorTheme")
+    theme = ThemeManager(qapp, theme_id)
     theme.apply_theme(dark)
     window = workspace
     try:
@@ -139,6 +145,9 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
         window._show_workspace(0)
         flush()
         assert contained(window._download_btn, window._workspace_pages.currentWidget())
+        single_bar = window._download_actions
+        single_position = single_bar.mapTo(window._workspace_pages.currentWidget(), QPoint())
+        single_size = single_bar.size()
         window._download_tabs.setCurrentIndex(1)
         batch = window._batch_page
         batch._url_text.setPlainText("BV1GJ411x7h7")
@@ -150,8 +159,12 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
         )
         assert not batch._preview.geometry().intersects(batch._result_label.geometry())
         assert batch._preview.horizontalScrollBar().maximum() == 0
+        assert batch._action_bar.size() == single_size
+        assert batch._action_bar.mapTo(window._workspace_pages.currentWidget(), QPoint()) == single_position
+        assert batch._add_btn.size() == window._download_btn.size()
+        assert batch._action_bar.edit_button.size() == window._edit_output_btn.size()
+        assert batch._collapse_btn.isChecked()
         if size[0] == 900:
-            assert batch._collapse_btn.isChecked()
             batch._collapse_btn.setChecked(False)
             flush()
             assert batch._url_text.isVisible()
@@ -160,6 +173,11 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
         window._show_workspace(1)
         flush()
         assert contained(window._live_page.start_stop, window._live_page)
+        live_bar = window._live_page._action_bar
+        assert live_bar.height() == single_size.height()
+        assert contained(window._live_page.monitor, live_bar)
+        assert contained(window._live_page.room_settings, live_bar)
+        assert window._live_page.start_stop.x() > window._live_page.room_settings.x()
         assert window._live_page.rooms.horizontalScrollBar().maximum() == 0
         window._show_tasks(1)
         flush()
@@ -182,6 +200,9 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
             )
         window._show_tasks(0)
         flush()
+        assert contained(window._task_page._download_tools, window._task_page.tabs.currentWidget())
+        for button in window._task_page._download_tools.findChildren(QPushButton):
+            assert contained(button, window._task_page._download_tools)
         table.update_progress(1, 0.73, "下载中")
         assert table._progress_at(table._row_for(1)).value() == 73
         table.mark_paused(1)
@@ -200,12 +221,24 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
         window._show_settings_tab(0)
         flush()
         assert contained(window._settings_page._save_btn, window._settings_page)
+        assert window._settings_page._action_bar.height() == single_size.height()
+        assert window._settings_page._save_btn.height() == window._download_btn.height()
         assert (
             window._settings_page.tabs.currentWidget().horizontalScrollBar().maximum()
             == 0
         )
+        window._show_settings_tab(4)
+        flush()
+        assert contained(window._settings_page._save_btn, window._settings_page)
+        assert window._settings_page.tabs.currentWidget().horizontalScrollBar().maximum() == 0
+        combo = window._settings_page._theme_combo
+        combo.showPopup()
+        flush()
+        assert combo.view().isVisible()
+        combo.hidePopup()
     finally:
         qapp.setProperty("darkTheme", previous_dark)
+        qapp.setProperty("colorTheme", previous_color_theme)
         qapp.setPalette(previous_palette)
         qapp.setFont(previous_font)
         qapp.setStyleSheet(previous_style)
@@ -278,8 +311,12 @@ def test_batch_partial_failure_fits_the_small_workspace(workspace):
     )
     flush()
     assert contained(panel._preview, panel._preview_card)
-    assert contained(panel._notice, panel)
-    assert not panel._result_label.isVisible()
+    assert panel._notice.isHidden()
+    assert contained(panel._issue_btn, panel._preview_card)
+    assert panel._issue_btn.isVisible()
+    assert panel._result_label.isVisible()
+    assert "成功 1 项" in panel._result_label.text()
+    assert not panel._preview.geometry().intersects(panel._result_label.geometry())
     panel._url_text.setPlainText("BV1Q541167Qg")
     flush()
     assert contained(panel._preview, panel._preview_card)
@@ -580,3 +617,347 @@ def test_settings_validation_marks_the_relevant_field(qtbot):
     assert panel._field_rows["path_template"].error.text()
     panel.load_settings(AppSettings())
     assert panel._field_rows["path_template"]._error_row.isHidden()
+
+
+def avatar_png():
+    output = io.BytesIO()
+    Image.new("RGB", (96, 96), "skyblue").save(output, format="PNG")
+    return output.getvalue()
+
+
+def test_sidebar_shows_username_avatar_and_retains_account_action(workspace, qapp):
+    window = workspace
+    request_id = window._login_status_request_id
+    name = "示例&用户名字很长很长"
+    window._on_login_status_result(request_id, {
+        "isLogin": True, "uname": name, "mid": 123,
+        "face": "https://i0.hdslb.com/demo.png", "vip": {"status": 1},
+    })
+    button = window._header_login
+    assert window._account_text == name
+    assert button.full_text == name
+    assert "已登录" not in button.text()
+    assert name in button.toolTip() and "UID: 123" in button.toolTip()
+    assert "大会员" in button.accessibleName()
+    window._on_login_status_avatar(request_id, avatar_png())
+    assert not button._avatar.isNull()
+    assert button.iconSize().width() == 28
+    window.show()
+    window.resize(900, 640)
+    flush()
+    assert button.text() == ""
+    assert contained(button, window._sidebar)
+    window.resize(1120, 760)
+    flush()
+    assert button.text() and "已登录" not in button.text()
+    # Theme changes recolor fallback icons without replacing a loaded avatar.
+    button._sync_icon()
+    assert button.iconSize().width() == 28
+    triggered = []
+    window._actions["login"].triggered.connect(lambda: triggered.append(True))
+    window._actions["login"].triggered.disconnect(window._on_login_triggered)
+    button.click()
+    assert triggered
+
+
+@pytest.mark.parametrize("state", ["logout", "expired", "error"])
+def test_sidebar_clears_identity_and_rejects_stale_avatar(workspace, state):
+    window = workspace
+    window._on_login_status_result(0, {
+        "isLogin": True, "uname": "示例用户", "face": "demo",
+    })
+    window._on_login_status_avatar(0, avatar_png())
+    window._login_status_request_id = 1
+    if state == "logout":
+        window._set_login_status_label("未登录", "MutedLabel")
+    elif state == "expired":
+        window._on_login_status_result(1, {"isLogin": False})
+    else:
+        window._on_login_status_error(1, "offline")
+    window._on_login_status_avatar(0, avatar_png())
+    window._on_login_status_result(0, {"isLogin": True, "uname": "旧账号", "face": "old"})
+    assert window._header_login._avatar.isNull()
+    assert "示例用户" not in window._header_login.toolTip()
+    assert window._account_text in ("未登录", "登录状态未知")
+
+
+def test_appearance_names_keep_existing_configuration_ids(qtbot):
+    panel = SettingsDialog(AppSettings(), embedded=True)
+    qtbot.addWidget(panel)
+    assert [(panel._theme_combo.itemText(i), panel._theme_combo.itemData(i)) for i in range(2)] == [
+        ("星河", "star_trail"), ("晴海", "bilibili_blue"),
+    ]
+
+
+def test_new_account_rejects_old_avatar_and_corrupt_avatar_keeps_username(workspace):
+    window = workspace
+    window._login_status_request_id = 2
+    window._on_login_status_result(2, {
+        "isLogin": True, "uname": "新账号", "face": "demo://new-avatar",
+    })
+    window._on_login_status_avatar(1, avatar_png())
+    assert window._header_login._avatar.isNull()
+    window._on_login_status_avatar(2, b"corrupt image")
+    assert window._header_login._avatar.isNull()
+    assert window._header_login.full_text == "新账号"
+    window._on_login_status_avatar(2, avatar_png())
+    assert not window._header_login._avatar.isNull()
+
+
+def test_empty_download_is_compact_and_parsed_summary_is_always_visible(workspace):
+    from bilibili_downloader.core.models import VideoPage
+
+    window = workspace
+    window.resize(900, 640)
+    window.show()
+    flush()
+    assert window._content_section.isHidden()
+    assert window._empty_download.isVisible()
+    window._url_input.setText("BV1GJ411x7h7")
+    video = VideoInfo(bvid="BV1GJ411x7h7", pages=[VideoPage(cid=1, page=1), VideoPage(cid=2, page=2)])
+    window._on_resolve_success(video, [], [], False)
+    flush()
+    assert window._empty_download.isHidden()
+    assert not window._content_section.isHidden()
+    assert "全部 2P" in window._download_hint.toolTip()
+    assert window._settings.output_dir in window._download_path_hint.toolTip()
+    assert contained(window._download_actions, window._workspace_pages.currentWidget())
+    window._edit_output_btn.click()
+    flush()
+    assert window._workspace_scroll.verticalScrollBar().value() > 0
+    window._output_mode_combo.setCurrentIndex(window._output_mode_combo.findData(OutputMode.AUDIO))
+    assert "仅音频" in window._download_hint.toolTip()
+    assert "各作品全部分 P" in window._batch_page._output_specs.toolTip()
+
+
+def test_output_cards_allow_preconfiguration_and_keep_available_choices(workspace):
+    window = workspace
+    window.resize(900, 640)
+    window.show()
+    flush()
+    assert not window._download_btn.isEnabled()
+    assert window._edit_output_btn.isEnabled()
+    window._edit_output_btn.click()
+    flush()
+    assert window._content_section.isVisible() and window._video_info.isHidden()
+    window._quality_combo.setCurrentIndex(window._quality_combo.findData(VideoQuality.Q720P))
+    window._codec_combo.setCurrentIndex(window._codec_combo.findData(7))
+    window._subtitle_check.setChecked(True)
+    assert "720P" in window._download_hint.toolTip()
+    assert "解析后选择分 P" in window._download_hint.toolTip()
+    assert not window._download_btn.isEnabled()
+    window._url_input.setText("BV1GJ411x7h7")
+    info = VideoInfo(bvid="BV1GJ411x7h7")
+    window._on_resolve_success(info, [StreamInfo(id=80, codecid=12), StreamInfo(id=64, codecid=7)], [], True)
+    assert window._quality_combo.currentData() == VideoQuality.Q720P
+    assert window._codec_combo.currentData() == 7
+    assert window._subtitle_check.isChecked()
+    assert window._download_btn.isEnabled()
+    assert window._download_actions.status.text() == "已选 1 项"
+    window._url_input.setText("BV1Q541167Qg")
+    assert not window._download_btn.isEnabled()
+    assert window._download_actions.status.text() == "待解析"
+    window._on_resolve_success(VideoInfo(bvid="BV1Q541167Qg"), [StreamInfo(id=80, codecid=12)], [], True)
+    assert window._quality_combo.currentData() == VideoQuality.Q1080P
+    assert window._codec_combo.currentData() == 12
+    window._download_tabs.setCurrentIndex(1)
+    batch = window._batch_page
+    batch._action_bar.edit_button.click()
+    assert window._download_tabs.currentIndex() == 0
+    assert window._content_section.isVisible()
+
+
+@pytest.mark.parametrize("source, target", [
+    ("https://space.bilibili.com/123/favlist?fid=456&ftype=create", "batch"),
+    ("ss123", "batch"),
+    ("https://live.bilibili.com/21414905", "live"),
+])
+def test_misplaced_source_can_be_transferred_without_network(workspace, source, target):
+    window = workspace
+    window._url_input.setText(source)
+    window._resolve_btn.click()
+    assert not window._resolve_notice.action.isHidden()
+    window._resolve_notice.action.click()
+    if target == "batch":
+        assert window._download_tabs.currentIndex() == 1
+        assert source in window._batch_page._url_text.toPlainText()
+    else:
+        assert window._workspace_pages.currentIndex() == 1
+        assert window._live_page.source.text() == source
+
+
+def test_bulk_actions_respect_scope_and_explain_affected_count(workspace, monkeypatch):
+    window = workspace
+    table, page = window._download_list, window._task_page
+    for task_id, state in ((1, TaskStatus.PAUSED), (2, TaskStatus.FAILED)):
+        table.add_item(DownloadItem(video_info=VideoInfo(bvid="BV1GJ411x7h7", cid=task_id)), download_id=task_id, status=state)
+    page.filter.setCurrentIndex(page.filter.findData("paused"))
+    assert page.bulk_ids("resume") == [1]
+    assert page._bulk_buttons[1].text() == "继续 1"
+    submitted = []
+    monkeypatch.setattr(window, "_on_retry_download", submitted.append)
+    page._bulk_buttons[1].click()
+    assert submitted == [1]
+    page.scope.setCurrentIndex(page.scope.findData("all"))
+    assert page.bulk_ids("resume") == [1, 2]
+    assert "2 项" in page._bulk_buttons[1].toolTip()
+
+
+def test_remove_filtered_completed_records_and_undo_preserve_files(workspace, tmp_path):
+    window = workspace
+    repo, table, page = window._task_repository, window._download_list, window._task_page
+    output = tmp_path / "already-downloaded.mp4"
+    output.write_bytes(b"demo-file")
+    ids = []
+    for cid, warnings in ((1, ["字幕失败"]), (2, [])):
+        item = DownloadItem(video_info=VideoInfo(bvid="BV1GJ411x7h7", cid=cid))
+        task_id = repo.add(item, TaskStatus.COMPLETED)
+        repo.update(task_id, progress=1.0, output_path=str(output), warnings=warnings)
+        table.add_item(item, download_id=task_id, status=TaskStatus.COMPLETED, progress=1.0, output_path=str(output), warnings=warnings)
+        ids.append(task_id)
+    page.filter.setCurrentIndex(page.filter.findData("attention"))
+    assert page.bulk_ids("clear") == [ids[0]]
+    window._on_clear_completed()
+    assert repo.get(ids[0]) is None
+    assert repo.get(ids[1]) is not None
+    assert "文件和断点仍保留" in page.undo_notice.label.text()
+    page.undo_notice.action.click()
+    assert repo.get(ids[0]).warnings == ["字幕失败"]
+    assert repo.get(ids[0]).progress == 1.0
+    assert output.read_bytes() == b"demo-file"
+
+
+def test_remove_failure_does_not_hide_existing_task(workspace, monkeypatch):
+    import sqlite3
+
+    window = workspace
+    item = DownloadItem(video_info=VideoInfo(bvid="BV1GJ411x7h7"))
+    task_id = window._task_repository.add(item, TaskStatus.COMPLETED)
+    window._download_list.add_item(item, download_id=task_id, status=TaskStatus.COMPLETED)
+    def fail(_ids):
+        raise sqlite3.OperationalError("read only")
+    monkeypatch.setattr(window._task_repository, "delete_many", fail)
+    errors = []
+    monkeypatch.setattr(window, "_show_error", errors.append)
+    window._download_list._on_delete_clicked(task_id)
+    assert window._download_list._row_for(task_id) is not None
+    assert window._task_repository.get(task_id) is not None
+    assert errors
+
+
+def test_live_actions_keep_selected_room_identity_visible(workspace):
+    window = workspace
+    first, second = room("recording", room_id=1), room("waiting", room_id=2)
+    first["author"], second["author"] = "主播甲", "主播乙"
+    window._live_controller.service.rows = [first, second]
+    window._live_controller.refresh()
+    window.resize(900, 640)
+    window.show()
+    window._show_workspace(1)
+    window._live_page.select_room(2)
+    flush()
+    assert "主播乙" in window._live_page._action_target.toolTip()
+    assert "主播乙" in window._live_page.start_stop.accessibleName()
+    assert contained(window._live_page._action_bar, window._live_page)
+
+
+def test_theme_cards_are_drafts_and_background_grid_adapts(workspace, qapp):
+    window = workspace
+    previous = qapp.property("colorTheme")
+    window.resize(1320, 860)
+    window.show()
+    window._show_settings_tab(4)
+    flush()
+    panel = window._settings_page
+    assert panel._appearance_columns == 2
+    panel._theme_buttons.button(1).click()
+    assert panel._theme_combo.currentData() == "bilibili_blue"
+    assert panel.dirty
+    assert qapp.property("colorTheme") == previous
+    first, selected = panel._theme_buttons.button(0), panel._theme_buttons.button(1)
+    first.setFocus(Qt.TabFocusReason)
+    flush()
+    assert first.hasFocus() and not first.isChecked()
+    assert selected.isChecked()
+    assert "按空格" in first.accessibleDescription()
+    assert "已选中" in selected.accessibleDescription()
+    window.resize(900, 640)
+    flush()
+    assert panel._appearance_columns == 1
+    panel._reset_btn.click()
+    assert not panel.dirty and panel._theme_buttons.button(0).isChecked()
+
+
+def test_batch_progress_keeps_compact_input_and_disables_stale_selection(workspace, monkeypatch):
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import QThreadPool
+
+    monkeypatch.setattr(QThreadPool, "globalInstance", lambda: SimpleNamespace(start=lambda _: None))
+    window = workspace
+    window.resize(900, 640)
+    window.show()
+    window._download_tabs.setCurrentIndex(1)
+    panel = window._batch_page
+    panel._url_text.setPlainText("BV1GJ411x7h7")
+    panel._on_resolved([VideoInfo(bvid="BV1GJ411x7h7")], [])
+    panel._begin_resolve(["BV1GJ411x7h7"])
+    flush()
+    assert panel._count_label.height() < 40
+    assert panel._preview_card.isHidden()
+    assert panel._selected_label.text() == "已选 0 项"
+    assert not panel._add_btn.isEnabled()
+    assert contained(panel._progress_area, panel)
+    assert contained(panel._cancel_btn, panel)
+    panel.cancel_resolution()
+    from bilibili_downloader.gui.threads.batch_worker import ImportIssue, ImportReport
+    panel._on_report(ImportReport([], [ImportIssue("BV1GJ411x7h7", "离线演示失败", "BV1GJ411x7h7")]))
+    flush()
+    assert panel._preview_card.isHidden()
+    assert "成功 0 项" in panel._notice.label.text()
+    assert contained(panel._notice, panel)
+    assert (window.width(), window.height()) == (900, 640)
+
+
+@pytest.mark.parametrize("size,min_rows", [((900, 640), 2), ((1120, 760), 5), ((1320, 860), 7)])
+def test_large_favorite_import_prioritizes_results_and_preserves_edits(workspace, size, min_rows):
+    from bilibili_downloader.gui.threads.batch_worker import ImportIssue, ImportReport
+
+    window = workspace
+    window.resize(*size)
+    window.show()
+    window._download_tabs.setCurrentIndex(1)
+    panel = window._batch_page
+    source = "https://space.bilibili.com/123/favlist?fid=456"
+    panel._url_text.setPlainText(source)
+    items = [
+        VideoInfo(bvid=f"BV1DEMO{i:05d}", title=f"收藏作品 {i + 1}", collection_title="演示收藏夹")
+        for i in range(130)
+    ]
+    panel._on_report(ImportReport(items, [ImportIssue(source, "失效作品", source, kind="item")] * 28))
+    flush()
+    assert panel._collapse_btn.isChecked() and panel._url_text.isHidden()
+    assert panel._source_summary.toolTip() == source
+    assert "演示收藏夹" in panel._source_summary._full_text
+    assert panel._preview.isColumnHidden(3)
+    assert panel._preview.viewport().height() // panel._preview.rowHeight(0) >= min_rows
+    assert panel._notice.isHidden() and panel._issue_btn.isVisible()
+    assert "跳过 28 项" in panel._result_label.text()
+    assert contained(panel._action_bar, panel)
+    assert contained(panel._add_btn, panel._action_bar)
+    panel._selectors[0].setChecked(False)
+    panel._collapse_btn.setChecked(False)
+    flush()
+    assert panel._url_text.isVisible()
+    assert len(panel.get_video_infos()) == 129
+    panel._url_text.appendPlainText("BV1GJ411x7h7")
+    assert not panel._add_btn.isEnabled()
+    panel._collapse_btn.setChecked(True)
+    assert panel._source_summary._full_text.endswith("等 2 个来源")
+    assert "BV1GJ411x7h7" in panel._source_summary.toolTip()
+    panel._url_text.setPlainText(source)
+    assert panel._add_btn.isEnabled() and len(panel.get_video_infos()) == 129
+    items[1].collection_title = "另一个来源"
+    panel._on_report(ImportReport(items))
+    assert not panel._preview.isColumnHidden(3)
+    assert panel._issue_btn.isHidden()

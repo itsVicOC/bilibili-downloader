@@ -1,7 +1,7 @@
 """Shared presentation primitives; no service or persistence ownership."""
 
-from PySide6.QtCore import QByteArray, QEvent, QSize, Qt
-from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtCore import QByteArray, QEvent, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication,
@@ -18,7 +18,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from bilibili_downloader.gui.resources.styles import DARK_PALETTE, LIGHT_PALETTE
+from bilibili_downloader.gui.resources.styles import theme_palette
+from bilibili_downloader.gui.widgets.header_backdrop import paint_header_backdrop
 
 _ICON_PATHS = {
     "download": '<path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/>',
@@ -38,7 +39,10 @@ _ICON_PATHS = {
 
 def palette():
     app = QApplication.instance()
-    return DARK_PALETTE if app and app.property("darkTheme") else LIGHT_PALETTE
+    return theme_palette(
+        bool(app and app.property("darkTheme")),
+        app.property("colorTheme") if app else "star_trail",
+    )
 
 
 def line_icon(name, color=None, size=24):
@@ -84,7 +88,8 @@ class IconButton(QPushButton):
         self._sync_icon()
 
     def _sync_icon(self):
-        self.setIcon(line_icon(self.icon_name))
+        color = palette().active_text if self.objectName() == "NavButtonActive" else None
+        self.setIcon(line_icon(self.icon_name, color))
 
     def event(self, event):
         if event.type() == QEvent.StyleChange and hasattr(self, "icon_name"):
@@ -93,6 +98,141 @@ class IconButton(QPushButton):
 
     def set_compact(self, compact):
         self.setText("" if compact else self.full_text)
+
+
+class AccountButton(IconButton):
+    """Keep the account avatar through theme and compact-layout changes."""
+
+    def __init__(self, parent=None):
+        self._avatar = QPixmap()
+        super().__init__("未登录", "account", "SidebarAction", parent)
+
+    def set_compact(self, compact):
+        if self.property("compact") != compact:
+            self.setProperty("compact", compact)
+            repolish(self)
+        super().set_compact(compact)
+
+    def setText(self, text):
+        # Usernames are literal text, including any ampersands.
+        super().setText(text.replace("&", "&&"))
+
+    def set_avatar(self, data: bytes = b""):
+        self._avatar = QPixmap()
+        if data:
+            self._avatar.loadFromData(data)
+        self._sync_icon()
+
+    def _sync_icon(self):
+        if self._avatar.isNull():
+            self.setIconSize(QSize(20, 20))
+            super()._sync_icon()
+            return
+        size = 28
+        pixmap = QPixmap(size * 2, size * 2)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        path = QPainterPath()
+        path.addEllipse(QRectF(0, 0, size * 2, size * 2))
+        painter.setClipPath(path)
+        scaled = self._avatar.scaled(
+            pixmap.size(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
+        )
+        painter.drawPixmap(
+            (pixmap.width() - scaled.width()) // 2,
+            (pixmap.height() - scaled.height()) // 2,
+            scaled,
+        )
+        painter.end()
+        pixmap.setDevicePixelRatio(2)
+        self.setIconSize(QSize(size, size))
+        self.setIcon(QIcon(pixmap))
+
+
+class ElidedLabel(QLabel):
+    """Single-line text with its full value available to hover and assistive tools."""
+
+    def __init__(self, text="", parent=None):
+        super().__init__(parent)
+        self._full_text = text
+        self.setTextFormat(Qt.PlainText)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.set_full_text(text)
+
+    def set_full_text(self, text):
+        self._full_text = text
+        self.setToolTip(text)
+        self.setAccessibleName(text)
+        self._sync_text()
+
+    def _sync_text(self):
+        super().setText(self.fontMetrics().elidedText(self._full_text, Qt.ElideRight, max(1, self.width())))
+
+    def resizeEvent(self, event):
+        self._sync_text()
+        super().resizeEvent(event)
+
+
+class ActionBar(QFrame):
+    """A stable, readable surface for workspace confirmation actions."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("ActionBar")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setFixedHeight(72)
+        self.row = QHBoxLayout(self)
+        self.row.setContentsMargins(16, 12, 16, 12)
+        self.row.setSpacing(16)
+
+
+class OutputActionBar(ActionBar):
+    """Shared fixed output confirmation card for single and batch downloads."""
+
+    edit_requested = Signal()
+    submit_requested = Signal()
+
+    def __init__(self, status="待解析", parent=None):
+        super().__init__(parent)
+        self.setObjectName("OutputActionBar")
+        self.setAccessibleName("下载输出与队列操作")
+        row = self.row
+        copy = QVBoxLayout()
+        copy.setSpacing(4)
+        heading = QHBoxLayout()
+        heading.setSpacing(12)
+        self.status = QLabel(status)
+        self.status.setObjectName("OutputSelection")
+        self.status.setTextFormat(Qt.PlainText)
+        self.status.setMinimumWidth(76)
+        heading.addWidget(self.status)
+        self.specs = ElidedLabel()
+        self.specs.setObjectName("MetaLabel")
+        heading.addWidget(self.specs, 1)
+        copy.addLayout(heading)
+        self.directory = ElidedLabel()
+        self.directory.setObjectName("MetaLabel")
+        copy.addWidget(self.directory)
+        row.addLayout(copy, 1)
+        self.actions = QHBoxLayout()
+        self.actions.setSpacing(8)
+        row.addLayout(self.actions)
+        self.edit_button = QPushButton("修改规格")
+        self.edit_button.setObjectName("OutputSecondaryButton")
+        self.edit_button.setCursor(Qt.PointingHandCursor)
+        self.edit_button.setAutoDefault(False)
+        self.edit_button.clicked.connect(self.edit_requested.emit)
+        self.actions.addWidget(self.edit_button)
+        self.primary_button = QPushButton("加入下载队列")
+        self.primary_button.setObjectName("OutputPrimaryButton")
+        self.primary_button.setFixedHeight(44)
+        self.primary_button.setMinimumWidth(128)
+        self.primary_button.setAutoDefault(False)
+        self.primary_button.setCursor(Qt.PointingHandCursor)
+        self.primary_button.setEnabled(False)
+        self.primary_button.clicked.connect(self.submit_requested.emit)
+        self.actions.addWidget(self.primary_button)
 
 
 class PageHeader(QWidget):
@@ -114,6 +254,17 @@ class PageHeader(QWidget):
         self.actions = QHBoxLayout()
         self.actions.setSpacing(8)
         row.addLayout(self.actions)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        app = QApplication.instance()
+        paint_header_backdrop(
+            painter, self.rect(), bool(app.property("darkTheme")),
+            app.property("colorTheme"),
+        )
+        painter.end()
 
 
 class SectionCard(QFrame):

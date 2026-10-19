@@ -154,6 +154,44 @@ def test_snapshot_can_be_restored_without_waiting_for_garbage_collection(transac
             gc.enable()
 
 
+@pytest.mark.parametrize("had_backgrounds", [True, False])
+def test_background_assets_are_restored_with_config(transaction, had_backgrounds):
+    path, _ = transaction
+    data = path.parent.parent.parent
+    assets = data / "backgrounds"
+    if had_backgrounds:
+        assets.mkdir()
+        (assets / "original.png").write_bytes(b"original image")
+    snapshot = path.parent / "snapshot"
+    helper._snapshot(data, snapshot)
+    assets.mkdir(exist_ok=True)
+    (assets / "new.png").write_bytes(b"new image")
+    if had_backgrounds:
+        (assets / "original.png").unlink()
+    helper._restore_snapshot(data, snapshot)
+    assert (data / "config.json").read_text() == '{"original": true}'
+    if had_backgrounds:
+        assert (assets / "original.png").read_bytes() == b"original image"
+        assert not (assets / "new.png").exists()
+    else:
+        assert not assets.exists()
+
+
+def test_background_rollback_replaces_a_broken_directory(transaction):
+    path, _ = transaction
+    data = path.parent.parent.parent
+    assets = data / "backgrounds"
+    assets.mkdir()
+    (assets / "original.png").write_bytes(b"original image")
+    snapshot = path.parent / "snapshot"
+    helper._snapshot(data, snapshot)
+    (assets / "original.png").unlink()
+    assets.rmdir()
+    assets.write_bytes(b"broken migration")
+    helper._restore_snapshot(data, snapshot)
+    assert (assets / "original.png").read_bytes() == b"original image"
+
+
 def test_running_other_instance_prevents_replacement(transaction, monkeypatch):
     path, value = transaction
     lease = RuntimeLease(path.parent.parent.parent / "runtime.lock")

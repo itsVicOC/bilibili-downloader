@@ -2,14 +2,37 @@
 
 import sys
 
-from PySide6.QtCore import QObject, Qt
+from PySide6.QtCore import QEvent, QObject, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QPalette
+from PySide6.QtWidgets import QAbstractButton
 
 from bilibili_downloader.gui.resources import load_stylesheet
-from bilibili_downloader.gui.resources.styles import DARK_PALETTE, LIGHT_PALETTE
+from bilibili_downloader.gui.resources.styles import theme_palette
 
 DEFAULT_FONT_POINT_SIZE = 10.5
 REFERENCE_LOGICAL_DPI = 96.0
+
+
+class _ButtonFocusFilter(QObject):
+    """Distinguish keyboard focus from a mouse click without changing geometry."""
+
+    def eventFilter(self, target, event):
+        if isinstance(target, QAbstractButton):
+            kind = event.type()
+            if kind == QEvent.FocusIn:
+                visible = event.reason() != Qt.MouseFocusReason
+            elif kind in (QEvent.FocusOut, QEvent.MouseButtonPress):
+                visible = False
+            elif kind == QEvent.KeyPress:
+                visible = True
+            else:
+                return False
+            if target.property("keyboardFocus") != visible:
+                target.setProperty("keyboardFocus", visible)
+                target.style().unpolish(target)
+                target.style().polish(target)
+                target.update()
+        return False
 
 
 def platform_font_scale(platform: str, logical_dpi: float) -> float:
@@ -29,10 +52,16 @@ def platform_font_scale(platform: str, logical_dpi: float) -> float:
 class ThemeManager(QObject):
     """Apply and live-update the theme based on the operating system setting."""
 
-    def __init__(self, app):
+    changed = Signal()
+
+    def __init__(self, app, theme_id="star_trail"):
         super().__init__(app)
         self._app = app
         self._is_dark = False
+        self._theme_id = theme_id
+        if not hasattr(app, "_button_focus_filter"):
+            app._button_focus_filter = _ButtonFocusFilter(app)
+            app.installEventFilter(app._button_focus_filter)
         screen = app.primaryScreen()
         dpi = screen.logicalDotsPerInchY() if screen else REFERENCE_LOGICAL_DPI
         self._font_scale = platform_font_scale(sys.platform, dpi)
@@ -64,6 +93,14 @@ class ThemeManager(QObject):
     def is_dark(self) -> bool:
         return self._is_dark
 
+    @property
+    def theme_id(self) -> str:
+        return self._theme_id
+
+    def set_color_theme(self, theme_id: str) -> None:
+        self._theme_id = theme_id if theme_id in ("star_trail", "bilibili_blue") else "star_trail"
+        self.apply_theme(self._is_dark)
+
     def _system_prefers_dark(self) -> bool:
         scheme = self._app.styleHints().colorScheme()
         if scheme == Qt.ColorScheme.Dark:
@@ -83,7 +120,8 @@ class ThemeManager(QObject):
         """Apply a theme immediately; also useful for visual verification."""
         self._is_dark = is_dark
         self._app.setProperty("darkTheme", is_dark)
-        colors = DARK_PALETTE if is_dark else LIGHT_PALETTE
+        self._app.setProperty("colorTheme", self._theme_id)
+        colors = theme_palette(is_dark, self._theme_id)
         palette = QPalette(self._app.palette())
         for role, color in (
             (QPalette.Window, colors.background),
@@ -101,7 +139,8 @@ class ThemeManager(QObject):
         self._app.setPalette(palette)
         self._app.setStyleSheet(
             load_stylesheet(
-                is_dark, font_scale=self._font_scale, font_family=self._font_family
+                is_dark, font_scale=self._font_scale, font_family=self._font_family,
+                theme_id=self._theme_id,
             )
         )
         for widget in self._app.topLevelWidgets():
@@ -109,3 +148,4 @@ class ThemeManager(QObject):
             widget.style().unpolish(widget)
             widget.style().polish(widget)
             widget.update()
+        self.changed.emit()

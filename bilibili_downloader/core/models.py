@@ -1,5 +1,6 @@
 """Pydantic data models for Bilibili API responses."""
 
+import re
 from enum import Enum, IntEnum
 from pathlib import Path
 from typing import Optional
@@ -194,6 +195,12 @@ class VideoInfo(BaseModel):
         )
 
 
+class ContentFailure(BaseModel):
+    url: str = ""
+    title: str = ""
+    error: str
+
+
 class ContentCollection(BaseModel):
     """A resolved user-facing source containing one or more videos."""
 
@@ -201,6 +208,8 @@ class ContentCollection(BaseModel):
     source_type: str = "video"
     source_url: str = ""
     items: list[VideoInfo] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    failures: list[ContentFailure] = Field(default_factory=list)
 
 
 class DownloadItem(BaseModel):
@@ -305,11 +314,88 @@ class DownloadOutcome(BaseModel):
         return bool(self.warnings)
 
 
+WORKSPACE_NAMES = ("download", "live", "tasks", "settings")
+BACKGROUND_REFERENCE = re.compile(r"[a-f0-9]{64}\.png")
+
+
+class WorkspaceBackgrounds(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
+
+    download: str = ""
+    live: str = ""
+    tasks: str = ""
+    settings: str = ""
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def valid_reference(cls, value):
+        return value if isinstance(value, str) and BACKGROUND_REFERENCE.fullmatch(value) else ""
+
+
+class BackgroundVisibility(BaseModel):
+    """Image visibility in percent; None retains the theme's automatic mask."""
+
+    model_config = ConfigDict(validate_assignment=True)
+
+    light: Optional[int] = None
+    dark: Optional[int] = None
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def valid_visibility(cls, value):
+        return value if type(value) is int and 0 <= value <= 100 else None
+
+
+class WorkspaceBackgroundVisibility(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
+
+    download: BackgroundVisibility = Field(default_factory=BackgroundVisibility)
+    live: BackgroundVisibility = Field(default_factory=BackgroundVisibility)
+    tasks: BackgroundVisibility = Field(default_factory=BackgroundVisibility)
+    settings: BackgroundVisibility = Field(default_factory=BackgroundVisibility)
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def valid_visibility(cls, value):
+        return value if isinstance(value, (dict, BackgroundVisibility)) else {}
+
+
+class AppearanceSettings(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
+
+    theme: str = "star_trail"
+    backgrounds: WorkspaceBackgrounds = Field(default_factory=WorkspaceBackgrounds)
+    background_visibility: WorkspaceBackgroundVisibility = Field(
+        default_factory=WorkspaceBackgroundVisibility
+    )
+
+    @field_validator("theme", mode="before")
+    @classmethod
+    def valid_theme(cls, value):
+        return value if value in ("star_trail", "bilibili_blue") else "star_trail"
+
+    @field_validator("backgrounds", mode="before")
+    @classmethod
+    def valid_backgrounds(cls, value):
+        return value if isinstance(value, (dict, WorkspaceBackgrounds)) else {}
+
+    @field_validator("background_visibility", mode="before")
+    @classmethod
+    def valid_background_visibility(cls, value):
+        return value if isinstance(value, (dict, WorkspaceBackgroundVisibility)) else {}
+
+
 class AppSettings(BaseModel):
     """Application settings persisted to JSON."""
     model_config = ConfigDict(validate_assignment=True)
 
     live: LiveSettings = Field(default_factory=LiveSettings)
+    appearance: AppearanceSettings = Field(default_factory=AppearanceSettings)
+
+    @field_validator("appearance", mode="before")
+    @classmethod
+    def valid_appearance(cls, value):
+        return value if isinstance(value, (dict, AppearanceSettings)) else {}
 
     output_dir: str = Field(default_factory=lambda: str(Path.home() / "Downloads" / "bilibili"))
     default_quality: VideoQuality = VideoQuality.Q1080P

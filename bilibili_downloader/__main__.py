@@ -220,6 +220,10 @@ def _cli_download(args: argparse.Namespace):
     try:
         collection = ContentSourceResolver(client).resolve(args.source)
         print(f"Source: {collection.title} ({len(collection.items)} videos)")
+        for error in collection.errors:
+            print(f"Skipped: {error}")
+        if not collection.items:
+            raise ValueError("该来源没有可下载的作品，请检查解析详情和内容访问权限")
 
         page_infos = []
         for info in collection.items:
@@ -403,7 +407,8 @@ def _launch_gui():
         MessageBox("正在安装更新", "更新程序正在替换应用，请稍后重新打开。", tone="warning").exec()
         return
     try:
-        window = MainWindow(config, startup_paused=transaction is not None)
+        theme_manager.set_color_theme(config.load().appearance.theme)
+        window = MainWindow(config, startup_paused=transaction is not None, theme_manager=theme_manager)
         window.show()
         if sys.platform == "darwin" and getattr(sys, "frozen", False):
             from pathlib import Path

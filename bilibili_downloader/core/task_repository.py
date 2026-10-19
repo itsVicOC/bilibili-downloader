@@ -310,6 +310,38 @@ class TaskRepository:
         with self._lock, self._open_connection() as connection:
             connection.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
 
+    def delete_many(self, task_ids: list[int]) -> None:
+        with self._lock, self._open_connection() as connection:
+            connection.executemany("DELETE FROM tasks WHERE id = ?", [(task_id,) for task_id in task_ids])
+
+    def restore_record(self, record: TaskRecord) -> bool:
+        return bool(self.restore_records([record]))
+
+    def restore_records(self, records: list[TaskRecord]) -> list[TaskRecord]:
+        """Restore one removal transaction without replacing newly created tasks."""
+        restored = []
+        with self._lock, self._open_connection() as connection:
+            for record in records:
+                existing = connection.execute(
+                    "SELECT id FROM tasks WHERE id = ? OR fingerprint = ?", (record.id, record.fingerprint)
+                ).fetchone()
+                if existing is not None:
+                    continue
+                connection.execute(
+                    """INSERT INTO tasks (
+                        id, fingerprint, payload_json, status, progress, status_text, error,
+                        output_path, speed_bytes_per_second, eta_seconds, created_at,
+                        updated_at, completed_at, warnings_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (record.id, record.fingerprint, _sanitized_item(record.item).model_dump_json(),
+                     record.status.value, record.progress, record.status_text, record.error,
+                     record.output_path, record.speed_bytes_per_second, record.eta_seconds,
+                     record.created_at, record.updated_at, record.completed_at,
+                     json.dumps(record.warnings, ensure_ascii=False)),
+                )
+                restored.append(record)
+        return restored
+
     def clear_completed(self) -> int:
         with self._lock, self._open_connection() as connection:
             cursor = connection.execute(

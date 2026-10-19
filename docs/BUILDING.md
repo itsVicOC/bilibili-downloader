@@ -163,6 +163,13 @@ python scripts/build_app_icons.py
 
 ## 发布流程
 
+### 0.8.2 发布检查（2026-10-19）
+
+- 版本由 `bilibili_downloader.__version__` 统一提供，正式标签为 `v0.8.2`；中英文 README、更新日志、用户指南和外观截图已同步。
+- 本地通过 566 项 Python 测试、编译、Ruff 与 diff 检查；macOS offscreen 与原生 Cocoa 各生成 277 张演示截图，复核范围见[视觉规范](UI_DESIGN.md)。
+- 使用 `v0.8.1` 标签导出的旧代码在临时目录创建真实任务库，再由本版打开；检查 schema、原始行、状态和备份保持一致，并验证记录移除/撤销及 schema 校验失败时保留原库。旧配置自动补全外观默认值。
+- GitHub 的 `v0.8.2` 标签构建会重新执行双平台测试、冻结更新程序与背景目录回滚、原生安装器、SBOM 和统一产物校验；所有检查通过后自动发布正式 Release。运行状态以 [Actions](https://github.com/itsVicOC/bilibili-downloader/actions/workflows/release.yml) 为准，实际资产以 [v0.8.2 Release](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.2) 为准。
+
 ### 本轮验证记录（2026-10-17）
 
 源代码提交 `604d089` 的[发布演练 dry-run-35](https://github.com/itsVicOC/bilibili-downloader/actions/runs/38996475166) 已通过；`publish=false`，没有创建 Release。

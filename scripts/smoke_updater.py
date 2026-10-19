@@ -47,6 +47,8 @@ if transaction:
     value = json.loads(path.read_text("utf-8"))
     if os.environ.get("BILIFLOW_SMOKE_FAIL"):
         (data / "config.json").write_text("failed migration")
+        (data / "backgrounds" / "original.png").unlink()
+        (data / "backgrounds" / "new.png").write_bytes(b"failed migration image")
         with closing(sqlite3.connect(data / "tasks.sqlite3")) as db, db:
             db.execute("UPDATE fixture SET value='failed migration'")
         raise SystemExit(3)
@@ -99,6 +101,8 @@ def exercise(directory, executable, helper, system, variant, fail):
     data.mkdir(parents=True)
     markers.mkdir()
     (data / "config.json").write_text('{"original": true}')
+    (data / "backgrounds").mkdir()
+    (data / "backgrounds" / "original.png").write_bytes(b"original image")
     with closing(sqlite3.connect(data / "tasks.sqlite3")) as db, db:
         db.execute("CREATE TABLE fixture (value TEXT)")
         db.execute("INSERT INTO fixture VALUES ('original')")
@@ -206,6 +210,8 @@ def exercise(directory, executable, helper, system, variant, fail):
         actual = new_build.read_from(target)
         assert actual == (build if fail else new_build)
         assert (data / "config.json").read_text() == '{"original": true}'
+        assert (data / "backgrounds" / "original.png").read_bytes() == b"original image"
+        assert not (data / "backgrounds" / "new.png").exists()
         with closing(sqlite3.connect(data / "tasks.sqlite3")) as db:
             assert db.execute("SELECT value FROM fixture").fetchone()[0] == "original"
         assert media.read_bytes() == b"preserve media"

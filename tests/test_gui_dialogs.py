@@ -1,7 +1,9 @@
 """Focused accessibility and validation tests for desktop dialogs."""
 
+import pytest
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
+    QLabel,
     QLineEdit,
     QMessageBox,
     QSizePolicy,
@@ -35,6 +37,65 @@ def test_login_cookie_is_masked_by_default(qtbot):
     assert "SESSDATA" in dialog._instructions.text()
     assert dialog._tabs.tabText(1) == "扫码登录"
     assert dialog._qr_label.text() == "点击下方按钮生成二维码"
+
+
+def test_login_defaults_to_qr_and_signed_in_account_opens_management(qtbot):
+    from PySide6.QtWidgets import QPushButton
+
+    login = LoginDialog(None)
+    qtbot.addWidget(login)
+    assert login._tabs.currentIndex() == 1
+    account = LoginDialog("demo-secret", account={"uname": "演示用户", "mid": 123})
+    qtbot.addWidget(account)
+    assert account._tabs.isHidden()
+    assert any(label.text() == "演示用户" for label in account.findChildren(QLabel))
+    switch = next(button for button in account.findChildren(QPushButton) if button.text() == "切换账号")
+    switch.click()
+    assert not account._tabs.isHidden()
+    assert account._tabs.currentIndex() == 1
+    assert account._account_card.isHidden()
+    assert account.height() <= 640
+
+
+def test_expired_account_opens_qr_login_instead_of_management(qtbot):
+    dialog = LoginDialog("expired-demo-cookie", account_valid=False)
+    qtbot.addWidget(dialog)
+    assert not dialog._tabs.isHidden()
+    assert dialog._tabs.currentIndex() == 1
+    assert "失效" in dialog._caption.text()
+
+
+def test_account_management_keeps_switch_action_inside_card(qtbot):
+    from PySide6.QtCore import QPoint, QRect
+    from PySide6.QtWidgets import QApplication, QPushButton
+
+    account = LoginDialog("demo-secret", account={"uname": "很长的演示名字" * 12, "mid": 123})
+    qtbot.addWidget(account)
+    account.show()
+    QApplication.processEvents()
+    switch = next(button for button in account.findChildren(QPushButton) if button.text() == "切换账号")
+    assert account.width() == 500
+    assert account._account_card.rect().contains(QRect(switch.mapTo(account._account_card, QPoint()), switch.size()))
+
+
+@pytest.mark.parametrize("target, url", [
+    ("batch", "https://space.bilibili.com/123/favlist?fid=456"),
+    ("live", "https://live.bilibili.com/123"),
+])
+def test_short_link_routes_in_background_before_video_resolution(qapp, monkeypatch, target, url):
+    from types import SimpleNamespace
+
+    from bilibili_downloader.gui.threads.resolve_worker import (
+        ResolveRunner,
+        ResolveWorker,
+    )
+
+    monkeypatch.setattr("bilibili_downloader.gui.threads.resolve_worker.resolve_short_url", lambda _: url)
+    worker = ResolveWorker(SimpleNamespace(), "https://b23.tv/demo123")
+    routed = []
+    worker.routed.connect(lambda *args: routed.append(args))
+    ResolveRunner(worker).run()
+    assert routed == [(target, url)]
 
 
 def test_settings_dialog_keeps_long_path_in_tooltip(qtbot):
@@ -148,8 +209,8 @@ def test_batch_dialog_selects_only_main_bangumi_episodes_by_default(qtbot):
     assert dialog._selectors[0].isChecked()
     assert not dialog._selectors[1].isChecked()
     assert dialog._preview.item(1, 3).text() == "系列 · 季度 · PV"
-    assert dialog._preview.rowHeight(0) == UI_METRICS.row_height
-    assert dialog._preview.rowHeight(1) == UI_METRICS.row_height
+    assert dialog._preview.rowHeight(0) == UI_METRICS.compact_row_height
+    assert dialog._preview.rowHeight(1) == UI_METRICS.compact_row_height
 
 
 def test_cancelling_copyright_notice_does_not_acknowledge(qtbot, tmp_path, monkeypatch):

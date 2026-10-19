@@ -19,6 +19,7 @@ from pathlib import Path, PurePosixPath
 BUILD_INFO_FILENAME = "biliflow-build.json"
 UPDATER_PROTOCOL = 1
 DATA_FILES = ("config.json", "tasks.sqlite3", "live.sqlite3")
+DATA_DIRECTORIES = ("backgrounds",)
 
 
 class UpdateError(ValueError):

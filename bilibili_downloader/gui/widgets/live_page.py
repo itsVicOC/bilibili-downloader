@@ -29,6 +29,8 @@ from bilibili_downloader.gui.resources.styles import UI_METRICS
 from bilibili_downloader.gui.widgets.chinese_input import ChineseLineEdit
 from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
+    ActionBar,
+    ElidedLabel,
     EmptyState,
     FieldRow,
     Notice,
@@ -77,6 +79,8 @@ class LiveSettingsDialog(SettingsDialog):
 
     def __init__(self, settings, parent=None):
         super().__init__(AppSettings(live=settings), parent)
+        # This compatibility editor returns only LiveSettings to its caller.
+        self.tabs.setTabVisible(4, False)
         self.tabs.setCurrentIndex(1)
 
     def settings(self):
@@ -223,30 +227,33 @@ class LivePage(QWidget):
         self.start_stop = QPushButton("立即开始")
         self.start_stop.setObjectName("PrimaryButton")
         self.start_stop.clicked.connect(self._start_stop)
-        buttons.addWidget(self.start_stop)
         self.room_settings = QPushButton("房间设置")
+        self.room_settings.setObjectName("OutputSecondaryButton")
         self.room_settings.clicked.connect(self._room_settings)
         buttons.addWidget(self.room_settings)
         more = QPushButton("更多")
-        more.setObjectName("TextButton")
+        more.setObjectName("OutputSecondaryButton")
         more.setProperty("menuButton", True)
         menu = PopupMenu(more)
         self.remove_action = menu.addAction("移除直播间")
         self.remove_action.triggered.connect(lambda: self._command("remove"))
         more.setMenu(menu)
         buttons.addWidget(more)
+        self.start_stop.setMinimumWidth(128)
+        buttons.addWidget(self.start_stop)
         self._detail_card.body.addWidget(self._detail_controls)
         self._detail_card.body.addStretch()
         self._content_layout.addWidget(self._detail_card)
         column.addWidget(self._content, 1)
         self._scroll = scroll_area(body)
         root.addWidget(self._scroll, 1)
-        self._action_bar = QWidget()
-        action_bar = QHBoxLayout(self._action_bar)
-        action_bar.setContentsMargins(0, 0, 0, 0)
-        action_bar.setSpacing(12)
+        self._action_bar = ActionBar()
+        self._action_bar.setAccessibleName("直播间录制操作")
+        action_bar = self._action_bar.row
+        self._action_target = ElidedLabel()
+        self._action_target.setObjectName("MetaLabel")
+        action_bar.addWidget(self._action_target, 1)
         action_bar.addWidget(self.monitor)
-        action_bar.addStretch()
         action_bar.addLayout(buttons)
         root.addWidget(self._action_bar)
         self._notice = Notice()
@@ -362,6 +369,8 @@ class LivePage(QWidget):
             self._quality_fingerprint = None
             return
         self._room_name.setText(row["author"] or "未命名直播间")
+        self._action_target.set_full_text(f"当前房间：{row['author'] or row['room_id']}")
+        self._action_target.setToolTip(f"{row['author']} · 房间 {row['room_id']}")
         self._room_id_label.setText(f"房间 {row['room_id']} · {row['title']}")
         self._room_id_label.setWordWrap(True)
         self._room_id_label.setTextFormat(Qt.PlainText)
@@ -409,6 +418,8 @@ class LivePage(QWidget):
         }
         self.room_settings.setEnabled(not locked)
         self.remove_action.setEnabled(not locked)
+        for button in (self.start_stop, self.room_settings, self.monitor):
+            button.setAccessibleName(f"{button.text()} · {row['author']} · 房间 {row['room_id']}")
 
     def _set_quality(self):
         if self._room_id():

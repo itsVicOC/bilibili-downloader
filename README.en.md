@@ -57,14 +57,19 @@ This README is available in English and Simplified Chinese. The current desktop 
 | Multiple sources | Parse BV/AV IDs, bangumi `ep/ss/md` IDs, full Bilibili URLs, b23.tv short links, uploader collections/series, and favorites |
 | Media quality and codecs | Select 240P–8K, HDR, Dolby Vision, AVC, HEVC, or AV1 when available, with a matching audio track |
 | Local archives | Save MP4, M4A, or Hi-Res FLAC, plus ASS danmaku, SRT subtitles, covers, and JSON metadata |
-| Persistent task center | Manage downloads, active recordings, and recording history; resume interrupted downloads after restarting |
+| Persistent task center | Manage downloads, active recordings, and history; apply bulk actions to filtered or all tasks, undo record removal, and resume interrupted downloads after restarting |
 | Live recording | Monitor rooms, record automatically or manually, split recordings, reconnect, browse history, and export MP4; see the [live recording guide](docs/LIVE_RECORDING.md) |
-| Batch and multi-part downloads | Select individual or all parts, preview and filter batches, read paginated sources, deduplicate tasks, and run 1–8 concurrent downloads |
-| Account login | Use QR-code or Cookie login; retain only allowed Cookie fields and prefer the system credential store |
+| Batch and multi-part downloads | Select individual or all parts, preview/filter batches, track or cancel metadata imports, retry failed entries, read paginated sources, deduplicate tasks, and run 1–8 concurrent downloads |
+| Account login | Start with QR login or use the Cookie fallback; manage your account from the sidebar with username and avatar, retaining only allowed Cookie fields and preferring the system credential store |
 | Cross-platform desktop UI | A PySide6 interface with a responsive layout down to 900×640 and automatic system light/dark themes |
+| Themes and backgrounds | Compare Xinghe (pink/purple) and Qinghai (sky blue/soft rose) preview cards; preview cropping and adjust light/dark image visibility independently for each workspace before saving |
 | Update checks and installation | Check at startup or manually, choose stable or beta channels, and verify/install/restart official macOS/Windows packages with recovery if startup fails |
 
 Automatic updates are available starting with `v0.8.1b1` and are currently a beta feature. First install a version that includes the updater manually. Check [Releases](https://github.com/itsVicOC/bilibili-downloader/releases) for stable and prerelease status.
+
+The stable `v0.8.2` release adds theme selection and independent workspace backgrounds with separate light/dark visibility controls. Unavailable entries in favorites are skipped individually so accessible works can still be imported. See the [changelog](CHANGELOG.md#v082---2026-10-19) and [appearance guide](docs/USER_GUIDE.md#主题与工作区背景) (Chinese).
+
+Downloads, live recording, and settings share consistent footer cards. Tabs and task tools retain readable surfaces over custom backgrounds, theme cards distinguish selection from keyboard focus, and record removal uses a quieter action style.
 
 Available quality, codecs, audio tracks, and subtitles depend on the source, your account permissions, and Bilibili's API response.
 
@@ -126,6 +131,8 @@ Releases also include the pinned FFmpeg source archive, a CycloneDX SBOM for eac
 5. For collections, favorites, and bangumi `ss/md` pages, open Batch import (`批量导入`), preview the source, and select the items to queue.
 6. Review the copyright notice when creating your first download task. Tasks and temporary media files are created only after confirmation.
 
+Single parsing and batch import use the same fixed output card, with media settings and the save directory on the left and Edit settings / Add to queue on the right. You can configure output before parsing; choices that remain available are preserved after parsing.
+
 Some higher-quality streams, member content, or account-specific videos require login. BiliFlow uses only playback permissions your account already has. It stops if the API returns only a preview, regional restrictions, DRM, or no complete unencrypted stream.
 
 See the [user guide](docs/USER_GUIDE.md) for task states, output templates, and configuration locations, or [troubleshooting](docs/TROUBLESHOOTING.md) for startup, parsing, FFmpeg, and login issues.
@@ -144,7 +151,7 @@ Video downloads and live recording share one workspace. Adding downloads keeps t
     <td width="50%"><img src="docs/images/biliflow-settings.png" alt="BiliFlow download settings"></td>
   </tr>
   <tr>
-    <td align="center">Batch import: preview, filtering, and existing-source hints</td>
+    <td align="center">Batch import: source summary, item selection, and output confirmation</td>
     <td align="center">Download settings: templates, formats, and archive extras</td>
   </tr>
   <tr>

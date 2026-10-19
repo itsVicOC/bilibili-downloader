@@ -6,9 +6,10 @@ from PySide6.QtCore import QObject, QRunnable, Signal
 
 from bilibili_downloader.api.client import BilibiliAPIClient
 from bilibili_downloader.api.pgc import BangumiAccessError
-from bilibili_downloader.core.batch import BatchResolver
+from bilibili_downloader.core.batch import BatchResolver, is_collection_source
 from bilibili_downloader.core.errors import redact_sensitive_text, user_error_message
 from bilibili_downloader.core.models import VideoQuality
+from bilibili_downloader.utils.validators import is_short_link, resolve_short_url
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ class ResolveWorker(QObject):
 
     finished = Signal(object, list, list, bool)
     error = Signal(str)
+    routed = Signal(str, str)
 
     def __init__(self, client: BilibiliAPIClient, source: str):
         super().__init__()
@@ -39,8 +41,17 @@ class ResolveRunner(QRunnable):
 
     def run(self):
         try:
+            source = self._worker._source
+            if is_short_link(source):
+                source = resolve_short_url(source) or source
+            if is_collection_source(source):
+                self._worker.routed.emit("batch", source)
+                return
+            if source.startswith(("https://live.bilibili.com/", "http://live.bilibili.com/")):
+                self._worker.routed.emit("live", source)
+                return
             resolver = BatchResolver(self._worker._client)
-            info = resolver.resolve_one(self._worker._source)
+            info = resolver.resolve_one(source)
             # Try to fetch playurl for quality discovery (degraded on failure)
             video_streams = []
             audio_streams = []

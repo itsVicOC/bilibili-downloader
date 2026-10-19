@@ -25,7 +25,12 @@ from bilibili_downloader.api.auth import filter_auth_cookies, parse_cookie_input
 from bilibili_downloader.api.login import LoginManager
 from bilibili_downloader.core.errors import redact_sensitive_text
 from bilibili_downloader.gui.widgets.chinese_input import ChineseLineEdit
-from bilibili_downloader.gui.widgets.components import MessageBox, palette
+from bilibili_downloader.gui.widgets.components import (
+    ElidedLabel,
+    MessageBox,
+    SectionCard,
+    palette,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +104,7 @@ class _CookieValidateRunner(QRunnable):
 class LoginDialog(QDialog):
     """Dialog for Bilibili login via QR code or manual SESSDATA."""
 
-    def __init__(self, current_sessdata: Optional[str] | dict[str, str], parent=None):
+    def __init__(self, current_sessdata: Optional[str] | dict[str, str], parent=None, *, account=None, avatar_icon=None, account_valid=None):
         super().__init__(parent)
         if isinstance(current_sessdata, dict):
             self._auth_cookies = filter_auth_cookies(current_sessdata)
@@ -114,6 +119,10 @@ class LoginDialog(QDialog):
         self._pending_cookies: dict[str, str] = {}
         self._validation_source = "manual"
         self._logout_requested = False
+        self._account = account or {}
+        self._avatar_icon = avatar_icon
+        self._management = bool(self._sessdata) and account_valid is not False
+        self._account_expired = bool(self._sessdata) and account_valid is False
 
         self.setWindowTitle("账号登录")
         self.setMinimumSize(480, 560)
@@ -125,9 +134,10 @@ class LoginDialog(QDialog):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(12)
 
-        title = QLabel("连接 B 站账号")
+        title = QLabel("账号与登录" if self._management else "连接 B 站账号")
         title.setObjectName("DialogTitle")
-        caption = QLabel("登录后可解析当前账号已获完整播放权限的内容")
+        caption = QLabel("登录已失效，请重新验证账号" if self._account_expired else "登录后可解析当前账号已获完整播放权限的内容")
+        self._caption = caption
         caption.setObjectName("DialogCaption")
         layout.addWidget(title)
         layout.addWidget(caption)
@@ -135,6 +145,28 @@ class LoginDialog(QDialog):
         rights_notice.setObjectName("WarningBanner")
         rights_notice.setWordWrap(True)
         layout.addWidget(rights_notice)
+
+        if self._management:
+            self._account_card = SectionCard("当前账号")
+            identity = QHBoxLayout()
+            if self._avatar_icon is not None:
+                avatar = QLabel()
+                avatar.setPixmap(self._avatar_icon.pixmap(48, 48))
+                identity.addWidget(avatar)
+            name = ElidedLabel(str(self._account.get("uname") or "已保存账号凭据"))
+            name.setObjectName("SectionTitle")
+            identity.addWidget(name, 1)
+            self._account_card.body.addLayout(identity)
+            vip = self._account.get("vip") or {}
+            member = "大会员" if self._account.get("vipStatus") or vip.get("status") else "普通会员"
+            description = QLabel(f"UID：{self._account['mid']} · {member}" if self._account.get("mid") else "登录状态正在检查或暂时无法确认，可切换或退出账号。")
+            description.setObjectName("MetaLabel")
+            description.setWordWrap(True)
+            self._account_card.body.addWidget(description)
+            switch = QPushButton("切换账号")
+            switch.clicked.connect(self._show_login_methods)
+            self._account_card.body.addWidget(switch, alignment=Qt.AlignLeft)
+            layout.addWidget(self._account_card)
 
         self._tabs = QTabWidget()
 
@@ -240,6 +272,7 @@ class LoginDialog(QDialog):
         qr_outer.addWidget(self._generate_btn, alignment=Qt.AlignCenter)
         qr_outer.addWidget(self._refresh_btn, alignment=Qt.AlignCenter)
         self._tabs.addTab(qr_panel, "扫码登录")
+        self._tabs.setCurrentIndex(1)
 
         layout.addWidget(self._tabs)
 
@@ -256,6 +289,19 @@ class LoginDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
         layout.addLayout(btn_layout)
+        if self._management:
+            self._tabs.hide()
+            self.setMinimumHeight(440)
+            self.resize(500, 460)
+
+    def _show_login_methods(self):
+        if hasattr(self, "_account_card"):
+            self._account_card.hide()
+        self._caption.setText("验证新账号成功后才会替换当前账号，关闭可保留原登录。")
+        self._caption.setWordWrap(True)
+        self._tabs.show()
+        self.setMinimumHeight(560)
+        self.resize(500, 600)
 
     def _sync_instruction_color(self):
         self._instructions.setText(

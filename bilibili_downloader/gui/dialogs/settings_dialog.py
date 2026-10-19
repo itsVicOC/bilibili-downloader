@@ -4,6 +4,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -25,14 +26,19 @@ from bilibili_downloader.core.errors import redact_sensitive_text
 from bilibili_downloader.core.ffmpeg import FFmpegManager
 from bilibili_downloader.core.models import (
     AUDIO_CODEC_MAP,
+    WORKSPACE_NAMES,
     AppSettings,
     OutputMode,
     UpdateChannel,
     VideoQuality,
 )
 from bilibili_downloader.core.recorder import check_recorder, find_recorder
+from bilibili_downloader.gui.widgets.appearance_preview import ThemePreviewButton
+from bilibili_downloader.gui.widgets.background_picker import BackgroundPicker
 from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
+    ActionBar,
+    ElidedLabel,
     FieldRow,
     Notice,
     SectionCard,
@@ -40,6 +46,19 @@ from bilibili_downloader.gui.widgets.components import (
     stepper,
 )
 from bilibili_downloader.utils.validators import render_path_template
+
+
+def _setting_value(settings, key):
+    for field in key.split("."):
+        settings = getattr(settings, field)
+    return settings
+
+
+def _set_setting_value(settings, key, value):
+    fields = key.split(".")
+    for field in fields[:-1]:
+        settings = getattr(settings, field)
+    setattr(settings, fields[-1], value)
 
 
 class _LeadingPathLineEdit(QLineEdit):
@@ -91,13 +110,15 @@ class SettingsDialog(QDialog):
     update_channel_changed = Signal()
     dirty_changed = Signal(bool)
 
-    def __init__(self, settings: AppSettings, parent=None, embedded=False):
+    def __init__(self, settings: AppSettings, parent=None, embedded=False, background_store=None):
         super().__init__(parent)
         self._embedded = embedded
         self._settings = settings.model_copy(deep=True)
         self._controls = {}
         self._field_rows = {}
         self._probes = {}
+        self._background_store = background_store
+        self._background_pickers = {}
         if embedded:
             self.setWindowFlags(Qt.Widget)
         else:
@@ -329,28 +350,94 @@ class SettingsDialog(QDialog):
         release_page.clicked.connect(self.update_page_requested.emit)
         update_card.body.addWidget(release_page, alignment=Qt.AlignLeft)
         updates.addWidget(update_card)
-        for column in (download, live, tools, updates):
+        appearance = self._tab("外观")
+        theme = SectionCard("应用配色")
+        self._theme_combo = self._combo(
+            "appearance.theme", theme, "主题",
+            [("星河", "star_trail"), ("晴海", "bilibili_blue")],
+        )
+        self._theme_combo.setItemData(0, "粉紫星空，深浅色跟随系统", Qt.ToolTipRole)
+        self._theme_combo.setItemData(1, "晴空青蓝与柔粉微光，深浅色跟随系统", Qt.ToolTipRole)
+        self._field_rows["appearance.theme"].hide()
+        previews = QHBoxLayout()
+        self._theme_buttons = QButtonGroup(self)
+        for index, (name, description, theme_id) in enumerate((
+            ("星河", "粉紫星空 · 温暖柔和", "star_trail"),
+            ("晴海", "晴空青蓝 · 柔粉微光", "bilibili_blue"),
+        )):
+            button = ThemePreviewButton(name, description, theme_id)
+            self._theme_buttons.addButton(button, index)
+            previews.addWidget(button, 1)
+        self._theme_buttons.idClicked.connect(self._theme_combo.setCurrentIndex)
+        self._theme_combo.currentIndexChanged.connect(self._sync_appearance_preview)
+        theme.body.addLayout(previews)
+        theme.body.addWidget(Notice("深浅色自动跟随系统。保存后立即生效，下次启动继续使用。"))
+        appearance.addWidget(theme)
+        self._background_grid = QGridLayout()
+        self._background_grid.setSpacing(20)
+        self._background_cards = []
+        self._appearance_columns = 0
+        appearance.addLayout(self._background_grid)
+        for workspace, title in zip(WORKSPACE_NAMES, ("视频下载", "直播录制", "任务中心", "设置")):
+            card = SectionCard(f"{title}背景")
+            picker = BackgroundPicker(title, self._background_store)
+            picker.changed.connect(self._draft_changed)
+            card.body.addWidget(picker)
+            self._background_cards.append(card)
+            self._background_pickers[workspace] = picker
+        self._layout_background_cards()
+        appearance.addWidget(Notice("支持静态 PNG、JPEG、WebP（20 MiB / 4000 万像素以内）。自动居中裁切并适配深浅主题；保存应用内副本后，移动原图不影响显示。"))
+        for column in (download, live, tools, updates, appearance):
             column.addStretch()
         self._notice = Notice()
         layout.addWidget(self._notice)
-        footer = QHBoxLayout()
-        self._draft_label = QLabel("所有修改已保存")
+        self._action_bar = ActionBar()
+        self._action_bar.setAccessibleName("设置保存操作")
+        footer = self._action_bar.row
+        self._draft_label = ElidedLabel("所有修改已保存")
         self._draft_label.setObjectName("MetaLabel")
         footer.addWidget(self._draft_label, 1)
         self._reset_btn = QPushButton("撤销修改")
+        self._reset_btn.setObjectName("OutputSecondaryButton")
         self._reset_btn.clicked.connect(lambda: self.load_settings(self._settings))
         footer.addWidget(self._reset_btn)
         self._save_btn = QPushButton("保存设置")
         self._save_btn.setAutoDefault(not self._embedded)
         self._save_btn.setDefault(not self._embedded)
         self._save_btn.setObjectName("PrimaryButton")
+        self._save_btn.setMinimumWidth(128)
         self._save_btn.clicked.connect(self._accept_if_valid)
-        footer.addWidget(self._save_btn)
         if not self._embedded:
             cancel = QPushButton("取消")
+            cancel.setObjectName("OutputSecondaryButton")
             cancel.clicked.connect(self.reject)
             footer.addWidget(cancel)
-        layout.addLayout(footer)
+        footer.addWidget(self._save_btn)
+        layout.addWidget(self._action_bar)
+
+    def _sync_appearance_preview(self, *_args):
+        index = self._theme_combo.currentIndex()
+        button = self._theme_buttons.button(index)
+        if button:
+            button.setChecked(True)
+        for picker in self._background_pickers.values():
+            picker.set_theme(self._theme_combo.currentData())
+
+    def _layout_background_cards(self):
+        columns = 2 if self.width() >= 960 else 1
+        if columns == self._appearance_columns:
+            return
+        self._appearance_columns = columns
+        for index, card in enumerate(self._background_cards):
+            self._background_grid.removeWidget(card)
+            self._background_grid.addWidget(card, index // columns, index % columns)
+        self._background_grid.setColumnStretch(0, 1)
+        self._background_grid.setColumnStretch(1, 1 if columns == 2 else 0)
+
+    def resizeEvent(self, event):
+        if hasattr(self, "_background_grid"):
+            self._layout_background_cards()
+        super().resizeEvent(event)
 
     def set_update_busy(self, busy, kind):
         self._check_update_btn.setEnabled(not busy)
@@ -428,11 +515,7 @@ class SettingsDialog(QDialog):
         previous_channel = self._update_channel.currentData()
         self._settings = settings.model_copy(deep=True)
         for key, control in self._controls.items():
-            value = (
-                getattr(settings.live, key.split(".")[1])
-                if key.startswith("live.")
-                else getattr(settings, key)
-            )
+            value = _setting_value(settings, key)
             if key == "live.segment_seconds":
                 value //= 60
             elif key == "live.minimum_free_bytes":
@@ -454,8 +537,12 @@ class SettingsDialog(QDialog):
                 control.valueChanged.emit(control.value())
         for row in self._field_rows.values():
             row.set_error("")
+        for workspace, picker in self._background_pickers.items():
+            picker.set_reference(getattr(settings.appearance.backgrounds, workspace))
+            picker.set_visibility(getattr(settings.appearance.background_visibility, workspace))
         self._notice.set_message("")
         self._draft_changed()
+        self._sync_appearance_preview()
         if previous_channel != self._update_channel.currentData():
             self.update_channel_changed.emit()
 
@@ -483,51 +570,56 @@ class SettingsDialog(QDialog):
                     else value * 1024**3
                 )
             values[key] = value
+        for workspace, picker in self._background_pickers.items():
+            values[f"appearance.backgrounds.{workspace}"] = picker.reference
+            for mode in ("light", "dark"):
+                values[f"appearance.background_visibility.{workspace}.{mode}"] = getattr(
+                    picker.visibility, mode
+                )
         values["download_subtitle"] |= values["download_all_subtitles"]
         return values
 
     def get_settings(self):
         draft = self._settings.model_copy(deep=True)
         for key, value in self._draft_values().items():
-            if key.startswith("live."):
-                setattr(draft.live, key.split(".")[1], value)
-            else:
-                setattr(draft, key, value)
+            _set_setting_value(draft, key, value)
         return draft
 
     def merge_into(self, latest):
         draft = self.get_settings()
         merged = latest.model_copy(deep=True)
-        for key in self._controls:
-            if key.startswith("live."):
-                field = key.split(".")[1]
-                if getattr(draft.live, field) != getattr(self._settings.live, field):
-                    setattr(merged.live, field, getattr(draft.live, field))
-            elif getattr(draft, key) != getattr(self._settings, key):
-                setattr(merged, key, getattr(draft, key))
+        for key in self._draft_values():
+            value = _setting_value(draft, key)
+            if value != _setting_value(self._settings, key):
+                _set_setting_value(merged, key, value)
         return merged
 
     @property
     def dirty(self):
         # Invalid text is still an editable draft; validate only on save.
         return any(
+            picker.busy or picker.prepared is not None
+            for picker in self._background_pickers.values()
+        ) or any(
             value
-            != (
-                getattr(self._settings.live, key.split(".")[1])
-                if key.startswith("live.")
-                else getattr(self._settings, key)
-            )
+            != _setting_value(self._settings, key)
             for key, value in self._draft_values().items()
         )
 
     def _draft_changed(self, *_args):
         dirty = self.dirty
-        self._draft_label.setText("有未保存的修改" if dirty else "所有修改已保存")
+        self._draft_label.set_full_text("有未保存的修改" if dirty else "所有修改已保存")
         self._reset_btn.setEnabled(dirty)
-        self._save_btn.setEnabled(dirty or not self._embedded)
+        self._save_btn.setEnabled(
+            (dirty or not self._embedded)
+            and not any(picker.busy for picker in self._background_pickers.values())
+        )
         self.dirty_changed.emit(dirty)
 
     def validate(self):
+        if any(picker.busy for picker in self._background_pickers.values()):
+            self._notice.set_message("图片正在读取，请稍后保存。", "warning")
+            return False
         for row in self._field_rows.values():
             row.set_error("")
         checks = [
@@ -582,6 +674,11 @@ class SettingsDialog(QDialog):
                 return False
         self._notice.set_message("")
         return True
+
+    def install_backgrounds(self, store):
+        for picker in self._background_pickers.values():
+            if picker.prepared is not None:
+                store.install(picker.prepared)
 
     def _show_validation(self, entry, message):
         tab = (

@@ -2,6 +2,7 @@
 
 import json
 import logging
+import sqlite3
 import sys
 import time
 from datetime import datetime, timezone
@@ -17,6 +18,7 @@ from PySide6.QtGui import (
     QKeySequence,
 )
 from PySide6.QtWidgets import (
+    QApplication,
     QBoxLayout,
     QCheckBox,
     QFrame,
@@ -40,6 +42,9 @@ from PySide6.QtWidgets import (
 
 from bilibili_downloader import __version__
 from bilibili_downloader.api.client import BilibiliAPIClient
+from bilibili_downloader.api.live import BilibiliLiveClient
+from bilibili_downloader.core.appearance import BackgroundStore
+from bilibili_downloader.core.batch import is_collection_source
 from bilibili_downloader.core.cache import clear_download_cache, inspect_download_cache
 from bilibili_downloader.core.copyright import (
     BILIBILI_TERMS_URL,
@@ -50,6 +55,7 @@ from bilibili_downloader.core.copyright import (
 )
 from bilibili_downloader.core.models import (
     AUDIO_CODEC_MAP,
+    WORKSPACE_NAMES,
     DownloadItem,
     OutputMode,
     TaskStatus,
@@ -65,6 +71,7 @@ from bilibili_downloader.gui.dialogs.settings_dialog import SettingsDialog
 from bilibili_downloader.gui.dialogs.update_dialog import UpdateDialog
 from bilibili_downloader.gui.live_controller import LiveUiController
 from bilibili_downloader.gui.resources.paths import asset_path
+from bilibili_downloader.gui.resources.theme import ThemeManager
 from bilibili_downloader.gui.threads.download_worker import (
     DownloadRunner,
     DownloadWorker,
@@ -82,10 +89,12 @@ from bilibili_downloader.gui.update_controller import UpdateController
 from bilibili_downloader.gui.widgets.chinese_input import ChineseLineEdit
 from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
+    AccountButton,
     FieldRow,
     IconButton,
     MessageBox,
     Notice,
+    OutputActionBar,
     PageHeader,
     SectionCard,
     repolish,
@@ -96,6 +105,7 @@ from bilibili_downloader.gui.widgets.hero_panel import HeroPanel
 from bilibili_downloader.gui.widgets.live_page import LivePage
 from bilibili_downloader.gui.widgets.task_page import TaskPage
 from bilibili_downloader.gui.widgets.video_info import VideoInfoWidget
+from bilibili_downloader.gui.widgets.workspace_background import WorkspaceStack
 from bilibili_downloader.utils.config import ConfigManager
 from bilibili_downloader.utils.validators import is_bilibili_url
 
@@ -105,14 +115,23 @@ logger = logging.getLogger(__name__)
 class MainWindow(QMainWindow):
     """Main application window."""
 
-    def __init__(self, config_manager=None, task_repository=None, live_controller=None, *, update_service=None, startup_paused=False):
+    def __init__(self, config_manager=None, task_repository=None, live_controller=None, *, update_service=None, startup_paused=False, theme_manager=None):
         super().__init__()
-        self.setWindowTitle("BiliFlow · 星轨下载站")
+        self.setWindowTitle("BiliFlow · 星轨收藏站")
         self.setMinimumSize(900, 640)
         self.resize(1320, 860)
         # Components
         self._config = config_manager or ConfigManager()
         self._settings = self._config.load()
+        self._background_store = BackgroundStore(self._config.data_dir)
+        self._theme_manager = theme_manager
+        if self._theme_manager is None and self._settings.appearance.theme != (
+            QApplication.instance().property("colorTheme") or "star_trail"
+        ):
+            self._theme_manager = ThemeManager(QApplication.instance(), self._settings.appearance.theme)
+            self._theme_manager.setParent(self)
+        if self._theme_manager is not None:
+            self._theme_manager.set_color_theme(self._settings.appearance.theme)
         self._task_repository = task_repository or TaskRepository(
             self._config.task_database_path
         )
@@ -126,6 +145,9 @@ class MainWindow(QMainWindow):
         # State
         self._current_video: VideoInfo | None = None
         self._login_status_request_id = 0
+        self._user_profile = {}
+        self._login_verified = None
+        self._removed_task_records = []
         self._close_confirmed = False
         self._startup_paused = startup_paused
         self._startup_downloads = []
@@ -222,6 +244,7 @@ class MainWindow(QMainWindow):
         self._home_nav, self._live_nav, self._tasks_nav = self._nav_buttons
         self._side_layout.addStretch()
         self._mascot_card = SectionCard()
+        self._mascot_card.setObjectName("MascotCard")
         mascot = QLabel()
         mascot.setPixmap(QIcon(asset_path("alien.png")).pixmap(28, 28))
         self._mascot_card.body.addWidget(mascot)
@@ -234,11 +257,11 @@ class MainWindow(QMainWindow):
         self._settings_nav.clicked.connect(self._on_settings_triggered)
         self._side_layout.addWidget(self._settings_nav)
         self._account_text = "未登录"
-        self._header_login = IconButton("未登录", "account", "SidebarAction")
+        self._header_login = AccountButton()
         self._header_login.clicked.connect(self._on_login_triggered)
         self._side_layout.addWidget(self._header_login)
         shell.addWidget(self._sidebar)
-        self._workspace_pages = QStackedWidget()
+        self._workspace_pages = WorkspaceStack()
         shell.addWidget(self._workspace_pages, 1)
         self._build_download_page()
         self._live_controller = self._provided_live_controller or LiveUiController(
@@ -265,6 +288,7 @@ class MainWindow(QMainWindow):
         self._task_page.resume_all_requested.connect(self._on_resume_all)
         self._task_page.clear_completed_requested.connect(self._on_clear_completed)
         self._task_page.clear_cache_requested.connect(self._on_clear_cache)
+        self._task_page.undo_remove_requested.connect(self._undo_removed_tasks)
         self._workspace_pages.addWidget(self._task_page)
         settings_page = QWidget()
         settings_layout = QVBoxLayout(settings_page)
@@ -276,7 +300,9 @@ class MainWindow(QMainWindow):
         about_button.clicked.connect(self._on_about_triggered)
         settings_header.actions.addWidget(about_button)
         settings_layout.addWidget(settings_header)
-        self._settings_page = SettingsDialog(self._settings, embedded=True)
+        self._settings_page = SettingsDialog(
+            self._settings, embedded=True, background_store=self._background_store
+        )
         self._settings_page.save_requested.connect(self._save_settings)
         self._settings_page.cache_requested.connect(self._on_clear_cache)
         settings_layout.addWidget(self._settings_page, 1)
@@ -327,8 +353,18 @@ class MainWindow(QMainWindow):
         row.addWidget(self._resolve_btn)
         self._hero_layout.addLayout(row)
         self._workspace_layout.addWidget(self._hero)
-        self._resolve_notice = Notice()
+        self._resolve_notice = Notice(callback=self._route_current_source)
         self._workspace_layout.addWidget(self._resolve_notice)
+        self._empty_download = SectionCard("从一个链接开始")
+        empty_hint = QLabel("粘贴作品链接或 BV / AV / ep 号，解析后选择画质、分 P 与保存位置。")
+        empty_hint.setWordWrap(True)
+        empty_hint.setObjectName("MetaLabel")
+        self._empty_download.body.addWidget(empty_hint)
+        import_collection = QPushButton("导入收藏夹或合集 →")
+        import_collection.setObjectName("TextButton")
+        import_collection.clicked.connect(self._on_batch_clicked)
+        self._empty_download.body.addWidget(import_collection, alignment=Qt.AlignLeft)
+        self._workspace_layout.addWidget(self._empty_download)
         self._content_section = QWidget()
         self._content_layout = QBoxLayout(QBoxLayout.LeftToRight, self._content_section)
         self._content_layout.setContentsMargins(0, 0, 0, 0)
@@ -337,6 +373,7 @@ class MainWindow(QMainWindow):
         self._content_layout.addWidget(self._video_info, 5)
         self._build_output_card()
         self._workspace_layout.addWidget(self._content_section)
+        self._content_section.hide()
         self._workspace_layout.addStretch()
         self._workspace_scroll = scroll_area(body)
         self._download_tabs.addTab(self._workspace_scroll, "单个解析")
@@ -346,10 +383,7 @@ class MainWindow(QMainWindow):
             embedded=True,
         )
         self._batch_page.enqueue_requested.connect(self._enqueue_batch_from_page)
-        batch_format = QPushButton("调整输出规格")
-        batch_format.setObjectName("TableSubtleButton")
-        batch_format.clicked.connect(lambda: self._download_tabs.setCurrentIndex(0))
-        self._batch_page._preview_card.header.addWidget(batch_format)
+        self._batch_page._action_bar.edit_requested.connect(self._show_output_options)
         self._download_tabs.addTab(self._batch_page, "批量导入")
         self._enqueue_notice = Notice(
             action="查看任务", callback=lambda: self._show_tasks(0)
@@ -359,6 +393,9 @@ class MainWindow(QMainWindow):
         self._download_tabs.currentChanged.connect(
             lambda index: self._download_actions.setVisible(index == 0)
         )
+        for combo in (self._page_combo, self._quality_combo, self._codec_combo, self._audio_combo, self._output_mode_combo):
+            combo.currentIndexChanged.connect(self._refresh_download_summary)
+        self._refresh_download_summary()
         self._workspace_pages.addWidget(page)
 
     def _build_output_card(self):
@@ -432,25 +469,45 @@ class MainWindow(QMainWindow):
         self._output_summary.setToolTip(self._settings.output_dir)
         self._output_summary.setCursorPosition(0)
         controls.body.addWidget(FieldRow("保存目录", self._output_summary))
-        self._download_actions = QWidget()
-        actions = QHBoxLayout(self._download_actions)
-        actions.setContentsMargins(0, 0, 0, 0)
-        actions.setSpacing(12)
-        self._download_hint = QLabel("选择输出规格后，加入下载队列")
-        self._download_hint.setObjectName("MetaLabel")
-        actions.addWidget(self._download_hint, 1)
-        self._download_btn = QPushButton("加入下载队列")
-        self._download_btn.setObjectName("PrimaryButton")
-        self._download_btn.setEnabled(False)
-        self._download_btn.clicked.connect(self._on_download_clicked)
-        actions.addWidget(self._download_btn)
-        self._batch_btn = QPushButton("批量导入")
-        self._batch_btn.setObjectName("TextButton")
-        self._batch_btn.clicked.connect(self._on_batch_clicked)
-        actions.addWidget(self._batch_btn)
+        self._download_actions = OutputActionBar()
+        self._download_hint = self._download_actions.specs
+        self._download_path_hint = self._download_actions.directory
+        self._edit_output_btn = self._download_actions.edit_button
+        self._download_btn = self._download_actions.primary_button
+        self._download_actions.edit_requested.connect(self._show_output_options)
+        self._download_actions.submit_requested.connect(self._on_download_clicked)
         controls.body.addStretch()
         self._sync_output_mode_controls()
         self._content_layout.addWidget(controls, 4)
+
+    def _show_output_options(self):
+        self._download_tabs.setCurrentIndex(0)
+        self._content_section.show()
+        self._empty_download.hide()
+        self._video_info.setVisible(self._current_video is not None)
+        QTimer.singleShot(0, lambda: self._workspace_scroll.ensureWidgetVisible(self._output_card, 0, 12))
+        self._quality_combo.setFocus()
+
+    def _refresh_download_summary(self, *_args):
+        if not hasattr(self, "_download_hint"):
+            return
+        audio = self._output_mode_combo.currentData() == OutputMode.AUDIO
+        quality = self._quality_combo.currentText() or self._settings.default_quality.label
+        codec = {7: "AVC", 12: "HEVC", 13: "AV1"}.get(self._codec_combo.currentData(), "自动编码")
+        selection = self._page_combo.currentData()
+        count = len(self._current_video.pages) if self._current_video and selection == "all" else 1
+        pages = (
+            "解析后选择分 P" if self._current_video is None else
+            f"全部 {count}P" if selection == "all" else self._page_combo.currentText()
+        )
+        specs = f"{self._audio_combo.currentText()} · 仅音频 · {pages}" if audio else f"{quality} · {codec} · {pages}"
+        self._download_actions.status.setText("已选 1 项" if self._current_video else "待解析")
+        self._download_hint.set_full_text(specs)
+        directory = f"保存至 {self._settings.output_dir}"
+        self._download_path_hint.set_full_text(directory)
+        if hasattr(self, "_batch_page"):
+            batch_specs = f"{self._audio_combo.currentText()} · 仅音频" if audio else f"{quality} · {codec}"
+            self._batch_page.set_output_summary(f"{batch_specs} · 各作品全部分 P", directory)
 
     def _show_workspace(self, index):
         if not getattr(self, "_shell_enabled", True):
@@ -465,13 +522,23 @@ class MainWindow(QMainWindow):
         if index == 3 and not self._settings_page.dirty:
             self._settings_page.load_settings(self._settings)
         self._workspace_pages.setCurrentIndex(index)
+        self._refresh_workspace_background()
         if hasattr(self, "_header_stack"):
             self._header_stack.setCurrentIndex(index)
         self._sync_workspace_actions()
         for i, button in enumerate([*self._nav_buttons, self._settings_nav]):
             button.setObjectName("NavButtonActive" if i == index else "NavButton")
             repolish(button)
+            button._sync_icon()
         return True
+
+    def _refresh_workspace_background(self):
+        workspace = WORKSPACE_NAMES[self._workspace_pages.currentIndex()]
+        reference = getattr(self._settings.appearance.backgrounds, workspace)
+        self._workspace_pages.set_background(self._background_store.path(reference))
+        self._workspace_pages.set_visibility(
+            getattr(self._settings.appearance.background_visibility, workspace)
+        )
 
     def _sync_workspace_actions(self):
         for index, action in enumerate(getattr(self, "_workspace_actions", ())):
@@ -667,7 +734,7 @@ class MainWindow(QMainWindow):
         if not compact:
             self._header_login.setText(
                 self._header_login.fontMetrics().elidedText(
-                    self._account_text, Qt.ElideRight, 116
+                    self._account_text, Qt.ElideRight, 108
                 )
             )
         content_width = width - (72 if compact else 208) - 48
@@ -957,16 +1024,23 @@ class MainWindow(QMainWindow):
         self._live_nav.setToolTip(f"直播录制 · {recording} 场正在录制")
         self._task_page.refresh_downloads()
 
-    def _set_login_status_label(self, text, style_name, tooltip=""):
+    def _set_login_status_label(self, text, style_name, tooltip="", *, account_name=None):
         self._login_status_label.setText(text)
         self._login_status_label.setObjectName(style_name)
-        self._account_text = text
-        self._header_login.full_text = text
+        self._account_text = account_name or text
+        self._header_login.full_text = self._account_text
+        self._header_login.setProperty("signedIn", account_name is not None)
+        repolish(self._header_login)
+        self._header_login.set_avatar()
+        self._login_verified = True if account_name is not None else False if text == "未登录" else None
+        if account_name is None:
+            self._user_face = ""
+            self._user_profile = {}
         compact = self._sidebar.width() == 72
         self._header_login.set_compact(compact)
         if not compact:
             self._header_login.setText(
-                self._header_login.fontMetrics().elidedText(text, Qt.ElideRight, 116)
+                self._header_login.fontMetrics().elidedText(self._account_text, Qt.ElideRight, 108)
             )
         self._header_login.setToolTip(
             " · ".join(part for part in (text, tooltip) if part)
@@ -974,6 +1048,7 @@ class MainWindow(QMainWindow):
         self._header_login.setAccessibleName(text)
 
     def _source_changed(self, text):
+        self._resolve_notice.action.hide()
         if hasattr(self, "_download_btn") and text.strip() != getattr(
             self, "_resolved_url", ""
         ):
@@ -981,6 +1056,7 @@ class MainWindow(QMainWindow):
             self._download_btn.setEnabled(False)
             self._video_info._state_label.setText("等待解析")
             self._video_info._state_label.set_tone("muted")
+            self._refresh_download_summary()
             if getattr(self, "_resolved_url", ""):
                 self._resolve_notice.set_message("来源已修改，请重新解析。")
 
@@ -1028,6 +1104,18 @@ class MainWindow(QMainWindow):
             )
             return
 
+        if is_collection_source(url):
+            self._suggest_source_route("batch", "这是收藏夹、合集或番剧季度，可转到批量导入。")
+            return
+        if url.startswith(("https://live.bilibili.com/", "http://live.bilibili.com/")):
+            try:
+                BilibiliLiveClient.parse_room_id(url)
+            except ValueError:
+                pass
+            else:
+                self._suggest_source_route("live", "这是直播间，可转到直播录制。")
+                return
+        self._resolve_notice.action.hide()
         if not is_bilibili_url(url):
             self._resolve_notice.set_message(
                 "无法识别这个来源。番剧季度、合集和收藏夹请使用批量导入。", "warning"
@@ -1037,6 +1125,7 @@ class MainWindow(QMainWindow):
         self._resolve_request_url = url
         self._current_video = None
         self._download_btn.setEnabled(False)
+        self._refresh_download_summary()
         self._resolve_notice.set_message("正在读取作品与可用规格…")
         self._video_info._state_label.setText("解析中")
         self._video_info._state_label.set_tone("active")
@@ -1050,7 +1139,38 @@ class MainWindow(QMainWindow):
         self._resolve_runner = ResolveRunner(self._resolve_worker)
         self._resolve_worker.finished.connect(self._on_resolve_success)
         self._resolve_worker.error.connect(self._on_resolve_error)
+        self._resolve_worker.routed.connect(self._on_resolve_route)
         self._service_pool.start(self._resolve_runner)
+
+    def _on_resolve_route(self, target, source):
+        self._resolve_btn.setEnabled(True)
+        self._resolve_btn.setText("开始解析")
+        self._video_info._state_label.setText("等待解析")
+        if self._resolve_request_url != self._url_input.text().strip():
+            self._resolve_notice.set_message("来源已修改，请重新解析。", "warning")
+            return
+        self._status_bar.showMessage("已识别来源，请选择对应工作区。")
+        self._suggest_source_route(target, "短链已识别为批量来源。" if target == "batch" else "短链已识别为直播间。", source)
+
+    def _suggest_source_route(self, target, message, source=None):
+        self._resolve_notice.set_message(message, "info")
+        self._source_route_target = target
+        self._source_route_url = source
+        self._resolve_notice.action.setText("转到批量导入" if target == "batch" else "转到直播录制")
+        self._resolve_notice.action.show()
+
+    def _route_current_source(self):
+        source = self._source_route_url or self._url_input.text().strip()
+        if self._source_route_target == "batch":
+            self._on_batch_clicked()
+            existing = self._batch_page._url_text.toPlainText().strip()
+            if source not in existing.splitlines():
+                self._batch_page._url_text.setPlainText("\n".join(part for part in (existing, source) if part))
+            self._batch_page._collapse_btn.setChecked(False)
+            self._batch_page._url_text.setFocus()
+        elif self._show_workspace(1):
+            self._live_page.source.setText(source)
+            self._live_page.source.setFocus()
 
     def _on_resolve_success(self, info, video_streams, audio_streams, playurl_ok):
         """Handle successful URL resolution."""
@@ -1065,11 +1185,15 @@ class MainWindow(QMainWindow):
             )
             return
         self._resolved_url = self._url_input.text().strip()
+        preferred_quality = self._quality_combo.currentData()
         self._resolve_notice.set_message("")
         self._download_btn.setEnabled(True)
         self._status_bar.showMessage(f"已解析：{info.title}")
 
         self._current_video = info
+        self._content_section.show()
+        self._empty_download.hide()
+        self._video_info.show()
         self._current_video.video_streams = video_streams
         self._current_video.audio_streams = audio_streams
         self._video_info.set_video_info(info)
@@ -1077,6 +1201,7 @@ class MainWindow(QMainWindow):
 
         QUALITY_ID_TO_ENUM = {q.value: q for q in VideoQuality}
 
+        self._quality_combo.blockSignals(True)
         if playurl_ok and video_streams:
             # Extract available quality IDs from video streams
             available_qids = set()
@@ -1094,9 +1219,7 @@ class MainWindow(QMainWindow):
                 label = enum_val.label if enum_val else str(qid)
                 self._quality_combo.addItem(label, enum_val)
             if available:
-                default_index = self._quality_combo.findData(
-                    self._settings.default_quality
-                )
+                default_index = self._quality_combo.findData(preferred_quality)
                 self._quality_combo.setCurrentIndex(
                     default_index if default_index >= 0 else 0
                 )
@@ -1106,14 +1229,18 @@ class MainWindow(QMainWindow):
             # playurl failed or no streams — fallback to full list
             self._quality_combo.clear()
             self._populate_quality_combo()
+            preferred_index = self._quality_combo.findData(preferred_quality)
+            if preferred_index >= 0:
+                self._quality_combo.setCurrentIndex(preferred_index)
+        self._quality_combo.blockSignals(False)
 
         self._refresh_codec_options()
         available_audio = {stream.id for stream in audio_streams}
         self._populate_audio_combo(available_audio or None)
         self._subtitle_check.setEnabled(True)
-        self._subtitle_check.setChecked(self._settings.download_subtitle)
         self._subtitle_check.setToolTip("每个分 P 下载时会单独查询可用字幕轨道")
         self._all_subtitles_check.setEnabled(self._subtitle_check.isChecked())
+        self._refresh_download_summary()
 
     def _on_resolve_error(self, error: str):
         """Handle resolution error."""
@@ -1335,7 +1462,42 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage("任务已暂停，断点数据已保留")
 
     def _on_delete_download(self, download_id: int):
-        self._task_repository.delete(download_id)
+        self._remove_task_records([download_id])
+
+    def _remove_task_records(self, task_ids):
+        try:
+            records = [record for task_id in task_ids if (record := self._task_repository.get(task_id)) is not None]
+            self._task_repository.delete_many(task_ids)
+        except (OSError, sqlite3.Error) as exc:
+            self._show_error(f"移除记录失败：{exc}")
+            return
+        for task_id in task_ids:
+            self._download_list.remove_item(task_id)
+        self._removed_task_records = records
+        if task_ids:
+            self._task_page.undo_notice.set_message(f"已移除 {len(task_ids)} 条记录，媒体文件和断点仍保留。", "info")
+            self._task_page.undo_notice.action.setVisible(bool(records))
+        self._task_page.refresh_downloads()
+
+    def _undo_removed_tasks(self):
+        restored = 0
+        try:
+            records = self._task_repository.restore_records(self._removed_task_records)
+        except (OSError, sqlite3.Error) as exc:
+            self._task_page.undo_notice.set_message(f"恢复记录失败，可重试：{exc}", "danger")
+            return
+        for record in records:
+            self._download_list.add_item(
+                record.item, download_id=record.id, status=record.status,
+                progress=record.progress, status_text=record.status_text,
+                output_path=record.output_path, warnings=record.warnings,
+            )
+            restored += 1
+        skipped = len(self._removed_task_records) - restored
+        self._removed_task_records = []
+        self._task_page.undo_notice.set_message("")
+        self._status_bar.showMessage(f"已恢复 {restored} 条记录" + (f"，{skipped} 条已有相同任务" if skipped else ""), 5000)
+        self._task_page.refresh_downloads()
 
     def _on_open_download(self, download_id: int):
         record = self._task_repository.get(download_id)
@@ -1349,21 +1511,19 @@ class MainWindow(QMainWindow):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.parent)))
 
     def _on_pause_all(self):
-        self._download_list.pause_all_workers()
-        self._status_bar.showMessage("正在暂停全部任务...")
+        task_ids = self._task_page.bulk_ids("pause")
+        for task_id in task_ids:
+            self._download_list._on_pause_clicked(task_id)
+        self._status_bar.showMessage(f"正在暂停 {len(task_ids)} 项任务…")
 
     def _on_resume_all(self):
-        task_ids = self._download_list.resumable_ids
+        task_ids = self._task_page.bulk_ids("resume")
         for task_id in task_ids:
             self._on_retry_download(task_id)
         self._status_bar.showMessage(f"已继续 {len(task_ids)} 个任务")
 
     def _on_clear_completed(self):
-        task_ids = self._download_list.completed_ids
-        for task_id in task_ids:
-            self._download_list.remove_item(task_id)
-        deleted = self._task_repository.clear_completed()
-        self._status_bar.showMessage(f"已清除 {deleted} 条完成记录，媒体文件仍保留")
+        self._remove_task_records(self._task_page.bulk_ids("clear"))
 
     def _on_clear_cache(self):
         if self._download_list.has_active_workers:
@@ -1398,11 +1558,23 @@ class MainWindow(QMainWindow):
             return False
         new_settings = self._settings_page.merge_into(self._config.load())
         try:
+            self._settings_page.install_backgrounds(self._background_store)
             self._config.save(new_settings)
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             self._settings_page._notice.set_message(f"设置保存失败：{exc}", "danger")
             return False
+        theme_changed = new_settings.appearance.theme != self._settings.appearance.theme
         self._settings = new_settings
+        if self._theme_manager is None and theme_changed:
+            self._theme_manager = ThemeManager(QApplication.instance(), new_settings.appearance.theme)
+            self._theme_manager.setParent(self)
+        elif self._theme_manager is not None and theme_changed:
+            self._theme_manager.set_color_theme(new_settings.appearance.theme)
+        self._refresh_workspace_background()
+        try:
+            self._background_store.cleanup(new_settings.appearance.backgrounds.model_dump().values())
+        except OSError:
+            logger.warning("Unused background images could not be removed")
         self._apply_thread_pool_settings()
         self._apply_settings_to_controls()
         self._live_controller.command("settings", settings=new_settings.live)
@@ -1435,11 +1607,12 @@ class MainWindow(QMainWindow):
         self._output_summary.setText(self._settings.output_dir)
         self._output_summary.setToolTip(self._settings.output_dir)
         self._output_summary.setCursorPosition(0)
+        self._refresh_download_summary()
 
     def _on_login_triggered(self):
         """Open login dialog."""
         current_cookies = getattr(self._config, "auth_cookies", {})
-        dialog = LoginDialog(current_cookies or self._settings.sessdata, self)
+        dialog = LoginDialog(current_cookies or self._settings.sessdata, self, account=self._user_profile, avatar_icon=self._header_login.icon(), account_valid=self._login_verified)
         if dialog.exec():
             if dialog.logout_requested:
                 new_settings = self._settings.model_copy(
@@ -1495,6 +1668,7 @@ class MainWindow(QMainWindow):
         self._login_status_worker = LoginStatusWorker(self._api_client, request_id)
         self._login_status_worker.finished.connect(self._on_login_status_result)
         self._login_status_worker.error.connect(self._on_login_status_error)
+        self._login_status_worker.avatar_ready.connect(self._on_login_status_avatar)
         self._login_status_runner = LoginStatusRunner(self._login_status_worker)
         self._service_pool.start(self._login_status_runner)
 
@@ -1502,7 +1676,8 @@ class MainWindow(QMainWindow):
         if request_id != self._login_status_request_id:
             return
         if nav_info.get("isLogin"):
-            uname = nav_info.get("uname", "未知用户")
+            self._user_profile = {key: nav_info.get(key) for key in ("uname", "mid", "vipStatus", "vip")}
+            uname = str(nav_info.get("uname") or "未知用户")
             mid = nav_info.get("mid", "")
             self._user_face = nav_info.get("face", "")
             vip = nav_info.get("vip") or {}
@@ -1512,9 +1687,14 @@ class MainWindow(QMainWindow):
                 f"已登录：{uname} · {member}",
                 "StatusPill",
                 f"UID: {mid}",
+                account_name=uname,
             )
         else:
             self._set_login_status_label("未登录", "MutedLabel")
+
+    def _on_login_status_avatar(self, request_id: int, data: bytes):
+        if request_id == self._login_status_request_id and self._user_face:
+            self._header_login.set_avatar(data)
 
     def _on_login_status_error(self, request_id: int, error: str):
         if request_id != self._login_status_request_id:
@@ -1664,6 +1844,7 @@ class MainWindow(QMainWindow):
                 return
             self._close_confirmed = True
 
+        self._batch_page.cancel_resolution()
         self._updates.shutdown()
         if live_service and not live_service.stopped:
             self._close_confirmed = True

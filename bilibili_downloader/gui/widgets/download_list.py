@@ -1,7 +1,7 @@
 """Download list table widget with cancel and retry support."""
 
 from PySide6.QtCore import QRect, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPalette
+from PySide6.QtGui import QColor, QFont, QPainter
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QSizePolicy,
+    QStyle,
     QStyledItemDelegate,
     QStyleOptionViewItem,
     QTableWidget,
@@ -25,12 +26,10 @@ from bilibili_downloader.core.models import (
     VideoQuality,
 )
 from bilibili_downloader.gui.resources.styles import (
-    DARK_PALETTE,
-    LIGHT_PALETTE,
     UI_METRICS,
     readable_fill_text,
 )
-from bilibili_downloader.gui.widgets.components import line_icon
+from bilibili_downloader.gui.widgets.components import line_icon, palette
 
 ACTION_BUTTON_MIN_WIDTH = 60
 ACTION_BUTTON_GAP = 6
@@ -41,7 +40,34 @@ _TABLE_BUTTON_NAMES = {
     "SubtleButton": "TableSubtleButton",
     "PrimaryButton": "TablePrimaryButton",
     "DangerButton": "TableDangerButton",
+    "RemoveButton": "TableRemoveButton",
 }
+
+
+class _SpecificationDelegate(QStyledItemDelegate):
+    """Compact, two-line media tags keep the title column readable."""
+
+    def paint(self, painter, option, index):
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        text, opt.text = opt.text, ""
+        style = opt.widget.style() if opt.widget else QApplication.style()
+        style.drawControl(QStyle.CE_ItemViewItem, opt, painter, opt.widget)
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+        p = palette()
+        rect = opt.rect.adjusted(5, 8, -5, -8)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(p.surface_raised))
+        painter.drawRoundedRect(rect, 6, 6)
+        painter.setPen(QColor(p.muted))
+        font = QFont(opt.font)
+        font.setPointSizeF(font.pointSizeF() * 0.86)
+        painter.setFont(font)
+        lines = text.splitlines()
+        label = "\n".join(painter.fontMetrics().elidedText(line, Qt.ElideRight, max(1, rect.width() - 6)) for line in lines[:2])
+        painter.drawText(rect, Qt.AlignCenter, label)
+        painter.restore()
 
 
 class _ReadableProgressBar(QProgressBar):
@@ -53,9 +79,7 @@ class _ReadableProgressBar(QProgressBar):
 
     def paintEvent(self, event):
         super().paintEvent(event)
-        app = QApplication.instance()
-        dark = bool(app and app.property("darkTheme"))
-        p = DARK_PALETTE if dark else LIGHT_PALETTE
+        p = palette()
         painter = QPainter(self)
         text = f"{self.value()}%"
         painter.setPen(QColor(p.text))
@@ -90,23 +114,28 @@ class _StatusDelegate(QStyledItemDelegate):
 
     def paint(self, painter, option, index):
         tone = index.data(STATUS_TONE_ROLE)
-        if tone:
-            option = QStyleOptionViewItem(option)
-            self.initStyleOption(option, index)
-            app = QApplication.instance()
-            dark = bool(app and app.property("darkTheme"))
-            palette = DARK_PALETTE if dark else LIGHT_PALETTE
-            colors = {
-                "active": palette.active_text,
-                "success": palette.success,
-                "warning": palette.warning,
-                "danger": palette.danger,
-                "muted": palette.muted,
-            }
-            color = QColor(colors.get(tone, colors["muted"]))
-            option.palette.setColor(QPalette.Text, color)
-            option.palette.setColor(QPalette.HighlightedText, color)
-        super().paint(painter, option, index)
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        text, opt.text = opt.text, ""
+        style = opt.widget.style() if opt.widget else QApplication.style()
+        style.drawControl(QStyle.CE_ItemViewItem, opt, painter, opt.widget)
+        p = palette()
+        color = {"active": p.active_text, "success": p.success, "warning": p.warning,
+                 "danger": p.danger, "muted": p.muted}.get(tone, p.text)
+        painter.save()
+        painter.setPen(QColor(color))
+        painter.setFont(opt.font)
+        lines = text.replace(" · ", "\n", 1).splitlines() or [""]
+        if len(lines) > 2:
+            lines = [lines[0], " · ".join(lines[1:])]
+        metrics = painter.fontMetrics()
+        height = metrics.height()
+        top = opt.rect.center().y() - len(lines) * height // 2
+        for line in lines:
+            rect = QRect(opt.rect.left() + 8, top, max(1, opt.rect.width() - 16), height)
+            painter.drawText(rect, Qt.AlignLeft | Qt.AlignVCenter, metrics.elidedText(line, Qt.ElideRight, rect.width()))
+            top += height
+        painter.restore()
 
 
 def _create_action_btn(text: str, object_name: str, download_id: int, handler):
@@ -125,7 +154,9 @@ def _create_pause_btn(download_id: int, handler):
 
 
 def _create_delete_btn(download_id: int, handler):
-    return _create_action_btn("删除", "DangerButton", download_id, handler)
+    button = _create_action_btn("移除记录", "RemoveButton", download_id, handler)
+    button.setToolTip("仅移除任务记录，保留媒体文件和断点")
+    return button
 
 
 def _create_retry_btn(download_id: int, handler):
@@ -133,7 +164,7 @@ def _create_retry_btn(download_id: int, handler):
 
 
 def _create_open_btn(download_id: int, handler):
-    return _create_action_btn("打开", "SubtleButton", download_id, handler)
+    return _create_action_btn("打开目录", "SubtleButton", download_id, handler)
 
 
 def _wrap_btn(widget):
@@ -189,7 +220,7 @@ class DownloadListWidget(QTableWidget):
         self.horizontalHeader().resizeSection(1, 110)
         self.horizontalHeader().setMinimumSectionSize(40)
         self.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
-        self.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.horizontalHeader().setSectionResizeMode(3, QHeaderView.Fixed)
         self.horizontalHeader().resizeSection(2, 210)
         # The operation column fits two localized action buttons without clipping.
         self.horizontalHeader().setSectionResizeMode(4, QHeaderView.Fixed)
@@ -208,6 +239,7 @@ class DownloadListWidget(QTableWidget):
         self.setIconSize(QSize(20, 20))
         self.setTextElideMode(Qt.ElideRight)
         self.setItemDelegateForColumn(3, _StatusDelegate(self))
+        self.setItemDelegateForColumn(1, _SpecificationDelegate(self))
         self._show_placeholder()
 
     def add_item(
@@ -247,6 +279,11 @@ class DownloadListWidget(QTableWidget):
             else f"{item.selected_quality.label} · {VIDEO_CODEC_MAP.get(item.selected_video_codec, item.selected_video_codec)}"
         )
         quality_item = QTableWidgetItem(quality_label)
+        if item.output_mode == OutputMode.VIDEO:
+            codec = {7: "AVC", 12: "HEVC", 13: "AV1"}.get(item.selected_video_codec, "自动")
+            quality_item.setText(f"{item.selected_quality.label}\n{codec}")
+        else:
+            quality_item.setText("Hi-Res\nFLAC" if item.selected_audio_quality == 30251 else "音频\nM4A")
         quality_item.setToolTip(quality_label)
         quality_item.setData(Qt.UserRole, download_id)
         self.setItem(row, 1, quality_item)
@@ -422,8 +459,9 @@ class DownloadListWidget(QTableWidget):
             )
             spec_item = self.item(row, 1)
             if spec_item:
-                spec_item.setText(f"{quality} · {codec}")
-                spec_item.setToolTip(spec_item.text())
+                short_codec = {7: "AVC", 12: "HEVC", 13: "AV1"}.get(outcome.actual_video_codec, codec)
+                spec_item.setText(f"{quality}\n{short_codec}")
+                spec_item.setToolTip(f"{quality} · {codec}")
         elif outcome is not None and outcome.actual_audio_quality is not None:
             audio = AUDIO_CODEC_MAP.get(
                 outcome.actual_audio_quality,
@@ -431,7 +469,7 @@ class DownloadListWidget(QTableWidget):
             )
             spec_item = self.item(row, 1)
             if spec_item:
-                spec_item.setText(audio)
+                spec_item.setText("Hi-Res\nFLAC" if outcome.actual_audio_quality == 30251 else "音频\nM4A")
                 spec_item.setToolTip(audio)
 
         self._set_actions(download_id, TaskStatus.COMPLETED)
@@ -542,7 +580,6 @@ class DownloadListWidget(QTableWidget):
     def _on_delete_clicked(self, download_id: int):
         """Remove a download from the table."""
         self.delete_requested.emit(download_id)
-        self.remove_item(download_id)
 
     def remove_item(self, download_id: int):
         row = self._row_for(download_id)
@@ -615,11 +652,13 @@ class DownloadListWidget(QTableWidget):
 
     def resizeEvent(self, event):
         """Keep progress useful without starving title text on compact windows."""
-        progress_width = 120 if event.size().width() < 800 else 170
+        narrow = event.size().width() < 900
+        progress_width = 104 if narrow else 150
         self.horizontalHeader().resizeSection(
-            1, 100 if event.size().width() < 800 else 140
+            1, 80 if narrow else 100
         )
         self.horizontalHeader().resizeSection(2, progress_width)
+        self.horizontalHeader().resizeSection(3, 156 if narrow else 220)
         super().resizeEvent(event)
 
 

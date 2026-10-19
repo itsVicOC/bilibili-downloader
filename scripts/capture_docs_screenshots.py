@@ -18,14 +18,17 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from PySide6.QtCore import QPoint, QRect, qVersion
+from PySide6.QtCore import QPoint, QRect, Qt, qVersion
 from PySide6.QtGui import (
     QCloseEvent,
     QColor,
     QFontInfo,
     QFontMetricsF,
     QIcon,
+    QImage,
+    QLinearGradient,
     QPainter,
+    QPalette,
     QPixmap,
 )
 from PySide6.QtWidgets import (
@@ -35,8 +38,10 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QSlider,
 )
 
+from bilibili_downloader.core.appearance import prepare_background
 from bilibili_downloader.core.live_models import (
     LiveRoom,
     RecordingSegment,
@@ -106,7 +111,7 @@ def _save_widget(app: QApplication, widget, filename: str, popup=None) -> None:
         )
         bounds = bounds.united(popup_rect)
     flattened = QPixmap(bounds.size())
-    flattened.fill(QColor("#14131b" if app.property("darkTheme") else "#f7f5fb"))
+    flattened.fill(app.palette().color(QPalette.Window))
     painter = QPainter(flattened)
     painter.drawPixmap(-bounds.topLeft(), captured)
     if popup_rect is not None:
@@ -667,6 +672,294 @@ def _capture_dialogs(app, window, suffix=""):
         window.closeEvent(QCloseEvent())
 
 
+def _capture_appearance(app, theme, window, temp_root):
+    """Exercise real managed images with generated, credential-free demo art."""
+    from bilibili_downloader.core.models import BackgroundVisibility
+    # Restore a coherent demo after error/quit states captured earlier.
+    window._output_mode_combo.setCurrentIndex(window._output_mode_combo.findData(OutputMode.VIDEO))
+    window._video_info._cover_label.set_source_pixmap(QPixmap(asset_path("nebula.jpg")), expand=True)
+    if window._live_controller.service.rows:
+        window._live_controller.service.rows[0].update(
+            state="recording", state_label="录制中", active=True, detail="原画 · AVC/AAC · FLV"
+        )
+        window._live_controller.notify("")
+        window._live_controller.refresh()
+    avatar = QImage(96, 96, QImage.Format_RGB32)
+    avatar.fill(QColor("#b9e9f6"))
+    painter = QPainter(avatar)
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setPen(QColor("#324b69"))
+    painter.setBrush(QColor("#324b69"))
+    painter.drawEllipse(20, 18, 56, 64)
+    painter.setBrush(QColor("#ffe1ce"))
+    painter.drawEllipse(28, 32, 40, 42)
+    painter.setBrush(QColor("#4f8db8"))
+    painter.drawEllipse(18, 74, 60, 54)
+    painter.drawEllipse(39, 48, 2, 3)
+    painter.drawEllipse(55, 48, 2, 3)
+    painter.drawArc(40, 53, 16, 10, 180 * 16, 180 * 16)
+    painter.end()
+    avatar_path = temp_root / "demo-avatar.png"
+    avatar.save(str(avatar_path))
+    window._on_login_status_result(window._login_status_request_id, {
+        "isLogin": True, "uname": "星海漫游", "mid": "演示账号",
+        "face": "demo://avatar",
+    })
+    window._on_login_status_avatar(window._login_status_request_id, avatar_path.read_bytes())
+    for workspace, colors in zip(
+        ("download", "live", "tasks", "settings"),
+        (("#378ec1", "#9be0c9"), ("#617bc4", "#b5c9ed"),
+         ("#579c9b", "#cce7bd"), ("#a4a7ce", "#e6cfdd")),
+    ):
+        path = temp_root / f"{workspace}-background.png"
+        image = QImage(1600, 1000, QImage.Format_RGB32)
+        painter = QPainter(image)
+        gradient = QLinearGradient(0, 0, 1600, 1000)
+        gradient.setColorAt(0, QColor(colors[0]))
+        gradient.setColorAt(1, QColor(colors[1]))
+        painter.fillRect(image.rect(), gradient)
+        painter.setPen(QColor(255, 255, 255, 55))
+        for x in range(-800, 1800, 110):
+            painter.drawLine(x, 1000, x + 950, 0)
+        painter.setBrush(QColor(255, 255, 255, 60))
+        painter.drawEllipse(1050, -150, 600, 600)
+        painter.drawEllipse(800, 650, 800, 700)
+        painter.end()
+        image.save(str(path))
+        prepared = prepare_background(path)
+        window._background_store.install(prepared)
+        setattr(window._settings.appearance.backgrounds, workspace, prepared.reference)
+        setattr(window._settings.appearance.background_visibility, workspace, BackgroundVisibility(light=80, dark=65))
+
+    for theme_id in ("star_trail", "bilibili_blue"):
+        window._settings.appearance.theme = theme_id
+        window._settings_page.load_settings(window._settings)
+        theme.set_color_theme(theme_id)
+        for dark in (True, False):
+            theme.apply_theme(dark)
+            mode = "dark" if dark else "light"
+            for width, height in ((900, 640), (1120, 760), (1320, 860)):
+                window.resize(width, height)
+                for index, name in enumerate(("download", "live", "tasks", "settings")):
+                    window._show_workspace(index)
+                    if index == 0:
+                        window._download_tabs.setCurrentIndex(0)
+                    if index == 3:
+                        window._settings_page.tabs.setCurrentIndex(4)
+                    _save_widget(app, window, f"biliflow-appearance-{theme_id}-{name}-{mode}-{width}.png")
+                    if index == 3 and width == 1320:
+                        panel = window._settings_page
+                        focused = panel._theme_buttons.button(1 - panel._theme_combo.currentIndex())
+                        window.show()
+                        window.activateWindow()
+                        app.setActiveWindow(window)
+                        _flush_events(app)
+                        focused.setFocus(Qt.TabFocusReason)
+                        _flush_events(app)
+                        assert focused.hasFocus() and focused.property("keyboardFocus")
+                        _save_widget(app, window, f"biliflow-appearance-{theme_id}-theme-focus-{mode}.png")
+                        focused.clearFocus()
+                if width == 900:
+                    scroll = window._settings_page.tabs.currentWidget()
+                    scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
+                    _save_widget(app, window, f"biliflow-appearance-{theme_id}-backgrounds-{mode}-{width}.png")
+                    scroll.verticalScrollBar().setValue(0)
+            window._show_settings_tab(0)
+            combo = window._settings_page._quality_combo
+            combo.showPopup()
+            _save_widget(app, window, f"biliflow-appearance-{theme_id}-dropdown-{mode}.png", popup=combo.view().window())
+            combo.hidePopup()
+            dialog = LoginDialog(None)
+            _save_widget(app, dialog, f"biliflow-appearance-{theme_id}-login-{mode}.png")
+            dialog.deleteLater()
+
+    # Show the default blue theme independently of the optional demo wallpaper.
+    for workspace in ("download", "live", "tasks", "settings"):
+        setattr(window._settings.appearance.backgrounds, workspace, "")
+    window._settings_page.load_settings(window._settings)
+    for dark in (True, False):
+        theme.apply_theme(dark)
+        mode = "dark" if dark else "light"
+        window.resize(1120, 760)
+        window._show_workspace(0)
+        window._download_tabs.setCurrentIndex(0)
+        _save_widget(app, window, f"biliflow-appearance-bilibili_blue-default-download-{mode}-1120.png")
+        window.resize(900, 640)
+        window._show_settings_tab(4)
+        _save_widget(app, window, f"biliflow-appearance-bilibili_blue-default-settings-{mode}-900.png")
+
+
+def _capture_ux_states(app, theme, temp_root):
+    from PySide6.QtWidgets import QCheckBox, QDialog
+
+    from bilibili_downloader.gui.threads.batch_worker import (
+        ImportIssue,
+        ImportReport,
+    )
+    from bilibili_downloader.gui.widgets.appearance_preview import WorkspacePreview
+
+    window = _make_main_window(temp_root / "ux-review")
+    window.resize(900, 640)
+    for dark in (True, False):
+        theme.apply_theme(dark)
+        mode = "dark" if dark else "light"
+        window._show_workspace(0)
+        window._download_tabs.setCurrentIndex(0)
+        _save_widget(app, window, f"biliflow-ux-empty-{mode}.png")
+        window._url_input.setText("https://space.bilibili.com/123/favlist?fid=456")
+        window._resolve_btn.click()
+        _save_widget(app, window, f"biliflow-ux-source-route-{mode}.png")
+        window._url_input.clear()
+        window._resolve_notice.set_message("")
+        window._resolve_notice.action.hide()
+        window._download_tabs.setCurrentIndex(1)
+        batch = window._batch_page
+        batch._url_text.setPlainText("https://space.bilibili.com/123/favlist?fid=456")
+        with patch("bilibili_downloader.gui.dialogs.batch_dialog.QThreadPool.globalInstance", return_value=SimpleNamespace(start=lambda _: None)):
+            batch._begin_resolve([batch._url_text.toPlainText()])
+        batch._on_progress({
+            "source": batch._url_text.toPlainText(), "source_index": 1, "sources": 1,
+            "stage": "解析作品", "completed": 42, "total": 158, "items": 38,
+        })
+        _save_widget(app, window, f"biliflow-ux-batch-progress-{mode}.png")
+        batch._on_report(ImportReport([], [ImportIssue(batch._url_text.toPlainText(), "离线演示：来源暂时不可用，请稍后重试", batch._url_text.toPlainText())]))
+        _save_widget(app, window, f"biliflow-ux-batch-all-failed-{mode}.png")
+        batch._on_report(ImportReport(
+            [VideoInfo(bvid="BV1DEMO2026A", title="演示作品：收藏片段", author="示例 UP 主")],
+            [ImportIssue(batch._url_text.toPlainText(), "作品已失效或当前账号无法访问", "https://www.bilibili.com/video/BV1DEMOFAIL1", "演示失效作品", "item")],
+            cancelled=True,
+        ))
+        _save_widget(app, window, f"biliflow-ux-batch-cancelled-{mode}.png")
+        with patch.object(QDialog, "exec", lambda dialog: (_save_widget(app, dialog, f"biliflow-ux-failure-details-{mode}.png"), QDialog.Rejected)[1]):
+            batch._show_errors()
+        dialog = LoginDialog("demo-session", account={"uname": "星海漫游（演示）", "mid": "演示 UID"}, avatar_icon=QIcon(asset_path("alien.png")))
+        _save_widget(app, dialog, f"biliflow-ux-account-{mode}.png")
+        dialog.deleteLater()
+        window._show_settings_tab(4)
+        picker = window._settings_page._background_pickers["download"]
+        prepared = prepare_background(Path(asset_path("nebula.jpg")))
+        window._background_store.install(prepared)
+        picker.set_reference(prepared.reference)
+        def preview_capture(dialog):
+            preview = dialog.findChild(WorkspacePreview)
+            preview.is_dark = dark
+            dialog.findChild(QCheckBox).setChecked(dark)
+            dialog.findChild(QSlider).setValue(45 if dark else 60)
+            _save_widget(app, dialog, f"biliflow-ux-background-preview-{mode}.png")
+            return QDialog.Rejected
+        with patch.object(QDialog, "exec", preview_capture):
+            picker._show_preview()
+        window._settings_page.load_settings(window._settings)
+    window._live_controller.shutdown()
+
+
+def _capture_batch_polish(app, theme, temp_root):
+    from bilibili_downloader.core.models import BackgroundVisibility
+    from bilibili_downloader.gui.threads.batch_worker import ImportIssue, ImportReport
+
+    window = _make_main_window(temp_root / "batch-review")
+    window._show_workspace(0)
+    window._download_tabs.setCurrentIndex(1)
+    panel = window._batch_page
+    source = "https://space.bilibili.com/123/favlist?fid=456"
+    panel._url_text.setPlainText(source)
+    titles = (
+        "童年动画音乐精选 · 重温那些熟悉的旋律",
+        "城市夜航：沿着灯光与人群慢慢前行",
+        "周末散步计划｜山野、公园与一小段旅程",
+        "创作手记：从一张草图到完整的故事",
+        "收藏的现场：夏日特别演出",
+        "桌面与生活：把喜欢的东西留在身边",
+    )
+    report = ImportReport(
+        [VideoInfo(
+            bvid=f"BV1DEMO{i:05d}", title=f"{titles[i % len(titles)]} {i + 1:02d}",
+            author=("星海漫游", "城市观察员", "音乐收藏室")[i % 3],
+            collection_title="日常灵感收藏夹",
+        ) for i in range(130)],
+        [ImportIssue(source, "视频已失效或暂时不可用", source, f"演示失效作品 {i + 1}", "item") for i in range(28)],
+    )
+    panel._on_report(report)
+    background = prepare_background(Path(asset_path("nebula.jpg")))
+    window._background_store.install(background)
+    window._settings.appearance.background_visibility.download = BackgroundVisibility(light=60, dark=45)
+    for theme_id in ("star_trail", "bilibili_blue"):
+        theme.set_color_theme(theme_id)
+        for dark in (False, True):
+            theme.apply_theme(dark)
+            mode = "dark" if dark else "light"
+            for custom in (False, True):
+                window._settings.appearance.backgrounds.download = background.reference if custom else ""
+                window._refresh_workspace_background()
+                for width, height in ((900, 640), (1120, 760), (1320, 860)):
+                    window.resize(width, height)
+                    panel._collapse_btn.setChecked(True)
+                    kind = "background" if custom else "default"
+                    _save_widget(app, window, f"biliflow-batch-refined-{theme_id}-{kind}-{mode}-{width}.png")
+            if theme_id == "star_trail" and not dark:
+                window.resize(1320, 860)
+                panel._collapse_btn.setChecked(False)
+                _save_widget(app, window, "biliflow-batch-refined-edit.png")
+                panel._collapse_btn.setChecked(True)
+    window._live_controller.shutdown()
+
+
+def _capture_output_actions(app, theme, temp_root):
+    from bilibili_downloader.core.models import BackgroundVisibility
+    from bilibili_downloader.gui.threads.batch_worker import ImportReport
+
+    window = _make_main_window(temp_root / "output-review")
+    _populate_main_window(window)
+    info = window._current_video.model_copy(deep=True)
+    background = prepare_background(Path(asset_path("nebula.jpg")))
+    window._background_store.install(background)
+    window._settings.appearance.backgrounds.download = background.reference
+    window._settings.appearance.background_visibility.download = BackgroundVisibility(light=60, dark=45)
+    source = "https://space.bilibili.com/123/favlist?fid=456"
+    for theme_id in ("star_trail", "bilibili_blue"):
+        theme.set_color_theme(theme_id)
+        for dark in (False, True):
+            theme.apply_theme(dark)
+            mode = "dark" if dark else "light"
+            for width, height in ((900, 640), (1120, 760), (1320, 860)):
+                window.resize(width, height)
+                window._show_workspace(0)
+                window._download_tabs.setCurrentIndex(0)
+                window._resolved_url = ""
+                window._url_input.clear()
+                window._current_video = None
+                window._download_btn.setEnabled(False)
+                window._refresh_download_summary()
+                window._resolve_notice.set_message("")
+                window._content_section.hide()
+                window._empty_download.show()
+                _save_widget(app, window, f"biliflow-output-{theme_id}-single-empty-{mode}-{width}.png")
+                window._url_input.setText(info.bvid)
+                window._on_resolve_success(info.model_copy(deep=True), [], [], False)
+                window._video_info._cover_label.set_source_pixmap(QPixmap(asset_path("nebula.jpg")), expand=True)
+                window._workspace_scroll.verticalScrollBar().setValue(0)
+                _save_widget(app, window, f"biliflow-output-{theme_id}-single-ready-{mode}-{width}.png")
+                if theme_id == "bilibili_blue" and not dark and width == 1320:
+                    window._download_actions.grab().save(str(OUTPUT_DIR / "biliflow-output-single-bar-light.png"))
+                window._download_tabs.setCurrentIndex(1)
+                batch = window._batch_page
+                batch._request_source = None
+                batch._url_text.clear()
+                batch._on_report(ImportReport())
+                batch._resolved_source = None
+                batch._resolve_btn.setText("解析并预览")
+                _save_widget(app, window, f"biliflow-output-{theme_id}-batch-empty-{mode}-{width}.png")
+                batch._url_text.setPlainText(source)
+                batch._on_report(ImportReport([
+                    info.model_copy(update={"collection_title": "日常灵感收藏夹"}, deep=True),
+                    info.model_copy(update={"bvid": "BV1DEMO2026B", "title": "星轨旅记：晨光抵达（文档演示）", "collection_title": "日常灵感收藏夹"}, deep=True),
+                ]))
+                _save_widget(app, window, f"biliflow-output-{theme_id}-batch-ready-{mode}-{width}.png")
+                if theme_id == "bilibili_blue" and not dark and width == 1320:
+                    batch._action_bar.grab().save(str(OUTPUT_DIR / "biliflow-output-batch-bar-light.png"))
+    window._live_controller.shutdown()
+
+
 def main(argv=None) -> int:
     global OUTPUT_DIR
     parser = argparse.ArgumentParser(description=__doc__)
@@ -680,6 +973,10 @@ def main(argv=None) -> int:
     )
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
     parser.add_argument("--updates-only", action="store_true", help="Capture settings tabs and update dialogs only")
+    parser.add_argument("--appearance-only", action="store_true", help="Capture both color themes and custom background workspaces")
+    parser.add_argument("--ux-only", action="store_true", help="Capture source routing, import progress, account and wallpaper preview states")
+    parser.add_argument("--batch-only", action="store_true", help="Capture the compact import workspace with 130 demo works and partial failures")
+    parser.add_argument("--actions-only", action="store_true", help="Compare single and batch output cards before and after resolving")
     args = parser.parse_args(argv)
     OUTPUT_DIR = args.output_dir.resolve()
     if args.native:
@@ -719,6 +1016,18 @@ def main(argv=None) -> int:
         app.setProperty("docsTempRoot", str(temp_root))
 
         window = _make_main_window(temp_root / "workspace")
+        if args.actions_only:
+            _capture_output_actions(app, theme, temp_root)
+            window._live_controller.shutdown()
+            return 0
+        if args.batch_only:
+            _capture_batch_polish(app, theme, temp_root)
+            window._live_controller.shutdown()
+            return 0
+        if args.ux_only:
+            _capture_ux_states(app, theme, temp_root)
+            window._live_controller.shutdown()
+            return 0
         if args.checks_only:
             _capture_platform_checks(app, theme, window)
             window._live_controller.shutdown()
@@ -729,6 +1038,10 @@ def main(argv=None) -> int:
         window._batch_page._url_text.setPlainText(preview._url_text.toPlainText())
         window._batch_page._on_resolved(preview._resolved_items, [])
         preview.deleteLater()
+        if args.appearance_only:
+            _capture_appearance(app, theme, window, temp_root)
+            window._live_controller.shutdown()
+            return 0
         pages = {
             "download": lambda: (
                 window._show_workspace(0),
@@ -757,6 +1070,7 @@ def main(argv=None) -> int:
             "live-settings": lambda: window._show_settings_tab(1),
             "tools": lambda: window._show_settings_tab(2),
             "updates": lambda: window._show_settings_tab(3),
+            "appearance": lambda: window._show_settings_tab(4),
         }
         if args.updates_only:
             pages = {name: pages[name] for name in ("settings", "live-settings", "tools", "updates")}
@@ -809,6 +1123,8 @@ def main(argv=None) -> int:
         _capture_dialogs(app, window)
         theme.apply_theme(False)
         _capture_dialogs(app, window, "-light")
+        _capture_ux_states(app, theme, temp_root)
+        _capture_appearance(app, theme, window, temp_root)
         window._live_controller.shutdown()
 
     return 0

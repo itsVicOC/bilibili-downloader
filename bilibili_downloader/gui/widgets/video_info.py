@@ -28,17 +28,17 @@ class _AspectCoverLabel(QLabel):
         self._source = QPixmap()
         self._expand = False
         self.setMinimumSize(240, 135)
-        self.setMaximumSize(300, 169)
+        self.setMaximumSize(260, 146)
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
 
     def hasHeightForWidth(self) -> bool:
         return True
 
     def heightForWidth(self, width: int) -> int:
-        return max(135, min(169, round(width * 9 / 16)))
+        return max(135, min(146, round(width * 9 / 16)))
 
     def sizeHint(self) -> QSize:
-        return QSize(300, 169)
+        return QSize(260, 146)
 
     def minimumSizeHint(self) -> QSize:
         return QSize(240, 135)
@@ -189,21 +189,16 @@ class VideoInfoWidget(QWidget):
         # Layout
         top_layout = QHBoxLayout()
         top_layout.setSpacing(18)
-        top_layout.addWidget(self._cover_label)
+        top_layout.addWidget(self._cover_label, 0, Qt.AlignTop)
 
         info_layout = QVBoxLayout()
         info_layout.setSpacing(9)
         info_layout.addWidget(self._title_label)
-        subtitle = QLabel("封面、作者与作品编号，帮助确认收藏内容")
-        subtitle.setObjectName("MetaLabel")
-        subtitle.setWordWrap(True)
-        info_layout.addWidget(subtitle)
-        info_layout.addSpacing(4)
         info_layout.addWidget(self._author_label)
         info_layout.addWidget(self._duration_label)
         info_layout.addWidget(self._bvid_label)
         info_layout.addStretch()
-        top_layout.addLayout(info_layout)
+        top_layout.addLayout(info_layout, 1)
 
         layout.addLayout(top_layout)
         layout.addStretch()

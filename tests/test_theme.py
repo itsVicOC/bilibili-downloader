@@ -3,16 +3,21 @@
 import sys
 
 import pytest
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QFontInfo, QFontMetricsF
-from PySide6.QtWidgets import QLabel, QLineEdit
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QPushButton, QWidget
 
 from bilibili_downloader.gui.resources import load_stylesheet
 from bilibili_downloader.gui.resources.styles import (
+    BLUE_DARK_PALETTE,
+    BLUE_LIGHT_PALETTE,
     DARK_PALETTE,
     LIGHT_PALETTE,
     UI_METRICS,
+    background_overlay_alpha,
     readable_fill_text,
     scale_font_sizes,
+    theme_palette,
 )
 from bilibili_downloader.gui.resources.theme import ThemeManager, platform_font_scale
 
@@ -147,8 +152,53 @@ def test_semantic_button_layer_covers_interaction_states():
     assert UI_METRICS.primary_height == 44
 
 
+@pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])
+@pytest.mark.parametrize("dark", [False, True])
+def test_primary_buttons_share_keyboard_focus_without_a_permanent_outline(qapp, qtbot, theme_id, dark):
+    previous = (qapp.styleSheet(), QFont(qapp.font()), qapp.palette(),
+                qapp.property("darkTheme"), qapp.property("colorTheme"))
+    theme = ThemeManager(qapp, theme_id)
+    theme.apply_theme(dark)
+    window = QWidget()
+    qtbot.addWidget(window)
+    row = QHBoxLayout(window)
+    buttons = []
+    for role in ("PrimaryButton", "OutputPrimaryButton"):
+        button = QPushButton("确认")
+        button.setObjectName(role)
+        button.setFixedSize(160, 44)
+        row.addWidget(button)
+        buttons.append(button)
+    try:
+        window.show()
+        window.activateWindow()
+        qtbot.waitUntil(window.isActiveWindow)
+        p = theme_palette(dark, theme_id)
+        focus_color = p.primary_text or p.accent_text
+        for button in buttons:
+            qtbot.mouseClick(button, Qt.LeftButton)
+            assert button.hasFocus()
+            assert button.grab().toImage().pixelColor(1, 22).name() != focus_color
+        qtbot.keyClick(buttons[1], Qt.Key_Tab)
+        assert buttons[0].hasFocus()
+        assert buttons[0].grab().toImage().pixelColor(1, 22).name() == focus_color
+        qtbot.keyClick(buttons[0], Qt.Key_Tab)
+        assert buttons[1].hasFocus()
+        assert buttons[1].grab().toImage().pixelColor(1, 22).name() == focus_color
+        with qtbot.waitSignal(buttons[1].clicked):
+            qtbot.keyClick(buttons[1], Qt.Key_Space)
+    finally:
+        window.close()
+        theme.deleteLater()
+        qapp.setProperty("darkTheme", previous[3])
+        qapp.setProperty("colorTheme", previous[4])
+        qapp.setPalette(previous[2])
+        qapp.setFont(previous[1])
+        qapp.setStyleSheet(previous[0])
+
+
 def test_theme_tokens_meet_text_and_control_contrast_targets():
-    for palette in (DARK_PALETTE, LIGHT_PALETTE):
+    for palette in (DARK_PALETTE, LIGHT_PALETTE, BLUE_DARK_PALETTE, BLUE_LIGHT_PALETTE):
         assert _contrast(palette.text, palette.surface) >= 4.5
         assert _contrast(palette.muted, palette.surface) >= 4.5
         assert _contrast(palette.border, palette.surface) >= 3.0
@@ -173,6 +223,70 @@ def test_theme_tokens_meet_text_and_control_contrast_targets():
             palette.danger_border,
         ):
             assert _contrast(readable_fill_text(fill, palette.accent_text), fill) >= 4.5
+        for fill in (palette.primary, palette.primary_hover, palette.primary_pressed):
+            if fill:
+                assert _contrast(palette.primary_text, fill) >= 4.5
+
+
+@pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])
+@pytest.mark.parametrize("dark", [True, False])
+def test_background_overlay_preserves_text_contrast_over_extreme_images(theme_id, dark):
+    p = theme_palette(dark, theme_id)
+    alpha = background_overlay_alpha(dark, theme_id) / 255
+    for image_channel in (0, 255):
+        background = "#" + "".join(
+            f"{round(int(p.background[i:i + 2], 16) * alpha + image_channel * (1 - alpha)):02x}"
+            for i in (1, 3, 5)
+        )
+        assert _contrast(p.text, background) >= 4.5
+        assert _contrast(p.muted, background) >= 4.5
+
+
+@pytest.mark.parametrize("dark", [True, False])
+@pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])
+def test_source_input_card_uses_a_plain_readable_surface(qapp, qtbot, dark, theme_id):
+    from bilibili_downloader.gui.widgets.hero_panel import HeroPanel
+
+    previous = (qapp.property("darkTheme"), qapp.property("colorTheme"))
+    try:
+        qapp.setProperty("darkTheme", dark)
+        qapp.setProperty("colorTheme", theme_id)
+        hero = HeroPanel()
+        qtbot.addWidget(hero)
+        hero.resize(800, 190)
+        image = hero.grab().toImage()
+        p = theme_palette(dark, theme_id)
+        for x in range(20, 780, 40):
+            for y in (20, 50, 100, 170):
+                background = image.pixelColor(x, y).name()
+                assert background == p.surface
+                assert _contrast(p.active_text, background) >= 4.5
+                assert _contrast(p.text, background) >= 4.5
+    finally:
+        qapp.setProperty("darkTheme", previous[0])
+        qapp.setProperty("colorTheme", previous[1])
+
+
+@pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])
+@pytest.mark.parametrize("dark", [True, False])
+def test_shared_header_decorates_the_right_and_keeps_text_readable(theme_id, dark):
+    from PySide6.QtCore import QRect
+    from PySide6.QtGui import QImage, QPainter
+
+    from bilibili_downloader.gui.widgets.header_backdrop import paint_header_backdrop
+
+    image = QImage(1320, 72, QImage.Format_RGB32)
+    painter = QPainter(image)
+    paint_header_backdrop(painter, QRect(0, 0, 1320, 72), dark, theme_id)
+    painter.end()
+    p = theme_palette(dark, theme_id)
+    assert image.pixelColor(24, 32).name() == p.surface
+    assert image.pixelColor(1200, 32).name() != p.surface
+    for x in range(20, 1300, 20):
+        for y in (8, 24, 44, 60):
+            background = image.pixelColor(x, y).name()
+            assert _contrast(p.text, background) >= 4.5
+            assert _contrast(p.muted, background) >= 4.5
 
 
 def test_status_badges_keep_semantic_colors_under_the_shared_stylesheet(qapp, qtbot):

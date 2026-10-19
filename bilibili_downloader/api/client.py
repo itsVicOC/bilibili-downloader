@@ -21,6 +21,7 @@ from bilibili_downloader.api.pgc import (
 from bilibili_downloader.api.wbi import WBISigner
 from bilibili_downloader.core.models import (
     ContentCollection,
+    ContentFailure,
     ContentKind,
     StreamInfo,
     SubtitleInfo,
@@ -28,6 +29,7 @@ from bilibili_downloader.core.models import (
     VideoPage,
     VideoQuality,
 )
+from bilibili_downloader.core.resolve_control import ResolveControl
 from bilibili_downloader.utils.network import BILIBILI_RESOURCE_HOSTS, trusted_https_url
 
 logger = logging.getLogger(__name__)
@@ -50,7 +52,11 @@ class BilibiliAPIClient:
         self,
         sessdata: Optional[str] = None,
         auth_cookies: Optional[Mapping[str, str] | AuthCookieBundle] = None,
+        *,
+        resolve_control: ResolveControl | None = None,
+        request_timeout: float = 30.0,
     ):
+        self._resolve_control = resolve_control or ResolveControl()
         cookies = filter_auth_cookies(
             auth_cookies.cookies
             if isinstance(auth_cookies, AuthCookieBundle)
@@ -65,7 +71,7 @@ class BilibiliAPIClient:
                 "Referer": "https://www.bilibili.com/",
             },
             cookies=cookies,
-            timeout=30.0,
+            timeout=request_timeout,
             http2=True,
         )
         self._wbi_signer = WBISigner()
@@ -260,6 +266,7 @@ class BilibiliAPIClient:
         title = f"收藏夹 {media_id}"
         page = 1
         while True:
+            self._resolve_control.checkpoint(f"读取收藏夹第 {page} 页", len(entries))
             response = self._client.get(
                 ep.FAVORITE_LIST_ENDPOINT,
                 params={
@@ -275,6 +282,7 @@ class BilibiliAPIClient:
             info = data.get("info") or {}
             title = info.get("title") or title
             entries.extend(data.get("medias") or [])
+            self._resolve_control.checkpoint("读取收藏夹列表", len(entries), int(info.get("media_count") or 0))
             if not data.get("has_more"):
                 break
             page += 1
@@ -295,6 +303,7 @@ class BilibiliAPIClient:
         page = 1
         total = None
         while total is None or len(entries) < total:
+            self._resolve_control.checkpoint(f"读取系列第 {page} 页", len(entries), total or 0)
             response = self._client.get(
                 ep.SERIES_ARCHIVES_ENDPOINT,
                 params={
@@ -329,6 +338,7 @@ class BilibiliAPIClient:
         entries = []
         page = 1
         while True:
+            self._resolve_control.checkpoint(f"读取合集第 {page} 页", len(entries))
             response = self._client.get(
                 ep.SEASON_ARCHIVES_ENDPOINT,
                 params={
@@ -375,14 +385,35 @@ class BilibiliAPIClient:
         source_url: str,
         entries: list[dict],
     ) -> ContentCollection:
+        from bilibili_downloader.core.errors import user_error_message
+
         items = []
+        errors = []
+        failures = []
         seen = set()
-        for entry in entries:
+        for index, entry in enumerate(entries):
+            self._resolve_control.checkpoint("解析作品", index, len(entries))
             bvid = entry.get("bvid") if isinstance(entry, dict) else ""
-            if not bvid or bvid in seen:
+            if not bvid:
+                failure = ContentFailure(
+                    url=source_url, title=(entry.get("title") or "失效条目") if isinstance(entry, dict) else "失效条目",
+                    error="条目缺少作品编号，可能已失效；可重试所属来源。",
+                )
+                failures.append(failure)
+                errors.append(f"{failure.title}：{failure.error}")
+                self._resolve_control.failure_ready(failure)
+                continue
+            if bvid in seen:
                 continue
             seen.add(bvid)
-            info = self.get_video_info(bvid)
+            try:
+                info = self.get_video_info(bvid)
+            except (BilibiliAPIError, httpx.HTTPError) as exc:
+                errors.append(f"{bvid}：{user_error_message(exc)}")
+                failure = ContentFailure(url=f"https://www.bilibili.com/video/{bvid}", title=entry.get("title") or bvid, error=user_error_message(exc))
+                failures.append(failure)
+                self._resolve_control.failure_ready(failure)
+                continue
             items.append(
                 info.model_copy(
                     update={
@@ -393,11 +424,15 @@ class BilibiliAPIClient:
                     deep=True,
                 )
             )
+            self._resolve_control.item_ready(items[-1])
+        self._resolve_control.checkpoint("作品读取完成", len(entries), len(entries))
         return ContentCollection(
             title=title,
             source_type=source_type,
             source_url=source_url,
             items=items,
+            errors=errors,
+            failures=failures,
         )
 
     def get_play_url(
