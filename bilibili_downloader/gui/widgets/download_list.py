@@ -1,7 +1,7 @@
 """Download list table widget with cancel and retry support."""
 
 from PySide6.QtCore import QRect, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QPainter
+from PySide6.QtGui import QColor, QFont, QPainter, QTextLayout, QTextOption
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -116,8 +116,9 @@ class _StatusDelegate(QStyledItemDelegate):
         tone = index.data(STATUS_TONE_ROLE)
         opt = QStyleOptionViewItem(option)
         self.initStyleOption(opt, index)
-        text, opt.text = opt.text, ""
         style = opt.widget.style() if opt.widget else QApplication.style()
+        content = style.subElementRect(QStyle.SE_ItemViewItemText, opt, opt.widget)
+        text, opt.text = opt.text, ""
         style.drawControl(QStyle.CE_ItemViewItem, opt, painter, opt.widget)
         p = palette()
         color = {"active": p.active_text, "success": p.success, "warning": p.warning,
@@ -125,15 +126,48 @@ class _StatusDelegate(QStyledItemDelegate):
         painter.save()
         painter.setPen(QColor(color))
         painter.setFont(opt.font)
-        lines = text.replace(" · ", "\n", 1).splitlines() or [""]
-        if len(lines) > 2:
-            lines = [lines[0], " · ".join(lines[1:])]
         metrics = painter.fontMetrics()
         height = metrics.height()
-        top = opt.rect.center().y() - len(lines) * height // 2
+        # CJK fonts can need slightly more than the style's padded height.
+        # Use spare vertical padding when two full lines still fit in the row.
+        if content.height() < height * 2 <= opt.rect.height():
+            content = QRect(
+                content.left(), content.center().y() - height + 1,
+                content.width(), height * 2,
+            ).intersected(opt.rect)
+        painter.setClipRect(content, Qt.IntersectClip)
+        paragraphs = text.replace(" · ", "\n", 1).splitlines() or [""]
+        lines = [" · ".join(paragraphs)]
+        if content.height() >= height * 2:
+            layout = QTextLayout(paragraphs[0], opt.font, opt.widget)
+            text_option = QTextOption()
+            text_option.setWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
+            layout.setTextOption(text_option)
+            layout.beginLayout()
+            first = layout.createLine()
+            length = 0
+            if first.isValid():
+                first.setLineWidth(max(1, content.width()))
+                length = first.textLength()
+            layout.endLayout()
+            # QTextLine offsets count UTF-16 units, including surrogate pairs.
+            encoded = paragraphs[0].encode("utf-16-le")
+            lines = [encoded[:length * 2].decode("utf-16-le").rstrip()]
+            remaining = " · ".join(
+                part for part in [
+                    encoded[length * 2:].decode("utf-16-le").lstrip(), *paragraphs[1:]
+                ]
+                if part
+            )
+            if remaining:
+                lines.append(remaining)
+        top = content.top() + (content.height() - len(lines) * height) // 2
+        alignment = (opt.displayAlignment & Qt.AlignHorizontal_Mask) | Qt.AlignVCenter
         for line in lines:
-            rect = QRect(opt.rect.left() + 8, top, max(1, opt.rect.width() - 16), height)
-            painter.drawText(rect, Qt.AlignLeft | Qt.AlignVCenter, metrics.elidedText(line, Qt.ElideRight, rect.width()))
+            rect = QRect(content.left(), top, max(1, content.width()), height)
+            painter.drawText(
+                rect, alignment, metrics.elidedText(line, Qt.ElideRight, rect.width())
+            )
             top += height
         painter.restore()
 
@@ -215,6 +249,7 @@ class DownloadListWidget(QTableWidget):
     def _setup_ui(self):
         self.setColumnCount(5)
         self.setHorizontalHeaderLabels(["作品", "规格", "传输进度", "任务状态", "操作"])
+        self.horizontalHeaderItem(3).setTextAlignment(Qt.AlignCenter)
         self.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
         self.horizontalHeader().resizeSection(1, 110)
@@ -306,6 +341,7 @@ class DownloadListWidget(QTableWidget):
         )
 
         status_item = QTableWidgetItem(status_text or _status_label(status))
+        status_item.setTextAlignment(Qt.AlignCenter)
         status_item.setData(Qt.UserRole, download_id)
         status_item.setData(STATUS_TONE_ROLE, _status_tone(status, bool(warnings)))
         status_item.setToolTip(status_text or _status_label(status))
@@ -335,6 +371,7 @@ class DownloadListWidget(QTableWidget):
         _set_progress_state(progress, "ErrorProgress")
         self.setCellWidget(row, 2, _ProgressCell(progress))
         status = QTableWidgetItem("未加入队列")
+        status.setTextAlignment(Qt.AlignCenter)
         status.setData(STATUS_TONE_ROLE, "danger")
         status.setToolTip(error)
         self.setItem(row, 3, status)
@@ -374,6 +411,7 @@ class DownloadListWidget(QTableWidget):
                 status_item = self.item(row, 3)
                 if status_item:
                     status_item.setText("暂停中...")
+                    status_item.setToolTip("暂停中...")
                     status_item.setData(STATUS_TONE_ROLE, "warning")
 
     def register_worker(self, download_id: int, worker):
@@ -504,6 +542,7 @@ class DownloadListWidget(QTableWidget):
         status_item = self.item(row, 3)
         if status_item:
             status_item.setText("已取消")
+            status_item.setToolTip("已取消")
             status_item.setData(STATUS_TONE_ROLE, "muted")
         self._set_actions(download_id, TaskStatus.CANCELLED)
 
@@ -517,6 +556,7 @@ class DownloadListWidget(QTableWidget):
         status_item = self.item(row, 3)
         if status_item:
             status_item.setText("已暂停，可继续")
+            status_item.setToolTip("已暂停，可继续")
             status_item.setData(STATUS_TONE_ROLE, "muted")
         self._set_actions(download_id, TaskStatus.PAUSED)
 
@@ -533,6 +573,7 @@ class DownloadListWidget(QTableWidget):
         status_item = self.item(row, 3)
         if status_item:
             status_item.setText("重试中...")
+            status_item.setToolTip("重试中...")
             status_item.setData(STATUS_TONE_ROLE, "warning")
 
         self._states[download_id] = TaskStatus.QUEUED

@@ -69,7 +69,7 @@ This README is available in English and Simplified Chinese. The current desktop 
 
 Automatic updates are available starting with `v0.8.1b1` and are currently a beta feature. First install a version that includes the updater manually. Check [Releases](https://github.com/itsVicOC/bilibili-downloader/releases) for stable and prerelease status.
 
-The stable `v0.8.2` release adds theme selection and independent workspace backgrounds with separate light/dark visibility controls. Unavailable entries in favorites are skipped individually so accessible works can still be imported. See the [changelog](CHANGELOG.md#v082---2026-10-19) and [appearance guide](docs/USER_GUIDE.md#主题与工作区背景) (Chinese).
+The stable `v0.8.4` release fixes leaked danmaku coordinates, task status alignment, and settings backgrounds. It also improves character rendering, timestamp precision, and collision handling. Regenerate existing ASS/SRT files to apply these fixes; videos do not need to be downloaded again. See the [changelog](CHANGELOG.md#v084---2026-10-19) and [danmaku and subtitle guide](docs/USER_GUIDE.md#弹幕与字幕) (Chinese).
 
 Downloads, live recording, and settings share consistent footer cards. Tabs and task tools retain readable surfaces over custom backgrounds, theme cards distinguish selection from keyboard focus, and record removal uses a quieter action style.
 

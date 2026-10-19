@@ -121,6 +121,67 @@ def test_service_keeps_video_success_when_companion_fails(monkeypatch, tmp_path)
     assert "弹幕下载失败" in outcome.warnings[0]
 
 
+def test_service_exposes_companion_conversion_warnings_and_keeps_artifacts(monkeypatch, tmp_path):
+    from bilibili_downloader.core.timed_text import ConversionReport
+
+    tracks = [SubtitleInfo(lan="zh-Hans", lan_doc="中文", url="https://i0.hdslb.com/sub.json")]
+    service = DownloadService(FakeAPI(tracks), str(tmp_path))
+
+    def fake_download(item, callback):
+        service._downloader.last_video_stream = StreamInfo(id=80, codecid=12)
+        return str(tmp_path / "video.mp4")
+
+    monkeypatch.setattr(service._downloader, "download", fake_download)
+    monkeypatch.setattr(
+        "bilibili_downloader.core.download_service.DanmakuDownloader.download_and_convert",
+        lambda *_args: ConversionReport(exported=10, invalid=2, unsupported=3, crowded=1, normalized=1),
+    )
+    monkeypatch.setattr(
+        "bilibili_downloader.core.download_service.SubtitleDownloader.download_and_convert",
+        lambda *_args: ConversionReport(exported=2, invalid=1),
+    )
+    item = DownloadItem(
+        video_info=VideoInfo(bvid="BV1xx", cid=1),
+        download_danmaku=True, download_subtitle=True,
+    )
+    outcome = service.download(item, lambda *_args: None)
+    assert outcome.video_path == str(tmp_path / "video.mp4")
+    assert outcome.danmaku_path == str(tmp_path / "video.ass")
+    assert outcome.subtitle_paths == [str(tmp_path / "video.srt")]
+    assert outcome.is_partial
+    assert len(outcome.warnings) == 5
+    assert "不支持的特殊弹幕" in " ".join(outcome.warnings)
+    assert any("字幕 中文" in warning and "1 条" in warning for warning in outcome.warnings)
+
+
+def test_service_exports_valid_danmaku_and_reports_actual_skipped_entries(monkeypatch, tmp_path):
+    service = DownloadService(FakeAPI(), str(tmp_path))
+
+    def fake_download(item, callback):
+        service._downloader.last_video_stream = StreamInfo(id=80, codecid=12)
+        path = tmp_path / "video.mp4"
+        path.write_bytes(b"media placeholder")
+        return str(path)
+
+    monkeypatch.setattr(service._downloader, "download", fake_download)
+    monkeypatch.setattr(
+        "bilibili_downloader.core.download_service.DanmakuDownloader.download_xml",
+        lambda _cid: (
+            b'<i><d p="NaN,1,25,16777215,0,0,h,1">bad</d>'
+            b'<d p="1,9,25,16777215,0,0,h,2">special</d>'
+            b'<d p="1.13,1,25,16777215,0,0,h,3">valid</d></i>'
+        ),
+    )
+    outcome = service.download(
+        DownloadItem(video_info=VideoInfo(bvid="BV1xx", cid=1), download_danmaku=True),
+        lambda *_args: None,
+    )
+    assert (tmp_path / "video.mp4").read_bytes() == b"media placeholder"
+    assert outcome.danmaku_path == str(tmp_path / "video.ass")
+    assert "0:00:01.13" in (tmp_path / "video.ass").read_text()
+    assert outcome.is_partial and len(outcome.warnings) == 2
+
+
 def test_service_downloads_all_unique_subtitle_languages(monkeypatch, tmp_path):
     tracks = [
         SubtitleInfo(lan="zh-Hans", lan_doc="中文", url="https://i0.hdslb.com/a"),

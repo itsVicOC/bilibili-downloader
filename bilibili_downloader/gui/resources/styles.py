@@ -175,6 +175,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QSlider::handle:horizontal:disabled, QSlider::sub-page:horizontal:disabled {{ background: {p.muted}; }}
     QWidget {{ background: transparent; }}
     QMainWindow, QDialog, #AppSurface, #Workspace {{ background: {p.background}; }}
+    QDialog#SettingsEditor[embedded="true"] {{ background: transparent; }}
     #Sidebar {{ background: {p.sidebar}; border-right: 1px solid {p.divider}; }}
     QLabel#BrandTitle {{ font-size: 15pt; font-weight: 800; }}
     QLabel#PageTitle, QLabel#DialogTitle {{ font-size: 18pt; font-weight: 600; }}

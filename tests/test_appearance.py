@@ -427,6 +427,120 @@ def test_preview_and_workspace_render_identical_visibility(qapp, qtbot, tmp_path
     assert colors[-1] == "#123456"
 
 
+@pytest.mark.parametrize("dark", [False, True])
+@pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])
+def test_full_settings_page_reveals_fixed_workspace_background(
+    workspace, qtbot, tmp_path, qapp, dark, theme_id
+):
+    from PySide6.QtCore import QPoint
+    from PySide6.QtGui import QColor, QImage, QPainter
+    from PySide6.QtWidgets import QApplication
+
+    from bilibili_downloader.core.models import WORKSPACE_NAMES
+    from bilibili_downloader.gui.resources.styles import theme_palette
+    from bilibili_downloader.gui.widgets.workspace_background import (
+        paint_workspace_background,
+    )
+
+    window = workspace
+    theme = ThemeManager(qapp, theme_id)
+    theme.apply_theme(dark)
+    window._settings.appearance.theme = theme_id
+    source = tmp_path / "position-markers.png"
+    image = Image.new("RGB", (384, 216))
+    image.putdata([
+        (x * 255 // 383, y * 255 // 215, 60 + (x // 48 % 2) * 100)
+        for y in range(216) for x in range(384)
+    ])
+    image.save(source)
+    prepared = prepare_background(source)
+    window._background_store.install(prepared)
+    window.resize(900, 640)
+    window.show()
+    stack = window._workspace_pages
+    panel = window._settings_page
+
+    def widget_color(widget, point):
+        image = widget.grab().toImage()
+        return image.pixelColor(
+            round(point.x() * image.devicePixelRatio()),
+            round(point.y() * image.devicePixelRatio()),
+        )
+
+    def assert_backdrop(points):
+        actual = stack.grab().toImage()
+        expected = QImage(actual.size(), QImage.Format_ARGB32_Premultiplied)
+        expected.setDevicePixelRatio(actual.devicePixelRatio())
+        painter = QPainter(expected)
+        paint_workspace_background(
+            painter, stack.rect(), stack._background, dark, theme_id, percent
+        )
+        painter.end()
+        for point in points:
+            pixel = QPoint(
+                round(point.x() * actual.devicePixelRatio()),
+                round(point.y() * actual.devicePixelRatio()),
+            )
+            assert actual.pixelColor(pixel) == expected.pixelColor(pixel)
+
+    try:
+        for percent in (0, 50, 100):
+            for name in WORKSPACE_NAMES:
+                setattr(window._settings.appearance.backgrounds, name, prepared.reference)
+                setattr(
+                    window._settings.appearance.background_visibility, name,
+                    BackgroundVisibility(light=percent, dark=percent),
+                )
+            panel.load_settings(window._settings)
+            for index in range(4):
+                window._show_workspace(index)
+                QApplication.processEvents()
+                assert_backdrop([QPoint(8, 80)])
+            assert panel.property("embedded") is True
+            for index in range(panel.tabs.count()):
+                panel.tabs.setCurrentIndex(index)
+                QApplication.processEvents()
+                scroll = panel.tabs.widget(index)
+                viewport = scroll.viewport()
+                for offset in (0, scroll.verticalScrollBar().maximum()):
+                    scroll.verticalScrollBar().setValue(offset)
+                    QApplication.processEvents()
+                    assert_backdrop([
+                        panel.mapTo(stack, QPoint(panel.width() - 8, 8)),
+                        viewport.mapTo(stack, QPoint(viewport.width() - 2, viewport.height() // 2)),
+                    ])
+                scroll.verticalScrollBar().setValue(0)
+                QApplication.processEvents()
+                card = scroll.widget().layout().itemAt(0).widget()
+                # Readable surfaces stay opaque while their surrounding page is transparent.
+                assert widget_color(card, QPoint(card.width() - 24, 20)) == QColor(
+                    theme_palette(dark, theme_id).surface
+                )
+            assert widget_color(panel._action_bar, QPoint(8, 36)) == QColor(
+                theme_palette(dark, theme_id).surface
+            )
+        for reference in ("", prepared.reference):
+            if reference:
+                window._background_store.path(reference).write_bytes(b"broken")
+            window._settings.appearance.backgrounds.settings = reference
+            panel.load_settings(window._settings)
+            window._refresh_workspace_background()
+            QApplication.processEvents()
+            assert stack._background.isNull()
+            assert_backdrop([panel.mapTo(stack, QPoint(panel.width() - 8, 8))])
+        standalone = SettingsDialog(window._settings)
+        qtbot.addWidget(standalone)
+        standalone.show()
+        QApplication.processEvents()
+        assert standalone.property("embedded") is False
+        assert widget_color(standalone, QPoint(8, 8)) == QColor(
+            theme_palette(dark, theme_id).background
+        )
+    finally:
+        qapp.styleHints().colorSchemeChanged.disconnect(theme._on_color_scheme_changed)
+        theme.deleteLater()
+
+
 def test_visibility_drafts_merge_save_fail_retry_and_restore(workspace, qtbot, tmp_path, monkeypatch):
     window = workspace
     panel = window._settings_page

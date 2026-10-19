@@ -113,6 +113,8 @@ class SettingsDialog(QDialog):
     def __init__(self, settings: AppSettings, parent=None, embedded=False, background_store=None):
         super().__init__(parent)
         self._embedded = embedded
+        self.setObjectName("SettingsEditor")
+        self.setProperty("embedded", embedded)
         self._settings = settings.model_copy(deep=True)
         self._controls = {}
         self._field_rows = {}

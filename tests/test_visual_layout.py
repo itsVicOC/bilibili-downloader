@@ -1,7 +1,16 @@
 """Geometry regressions for the responsive desktop visual system."""
 
+import pytest
 from PySide6.QtCore import QPoint, QRect, Qt
-from PySide6.QtWidgets import QApplication, QPushButton
+from PySide6.QtGui import QFont, QImage, QPainter
+from PySide6.QtWidgets import (
+    QApplication,
+    QPushButton,
+    QStyle,
+    QStyleOptionViewItem,
+    QTableWidget,
+    QTableWidgetItem,
+)
 
 from bilibili_downloader.core.models import (
     AppSettings,
@@ -13,6 +22,11 @@ from bilibili_downloader.core.task_repository import TaskRepository
 from bilibili_downloader.gui.dialogs.login_dialog import LoginDialog
 from bilibili_downloader.gui.dialogs.settings_dialog import SettingsDialog
 from bilibili_downloader.gui.main_window import MainWindow
+from bilibili_downloader.gui.resources.styles import build_component_overrides
+from bilibili_downloader.gui.widgets.download_list import (
+    DownloadListWidget,
+    _StatusDelegate,
+)
 from bilibili_downloader.utils.config import ConfigManager
 
 
@@ -124,3 +138,110 @@ def test_long_settings_path_starts_at_leading_edge(qtbot):
     assert dialog._output_dir.cursorPosition() == 0
     assert dialog._output_dir.toolTip() == path
     assert dialog._output_dir.alignment() & Qt.AlignLeft
+
+
+class _TextRecordingPainter(QPainter):
+    def __init__(self, image):
+        super().__init__(image)
+        self.lines = []
+
+    def drawText(self, rect, flags, text):
+        self.lines.append((QRect(rect), flags, text))
+        super().drawText(rect, flags, text)
+
+
+def _paint_status(table, column, scale=1):
+    index = table.model().index(0, column)
+    option = QStyleOptionViewItem()
+    option.initFrom(table)
+    option.widget = table
+    option.rect = table.visualRect(index)
+    delegate = table.itemDelegateForColumn(column)
+    delegate.initStyleOption(option, index)
+    content = table.style().subElementRect(QStyle.SE_ItemViewItemText, option, table)
+    image = QImage(
+        round(table.viewport().width() * scale),
+        round(table.viewport().height() * scale),
+        QImage.Format_ARGB32_Premultiplied,
+    )
+    image.setDevicePixelRatio(scale)
+    image.fill(Qt.transparent)
+    painter = _TextRecordingPainter(image)
+    delegate.paint(painter, option, index)
+    painter.end()
+    return painter.lines, content
+
+
+@pytest.mark.parametrize("width", [700, 1026])
+@pytest.mark.parametrize("scale", [1, 1.25, 1.5])
+@pytest.mark.parametrize(
+    ("text", "count"),
+    [
+        ("已暂停，可继续", 1),
+        ("下载中 · 2.4 MiB/s", 2),
+        ("失败：" + "网络连接超时，请检查网络后继续下载。" * 6, 2),
+        ("😀🛰️" * 18 + "弹幕与视频下载", 2),
+    ],
+)
+def test_download_status_is_centered_and_bounded(qtbot, width, scale, text, count):
+    table = DownloadListWidget()
+    qtbot.addWidget(table)
+    table.setStyleSheet(build_component_overrides(False))
+    table.add_item(
+        DownloadItem(video_info=VideoInfo(bvid="BV1VISUAL01", cid=1, title="示例")),
+        status_text=text,
+    )
+    # Exercise fonts whose two lines need some of the QSS vertical padding.
+    font = QFont(table.font())
+    font.setPixelSize(18)
+    table.item(0, 3).setFont(font)
+    table.resize(width, 200)
+    table.show()
+    QApplication.processEvents()
+    lines, content = _paint_status(table, 3, scale)
+    assert len(lines) == count
+    assert table.horizontalHeaderItem(3).textAlignment() == Qt.AlignCenter
+    assert table.item(0, 3).toolTip() == text
+    block = QRect()
+    for rect, flags, line in lines:
+        assert flags & Qt.AlignHCenter
+        assert table.visualRect(table.model().index(0, 3)).contains(rect)
+        assert rect.left() == content.left() and rect.width() == content.width()
+        assert abs(rect.center().x() - content.center().x()) <= 1
+        block = block.united(rect)
+    assert abs(block.center().y() - content.center().y()) <= 1
+    if text.startswith("失败："):
+        assert lines[-1][2].endswith("…")
+
+
+@pytest.mark.parametrize("alignment", [Qt.AlignLeft, Qt.AlignRight])
+def test_shared_status_delegate_respects_other_columns(qtbot, alignment):
+    table = QTableWidget(1, 1)
+    qtbot.addWidget(table)
+    item = QTableWidgetItem("录制中 · 原画")
+    item.setTextAlignment(alignment | Qt.AlignVCenter)
+    table.setItem(0, 0, item)
+    table.setItemDelegateForColumn(0, _StatusDelegate(table))
+    table.setColumnWidth(0, 180)
+    table.setRowHeight(0, 56)
+    table.show()
+    QApplication.processEvents()
+    lines, _content = _paint_status(table, 0)
+    assert lines
+    assert all(flags & alignment for _rect, flags, _text in lines)
+
+
+def test_resolution_errors_and_resumed_status_keep_alignment_and_tooltips(qtbot):
+    table = DownloadListWidget()
+    qtbot.addWidget(table)
+    error_id = table.add_resolution_error("无法解析作品")
+    assert table.item(table._row_for(error_id), 3).textAlignment() == Qt.AlignCenter
+    task_id = table.add_item(
+        DownloadItem(video_info=VideoInfo(bvid="BV1VISUAL01", cid=1, title="示例"))
+    )
+    row = table._row_for(task_id)
+    for transition in (table.mark_paused, table.mark_failed_retry_reset, table.mark_cancelled):
+        table.update_progress(task_id, .3, "下载中 · 旧进度详情")
+        transition(task_id)
+        assert table.item(row, 3).toolTip() == table.item(row, 3).text()
+        assert table.item(row, 3).textAlignment() == Qt.AlignCenter

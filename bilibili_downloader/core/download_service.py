@@ -16,6 +16,7 @@ from bilibili_downloader.core.models import (
     SubtitleInfo,
 )
 from bilibili_downloader.core.subtitle import SubtitleDownloader
+from bilibili_downloader.core.timed_text import ConversionReport
 from bilibili_downloader.utils.validators import sanitize_filename
 
 logger = logging.getLogger(__name__)
@@ -102,8 +103,10 @@ class DownloadService:
             progress_callback(0.90, "正在下载弹幕...")
             danmaku_path = Path(video_path).with_suffix(".ass")
             try:
-                DanmakuDownloader.download_and_convert(item.video_info.cid, danmaku_path)
+                report = DanmakuDownloader.download_and_convert(item.video_info.cid, danmaku_path)
                 outcome.danmaku_path = str(danmaku_path)
+                if isinstance(report, ConversionReport):
+                    outcome.warnings.extend(report.warnings("弹幕"))
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
                     "Danmaku download failed for %s: %s",
@@ -127,8 +130,11 @@ class DownloadService:
                 else:
                     subtitle_path = Path(video_path).with_suffix(".srt")
                 try:
-                    SubtitleDownloader.download_and_convert(subtitle.url, subtitle_path)
+                    report = SubtitleDownloader.download_and_convert(subtitle.url, subtitle_path)
                     outcome.subtitle_paths.append(str(subtitle_path))
+                    if isinstance(report, ConversionReport):
+                        label = subtitle.lan_doc or subtitle.lan or str(index + 1)
+                        outcome.warnings.extend(report.warnings(f"字幕 {label}"))
                 except Exception as exc:  # noqa: BLE001
                     logger.warning(
                         "Subtitle download failed for %s: %s",

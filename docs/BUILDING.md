@@ -41,6 +41,18 @@ CI 在 Ubuntu 和 Windows 上使用 Python 3.10、3.11、3.12 运行测试，并
 
 `constraints.txt` 固定经过验证的直接运行与开发依赖。修改依赖时，应在三类系统的 CI 通过后同步更新约束版本；平台专属传递依赖由 pip 解析器管理。
 
+### 弹幕实际渲染验证
+
+单元测试覆盖导出字段、Unicode 字素、时间量化、轨道分配和失败保护。还可使用本机已有的 libass 直接验证实际像素：
+
+```bash
+python scripts/verify_timed_text_rendering.py \
+  --libass /path/to/libass.so \
+  --output-dir /tmp/biliflow-ass-check
+```
+
+macOS 使用对应的 dylib，Windows 使用 DLL；如该库还依赖同目录动态库，需要先配置操作系统的动态库搜索路径。脚本不下载渲染器、不修改应用设置，检查字面字符、颜色、正反向运动、长文本完整进出、大字号以及顶底位置，并输出 ASS/PNG 演示文件。该检查不能替代 Windows PotPlayer 的实机验收。
+
 ## 文档与截图
 
 README 和用户指南中的软件截图由离线脚本生成，不依赖 Bilibili 接口，也不会读取本机配置、系统凭据库或下载任务。GUI 样式、布局、可见文案发生变化后，在仓库根目录运行：
