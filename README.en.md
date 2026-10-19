@@ -65,6 +65,8 @@ This README is available in English and Simplified Chinese. The current desktop 
 | Themes and backgrounds | Compare Xinghe (pink/purple) and Qinghai (sky blue/soft rose) preview cards; preview cropping and adjust light/dark image visibility independently for each workspace before saving |
 | Update checks and installation | Check at startup or manually, choose stable or beta channels, and verify/install/restart official macOS/Windows packages with recovery if startup fails |
 
+`v0.8.3` adds the [official download mirror](https://1008.si/download/) for update discovery and package downloads, with GitHub fallback on network failures. Versions up to v0.8.2 use fixed GitHub endpoints; install v0.8.3 from the website to enable the mirror for future updates.
+
 Automatic updates are available starting with `v0.8.1b1` and are currently a beta feature. First install a version that includes the updater manually. Check [Releases](https://github.com/itsVicOC/bilibili-downloader/releases) for stable and prerelease status.
 
 The stable `v0.8.2` release adds theme selection and independent workspace backgrounds with separate light/dark visibility controls. Unavailable entries in favorites are skipped individually so accessible works can still be imported. See the [changelog](CHANGELOG.md#v082---2026-10-19) and [appearance guide](docs/USER_GUIDE.md#主题与工作区背景) (Chinese).

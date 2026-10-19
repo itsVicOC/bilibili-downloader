@@ -24,6 +24,8 @@ from bilibili_downloader.core.update_protocol import (
     validate_archive,
 )
 from bilibili_downloader.core.updater import (
+    MIRROR_ORIGIN,
+    MIRROR_RELEASES_URL,
     RELEASES_URL,
     REPOSITORY,
     ReleaseAsset,
@@ -128,6 +130,8 @@ def test_pagination_never_follows_remote_link(tmp_path):
     pages = []
 
     def handler(request):
+        if str(request.url) == MIRROR_RELEASES_URL:
+            return httpx.Response(503)
         assert str(request.url).startswith(RELEASES_URL)
         pages.append(request.url.params["page"])
         if pages[-1] == "1":
@@ -141,6 +145,83 @@ def test_pagination_never_follows_remote_link(tmp_path):
     service = UpdateService(tmp_path, transport=httpx.MockTransport(handler))
     assert service.check("stable").version == "0.9.0"
     assert pages == ["1", "2"]
+
+
+def test_mirror_discovery_and_asset_validation(tmp_path):
+    name = "BilibiliDownloader-Windows-full-v0.9.0.zip"
+    original = f"https://github.com/{REPOSITORY}/releases/download/v0.9.0/{name}"
+    mirror = f"{MIRROR_ORIGIN}/releases/download/v0.9.0/{name}"
+    calls = []
+
+    def handler(request):
+        calls.append(str(request.url))
+        return httpx.Response(200, json=[release_row("v0.9.0", assets=[
+            {"name": name, "size": 100, "browser_download_url": original, "mirror_download_url": mirror},
+            {"name": "SHA256SUMS.txt", "size": 100, "browser_download_url": original.rsplit("/", 1)[0] + "/SHA256SUMS.txt", "mirror_download_url": "https://evil.example/checksums"},
+        ])], headers={"Link": '<https://evil.example/>; rel="next"'})
+
+    release = UpdateService(tmp_path, transport=httpx.MockTransport(handler)).check("stable")
+    assert calls == [MIRROR_RELEASES_URL]
+    assert release.assets[0].url == original
+    assert release.assets[0].mirror_download_url == mirror
+    assert release.assets[1].mirror_download_url is None
+
+
+@pytest.mark.parametrize("bad", [httpx.Response(503), httpx.Response(200, json={}), httpx.Response(200, content=b"invalid")])
+def test_mirror_metadata_failure_uses_github(tmp_path, bad):
+    calls = []
+
+    def handler(request):
+        calls.append(str(request.url))
+        return bad if request.url.host == "dl.1008.si" else httpx.Response(200, json=[release_row("v0.9.0")])
+
+    assert UpdateService(tmp_path, transport=httpx.MockTransport(handler)).check("stable").version == "0.9.0"
+    assert calls[0] == MIRROR_RELEASES_URL
+    assert calls[1].startswith(RELEASES_URL)
+
+
+@pytest.mark.parametrize("system,variant", [("Windows", "full"), ("Windows", "lite"), ("macOS", "full"), ("macOS", "lite")])
+@pytest.mark.parametrize("failure", [False, True])
+def test_mirror_download_and_network_fallback(tmp_path, system, variant, failure):
+    name = f"BilibiliDownloader-{system}-{variant}-v0.9.0.zip"
+    original = f"https://github.com/{REPOSITORY}/releases/download/v0.9.0/{name}"
+    mirror = f"{MIRROR_ORIGIN}/releases/download/v0.9.0/{name}"
+    content, calls = b"verified package", []
+
+    def handler(request):
+        calls.append(str(request.url))
+        assert "cookie" not in request.headers and "authorization" not in request.headers
+        if failure and request.url.host == "dl.1008.si":
+            raise httpx.ReadTimeout("offline", request=request)
+        return httpx.Response(200, content=content)
+
+    service = UpdateService(tmp_path, transport=httpx.MockTransport(handler))
+    destination = tmp_path / "package.zip"
+    with service._client() as client:
+        service._download(client, ReleaseAsset(name, original, len(content), mirror), destination, None)
+    assert destination.read_bytes() == content
+    assert calls == ([mirror, original] if failure else [mirror])
+    assert not list(tmp_path.glob("*.part"))
+
+
+def test_mirror_integrity_error_never_falls_back(tmp_path):
+    installation = installed_root(tmp_path)
+    release, _ = release_fixture(replace(installation[1], version="0.9.0"))
+    release = replace(release, assets=tuple(replace(a, mirror_download_url=a.url.replace(f"https://github.com/{REPOSITORY}", MIRROR_ORIGIN)) for a in release.assets))
+    calls = []
+
+    def handler(request):
+        calls.append(str(request.url))
+        assert request.url.host == "dl.1008.si"
+        if request.url.path.endswith("SHA256SUMS.txt"):
+            return httpx.Response(200, content=f"{'0' * 64}  {release.assets[0].name}\n".encode())
+        return httpx.Response(200, content=zip_bytes(replace(installation[1], version="0.9.0")))
+
+    service = UpdateService(tmp_path / "data", installation=installation, transport=httpx.MockTransport(handler))
+    with pytest.raises(UpdateError, match="SHA-256"):
+        service.prepare(release)
+    assert len(calls) == 2
+    assert (installation[0] / installation[1].executable).read_bytes() == b"old executable"
 
 
 def test_no_downgrade_and_rc_to_stable(tmp_path):

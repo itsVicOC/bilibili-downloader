@@ -38,6 +38,8 @@ REPOSITORY = "itsVicOC/bilibili-downloader"
 RELEASES_URL = f"https://api.github.com/repos/{REPOSITORY}/releases"
 RELEASES_PAGE = f"https://github.com/{REPOSITORY}/releases"
 ASSET_HOSTS = {"github.com", "release-assets.githubusercontent.com"}
+MIRROR_ORIGIN = "https://dl.1008.si"
+MIRROR_RELEASES_URL = f"{MIRROR_ORIGIN}/releases/index.json"
 
 
 class UpdateCancelled(UpdateError):
@@ -49,6 +51,7 @@ class ReleaseAsset:
     name: str
     url: str
     size: int
+    mirror_download_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -84,7 +87,7 @@ def _cancelled(cancel):
         raise UpdateCancelled("更新已取消")
 
 
-def _asset_url(url: str) -> str:
+def _asset_url(url: str, *, mirror_url: str | None = None) -> str:
     parsed = urlparse(url)
     try:
         port = parsed.port
@@ -92,13 +95,29 @@ def _asset_url(url: str) -> str:
         raise UpdateError("更新下载地址无效") from exc
     if (
         parsed.scheme != "https"
-        or parsed.hostname not in ASSET_HOSTS
+        or (parsed.hostname not in ASSET_HOSTS and url != mirror_url)
         or parsed.username
         or parsed.password
         or port not in (None, 443)
     ):
-        raise UpdateError("更新下载地址不属于可信的 GitHub 下载服务")
+        raise UpdateError("更新下载地址不属于可信的下载服务")
     return url
+
+
+def _mirror_url(asset: ReleaseAsset) -> str | None:
+    prefix = f"https://github.com/{REPOSITORY}/releases/download/"
+    if not asset.url.startswith(prefix):
+        return None
+    remainder = asset.url[len(prefix):]
+    if remainder.count("/") != 1:
+        return None
+    tag, filename = remainder.split("/")
+    if (not re.fullmatch(r"v?\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?", tag)
+            or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.+-]*", asset.name)
+            or ".." in asset.name or filename != quote(asset.name, safe="")):
+        return None
+    expected = f"{MIRROR_ORIGIN}/releases/download/{tag}/{filename}"
+    return expected if asset.mirror_download_url == expected else None
 
 
 class UpdateService:
@@ -142,6 +161,16 @@ class UpdateService:
         self, channel: UpdateChannel | str, cancel: threading.Event | None = None
     ) -> UpdateRelease | None:
         channel = UpdateChannel(channel)
+        try:
+            return self._check_source(channel, cancel, MIRROR_RELEASES_URL)
+        except (httpx.HTTPError, UpdateError, ValueError):
+            _cancelled(cancel)
+            return self._check_source(channel, cancel, RELEASES_URL)
+
+    def _check_source(
+        self, channel: UpdateChannel, cancel, source: str
+    ) -> UpdateRelease | None:
+        channel = UpdateChannel(channel)
         candidates = []
         deadline = time.monotonic() + 30
         with self._client() as client:
@@ -151,7 +180,9 @@ class UpdateService:
                 if time.monotonic() > deadline:
                     raise UpdateError("检查更新超时，请稍后重试")
                 response = client.get(
-                    RELEASES_URL, params={"per_page": 100, "page": page}
+                    source,
+                    params={"per_page": 100, "page": page} if source == RELEASES_URL else None,
+                    timeout=httpx.Timeout(10, connect=5) if source == RELEASES_URL else httpx.Timeout(5, connect=3),
                 )
                 if response.status_code in (403, 429):
                     raise UpdateError("GitHub 请求受到限制，请稍后重试")
@@ -203,7 +234,8 @@ class UpdateService:
                             and size >= 0
                             and asset.get("state", "uploaded") == "uploaded"
                         ):
-                            assets.append(ReleaseAsset(name, url, size))
+                            candidate = ReleaseAsset(name, url, size, asset.get("mirror_download_url") if source == MIRROR_RELEASES_URL else None)
+                            assets.append(replace(candidate, mirror_download_url=_mirror_url(candidate)))
                     candidates.append(
                         (
                             version,
@@ -217,7 +249,7 @@ class UpdateService:
                         )
                     )
                 # Link URLs are not followed: pagination stays on our fixed repository.
-                if not response.links.get("next"):
+                if source != RELEASES_URL or not response.links.get("next"):
                     break
                 page += 1
         _cancelled(cancel)
@@ -226,15 +258,28 @@ class UpdateService:
     def _download(
         self, client, asset, destination, cancel, progress=None, *, maximum=None
     ):
+        mirror = _mirror_url(asset)
+        if mirror:
+            try:
+                return self._download_url(client, asset, mirror, destination, cancel, progress, maximum=maximum, mirror_url=mirror)
+            except httpx.HTTPError:
+                _cancelled(cancel)
+                # Retry from byte zero with a fresh partial file. Integrity errors
+                # and cancellation deliberately do not trigger source fallback.
+        return self._download_url(client, asset, asset.url, destination, cancel, progress, maximum=maximum)
+
+    def _download_url(
+        self, client, asset, url, destination, cancel, progress=None, *, maximum=None, mirror_url=None
+    ):
         partial = destination.with_name(f"{destination.name}.{uuid.uuid4().hex}.part")
-        url = _asset_url(asset.url)
+        url = _asset_url(url, mirror_url=mirror_url)
         try:
             for _attempt in range(6):
                 _cancelled(cancel)
                 with client.stream("GET", url) as response:
                     if response.is_redirect:
                         location = response.headers.get("location", "")
-                        url = _asset_url(str(response.url.join(location)))
+                        url = _asset_url(str(response.url.join(location)), mirror_url=mirror_url)
                         continue
                     response.raise_for_status()
                     received = 0
