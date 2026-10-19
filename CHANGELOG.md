@@ -36,7 +36,7 @@
 
 - 本地 566 项 Python 测试、编译、Ruff 与 diff 检查通过，覆盖旧配置兼容、草稿与撤销、保存失败、字段合并、背景导入限制、共享与清理、丢失回退及更新回滚。
 - macOS offscreen 与原生 Cocoa 各生成 277 张演示截图，复核两套配色、深浅模式、三种窗口尺寸、四个工作区及关键弹窗。Windows 原生字体、缩放、安装器和更新检查由发布流水线执行；系统文件选择器与多屏切换仍需桌面人工复核。
-- 正式包由发布流水线重新构建 macOS / Windows full/lite ZIP、full DMG / EXE、SBOM、原生安装验证报告及 SHA-256 清单；全套产物校验通过后才公开 Release。
+- [发布流水线](https://github.com/itsVicOC/bilibili-downloader/actions/runs/39189955990) 已通过双平台构建、媒体样本、更新回滚、原生安装器和统一产物校验，正式提供 macOS / Windows full/lite ZIP、full DMG / EXE、SBOM、原生验证报告及 SHA-256 清单，共 14 个附件。
 
 ## v0.8.1 - 2026-10-17
 
