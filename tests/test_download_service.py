@@ -178,7 +178,7 @@ def test_service_exports_valid_danmaku_and_reports_actual_skipped_entries(monkey
     )
     assert (tmp_path / "video.mp4").read_bytes() == b"media placeholder"
     assert outcome.danmaku_path == str(tmp_path / "video.ass")
-    assert "0:00:01.13" in (tmp_path / "video.ass").read_text()
+    assert "0:00:01.13" in (tmp_path / "video.ass").read_text(encoding="utf-8")
     assert outcome.is_partial and len(outcome.warnings) == 2
 
 

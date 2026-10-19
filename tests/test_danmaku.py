@@ -95,7 +95,10 @@ def test_ass_motion_is_inside_text_override_not_effect(tmp_path, mode, style):
     ).encode()
     path = tmp_path / "danmaku.ass"
     DanmakuDownloader.xml_to_ass(xml, path)
-    event = next(line for line in path.read_text().splitlines() if line.startswith("Dialogue: "))
+    event = next(
+        line for line in path.read_text(encoding="utf-8").splitlines()
+        if line.startswith("Dialogue: ")
+    )
     fields = event.removeprefix("Dialogue: ").split(",", 9)
     assert len(fields) == 10
     assert fields[:4] == [
@@ -121,7 +124,7 @@ def test_ass_fixed_modes_have_correct_vertical_alignment(tmp_path):
     DanmakuDownloader.xml_to_ass(
         b'<i><d p="1,5,25,16777215,0,0,h,1">Top</d></i>', path
     )
-    lines = path.read_text().splitlines()
+    lines = path.read_text(encoding="utf-8").splitlines()
     style_format = next(line for line in lines if line.startswith("Format: Name,"))
     columns = style_format.removeprefix("Format: ").split(", ")
     styles = {
