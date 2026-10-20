@@ -103,7 +103,6 @@ from bilibili_downloader.gui.widgets.components import (
 from bilibili_downloader.gui.widgets.download_list import DownloadListWidget
 from bilibili_downloader.gui.widgets.hero_panel import HeroPanel
 from bilibili_downloader.gui.widgets.live_page import LivePage
-from bilibili_downloader.gui.widgets.pixel_mascot import MascotCard
 from bilibili_downloader.gui.widgets.task_page import TaskPage
 from bilibili_downloader.gui.widgets.video_info import VideoInfoWidget
 from bilibili_downloader.gui.widgets.workspace_background import WorkspaceStack
@@ -251,7 +250,15 @@ class MainWindow(QMainWindow):
             self._side_layout.addWidget(button)
         self._home_nav, self._live_nav, self._tasks_nav = self._nav_buttons
         self._side_layout.addStretch()
-        self._mascot_card = MascotCard(self._sidebar)
+        self._mascot_card = SectionCard()
+        self._mascot_card.setObjectName("MascotCard")
+        mascot = QLabel()
+        mascot.setPixmap(QIcon(asset_path("alien.png")).pixmap(28, 28))
+        self._mascot_card.body.addWidget(mascot)
+        welcome = QLabel("次元收藏，随时继续")
+        welcome.setObjectName("SidebarCaption")
+        welcome.setWordWrap(True)
+        self._mascot_card.body.addWidget(welcome)
         self._side_layout.addWidget(self._mascot_card)
         self._settings_nav = IconButton("设置", "settings", "NavButton")
         self._settings_nav.clicked.connect(self._on_settings_triggered)
