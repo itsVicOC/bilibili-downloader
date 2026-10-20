@@ -2,6 +2,7 @@
 
 import re
 from dataclasses import dataclass, replace
+from functools import lru_cache
 
 _FONT_SIZE_PATTERN = re.compile(r"(font-size:\s*)(\d+(?:\.\d+)?)(pt\s*;)")
 
@@ -147,13 +148,45 @@ def theme_palette(is_dark: bool, theme_id: str = "star_trail") -> ThemePalette:
 
 
 def background_overlay_alpha(
-    is_dark: bool, theme_id: str = "star_trail", visibility: int | None = None
+    is_dark: bool, theme_id: str = "star_trail", visibility: int | None = None,
+    *, builtin: bool = False,
 ) -> int:
     if visibility is not None:
-        return round(255 * (1 - visibility / 100))
-    # Existing settings retain the original automatic readability mask.
-    light, dark = (238, 214) if theme_id == "bilibili_blue" else (246, 208)
-    return dark if is_dark else light
+        return round(255 * (100 - visibility) / 100)
+    return round(255 * (20 if is_dark else 10) / 100)
+
+
+def background_surface_alpha(is_dark: bool) -> int:
+    return round(255 * (.20 if is_dark else .16))
+
+
+def contrast_ratio(first: str, second: str) -> float:
+    def luminance(value):
+        channels = [int(value[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        return sum(
+            (c / 12.92 if c <= .04045 else ((c + .055) / 1.055) ** 2.4) * weight
+            for c, weight in zip(channels, (.2126, .7152, .0722))
+        )
+    high, low = sorted((luminance(first), luminance(second)), reverse=True)
+    return (high + .05) / (low + .05)
+
+
+@lru_cache(maxsize=128)
+def background_reading_alpha(surface: str, *foregrounds: str) -> int:
+    """Smallest safe reading surface over any picture, even at 100% visibility.
+
+    The black/white extremes bound every image channel. Reading surfaces are
+    local to text and data rows; empty card space uses the decorative alpha.
+    """
+    channels = [int(surface[i:i + 2], 16) for i in (1, 3, 5)]
+    for alpha in range(256):
+        backgrounds = [
+            "#" + "".join(f"{round(c * alpha / 255 + extreme * (1 - alpha / 255)):02x}" for c in channels)
+            for extreme in (0, 255)
+        ]
+        if all(contrast_ratio(fg, bg) >= 4.5 for fg in foregrounds for bg in backgrounds):
+            return alpha
+    return 255
 
 
 def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> str:
@@ -161,6 +194,10 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     m = UI_METRICS
     notice = "#342c22" if is_dark else "#fff5e0"
     success_surface = "#20362e" if is_dark else "#edf8f2"
+    surface_rgb = ", ".join(str(int(p.surface[i:i + 2], 16)) for i in (1, 3, 5))
+    wallpaper_surface = f"rgba({surface_rgb}, {background_surface_alpha(is_dark)})"
+    row_alpha = background_reading_alpha(p.surface, p.text)
+    reading_surface = f"rgba({surface_rgb}, {row_alpha})"
     primary = p.primary or p.accent
     primary_hover = p.primary_hover or p.accent_hover
     primary_pressed = p.primary_pressed or p.accent_pressed
@@ -193,6 +230,10 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     #Panel, #SectionCard, #ControlPanel, #MascotCard {{
         background: {p.surface}; border: 1px solid {p.divider}; border-radius: {m.card_radius}px;
     }}
+    QStackedWidget[customBackground="true"] #Panel,
+    QStackedWidget[customBackground="true"] #SectionCard,
+    QStackedWidget[customBackground="true"] #ControlPanel,
+    QStackedWidget[customBackground="true"] QGroupBox#SettingsSection {{ background: {wallpaper_surface}; }}
     QLabel#InfoChip {{ background: transparent; border: none; padding: 0; }}
     QLabel#EmptyCover {{ background: {p.surface_raised}; border: 1px solid {p.divider}; border-radius: 10px; }}
     QLabel#LoginInstructions {{ background: {p.surface_raised}; border: 1px solid {p.divider}; border-radius: 10px; padding: 12px; }}
@@ -223,6 +264,9 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QPushButton:pressed {{ background: {p.surface}; border-color: {p.border}; }}
     QPushButton[keyboardFocus="true"]:focus {{ border-color: {p.focus}; }}
     QPushButton:disabled {{ background: {p.surface_raised}; color: {p.disabled}; }}
+    QPushButton#SegmentButton {{ min-height: 28px; max-height: 28px; padding: 0 8px; font-weight: 500; border: 1px solid transparent; }}
+    QPushButton#SegmentButton:checked {{ background: {p.selection}; color: {p.active_text}; border-color: {p.focus}; }}
+    QPushButton#SegmentButton:focus {{ border-color: {p.focus}; }}
     QPushButton#PrimaryButton, QPushButton#DownloadButton, QPushButton#HeroButton {{
         min-height: {m.primary_height - 4}px; background: {primary}; color: {primary_text}; border-color: transparent;
     }}
@@ -295,6 +339,16 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QTableWidget::item, QTreeWidget::item {{ padding: 8px; border-bottom: 1px solid {p.divider}; }}
     QTableWidget::item:hover, QTreeWidget::item:hover {{ background: {p.surface_raised}; }}
     QTableWidget::item:selected, QTreeWidget::item:selected {{ background: {p.selection}; color: {p.text}; }}
+    QStackedWidget[customBackground="true"] QTableWidget,
+    QStackedWidget[customBackground="true"] QTreeWidget {{ background: transparent; alternate-background-color: transparent; }}
+    QStackedWidget[customBackground="true"] QTableWidget QWidget#qt_scrollarea_viewport,
+    QStackedWidget[customBackground="true"] QTreeWidget QWidget#qt_scrollarea_viewport {{ background: transparent; }}
+    QStackedWidget[customBackground="true"] QTableWidget::item,
+    QStackedWidget[customBackground="true"] QTreeWidget::item {{ background: {reading_surface}; }}
+    QStackedWidget[customBackground="true"] QTableWidget::item:hover,
+    QStackedWidget[customBackground="true"] QTreeWidget::item:hover {{ background: {p.surface_raised}; }}
+    QStackedWidget[customBackground="true"] QTableWidget::item:selected,
+    QStackedWidget[customBackground="true"] QTreeWidget::item:selected {{ background: {p.selection}; color: {p.text}; }}
     QHeaderView::section {{ background: {p.surface_raised}; color: {p.muted}; border: none; border-bottom: 1px solid {p.divider}; padding: 0 10px; min-height: 40px; font-size: 9pt; }}
     QTableCornerButton::section {{ background: {p.surface_raised}; border: none; }}
     QProgressBar {{ min-height: 16px; max-height: 16px; border: none; border-radius: 5px; background: {p.surface_raised}; color: {p.text}; font-size: 9pt; text-align: center; }}

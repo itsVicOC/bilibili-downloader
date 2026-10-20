@@ -1,0 +1,7 @@
+{
+  "platform": "offscreen",
+  "qt_version": "6.11.2",
+  "logical_dpi": 96.0,
+  "dpr": 1.0,
+  "note": "Offline demonstration data; screenshots normalized to logical pixels."
+}

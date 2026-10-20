@@ -169,7 +169,7 @@ def test_background_picker_decodes_async_and_discards_stale_results(qtbot, tmp_p
 
 
 def test_background_effect_preview_uses_draft_theme_and_isolated_mode(qtbot, monkeypatch, qapp, tmp_path):
-    from PySide6.QtWidgets import QCheckBox, QDialog
+    from PySide6.QtWidgets import QDialog
 
     from bilibili_downloader.gui.widgets.appearance_preview import WorkspacePreview
 
@@ -184,9 +184,8 @@ def test_background_effect_preview_uses_draft_theme_and_isolated_mode(qtbot, mon
     def inspect(dialog):
         preview = dialog.findChild(WorkspacePreview)
         assert preview.theme_id == "bilibili_blue"
-        mode = dialog.findChild(QCheckBox)
-        mode.setChecked(not mode.isChecked())
-        assert preview.is_dark == mode.isChecked()
+        (dialog.effects.light_button if preview.is_dark else dialog.effects.dark_button).click()
+        assert preview.is_dark == dialog.effects.dark_button.isChecked()
         assert not preview.grab().isNull()
         inspected.append(True)
         return QDialog.Rejected
@@ -357,7 +356,7 @@ def test_visibility_settings_fall_back_per_mode_and_workspace(tmp_path):
 
 @pytest.mark.parametrize("accepted", [False, True])
 def test_preview_visibility_is_local_until_applied(qtbot, monkeypatch, tmp_path, accepted):
-    from PySide6.QtWidgets import QCheckBox, QDialog, QPushButton, QSlider
+    from PySide6.QtWidgets import QDialog, QPushButton, QSlider
 
     from bilibili_downloader.gui.widgets.appearance_preview import WorkspacePreview
 
@@ -371,19 +370,18 @@ def test_preview_visibility_is_local_until_applied(qtbot, monkeypatch, tmp_path,
     def inspect(dialog):
         preview = dialog.findChild(WorkspacePreview)
         slider = dialog.findChild(QSlider)
-        mode = dialog.findChild(QCheckBox)
-        mode.setChecked(False)
+        dialog.effects.light_button.setChecked(True)
         assert slider.value() == 20
         assert preview.pixmap.width() == 1600  # Preview uses the processed full image.
         slider.setValue(70)
-        mode.setChecked(True)
+        dialog.effects.dark_button.setChecked(True)
         assert slider.value() == 30
         slider.setValue(45)
         assert picker.visibility == baseline
         reset = next(b for b in dialog.findChildren(QPushButton) if "当前模式默认" in b.text())
         reset.click()
         assert preview.visibility.dark is None
-        mode.setChecked(False)
+        dialog.effects.light_button.setChecked(True)
         assert slider.value() == 70
         assert not preview.grab().isNull()
         return QDialog.Accepted if accepted else QDialog.Rejected
@@ -414,13 +412,16 @@ def test_preview_and_workspace_render_identical_visibility(qapp, qtbot, tmp_path
     preview = WorkspacePreview("下载", QPixmap(str(path)), theme_id)
     qtbot.addWidget(preview)
     preview.resize(640, 360)
+    from PySide6.QtCore import QSize
+    preview.viewport_size = QSize(640, 360)
+    preview.resize(644, 364)
     colors = []
     for percent in (0, 50, 100):
         visibility = BackgroundVisibility(light=percent, dark=percent)
         workspace.set_visibility(visibility)
         preview.visibility = visibility
         actual = workspace.grab().toImage().pixelColor(QPoint(8, 8))
-        draft = preview.grab().toImage().pixelColor(QPoint(72, 52))
+        draft = preview.grab().toImage().pixelColor(QPoint(80, 78))
         assert actual == draft
         colors.append(actual.name())
     assert len(set(colors)) == 3
@@ -512,8 +513,8 @@ def test_full_settings_page_reveals_fixed_workspace_background(
                 scroll.verticalScrollBar().setValue(0)
                 QApplication.processEvents()
                 card = scroll.widget().layout().itemAt(0).widget()
-                # Readable surfaces stay opaque while their surrounding page is transparent.
-                assert widget_color(card, QPoint(card.width() - 24, 20)) == QColor(
+                # Decorative card space reveals the image; controls stay opaque.
+                assert widget_color(card, QPoint(card.width() - 24, 20)) != QColor(
                     theme_palette(dark, theme_id).surface
                 )
             assert widget_color(panel._action_bar, QPoint(8, 36)) == QColor(

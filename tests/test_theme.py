@@ -15,6 +15,7 @@ from bilibili_downloader.gui.resources.styles import (
     LIGHT_PALETTE,
     UI_METRICS,
     background_overlay_alpha,
+    background_reading_alpha,
     readable_fill_text,
     scale_font_sizes,
     theme_palette,
@@ -230,16 +231,17 @@ def test_theme_tokens_meet_text_and_control_contrast_targets():
 
 @pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])
 @pytest.mark.parametrize("dark", [True, False])
-def test_background_overlay_preserves_text_contrast_over_extreme_images(theme_id, dark):
+def test_local_reading_surfaces_preserve_contrast_over_extreme_images(theme_id, dark):
     p = theme_palette(dark, theme_id)
-    alpha = background_overlay_alpha(dark, theme_id) / 255
-    for image_channel in (0, 255):
-        background = "#" + "".join(
-            f"{round(int(p.background[i:i + 2], 16) * alpha + image_channel * (1 - alpha)):02x}"
-            for i in (1, 3, 5)
-        )
-        assert _contrast(p.text, background) >= 4.5
-        assert _contrast(p.muted, background) >= 4.5
+    assert background_overlay_alpha(dark, theme_id) == round(255 * (.2 if dark else .1))
+    for foreground in (p.text, p.muted, p.active_text, p.success, p.warning, p.danger):
+        alpha = background_reading_alpha(p.surface, foreground) / 255
+        for image_channel in (0, 255):
+            background = "#" + "".join(
+                f"{round(int(p.surface[i:i + 2], 16) * alpha + image_channel * (1 - alpha)):02x}"
+                for i in (1, 3, 5)
+            )
+            assert _contrast(foreground, background) >= 4.5
 
 
 @pytest.mark.parametrize("dark", [True, False])

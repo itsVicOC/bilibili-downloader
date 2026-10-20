@@ -29,6 +29,10 @@ from bilibili_downloader.gui.resources.styles import (
     UI_METRICS,
     readable_fill_text,
 )
+from bilibili_downloader.gui.widgets.background_readability import (
+    paint_reading_surface,
+    wallpaper_active,
+)
 from bilibili_downloader.gui.widgets.components import line_icon, palette
 
 ACTION_BUTTON_MIN_WIDTH = 60
@@ -165,6 +169,9 @@ class _StatusDelegate(QStyledItemDelegate):
         alignment = (opt.displayAlignment & Qt.AlignHorizontal_Mask) | Qt.AlignVCenter
         for line in lines:
             rect = QRect(content.left(), top, max(1, content.width()), height)
+            if opt.widget and wallpaper_active(opt.widget):
+                label_rect = metrics.boundingRect(rect, int(alignment), metrics.elidedText(line, Qt.ElideRight, rect.width()))
+                paint_reading_surface(painter, label_rect.adjusted(-3, -2, 3, 2), p.surface, color)
             painter.drawText(
                 rect, alignment, metrics.elidedText(line, Qt.ElideRight, rect.width())
             )

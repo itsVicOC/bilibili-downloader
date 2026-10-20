@@ -421,13 +421,13 @@ class SettingsDialog(QDialog):
         appearance.addLayout(self._background_grid)
         for workspace, title in zip(WORKSPACE_NAMES, ("视频下载", "直播录制", "任务中心", "设置")):
             card = SectionCard(f"{title}背景")
-            picker = BackgroundPicker(title, self._background_store)
+            picker = BackgroundPicker(title, self._background_store, workspace=workspace)
             picker.changed.connect(self._draft_changed)
             card.body.addWidget(picker)
             self._background_cards.append(card)
             self._background_pickers[workspace] = picker
         self._layout_background_cards()
-        appearance.addWidget(Notice("支持静态 PNG、JPEG、WebP（20 MiB / 4000 万像素以内）。自动居中裁切并适配深浅主题；保存应用内副本后，移动原图不影响显示。"))
+        appearance.addWidget(Notice("可选择小流的 12 张背景，或导入自己的静态 PNG、JPEG、WebP（20 MiB / 4000 万像素以内）。四个页面分别保存，支持深浅模式预览与可见度调节；自定义图片保存应用内副本。"))
         for column in (download, live, tools, updates, appearance):
             column.addStretch()
         self._notice = Notice()

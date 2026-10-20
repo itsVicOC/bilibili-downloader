@@ -35,7 +35,7 @@ bilibili-downloader = "bilibili_downloader.__main__:main"
 include = ["bilibili_downloader*"]
 
 [tool.setuptools.package-data]
-"bilibili_downloader.gui" = ["assets/*"]
+"bilibili_downloader.gui" = ["assets/*", "assets/backgrounds/*"]
 
 [tool.setuptools.dynamic]
 version = {attr = "bilibili_downloader.__version__"}

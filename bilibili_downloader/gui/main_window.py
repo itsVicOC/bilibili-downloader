@@ -45,6 +45,7 @@ from bilibili_downloader.api.client import BilibiliAPIClient
 from bilibili_downloader.api.live import BilibiliLiveClient
 from bilibili_downloader.core.appearance import BackgroundStore
 from bilibili_downloader.core.batch import is_collection_source
+from bilibili_downloader.core.builtin_backgrounds import builtin_background
 from bilibili_downloader.core.cache import clear_download_cache, inspect_download_cache
 from bilibili_downloader.core.copyright import (
     BILIBILI_TERMS_URL,
@@ -70,7 +71,7 @@ from bilibili_downloader.gui.dialogs.login_dialog import LoginDialog
 from bilibili_downloader.gui.dialogs.settings_dialog import SettingsDialog
 from bilibili_downloader.gui.dialogs.update_dialog import UpdateDialog
 from bilibili_downloader.gui.live_controller import LiveUiController
-from bilibili_downloader.gui.resources.paths import asset_path
+from bilibili_downloader.gui.resources.paths import asset_path, background_path
 from bilibili_downloader.gui.resources.theme import ThemeManager
 from bilibili_downloader.gui.threads.download_worker import (
     DownloadRunner,
@@ -103,6 +104,7 @@ from bilibili_downloader.gui.widgets.components import (
 from bilibili_downloader.gui.widgets.download_list import DownloadListWidget
 from bilibili_downloader.gui.widgets.hero_panel import HeroPanel
 from bilibili_downloader.gui.widgets.live_page import LivePage
+from bilibili_downloader.gui.widgets.pixel_mascot import MascotCard
 from bilibili_downloader.gui.widgets.task_page import TaskPage
 from bilibili_downloader.gui.widgets.video_info import VideoInfoWidget
 from bilibili_downloader.gui.widgets.workspace_background import WorkspaceStack
@@ -250,15 +252,7 @@ class MainWindow(QMainWindow):
             self._side_layout.addWidget(button)
         self._home_nav, self._live_nav, self._tasks_nav = self._nav_buttons
         self._side_layout.addStretch()
-        self._mascot_card = SectionCard()
-        self._mascot_card.setObjectName("MascotCard")
-        mascot = QLabel()
-        mascot.setPixmap(QIcon(asset_path("alien.png")).pixmap(28, 28))
-        self._mascot_card.body.addWidget(mascot)
-        welcome = QLabel("次元收藏，随时继续")
-        welcome.setObjectName("SidebarCaption")
-        welcome.setWordWrap(True)
-        self._mascot_card.body.addWidget(welcome)
+        self._mascot_card = MascotCard(self._sidebar)
         self._side_layout.addWidget(self._mascot_card)
         self._settings_nav = IconButton("设置", "settings", "NavButton")
         self._settings_nav.clicked.connect(self._on_settings_triggered)
@@ -548,7 +542,12 @@ class MainWindow(QMainWindow):
     def _refresh_workspace_background(self):
         workspace = WORKSPACE_NAMES[self._workspace_pages.currentIndex()]
         reference = getattr(self._settings.appearance.backgrounds, workspace)
-        self._workspace_pages.set_background(self._background_store.path(reference))
+        entry = builtin_background(reference)
+        self._workspace_pages.set_background(
+            background_path(reference, self._background_store),
+            builtin=entry is not None,
+            pixel_art=entry is not None and entry.style == "pixel",
+        )
         self._workspace_pages.set_visibility(
             getattr(self._settings.appearance.background_visibility, workspace)
         )

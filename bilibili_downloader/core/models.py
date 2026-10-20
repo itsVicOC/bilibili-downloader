@@ -7,6 +7,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from bilibili_downloader.core.builtin_backgrounds import builtin_background
 from bilibili_downloader.core.live_models import LiveSettings
 
 _VIDEO_QUALITY_LABELS = {
@@ -335,7 +336,9 @@ class WorkspaceBackgrounds(BaseModel):
     @field_validator("*", mode="before")
     @classmethod
     def valid_reference(cls, value):
-        return value if isinstance(value, str) and BACKGROUND_REFERENCE.fullmatch(value) else ""
+        return value if isinstance(value, str) and (
+            BACKGROUND_REFERENCE.fullmatch(value) or builtin_background(value)
+        ) else ""
 
 
 class BackgroundVisibility(BaseModel):

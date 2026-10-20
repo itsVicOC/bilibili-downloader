@@ -800,7 +800,8 @@ def _capture_appearance(app, theme, window, temp_root):
 
 
 def _capture_ux_states(app, theme, temp_root):
-    from PySide6.QtWidgets import QCheckBox, QDialog
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QDialog
 
     from bilibili_downloader.gui.threads.batch_worker import (
         ImportIssue,
@@ -853,7 +854,11 @@ def _capture_ux_states(app, theme, temp_root):
         def preview_capture(dialog):
             preview = dialog.findChild(WorkspacePreview)
             preview.is_dark = dark
-            dialog.findChild(QCheckBox).setChecked(dark)
+            for _ in range(100):
+                if not dialog.busy:
+                    break
+                QTest.qWait(10)
+            (dialog.effects.dark_button if dark else dialog.effects.light_button).setChecked(True)
             dialog.findChild(QSlider).setValue(45 if dark else 60)
             _save_widget(app, dialog, f"biliflow-ux-background-preview-{mode}.png")
             return QDialog.Rejected
@@ -1007,6 +1012,107 @@ def _capture_lifecycle(app, theme, temp_root):
         window.deleteLater()
 
 
+def _capture_builtin_backgrounds(app, theme, window, temp_root):
+    from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
+    from bilibili_downloader.gui.dialogs.background_gallery import BackgroundGallery
+
+    _populate_main_window(window)
+    _populate_live_page(window, temp_root / "background-demo")
+    window._settings.appearance.theme = "bilibili_blue"
+    theme.set_color_theme("bilibili_blue")
+    for entry in BUILTIN_BACKGROUNDS:
+        setattr(window._settings.appearance.backgrounds, entry.workspace, entry.reference)
+        theme.apply_theme(entry.style == "pixel")
+        mode = "dark" if entry.style == "pixel" else "light"
+        window.resize(1320, 860)
+        window._show_workspace(("download", "live", "tasks", "settings").index(entry.workspace))
+        if entry.workspace == "settings":
+            window._settings_page.tabs.setCurrentIndex(4)
+        window.show()
+        _flush_events(app)
+        assert window._workspace_pages.property("mascotBackground")
+        _save_widget(app, window, f"biliflow-background-{entry.id}-{mode}.png")
+
+    for theme_id in ("star_trail", "bilibili_blue"):
+        theme.set_color_theme(theme_id)
+        for dark in (False, True):
+            theme.apply_theme(dark)
+            for size in ((900, 640), (1120, 760), (1320, 860)):
+                window.resize(*size)
+                window.show()
+                for page in range(4):
+                    window._show_workspace(page)
+                    _flush_events(app)
+                    assert window.size().width() == size[0] and window.size().height() == size[1]
+                    assert window._workspace_pages.property("mascotBackground")
+    theme.set_color_theme("bilibili_blue")
+    theme.apply_theme(False)
+    picker = window._settings_page._background_pickers["download"]
+    for size in ((1080, 720), (980, 660), (720, 540)):
+        dialog = BackgroundGallery(picker)
+        dialog.resize(*size)
+        dialog.select_builtin(BUILTIN_BACKGROUNDS[0].reference)
+        dialog.page_filter.setCurrentIndex(0)
+        dialog.show()
+        _flush_events(app)
+        from PySide6.QtTest import QTest
+        for _ in range(100):
+            if not dialog.busy:
+                break
+            QTest.qWait(10)
+        assert not dialog.busy
+        assert dialog.scroll.horizontalScrollBar().maximum() == 0
+        assert dialog.rect().contains(QRect(dialog.apply_button.mapTo(dialog, QPoint()), dialog.apply_button.size()))
+        _save_widget(app, dialog, f"biliflow-background-gallery-{size[0]}.png")
+        if size[0] == 1080:
+            dialog.effects.original_button.click()
+            _save_widget(app, dialog, "biliflow-background-gallery-original.png")
+            dialog.effects.page_button.click()
+            dialog.tabs.setCurrentIndex(1)
+            _save_widget(app, dialog, "biliflow-background-gallery-custom.png")
+        dialog.deleteLater()
+    screen = app.primaryScreen()
+    (OUTPUT_DIR / "rendering-profile.json").write_text(json.dumps({
+        "platform": app.platformName(), "qt_version": qVersion(),
+        "logical_dpi": screen.logicalDotsPerInch(), "dpr": screen.devicePixelRatio(),
+        "note": "Offline services and isolated configuration; twelve wallpapers plus both themes, modes and three window sizes checked.",
+    }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _capture_mascot(app, theme, window):
+    """Exercise full, short and narrow sidebars without production services."""
+    _populate_main_window(window)
+    for theme_id in ("star_trail", "bilibili_blue"):
+        theme.set_color_theme(theme_id)
+        for dark in (False, True):
+            theme.apply_theme(dark)
+            mode = "dark" if dark else "light"
+            for width, height in ((900, 640), (1120, 640), (1120, 760), (1320, 860)):
+                window.resize(width, height)
+                window.show()
+                _flush_events(app)
+                card = window._mascot_card
+                card.mascot._timer.stop()
+                card.mascot._frame_index = 0
+                card.mascot.update()
+                for control in (*window._nav_buttons, window._settings_nav, window._header_login):
+                    assert window._sidebar.rect().contains(QRect(control.mapTo(window._sidebar, QPoint()), control.size()))
+                assert card.isVisible() == (width >= 1120)
+                if width >= 1120:
+                    assert card._mini == (height == 640)
+                    for child in (card.mascot, card.caption):
+                        assert card.rect().contains(QRect(child.mapTo(card, QPoint()), child.size()))
+                _save_widget(app, window, f"biliflow-mascot-{theme_id}-{mode}-{width}x{height}.png")
+                if width == 1120:
+                    _save_widget(app, card, f"xiaoliu-card-{theme_id}-{mode}-{'mini' if card._mini else 'full'}.png")
+    screen = app.primaryScreen()
+    (OUTPUT_DIR / "rendering-profile.json").write_text(json.dumps({
+        "platform": app.platformName(), "qt_version": qVersion(),
+        "logical_dpi": screen.logicalDotsPerInch(), "dpr": screen.devicePixelRatio(),
+        "note": "Offline demonstration data; screenshots normalized to logical pixels.",
+    }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def main(argv=None) -> int:
     global OUTPUT_DIR
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1025,6 +1131,8 @@ def main(argv=None) -> int:
     parser.add_argument("--batch-only", action="store_true", help="Capture the compact import workspace with 130 demo works and partial failures")
     parser.add_argument("--actions-only", action="store_true", help="Compare single and batch output cards before and after resolving")
     parser.add_argument("--lifecycle-only", action="store_true", help="Capture close dialogs and background operation settings with offline data")
+    parser.add_argument("--mascot-only", action="store_true", help="Capture Xiao Liu at full, short and narrow sidebar sizes in both themes")
+    parser.add_argument("--builtin-backgrounds-only", action="store_true", help="Capture the twelve bundled Xiao Liu wallpapers and gallery")
     args = parser.parse_args(argv)
     OUTPUT_DIR = args.output_dir.resolve()
     if args.native:
@@ -1067,6 +1175,16 @@ def main(argv=None) -> int:
             _capture_lifecycle(app, theme, temp_root)
             return 0
         window = _make_main_window(temp_root / "workspace")
+        if args.builtin_backgrounds_only:
+            _capture_builtin_backgrounds(app, theme, window, temp_root)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
+        if args.mascot_only:
+            _capture_mascot(app, theme, window)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
         if args.actions_only:
             _capture_output_actions(app, theme, temp_root)
             window._live_controller.shutdown()

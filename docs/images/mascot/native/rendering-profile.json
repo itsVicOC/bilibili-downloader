@@ -1,0 +1,7 @@
+{
+  "platform": "cocoa",
+  "qt_version": "6.11.2",
+  "logical_dpi": 72.0,
+  "dpr": 2.0,
+  "note": "Offline demonstration data; screenshots normalized to logical pixels."
+}
