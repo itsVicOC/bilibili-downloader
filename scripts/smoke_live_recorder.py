@@ -10,6 +10,7 @@ import json
 import queue
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -433,6 +434,19 @@ def main():
                 }
                 assert packets == expected, (format_name, packets, expected)
                 assert 7.1 <= duration <= 8.5, (format_name, duration)
+                sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+                from bilibili_downloader.core.ffmpeg import FFmpegManager
+
+                combined = root / f"combined-{format_name}.mp4"
+                ok, message = FFmpegManager.merge_live_segments(
+                    [Path(s["path"]) for s in segments], combined,
+                    args.remux_ffmpeg or args.ffmpeg,
+                )
+                assert ok, message
+                combined_info = probe(combined, args.ffprobe)
+                assert {s["codec_type"]: int(s["nb_read_packets"])
+                        for s in combined_info["streams"]} == expected, combined_info
+                assert abs(float(combined_info["format"]["duration"]) - duration) < 0.3, combined_info
                 print(
                     f"PASS {format_name}: {len(segments)} playable segments, {duration:.2f}s; MP4 exports verified",
                     flush=True,

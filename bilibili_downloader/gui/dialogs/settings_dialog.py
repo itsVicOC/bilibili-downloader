@@ -240,6 +240,13 @@ class SettingsDialog(QDialog):
         )
         download.addWidget(options)
         defaults = SectionCard("默认录制位置与分段")
+        self._review_directories_button = QPushButton("核对旧房间目录")
+        self._review_directories_button.setObjectName("TextButton")
+        self._review_directories_button.clicked.connect(
+            lambda: self.tabs.widget(1).ensureWidgetVisible(self._directory_review)
+        )
+        self._review_directories_button.hide()
+        defaults.header.addWidget(self._review_directories_button)
         self._live_directory = _LeadingPathLineEdit()
         self._controls["live.output_dir"] = self._live_directory
         self._field(
@@ -250,8 +257,12 @@ class SettingsDialog(QDialog):
         )
         self._number("live.segment_seconds", defaults, "分段时长", 1, 1440, " 分钟")
         defaults.body.addWidget(
-            Notice("目录与分段时长只用于新添加的直播间；已有房间请在房间设置中修改。")
+            Notice("跟随全局的房间在下一场使用此目录；本场录制继续保存在原位置。分段时长用于新增房间。")
         )
+        self._auto_merge_live = QCheckBox("录制结束后自动合并 MP4")
+        self._controls["live.auto_merge_mp4"] = self._auto_merge_live
+        defaults.body.addWidget(self._auto_merge_live)
+        defaults.body.addWidget(Notice("正常下播或手动停止后合并到场次目录，保留原始分段。"))
         quality_hint = QLabel(
             "默认使用当前可用最高画质；单房间画质可在直播工作台设置，下次拉流生效。"
         )
@@ -259,6 +270,14 @@ class SettingsDialog(QDialog):
         quality_hint.setWordWrap(True)
         defaults.body.addWidget(quality_hint)
         live.addWidget(defaults)
+        self._directory_review = SectionCard("核对已有房间的保存位置")
+        self._directory_review.body.addWidget(Notice(
+            "旧版本未记录目录来源。请逐个选择跟随全局或保留独立目录，保存前继续使用原位置。", "warning"
+        ))
+        self._directory_choices = {}
+        self._live_directory.textChanged.connect(self._update_directory_previews)
+        self._directory_review.hide()
+        live.addWidget(self._directory_review)
         limits = SectionCard("录制并发与空间")
         self._number("live.max_concurrent", limits, "同时录制", 1, 4)
         self._number("live.minimum_free_bytes", limits, "保留空间", 1, 1024, " GiB")
@@ -513,9 +532,13 @@ class SettingsDialog(QDialog):
             entry.setToolTip(value)
             entry.setCursorPosition(0)
 
-    def load_settings(self, settings):
+    def load_settings(self, settings, *, keep_directory_choices=False):
         previous_channel = self._update_channel.currentData()
         self._settings = settings.model_copy(deep=True)
+        for _, choice in (() if keep_directory_choices else getattr(self, "_directory_choices", {}).values()):
+            choice.blockSignals(True)
+            choice.setCurrentIndex(0)
+            choice.blockSignals(False)
         for key, control in self._controls.items():
             value = _setting_value(settings, key)
             if key == "live.segment_seconds":
@@ -543,6 +566,7 @@ class SettingsDialog(QDialog):
             picker.set_reference(getattr(settings.appearance.backgrounds, workspace))
             picker.set_visibility(getattr(settings.appearance.background_visibility, workspace))
         self._notice.set_message("")
+        self._update_directory_previews()
         self._draft_changed()
         self._sync_appearance_preview()
         if previous_channel != self._update_channel.currentData():
@@ -599,7 +623,7 @@ class SettingsDialog(QDialog):
     @property
     def dirty(self):
         # Invalid text is still an editable draft; validate only on save.
-        return any(
+        return bool(self.directory_modes()) or any(
             picker.busy or picker.prepared is not None
             for picker in self._background_pickers.values()
         ) or any(
@@ -607,6 +631,61 @@ class SettingsDialog(QDialog):
             != _setting_value(self._settings, key)
             for key, value in self._draft_values().items()
         )
+
+    def set_live_rooms(self, rows):
+        """Keep a migration draft stable while live snapshots refresh."""
+        legacy = {row["room_id"]: row for row in rows if row.get("output_dir_mode", "known") is None}
+        changed = set(self._directory_choices) != legacy.keys()
+        for room_id in set(self._directory_choices) - legacy.keys():
+            field, _ = self._directory_choices.pop(room_id)
+            self._directory_review.body.removeWidget(field)
+            field.deleteLater()
+        for room_id, row in legacy.items():
+            if room_id in self._directory_choices:
+                continue
+            choice = ComboBox()
+            choice.addItem("待确认 · 暂用原目录", None)
+            choice.addItem("跟随全局保存目录", "default")
+            choice.addItem("保留独立目录", "custom")
+            choice.setMinimumWidth(180)
+            field = QWidget()
+            heading = QHBoxLayout(field)
+            heading.setContentsMargins(0, 0, 0, 0)
+            room_name = ElidedLabel(f"{row['author'] or '未命名直播间'} · 房间 {room_id}")
+            heading.addWidget(room_name, 1)
+            heading.addWidget(choice)
+            field.setToolTip(row["output_dir"])
+            # Show the original path without forcing the settings page wider.
+            wrapper = QWidget()
+            column = QVBoxLayout(wrapper)
+            column.setContentsMargins(0, 0, 0, 0)
+            column.addWidget(field)
+            path = ElidedLabel(f"原目录：{row['output_dir']}")
+            path.setObjectName("MetaLabel")
+            column.addWidget(path)
+            wrapper.original_directory = row["output_dir"]
+            wrapper.preview = ElidedLabel("下一场：等待核对")
+            wrapper.preview.setObjectName("MetaLabel")
+            column.addWidget(wrapper.preview)
+            self._directory_review.body.addWidget(wrapper)
+            self._directory_choices[room_id] = (wrapper, choice)
+            choice.currentIndexChanged.connect(self._draft_changed)
+            choice.currentIndexChanged.connect(self._update_directory_previews)
+        self._directory_review.setVisible(bool(legacy))
+        self._review_directories_button.setText(f"核对 {len(legacy)} 个旧房间")
+        self._review_directories_button.setVisible(bool(legacy))
+        if changed:
+            self._draft_changed()
+
+    def _update_directory_previews(self, *_args):
+        for wrapper, choice in self._directory_choices.values():
+            mode = choice.currentData()
+            path = self._live_directory.text().strip() if mode == "default" else wrapper.original_directory
+            wrapper.preview.set_full_text(f"下一场：{path}" if mode else "下一场：待确认，继续使用原目录")
+
+    def directory_modes(self):
+        return {room_id: choice.currentData() for room_id, (_, choice) in self._directory_choices.items()
+                if choice.currentData() is not None}
 
     def _draft_changed(self, *_args):
         dirty = self.dirty
@@ -632,7 +711,7 @@ class SettingsDialog(QDialog):
             ),
             (
                 self._live_directory,
-                bool(self._live_directory.text().strip()),
+                bool(self._live_directory.text().strip()) and not Path(self._live_directory.text().strip()).expanduser().is_file(),
                 "请选择有效的录制保存目录",
             ),
         ]

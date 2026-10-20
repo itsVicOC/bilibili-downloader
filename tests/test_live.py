@@ -730,6 +730,101 @@ def test_finalized_event_is_saved_before_process_exit(service):
     assert service.repository.sessions()[0].segments[0].path == str(path)
 
 
+def test_global_directory_follows_next_session_and_reconnect_keeps_current(service, tmp_path):
+    runtime = service._rooms[1]
+    runtime.subscription.output_dir_mode = "default"
+    first = tmp_path / "第一处 目录"
+    second = tmp_path / "第二处 目录"
+    service.settings.output_dir = str(first)
+    runtime = connect(service)
+    original = Path(runtime.session.directory)
+    assert first in original.parents
+    settings = service.settings.model_copy(update={"output_dir": str(second)})
+    service.command("settings", settings=settings)
+    service.tick()
+    assert service.snapshot()[0]["output_dir"] == str(second)
+    assert service.snapshot()[0]["active_output_dir"] == str(original)
+    checked = []
+    service._disk_usage = lambda path: (checked.append(path) or SimpleNamespace(free=10 * 1024**3))
+    service._ensure_space(runtime)
+    assert checked[-1] == original
+    runtime.backend.exit_code = 0
+    service.tick()
+    service.test_clock[0] += 2
+    service.tick()
+    service.tick()
+    assert Path(runtime.session.directory) == original
+    service.command("stop", room_id=1)
+    service.tick()
+    runtime.backend.exit_code = 0
+    service.tick()
+    service.command("start", room_id=1)
+    service.tick()
+    service.tick()
+    assert second in Path(runtime.session.directory).parents
+
+
+def test_legacy_directory_review_and_custom_directory_survive_restart(service, tmp_path):
+    runtime = service._rooms[1]
+    legacy = runtime.subscription.output_dir
+    global_path = tmp_path / "global"
+    settings = service.settings.model_copy(update={"output_dir": str(global_path)})
+    service.command("settings", settings=settings)
+    service._handle_commands()
+    assert service._output_directory(runtime) == Path(legacy)
+    service.command("settings", settings=settings, directory_modes={1: "default"})
+    service._handle_commands()
+    assert service._output_directory(runtime) == global_path
+    assert service.repository.subscriptions()[0].output_dir_mode == "default"
+    custom = tmp_path / "custom"
+    service.command("room_settings", room_id=1, output_dir=str(custom),
+                    output_dir_mode="custom", segment_seconds=1800)
+    service._handle_commands()
+    assert service._output_directory(runtime) == custom
+    restored = service.repository.subscriptions()[0]
+    assert restored.output_dir_mode == "custom" and restored.output_dir == str(custom)
+    service.command("settings", settings=settings.model_copy(update={"output_dir": str(tmp_path / "third")}))
+    service._handle_commands()
+    assert service._output_directory(runtime) == custom
+
+
+def test_directory_save_failure_retains_runtime_and_reports_completion(service, tmp_path, monkeypatch):
+    runtime = service._rooms[1]
+    original = runtime.subscription.model_copy(deep=True)
+
+    def failure(_subscriptions):
+        raise OSError("目录数据库不可写")
+
+    monkeypatch.setattr(service.repository, "save_subscriptions", failure)
+    completion = Future()
+    service.command("settings", settings=service.settings, directory_modes={1: "default"}, completion=completion)
+    service._handle_commands()
+    assert completion.result()[0] is False
+    assert runtime.subscription == original
+    service.command("room_settings", room_id=1, output_dir=str(tmp_path / "new"),
+                    output_dir_mode="custom", segment_seconds=1800)
+    service._handle_commands()
+    assert runtime.subscription == original
+
+
+@pytest.mark.parametrize("status,enabled,expected", [
+    ("completed", True, True), ("stopped", True, True), ("completed", False, False),
+    ("interrupted", True, False), ("failed", True, False),
+])
+def test_auto_merge_only_queues_finalized_normal_sessions(service, status, enabled, expected):
+    runtime = connect(service)
+    source = runtime.backend.directory / "part.flv"
+    source.write_bytes(b"media")
+    runtime.backend.pending.append({"event": "segment_finalized", "path": str(source), "bytes": 5, "duration": 2})
+    service.tick()
+    service.settings.auto_merge_mp4 = enabled
+    service._finish(runtime, status)
+    saved = service.repository.sessions()[0]
+    assert bool(saved.mp4_export) is expected
+    if expected:
+        assert saved.mp4_export.status == "queued" and saved.mp4_export.automatic
+
+
 def test_recorder_checks_reject_test_engine_and_wrong_protocol(tmp_path, monkeypatch):
     info = {
         "name": "biliflow-recorder",

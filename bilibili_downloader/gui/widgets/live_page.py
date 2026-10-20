@@ -1,6 +1,9 @@
 """Live room workspace backed by the shared live UI controller."""
 
-from PySide6.QtCore import Qt, Signal
+from pathlib import Path
+
+from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QBoxLayout,
     QCheckBox,
@@ -209,7 +212,21 @@ class LivePage(QWidget):
         details.addWidget(FieldRow("下次拉流画质", self.quality))
         self._directory = QLineEdit()
         self._directory.setReadOnly(True)
-        details.addWidget(FieldRow("保存目录", self._directory))
+        directory_row = QWidget()
+        directory_layout = QHBoxLayout(directory_row)
+        directory_layout.setContentsMargins(0, 0, 0, 0)
+        directory_layout.addWidget(self._directory, 1)
+        self._open_directory = QPushButton("打开")
+        self._open_directory.clicked.connect(lambda: QDesktopServices.openUrl(
+            QUrl.fromLocalFile(str(Path(self._directory.text()).expanduser()))
+        ) if Path(self._directory.text()).expanduser().is_dir() else self.controller.notify("保存目录尚未创建或已不可用。", "warning"))
+        directory_layout.addWidget(self._open_directory)
+        details.addWidget(FieldRow("保存目录", directory_row))
+        self._directory_hint = QLabel()
+        self._directory_hint.setObjectName("MetaLabel")
+        self._directory_hint.setWordWrap(True)
+        self._directory_hint.setTextFormat(Qt.PlainText)
+        details.addWidget(self._directory_hint)
         self._segment = QLabel()
         self._segment.setObjectName("MetaLabel")
         details.addWidget(self._segment)
@@ -377,8 +394,14 @@ class LivePage(QWidget):
         self._detail_badge.setText(row["state_label"])
         self._detail_badge.set_tone(live_tone(row["state"]))
         self._detail.setText(row["detail"] or "等待直播状态更新")
-        self._directory.setText(row["output_dir"])
-        self._directory.setToolTip(row["output_dir"])
+        actual = row.get("active_output_dir") or row["output_dir"]
+        self._directory.setText(actual)
+        self._directory.setToolTip(actual)
+        mode = {"default": "跟随全局", "custom": "独立目录", None: "旧目录待核对"}.get(row.get("output_dir_mode"), "独立目录")
+        self._directory_hint.setText(
+            f"{mode} · 下一场保存位置：{row['output_dir']}" if row.get("active_output_dir")
+            else f"{mode} · 按主播和场次建立子目录"
+        )
         self._directory.setCursorPosition(0)
         self._segment.setText(
             f"分段时长 {row['segment_seconds'] // 60} 分钟 · 画质修改在下次拉流生效"
@@ -432,6 +455,7 @@ class LivePage(QWidget):
             self.settings_requested.emit(1)
             return
         dialog = LiveSettingsDialog(self._config.load().live, self)
+        dialog.set_live_rooms(self.controller.rows)
         if dialog.exec():
             settings = self._config.load().model_copy(deep=True)
             settings.live = dialog.settings()
@@ -441,7 +465,7 @@ class LivePage(QWidget):
                 self.controller.notify(str(exc), "danger")
                 return
             self.settings_changed.emit(settings)
-            self.controller.command("settings", settings=settings.live)
+            self.controller.apply_live_settings(settings.live, dialog.directory_modes())
             self.check_engine()
 
     def _room_settings(self):
@@ -454,6 +478,7 @@ class LivePage(QWidget):
                 "room_settings",
                 room_id=row["room_id"],
                 output_dir=dialog.directory.text().strip(),
+                output_dir_mode=dialog.directory_mode.currentData(),
                 segment_seconds=(
                     row["segment_seconds"]
                     if dialog.segment.value() == row["segment_seconds"] // 60
@@ -469,7 +494,15 @@ class LivePage(QWidget):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(20)
         card = SectionCard("房间录制设置")
+        mode = ComboBox()
+        mode.addItem("跟随全局保存目录", "default")
+        mode.addItem("单独设置保存目录", "custom")
+        mode.setCurrentIndex(0 if row.get("output_dir_mode") == "default" else 1)
+        dialog.directory_mode = mode
+        card.body.addWidget(FieldRow("目录规则", mode))
         directory = QLineEdit(row["output_dir"])
+        draft_directory = {"custom": row["output_dir"]}
+        directory.textEdited.connect(lambda value: draft_directory.update(custom=value))
         directory.setToolTip(row["output_dir"])
         directory.setCursorPosition(0)
         dialog.directory = directory
@@ -488,6 +521,14 @@ class LivePage(QWidget):
 
         browse.clicked.connect(select_directory)
         path_layout.addWidget(browse)
+        def sync_directory():
+            follows = mode.currentData() == "default"
+            directory.setEnabled(not follows)
+            browse.setEnabled(not follows)
+            directory.setText(self._config.load().live.output_dir if follows else draft_directory["custom"])
+            directory.setToolTip(directory.text())
+        mode.currentIndexChanged.connect(sync_directory)
+        sync_directory()
         directory_field = FieldRow("保存目录", path_row)
         card.body.addWidget(directory_field)
         segment = QSpinBox()
@@ -497,7 +538,7 @@ class LivePage(QWidget):
         segment.setSuffix(" 分钟")
         segment_row, _, _ = stepper(segment)
         card.body.addWidget(FieldRow("分段时长", segment_row))
-        card.body.addWidget(Notice("修改仅影响这个直播间；录制或收尾期间无法保存。"))
+        card.body.addWidget(Notice("跟随全局时，下次录制使用全局目录；单独设置只影响此房间。录制或收尾期间无法保存。"))
         layout.addWidget(card)
         notice = Notice()
         layout.addWidget(notice)
@@ -518,7 +559,7 @@ class LivePage(QWidget):
             ):
                 notice.set_message("请先停止本场并等待收尾完成。", "warning")
                 return
-            if not directory.text().strip():
+            if not directory.text().strip() or Path(directory.text().strip()).expanduser().is_file():
                 notice.set_message("请选择有效的录制保存目录。", "danger")
                 directory_field.set_error("请选择有效的录制保存目录。")
                 directory.setFocus()

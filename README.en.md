@@ -58,7 +58,7 @@ This README is available in English and Simplified Chinese. The current desktop 
 | Media quality and codecs | Select 240P–8K, HDR, Dolby Vision, AVC, HEVC, or AV1 when available, with a matching audio track |
 | Local archives | Save MP4, M4A, or Hi-Res FLAC, plus ASS danmaku, SRT subtitles, covers, and JSON metadata |
 | Persistent task center | Manage downloads, active recordings, and history; apply bulk actions to filtered or all tasks, undo record removal, and resume interrupted downloads after restarting |
-| Live recording | Monitor rooms, record automatically or manually, split recordings, reconnect, browse history, and export MP4; see the [live recording guide](docs/LIVE_RECORDING.md) |
+| Live recording | Monitor rooms, record automatically or manually, reconnect, merge a session into one MP4 automatically or on demand, and use global or per-room directories; see the [live recording guide](docs/LIVE_RECORDING.md) |
 | Batch and multi-part downloads | Select individual or all parts, preview/filter batches, track or cancel metadata imports, retry failed entries, read paginated sources, deduplicate tasks, and run 1–8 concurrent downloads |
 | Account login | Start with QR login or use the Cookie fallback; manage your account from the sidebar with username and avatar, retaining only allowed Cookie fields and preferring the system credential store |
 | Cross-platform desktop UI | A PySide6 interface with a responsive layout down to 900×640 and automatic system light/dark themes |

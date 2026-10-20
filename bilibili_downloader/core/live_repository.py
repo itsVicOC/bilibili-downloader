@@ -4,6 +4,7 @@ import json
 import os
 import sqlite3
 import threading
+import uuid
 from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,7 +12,11 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from bilibili_downloader.core.errors import redact_sensitive_text
-from bilibili_downloader.core.live_models import LiveSubscription, RecordingSession
+from bilibili_downloader.core.live_models import (
+    LiveExport,
+    LiveSubscription,
+    RecordingSession,
+)
 from bilibili_downloader.core.task_repository import TaskDatabaseVersionError
 
 
@@ -80,10 +85,13 @@ class LiveRepository:
         return self._decode(rows, LiveSubscription)
 
     def save_subscription(self, subscription: LiveSubscription):
+        self.save_subscriptions([subscription])
+
+    def save_subscriptions(self, subscriptions: list[LiveSubscription]):
         with self._db() as db:
-            db.execute(
+            db.executemany(
                 "INSERT INTO subscriptions VALUES (?, ?) ON CONFLICT(room_id) DO UPDATE SET payload=excluded.payload",
-                (subscription.room.room_id, self._serialize(subscription)),
+                [(subscription.room.room_id, self._serialize(subscription)) for subscription in subscriptions],
             )
 
     def remove_subscription(self, room_id: int):
@@ -111,6 +119,25 @@ class LiveRepository:
         return result
 
     def save_session(self, session: RecordingSession):
+        with self._lock:
+            self._save_session(session)
+
+    def session(self, session_id: str) -> RecordingSession | None:
+        with self._db() as db:
+            row = db.execute("SELECT payload FROM sessions WHERE id=?", (session_id,)).fetchone()
+        return RecordingSession.model_validate_json(row[0]) if row else None
+
+    def update_export(self, session_id: str, export: LiveExport):
+        # Merge into the latest recording payload rather than saving an old GUI
+        # snapshot over the final segments or recording warnings.
+        with self._lock:
+            session = self.session(session_id)
+            if session is None or session.status == "recording":
+                raise ValueError("场次尚未结束或已不存在")
+            session.mp4_export = export
+            self._save_session(session)
+
+    def _save_session(self, session: RecordingSession):
         serialized = self._serialize(session)
         with self._db() as db:
             db.execute(
@@ -120,7 +147,7 @@ class LiveRepository:
             self.history_revision += 1
         directory = Path(session.directory)
         if directory.is_dir():
-            temporary = directory / ".manifest.json.tmp"
+            temporary = directory / f".manifest-{uuid.uuid4().hex}.tmp"
             try:
                 with temporary.open("w", encoding="utf-8") as output:
                     output.write(serialized)

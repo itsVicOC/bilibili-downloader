@@ -2,6 +2,7 @@
 
 from enum import Enum
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -64,6 +65,8 @@ class LiveSubscription(BaseModel):
     enabled: bool = True
     quality: int = Field(default=0, ge=0)  # 0 = best available
     output_dir: str
+    # None identifies legacy subscriptions whose directory origin is unknown.
+    output_dir_mode: Literal["default", "custom"] | None = None
     segment_seconds: int = Field(default=1800, ge=60, le=86400)
     skipped_broadcast: str = ""
 
@@ -76,6 +79,14 @@ class RecordingSegment(BaseModel):
     quality: int = 0
     codec: str = "avc"
     format: str = ""
+
+
+class LiveExport(BaseModel):
+    status: Literal["queued", "running", "completed", "failed"] = "queued"
+    path: str
+    automatic: bool = False
+    progress: str = "等待导出"
+    error: str = ""
 
 
 class RecordingSession(BaseModel):
@@ -92,6 +103,7 @@ class RecordingSession(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     gaps: list[dict[str, str]] = Field(default_factory=list)
     segments: list[RecordingSegment] = Field(default_factory=list)
+    mp4_export: LiveExport | None = None
 
     @property
     def total_size(self) -> int:
@@ -99,6 +111,7 @@ class RecordingSession(BaseModel):
 
 
 class LiveSettings(BaseModel):
+    auto_merge_mp4: bool = True
     recorder_path: str = ""
     output_dir: str = Field(
         default_factory=lambda: str(Path.home() / "Downloads" / "bilibili" / "live")

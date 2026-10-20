@@ -19,6 +19,7 @@ from bilibili_downloader.api.live import BilibiliLiveClient, LiveAccessError
 from bilibili_downloader.core.errors import redact_sensitive_text, user_error_message
 from bilibili_downloader.core.live_models import (
     LIVE_STATE_LABELS,
+    LiveExport,
     LiveSettings,
     LiveState,
     LiveStream,
@@ -297,7 +298,23 @@ class LiveService:
                     )
                     continue
                 if action == "settings":
+                    # Directory decisions are an explicit one-time migration;
+                    # unreviewed legacy subscriptions retain their old paths.
+                    updates = []
+                    for room_id, mode in args.get("directory_modes", {}).items():
+                        runtime = self._rooms.get(int(room_id))
+                        if runtime:
+                            updated = runtime.subscription.model_copy(update={
+                                "output_dir_mode": mode,
+                            })
+                            updated = LiveSubscription.model_validate(updated.model_dump())
+                            updates.append((runtime, updated))
+                    self.repository.save_subscriptions([updated for _, updated in updates])
+                    for runtime, updated in updates:
+                        runtime.subscription = updated
                     self.settings = args["settings"].model_copy(deep=True)
+                    if args.get("completion"):
+                        args["completion"].set_result((True, "设置与房间目录规则已保存，下一场录制生效。"))
                     continue
                 if action == "auth":
                     self._auth = dict(args["cookies"])
@@ -369,17 +386,25 @@ class LiveService:
                         raise ValueError(
                             "请先停止本场并等待收尾，再修改房间目录与分段时长"
                         )
-                    runtime.subscription = LiveSubscription.model_validate(
+                    if not args.get("output_dir", "").strip():
+                        raise ValueError("请选择有效的录制保存目录")
+                    updated = LiveSubscription.model_validate(
                         {
                             **runtime.subscription.model_dump(),
                             "output_dir": str(
                                 Path(args["output_dir"]).expanduser().resolve()
                             ),
                             "segment_seconds": args["segment_seconds"],
+                            "output_dir_mode": args.get("output_dir_mode", "custom"),
                         }
                     )
+                    self.repository.save_subscription(updated)
+                    runtime.subscription = updated
+                    continue
                 self.repository.save_subscription(runtime.subscription)
             except Exception as exc:
+                if action == "settings" and args.get("completion"):
+                    args["completion"].set_result((False, f"房间目录规则保存失败：{redact_sensitive_text(str(exc))}"))
                 self._messages.put(redact_sensitive_text(str(exc)))
 
     def _complete_additions(self):
@@ -395,6 +420,7 @@ class LiveService:
                     room=room,
                     enabled=args.get("enabled", True),
                     output_dir=self.settings.output_dir,
+                    output_dir_mode="default",
                     segment_seconds=self.settings.segment_seconds,
                 )
                 self.repository.save_subscription(subscription)
@@ -480,9 +506,16 @@ class LiveService:
             raise RuntimeError("未获取到可用 AVC 直播流，将重新查询")
         self._begin(runtime, streams)
 
+    def _output_directory(self, runtime):
+        value = (self.settings.output_dir if runtime.subscription.output_dir_mode == "default"
+                 else runtime.subscription.output_dir)
+        if not value.strip():
+            raise ValueError("请选择有效的录制保存目录")
+        return Path(value).expanduser().resolve()
+
     def _ensure_space(self, runtime):
-        directory = Path(runtime.subscription.output_dir).expanduser()
-        if runtime.session and not Path(runtime.session.directory).is_dir():
+        directory = Path(runtime.session.directory) if runtime.session else self._output_directory(runtime)
+        if runtime.session and not directory.is_dir():
             raise OSError("录制目录已不可用，已停止录制；恢复目录后重新开始")
         directory.mkdir(parents=True, exist_ok=True)
         if self._disk_usage(directory).free < self.settings.minimum_free_bytes:
@@ -498,19 +531,19 @@ class LiveService:
             raise _UnsupportedStreamsError(
                 "本场直播的可用线路均不受支持；可更新应用后重试，下次开播仍会自动尝试"
             )
+        room = runtime.subscription.room
+        if runtime.session and runtime.session.room.broadcast_key != room.broadcast_key:
+            self._finish(runtime, "completed")
         self._ensure_space(runtime)
         runtime.state = LiveState.PREPARING
         stream = streams[runtime.retries % len(streams)]
         runtime.qualities = [q.model_dump() for q in stream.qualities]
         backend = self._backend_factory(self.settings.recorder_path)
-        room = runtime.subscription.room
-        if runtime.session and runtime.session.room.broadcast_key != room.broadcast_key:
-            self._finish(runtime, "completed")
         if runtime.session is None:
             identity = uuid.uuid4().hex
             stamp = utc_now().replace(":", "-")
             directory = (
-                Path(runtime.subscription.output_dir).expanduser().resolve()
+                self._output_directory(runtime)
                 / sanitize_filename(redact_sensitive_text(room.author or str(room.uid)))
                 / str(room.room_id)
                 / f"{stamp}_{identity[:8]}"
@@ -678,6 +711,11 @@ class LiveService:
         if runtime.session:
             session = runtime.session
             session.status, session.ended_at = status, utc_now()
+            if (self.settings.auto_merge_mp4 and status in {"completed", "stopped"}
+                    and session.segments and session.mp4_export is None):
+                session.mp4_export = LiveExport(
+                    path=str(Path(session.directory) / "整场直播.mp4"), automatic=True,
+                )
             if runtime.gap_start:
                 session.gaps.append(
                     {
@@ -772,7 +810,9 @@ class LiveService:
                 }
             )
             snapshots[-1].update(
-                output_dir=runtime.subscription.output_dir,
+                output_dir=str(self._output_directory(runtime)),
+                output_dir_mode=runtime.subscription.output_dir_mode,
+                active_output_dir=session.directory if session else "",
                 segment_seconds=runtime.subscription.segment_seconds,
             )
         with self._snapshot_lock:

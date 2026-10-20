@@ -67,6 +67,7 @@ from bilibili_downloader.gui.live_controller import LiveUiController
 from bilibili_downloader.gui.main_window import MainWindow
 from bilibili_downloader.gui.resources.paths import asset_path
 from bilibili_downloader.gui.resources.theme import ThemeManager
+from bilibili_downloader.gui.widgets.components import ElidedLabel
 from bilibili_downloader.utils.config import ConfigManager
 
 OUTPUT_DIR = PROJECT_ROOT / "docs" / "images"
@@ -85,6 +86,11 @@ def _save_widget(app: QApplication, widget, filename: str, popup=None) -> None:
     # stable demonstration path instead of machine-specific temporary roots.
     masked = []
     temp_root = app.property("docsTempRoot")
+    masked_labels = []
+    for entry in widget.findChildren(ElidedLabel):
+        if temp_root and temp_root in entry._full_text:
+            masked_labels.append((entry, entry._full_text))
+            entry.set_full_text(entry._full_text.replace(temp_root, "~/BiliFlow-demo"))
     for entry in widget.findChildren(QLineEdit) + widget.findChildren(QPlainTextEdit):
         if not temp_root or not entry.isReadOnly():
             continue
@@ -125,6 +131,8 @@ def _save_widget(app: QApplication, widget, filename: str, popup=None) -> None:
             entry.setCursorPosition(0)
         else:
             entry.setPlainText(text)
+    for entry, text in masked_labels:
+        entry.set_full_text(text)
     widget.hide()
 
 

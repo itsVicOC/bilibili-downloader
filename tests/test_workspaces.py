@@ -507,6 +507,91 @@ def test_room_settings_rechecks_recording_state_before_save(workspace, qtbot):
     assert dialog.result()
 
 
+def test_legacy_directory_choices_are_drafts_until_saved(workspace):
+    panel = workspace._settings_page
+    legacy = room("waiting")
+    legacy["output_dir_mode"] = None
+    panel.set_live_rooms([legacy])
+    wrapper, choice = panel._directory_choices[1]
+    assert panel.directory_modes() == {}
+    choice.setCurrentIndex(1)
+    panel._live_directory.setText("~/新 直播目录")
+    assert panel.directory_modes() == {1: "default"}
+    assert "~/新 直播目录" in wrapper.preview._full_text
+    assert panel.dirty
+    panel.load_settings(workspace._settings)
+    assert panel.directory_modes() == {}
+    choice.setCurrentIndex(2)
+    panel.load_settings(workspace._settings, keep_directory_choices=True)
+    assert panel.directory_modes() == {1: "custom"}
+    legacy["output_dir_mode"] = "custom"
+    panel.set_live_rooms([legacy])
+    assert not panel._directory_choices
+    assert not panel.dirty
+
+
+def test_room_directory_modes_preserve_custom_draft(workspace, qtbot):
+    value = room("waiting")
+    value["output_dir_mode"] = "custom"
+    dialog = workspace._live_page._build_room_settings_dialog(value)
+    qtbot.addWidget(dialog)
+    dialog.directory.setText("/tmp/custom")
+    dialog.directory.textEdited.emit("/tmp/custom")
+    dialog.directory_mode.setCurrentIndex(0)
+    assert not dialog.directory.isEnabled()
+    assert dialog.directory.text() == workspace._config.load().live.output_dir
+    dialog.directory_mode.setCurrentIndex(1)
+    assert dialog.directory.isEnabled() and dialog.directory.text() == "/tmp/custom"
+
+
+def test_session_export_controls_show_selected_session_result(workspace, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+
+    from bilibili_downloader.core.live_models import LiveExport
+
+    source = tmp_path / "part.flv"
+    source.touch()
+    session = RecordingSession(
+        id="selected", room=LiveRoom(room_id=1, author="演示"),
+        directory=str(tmp_path), started_at="2026-10-20T01:00:00+00:00", status="completed",
+        segments=[RecordingSegment(path=str(source), duration=5, finalized_at="2026-10-20T01:00:05+00:00")],
+    )
+    page = workspace._task_page
+    page.update_history([session])
+    page.history.setCurrentItem(page.history.topLevelItem(0))
+    assert page.export_button.isEnabled() and page.export_button.text() == "合并导出 MP4"
+    calls = []
+    monkeypatch.setattr(workspace._live_controller, "export_session", lambda *args: calls.append(args))
+    target = tmp_path / "whole.mp4"
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *_args: (str(target), "MP4"))
+    page.export_button.click()
+    assert calls == [(session.id, str(target))]
+    session.mp4_export = LiveExport(path=str(target), status="failed", error="片段缺失")
+    page.update_history([session])
+    assert page.history_notice.label.text() == "片段缺失"
+    assert page.export_button.text() == "重试合并 MP4"
+    session.mp4_export.status = "completed"
+    session.mp4_export.error = ""
+    target.touch()
+    page.update_history([session])
+    assert not page.export_play.isHidden() and not page.export_location.isHidden()
+    child_target = tmp_path / "part.mp4"
+    child_target.touch()
+    workspace._live_controller.export_source = str(source.resolve())
+    workspace._live_controller.export_path = str(child_target)
+    page.history.setCurrentItem(page.history.topLevelItem(0).child(0))
+    assert page._selected_export_path() == child_target
+    page.history.setCurrentItem(page.history.topLevelItem(0))
+    assert page._selected_export_path() == target
+    session.status = "recording"
+    session.mp4_export = None
+    page.update_history([session])
+    assert not page.export_button.isEnabled()
+    assert "收尾后" in page.history_stage._full_text
+    page.history.setCurrentItem(page.history.topLevelItem(0).child(0))
+    assert page.export_button.text() == "导出片段 MP4" and page.export_button.isEnabled()
+
+
 def test_history_refresh_keeps_expansion_selection_and_export_eligibility(
     workspace, tmp_path
 ):

@@ -305,6 +305,11 @@ class MainWindow(QMainWindow):
         )
         self._settings_page.save_requested.connect(self._save_settings)
         self._settings_page.cache_requested.connect(self._on_clear_cache)
+        self._live_controller.snapshot_changed.connect(self._settings_page.set_live_rooms)
+        self._settings_page.set_live_rooms(self._live_controller.rows)
+        self._live_controller.settings_applied.connect(
+            lambda ok, message: self._settings_page._notice.set_message(message, "success" if ok else "danger")
+        )
         settings_layout.addWidget(self._settings_page, 1)
         self._workspace_pages.addWidget(settings_page)
         self._setup_workspace_toolbar((
@@ -1577,10 +1582,11 @@ class MainWindow(QMainWindow):
             logger.warning("Unused background images could not be removed")
         self._apply_thread_pool_settings()
         self._apply_settings_to_controls()
-        self._live_controller.command("settings", settings=new_settings.live)
+        modes = self._settings_page.directory_modes()
+        self._live_controller.apply_live_settings(new_settings.live, modes)
         self._live_page.check_engine()
-        self._settings_page.load_settings(new_settings)
-        self._settings_page._notice.set_message("设置已保存", "success")
+        self._settings_page.load_settings(new_settings, keep_directory_choices=bool(modes))
+        self._settings_page._notice.set_message("设置已保存，正在应用房间目录规则…" if modes else "设置已保存", "info" if modes else "success")
         return True
 
     def _apply_settings_to_controls(self):
@@ -1846,7 +1852,7 @@ class MainWindow(QMainWindow):
 
         self._batch_page.cancel_resolution()
         self._updates.shutdown()
-        if live_service and not live_service.stopped:
+        if not self._live_controller.background_stopped:
             self._close_confirmed = True
             self._live_page.shutdown()
             self._download_list.pause_all_workers()

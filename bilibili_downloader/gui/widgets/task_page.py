@@ -6,12 +6,14 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
+    QApplication,
     QFileDialog,
     QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QPlainTextEdit,
+    QProgressBar,
     QPushButton,
     QSizePolicy,
     QStackedWidget,
@@ -28,10 +30,15 @@ from bilibili_downloader.core.models import TaskStatus
 from bilibili_downloader.gui.resources.styles import UI_METRICS
 from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
+    ActionBar,
+    ElidedLabel,
     EmptyState,
+    MessageBox,
     Notice,
     PageHeader,
     PopupMenu,
+    SectionCard,
+    StatusBadge,
     repolish,
 )
 from bilibili_downloader.gui.widgets.download_list import (
@@ -409,34 +416,88 @@ class TaskPage(QWidget):
         self.history.setSelectionMode(QTreeWidget.SingleSelection)
         self.history.itemSelectionChanged.connect(self._history_selection)
         self._history_stack = QStackedWidget()
+        self._history_stack.setMinimumHeight(120)
+        self.history.setMinimumHeight(120)
         self._history_stack.addWidget(self.history)
         self._history_stack.addWidget(
             EmptyState("留住每一场相遇", "录制场次及已封口片段会保存在这里。")
         )
         layout.addWidget(self._history_stack, 1)
+        self._history_sessions = {}
+        self.history_summary = SectionCard("")
+        self.history_summary.body.setContentsMargins(16, 16, 16, 16)
+        self.history_summary.body.setSpacing(8)
+        self.history_summary.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        # The summary heading carries selected-session context, rather than a
+        # fixed card title that repeats the tab name.
+        self.history_summary.hide()
+        summary_heading = QHBoxLayout()
+        self.history_title = ElidedLabel()
+        self.history_title.setObjectName("SectionTitle")
+        summary_heading.addWidget(self.history_title, 1)
+        self.history_diagnostics = QPushButton("详细提示")
+        self.history_diagnostics.setObjectName("TextButton")
+        self.history_diagnostics.clicked.connect(lambda: MessageBox(
+            "录制提示", self.history_detail.toPlainText(), self, tone="warning"
+        ).exec())
+        summary_heading.addWidget(self.history_diagnostics)
+        self.history_status = StatusBadge("未导出")
+        summary_heading.addWidget(self.history_status)
+        self.history_summary.body.addLayout(summary_heading)
+        self.history_specs = ElidedLabel()
+        self.history_specs.setObjectName("MetaLabel")
+        self.history_summary.body.addWidget(self.history_specs)
+        self.history_path = ElidedLabel()
+        self.history_path.setObjectName("MetaLabel")
+        self.history_summary.body.addWidget(self.history_path)
+        self.history_stage = ElidedLabel()
+        self.history_stage.setObjectName("MetaLabel")
+        self.history_stage.hide()
+        self.history_summary.body.addWidget(self.history_stage)
+        self.history_progress = QProgressBar()
+        self.history_progress.setRange(0, 0)
+        self.history_progress.setTextVisible(False)
+        self.history_progress.setObjectName("ImportProgress")
+        self.history_progress.hide()
+        self.history_summary.body.addWidget(self.history_progress)
+        self.history_notice = Notice()
+        self.history_summary.body.addWidget(self.history_notice)
+        layout.addWidget(self.history_summary)
         self.history_detail = QPlainTextEdit()
         self.history_detail.setReadOnly(True)
         self.history_detail.setMaximumHeight(112)
         self.history_detail.hide()
-        layout.addWidget(self.history_detail)
-        footer = QHBoxLayout()
+        # Keep the complete recording diagnostics available without making every
+        # selection consume a second details panel.
+        self.history_detail.setParent(self.history_summary)
+        self.history_summary.setToolTip("")
+        self.history_actions = ActionBar()
+        footer = self.history_actions.row
         self.open_button = QPushButton("打开目录")
         self.open_button.clicked.connect(self._open)
         footer.addWidget(self.open_button)
-        self.export_button = QPushButton("导出 MP4")
+        self.copy_path_button = QPushButton("复制路径")
+        self.copy_path_button.clicked.connect(lambda: QApplication.clipboard().setText(str(self._selected_path() or "")))
+        footer.addWidget(self.copy_path_button)
+        footer.addStretch()
+        self.export_button = QPushButton("合并导出 MP4")
         self.export_button.setObjectName("PrimaryButton")
         self.export_button.clicked.connect(self._export_mp4)
-        footer.addWidget(self.export_button)
-        self.export_location = QPushButton("打开导出位置")
+        self.export_play = QPushButton("打开 MP4")
+        self.export_play.clicked.connect(self._play_export)
+        self.export_play.hide()
+        footer.addWidget(self.export_play)
+        self.export_location = QPushButton("所在目录")
         self.export_location.setObjectName("TextButton")
         self.export_location.clicked.connect(self._open_export)
         self.export_location.hide()
         footer.addWidget(self.export_location)
-        footer.addStretch()
-        layout.addLayout(footer)
+        footer.addWidget(self.export_button)
+        layout.addWidget(self.history_actions)
         self.tabs.addTab(tab, "录制历史")
 
     def update_history(self, sessions):
+        self._history_sessions = {s.id: s for s in sessions}
         selected = self.history.currentItem()
         key = selected.data(0, Qt.UserRole + 1) if selected else None
         expanded = {
@@ -460,6 +521,8 @@ class TaskPage(QWidget):
                 status += (
                     f"\n{len(session.gaps)} 处缺口 / {len(session.warnings)} 条提示"
                 )
+            if session.mp4_export:
+                status += "\nMP4 · " + {"queued": "等待导出", "running": "导出中", "completed": "已导出", "failed": "失败"}[session.mp4_export.status]
             details = [
                 f"{session.room.author} · {_local_time(session.started_at)}",
                 f"保存目录：{session.directory}",
@@ -475,6 +538,7 @@ class TaskPage(QWidget):
             parent.setData(0, Qt.UserRole, session.directory)
             parent.setData(0, Qt.UserRole + 1, f"session:{session.id}")
             parent.setData(0, Qt.UserRole + 2, "\n".join(details))
+            parent.setData(0, Qt.UserRole + 3, session.id)
             parent.setToolTip(0, "\n".join(details))
             parent.setSizeHint(
                 0,
@@ -482,7 +546,7 @@ class TaskPage(QWidget):
                     0,
                     max(
                         UI_METRICS.row_height,
-                        self.history.fontMetrics().height() * 2 + 20,
+                        self.history.fontMetrics().height() * (status.count("\n") + 1) + 20,
                     ),
                 ),
             )
@@ -525,14 +589,75 @@ class TaskPage(QWidget):
         segment = item is not None and item.parent() is not None
         self.open_button.setText("打开文件" if segment else "打开目录")
         self.open_button.setEnabled(path is not None and path.exists())
+        session = self._selected_session()
+        export = session.mp4_export if session else None
+        busy = bool(export and export.status in {"queued", "running"})
+        eligible = bool(session and session.status != "recording" and session.segments)
+        self.export_button.setText("导出片段 MP4" if segment else "重试合并 MP4" if export and export.status == "failed" else "合并导出 MP4")
         self.export_button.setEnabled(
-            segment and path.is_file() and not self.controller.exporting
-            if path
-            else False
+            bool(path and path.is_file() and not self.controller.exporting) if segment
+            else eligible and not busy
         )
-        self.history_detail.setVisible(item is not None)
+        self.copy_path_button.setEnabled(path is not None)
+        self.history_summary.setVisible(item is not None)
+        self.history_detail.hide()
         if item:
             self.history_detail.setPlainText(item.data(0, Qt.UserRole + 2) or str(path))
+        if session:
+            self.history_diagnostics.setVisible(bool(session.gaps or session.warnings or (export and export.error)))
+            self.history_summary.setToolTip(self.history_detail.toPlainText())
+            self.history_title.set_full_text(f"{session.room.author or '未命名直播间'} · {_local_time(session.started_at)}")
+            integrity = f"{len(session.gaps)} 处缺口 / {len(session.warnings)} 条提示" if session.gaps or session.warnings else "未记录缺口"
+            self.history_specs.set_full_text(f"{len(session.segments)} 个片段 · {_duration(sum(s.duration for s in session.segments))} · {_size(session.total_size)} · {integrity}")
+            self.history_path.set_full_text(f"{'片段' if segment else '录制目录'}：{path}")
+            text, tone = ("未导出", "muted")
+            if export:
+                text, tone = {"queued": ("等待导出", "warning"), "running": ("导出中", "active"), "completed": ("已导出 MP4", "success"), "failed": ("导出失败", "danger")}[export.status]
+            self.history_status.setText(text)
+            self.history_status.set_tone(tone)
+            self.history_progress.setVisible(bool(export and export.status == "running"))
+            message = "收尾后可合并导出，原始分段会保留。" if session.status == "recording" else ""
+            if export:
+                message = export.error if export.status == "failed" else export.progress
+                if export.error:
+                    self.history_detail.appendPlainText(f"\n合并导出：{export.error}")
+                if export.status == "completed":
+                    self.history_path.set_full_text(f"MP4：{export.path}")
+            if not message and (session.gaps or session.warnings):
+                message = "录制存在缺口或提示，合并仅衔接已保存的内容。详情见场次提示。"
+            failed = bool(export and export.status == "failed")
+            self.history_stage.set_full_text(message if not failed else "")
+            self.history_stage.setVisible(bool(message) and not failed)
+            self.history_notice.set_message(message[:180] if failed else "", "danger")
+            self.history_notice.setToolTip(message)
+            notice_width = max(280, self.history_summary.width() - 40)
+            notice_height = self.history_notice.layout().totalHeightForWidth(notice_width)
+            self.history_notice.setMinimumHeight(max(44, notice_height))
+            self.history_summary.setMinimumHeight(self.history_summary.body.sizeHint().height())
+            self.history_summary.updateGeometry()
+        exported = self._selected_export_path()
+        self.export_play.setVisible(bool(exported and exported.is_file()))
+        self.export_location.setVisible(bool(exported and exported.is_file()))
+
+    def _selected_session(self):
+        item = self.history.currentItem()
+        if item and item.parent():
+            item = item.parent()
+        return self._history_sessions.get(item.data(0, Qt.UserRole + 3)) if item else None
+
+    def _selected_export_path(self):
+        session = self._selected_session()
+        item = self.history.currentItem()
+        if (item and item.parent() and self.controller.export_path and self.controller.export_source
+                and self._selected_path().resolve() == Path(self.controller.export_source)):
+            return Path(self.controller.export_path)
+        if session and session.mp4_export and session.mp4_export.status == "completed":
+            return Path(session.mp4_export.path)
+        if (session and self.controller.export_path and self.controller.export_source
+                and any(Path(s.path).resolve() == Path(self.controller.export_source)
+                        for s in session.segments)):
+            return Path(self.controller.export_path)
+        return None
 
     def _open(self):
         path = self._selected_path()
@@ -543,21 +668,31 @@ class TaskPage(QWidget):
 
     def _export_mp4(self):
         path = self._selected_path()
-        if not self.export_button.isEnabled() or not path or not path.is_file():
+        if not self.export_button.isEnabled() or not path:
             return
+        session = self._selected_session()
+        segment = self.history.currentItem().parent() is not None
+        proposed = path.with_suffix(".mp4") if segment else Path(session.directory) / "整场直播.mp4"
         output, _ = QFileDialog.getSaveFileName(
-            self, "导出 MP4", str(path.with_suffix(".mp4")), "MP4 (*.mp4)"
+            self, self.export_button.text(), str(proposed), "MP4 (*.mp4)"
         )
         if output:
-            self.controller.export(path, output)
+            if segment:
+                self.controller.export(path, output)
+            else:
+                self.controller.export_session(session.id, output)
 
     def _export_changed(self, busy, path):
-        self.export_button.setText("导出中…" if busy else "导出 MP4")
-        self.export_location.setVisible(bool(path))
         self._history_selection()
 
     def _open_export(self):
-        if self.controller.export_path:
-            path = Path(self.controller.export_path).parent
+        exported = self._selected_export_path()
+        if exported:
+            path = exported.parent
             if path.exists():
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+
+    def _play_export(self):
+        path = self._selected_export_path()
+        if path and path.is_file():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
