@@ -67,6 +67,12 @@ class UpdateChannel(str, Enum):
     LATEST = "latest"
 
 
+class WindowCloseAction(str, Enum):
+    ASK = "ask"
+    TRAY = "tray"
+    QUIT = "quit"
+
+
 class ContentKind(str, Enum):
     """Origin-specific media identity used by resolvers and downloaders."""
 
@@ -419,6 +425,15 @@ class AppSettings(BaseModel):
     auto_check_updates: bool = True
     update_channel: UpdateChannel = UpdateChannel.STABLE
     skipped_update_versions: list[str] = Field(default_factory=list)
+    windows_close_action: WindowCloseAction = WindowCloseAction.ASK
+
+    @field_validator("windows_close_action", mode="before")
+    @classmethod
+    def valid_window_close_action(cls, value):
+        try:
+            return WindowCloseAction(value)
+        except (ValueError, TypeError):
+            return WindowCloseAction.ASK
 
     @field_validator("output_dir")
     @classmethod

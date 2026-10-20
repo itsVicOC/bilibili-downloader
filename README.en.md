@@ -141,6 +141,8 @@ See the [user guide](docs/USER_GUIDE.md) for task states, output templates, and 
 
 **Recording a live stream?** Add a room ID or live room URL on the Live recording page (`直播录制`) and enable monitoring. The task center shows active recordings and historical segments, with MP4 export. Monitoring requires the app to stay open; content missed while the app is closed, asleep, or offline cannot be recovered. See the [live recording guide](docs/LIVE_RECORDING.md).
 
+**Keep tasks running after closing the window:** On macOS, the red close button and `⌘W` close only the window; click the Dock icon to restore it, or use `⌘Q` / the app menu to quit. On Windows, closing offers Minimize to system tray or Quit, with an optional remembered choice. Change it in Settings → Tools & storage → Window & background operation (`设置 → 工具与存储 → 窗口与后台运行`). Click the tray icon to restore the window or use its context menu to quit. Downloads, live monitoring, recording, and exports continue while the window is closed or in the tray. Quitting confirms active tasks and waits for cleanup.
+
 ## Screenshots
 
 Video downloads and live recording share one workspace. Adding downloads keeps the current page open; the task center brings together the download queue, active recordings, and recording history. Settings cover downloads, live recording, tools/storage, and software updates.

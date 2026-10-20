@@ -1,0 +1,9 @@
+{
+  "backend": "offscreen",
+  "host_platform": "darwin",
+  "scale_factor": "1.5",
+  "device_pixel_ratio": 1.5,
+  "logical_dpi": 96.0,
+  "qt_version": "6.11.2",
+  "note": "Images normalized to logical pixels; Windows behavior is simulated on macOS. Native Windows tray is not verified by these captures."
+}

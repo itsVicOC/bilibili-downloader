@@ -1,5 +1,6 @@
 """Reusable settings editor with an isolated draft and field-level merging."""
 
+import sys
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal
@@ -31,6 +32,7 @@ from bilibili_downloader.core.models import (
     OutputMode,
     UpdateChannel,
     VideoQuality,
+    WindowCloseAction,
 )
 from bilibili_downloader.core.recorder import check_recorder, find_recorder
 from bilibili_downloader.gui.widgets.appearance_preview import ThemePreviewButton
@@ -110,9 +112,10 @@ class SettingsDialog(QDialog):
     update_channel_changed = Signal()
     dirty_changed = Signal(bool)
 
-    def __init__(self, settings: AppSettings, parent=None, embedded=False, background_store=None):
+    def __init__(self, settings: AppSettings, parent=None, embedded=False, background_store=None, *, desktop_platform=None):
         super().__init__(parent)
         self._embedded = embedded
+        self._desktop_platform = desktop_platform or sys.platform
         self.setObjectName("SettingsEditor")
         self.setProperty("embedded", embedded)
         self._settings = settings.model_copy(deep=True)
@@ -288,6 +291,23 @@ class SettingsDialog(QDialog):
             )
         )
         live.addWidget(limits)
+        if self._desktop_platform in ("darwin", "win32"):
+            window_card = SectionCard("窗口与后台运行")
+            if self._desktop_platform == "win32":
+                self._combo(
+                    "windows_close_action", window_card, "关闭窗口时",
+                    [("每次询问", WindowCloseAction.ASK),
+                     ("最小化到系统托盘", WindowCloseAction.TRAY),
+                     ("彻底退出", WindowCloseAction.QUIT)],
+                )
+                explanation = "最小化到托盘后，后台任务继续运行。点击托盘图标可恢复窗口；右键菜单可退出。有任务时，彻底退出仍需确认。"
+            else:
+                explanation = "点击红色关闭按钮或按 ⌘W 仅关闭窗口，后台任务继续运行。点击 Dock 图标可恢复窗口；按 ⌘Q 或选择应用菜单中的「退出 BiliFlow」可退出。"
+            hint = QLabel(explanation)
+            hint.setObjectName("MetaLabel")
+            hint.setWordWrap(True)
+            window_card.body.addWidget(hint)
+            tools.addWidget(window_card)
         engines = SectionCard("媒体工具")
         self._ffmpeg_path = QLineEdit()
         self._controls["ffmpeg_path"] = self._ffmpeg_path
@@ -571,6 +591,16 @@ class SettingsDialog(QDialog):
         self._sync_appearance_preview()
         if previous_channel != self._update_channel.currentData():
             self.update_channel_changed.emit()
+
+    def sync_close_action(self, action):
+        """Rebase just this preference without overwriting other edited fields."""
+        self._settings.windows_close_action = action
+        control = self._controls.get("windows_close_action")
+        if control is not None:
+            control.blockSignals(True)
+            control.setCurrentIndex(control.findData(action))
+            control.blockSignals(False)
+        self._draft_changed()
 
     def _draft_values(self):
         values = {}

@@ -74,6 +74,8 @@
 
 所有工作区共用一个不可拖动、不可浮动的顶部工具栏，集中显示工作区标题、说明和页头动作。macOS 使用系统标题栏融合能力，Windows 保留原生边框及窗口内菜单；页内仍保留页签、筛选、主要操作与反馈。设置、关于、退出使用明确的系统菜单角色。来源聚焦和工作区切换分别支持 Cmd/Ctrl+L、Cmd/Ctrl+1–4；多行 Enter 与中文输入法提交沿用 Qt 原有行为。
 
+窗口关闭与应用退出分别处理：macOS 关闭后保留 Dock 入口，Windows 默认明确选择后台运行或退出，并可记住。关闭提示采用具体动作按钮、默认后台运行、低强调危险色退出及取消入口；配色、字体和间距沿用现有组件。完整依据见[交互调研](WINDOW_LIFECYCLE_RESEARCH.md)，提示框可查看[星河浅色](images/lifecycle/1/biliflow-close-active-star_trail-light.png)、[星河深色](images/lifecycle/1/biliflow-close-active-star_trail-dark.png)、[晴海浅色](images/lifecycle/1/biliflow-close-active-bilibili_blue-light.png)、[晴海深色](images/lifecycle/1/biliflow-close-active-bilibili_blue-dark.png)。
+
 任务批量操作在没有对应任务时禁用。工具检测过程防重复提交，结果显示于设置页。字段标签关联对应控件或其焦点代理；设置保存失败保留草稿并定位首个错误。
 
 | 入口 | 内容 | 主要操作 |

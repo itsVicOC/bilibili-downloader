@@ -61,6 +61,7 @@ from bilibili_downloader.core.models import (
 from bilibili_downloader.core.task_repository import TaskRepository
 from bilibili_downloader.core.updater import UpdateRelease
 from bilibili_downloader.gui.dialogs.batch_dialog import BatchDialog
+from bilibili_downloader.gui.dialogs.close_dialog import CloseWindowDialog
 from bilibili_downloader.gui.dialogs.login_dialog import LoginDialog
 from bilibili_downloader.gui.dialogs.update_dialog import UpdateDialog
 from bilibili_downloader.gui.live_controller import LiveUiController
@@ -166,7 +167,7 @@ class DemoLiveService:
         return True
 
 
-def _make_main_window(workdir: Path) -> MainWindow:
+def _make_main_window(workdir: Path, *, desktop_platform=None) -> MainWindow:
     config = ConfigManager(workdir / "config.json")
     config.save(
         AppSettings(
@@ -182,7 +183,8 @@ def _make_main_window(workdir: Path) -> MainWindow:
     repository = TaskRepository(workdir / "tasks.sqlite3")
     controller = LiveUiController(config, service_factory=DemoLiveService)
     window = MainWindow(
-        config_manager=config, task_repository=repository, live_controller=controller
+        config_manager=config, task_repository=repository, live_controller=controller,
+        desktop_platform=desktop_platform,
     )
     controller.timer.stop()
     window.resize(1320, 860)
@@ -968,6 +970,43 @@ def _capture_output_actions(app, theme, temp_root):
     window._live_controller.shutdown()
 
 
+def _capture_lifecycle(app, theme, temp_root):
+    screen = app.primaryScreen()
+    (OUTPUT_DIR / "rendering-profile.json").write_text(json.dumps({
+        "backend": app.platformName(),
+        "host_platform": sys.platform,
+        "scale_factor": os.environ.get("QT_SCALE_FACTOR", "1"),
+        "device_pixel_ratio": screen.devicePixelRatio(),
+        "logical_dpi": screen.logicalDotsPerInch(),
+        "qt_version": qVersion(),
+        "note": "Images normalized to logical pixels; Windows behavior is simulated on macOS. Native Windows tray is not verified by these captures.",
+    }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    for platform in ("win32", "darwin"):
+        window = _make_main_window(temp_root / f"lifecycle-{platform}", desktop_platform=platform)
+        window._show_settings_tab(2)
+        for theme_id in ("star_trail", "bilibili_blue"):
+            theme.set_color_theme(theme_id)
+            for dark in (False, True):
+                theme.apply_theme(dark)
+                mode = "dark" if dark else "light"
+                for width in (900, 1320):
+                    window.resize(width, 640 if width == 900 else 860)
+                    _save_widget(app, window, f"biliflow-background-{platform}-{theme_id}-{mode}-{width}.png")
+                if platform == "win32":
+                    for state, active, available in (("idle", False, True), ("active", True, True), ("unavailable", True, False)):
+                        dialog = CloseWindowDialog(window, active=active, tray_available=available)
+                        _save_widget(app, dialog, f"biliflow-close-{state}-{theme_id}-{mode}.png")
+                        for button in (dialog.cancel_button, dialog.quit_button, dialog.tray_button):
+                            assert dialog.rect().contains(QRect(button.mapTo(dialog, QPoint()), button.size()))
+                            assert button.width() >= button.sizeHint().width()
+                        dialog.hide()
+                        dialog.deleteLater()
+        window._live_controller.shutdown()
+        window.request_quit(confirmed=True)
+        _flush_events(app)
+        window.deleteLater()
+
+
 def main(argv=None) -> int:
     global OUTPUT_DIR
     parser = argparse.ArgumentParser(description=__doc__)
@@ -985,6 +1024,7 @@ def main(argv=None) -> int:
     parser.add_argument("--ux-only", action="store_true", help="Capture source routing, import progress, account and wallpaper preview states")
     parser.add_argument("--batch-only", action="store_true", help="Capture the compact import workspace with 130 demo works and partial failures")
     parser.add_argument("--actions-only", action="store_true", help="Compare single and batch output cards before and after resolving")
+    parser.add_argument("--lifecycle-only", action="store_true", help="Capture close dialogs and background operation settings with offline data")
     args = parser.parse_args(argv)
     OUTPUT_DIR = args.output_dir.resolve()
     if args.native:
@@ -1023,6 +1063,9 @@ def main(argv=None) -> int:
         theme = ThemeManager(app)
         app.setProperty("docsTempRoot", str(temp_root))
 
+        if args.lifecycle_only:
+            _capture_lifecycle(app, theme, temp_root)
+            return 0
         window = _make_main_window(temp_root / "workspace")
         if args.actions_only:
             _capture_output_actions(app, theme, temp_root)

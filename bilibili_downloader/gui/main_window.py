@@ -103,6 +103,7 @@ from bilibili_downloader.gui.widgets.components import (
 from bilibili_downloader.gui.widgets.download_list import DownloadListWidget
 from bilibili_downloader.gui.widgets.hero_panel import HeroPanel
 from bilibili_downloader.gui.widgets.live_page import LivePage
+from bilibili_downloader.gui.widgets.pixel_mascot import MascotCard
 from bilibili_downloader.gui.widgets.task_page import TaskPage
 from bilibili_downloader.gui.widgets.video_info import VideoInfoWidget
 from bilibili_downloader.gui.widgets.workspace_background import WorkspaceStack
@@ -115,11 +116,18 @@ logger = logging.getLogger(__name__)
 class MainWindow(QMainWindow):
     """Main application window."""
 
-    def __init__(self, config_manager=None, task_repository=None, live_controller=None, *, update_service=None, startup_paused=False, theme_manager=None):
+    def __init__(self, config_manager=None, task_repository=None, live_controller=None, *, update_service=None, startup_paused=False, theme_manager=None, desktop_platform=None):
         super().__init__()
         self.setWindowTitle("BiliFlow · 星轨收藏站")
         self.setMinimumSize(900, 640)
         self.resize(1320, 860)
+        self._desktop_platform = desktop_platform or sys.platform
+        self._lifecycle = None
+        self._quit_requested = False
+        self._quit_prompt_open = False
+        self._shutdown_started = False
+        self._shutdown_complete = False
+        self._deferred_update = None
         # Components
         self._config = config_manager or ConfigManager()
         self._settings = self._config.load()
@@ -243,15 +251,7 @@ class MainWindow(QMainWindow):
             self._side_layout.addWidget(button)
         self._home_nav, self._live_nav, self._tasks_nav = self._nav_buttons
         self._side_layout.addStretch()
-        self._mascot_card = SectionCard()
-        self._mascot_card.setObjectName("MascotCard")
-        mascot = QLabel()
-        mascot.setPixmap(QIcon(asset_path("alien.png")).pixmap(28, 28))
-        self._mascot_card.body.addWidget(mascot)
-        welcome = QLabel("次元收藏，随时继续")
-        welcome.setObjectName("SidebarCaption")
-        welcome.setWordWrap(True)
-        self._mascot_card.body.addWidget(welcome)
+        self._mascot_card = MascotCard(self._sidebar)
         self._side_layout.addWidget(self._mascot_card)
         self._settings_nav = IconButton("设置", "settings", "NavButton")
         self._settings_nav.clicked.connect(self._on_settings_triggered)
@@ -301,7 +301,8 @@ class MainWindow(QMainWindow):
         settings_header.actions.addWidget(about_button)
         settings_layout.addWidget(settings_header)
         self._settings_page = SettingsDialog(
-            self._settings, embedded=True, background_store=self._background_store
+            self._settings, embedded=True, background_store=self._background_store,
+            desktop_platform=self._desktop_platform,
         )
         self._settings_page.save_requested.connect(self._save_settings)
         self._settings_page.cache_requested.connect(self._on_clear_cache)
@@ -774,7 +775,9 @@ class MainWindow(QMainWindow):
         file_menu.addSeparator()
         preferences = QKeySequence.StandardKey.Preferences if sys.platform == "darwin" else QKeySequence("Ctrl+,")
         file_menu.addAction(action("settings", "设置…", self._on_settings_triggered, preferences, QAction.PreferencesRole))
-        file_menu.addAction(action("quit", "退出 BiliFlow", self.close, QKeySequence.StandardKey.Quit, QAction.QuitRole))
+        if self._desktop_platform == "darwin":
+            file_menu.addAction(action("close_window", "关闭窗口", self.close, QKeySequence.StandardKey.Close))
+        file_menu.addAction(action("quit", "退出 BiliFlow", self.request_quit, QKeySequence.StandardKey.Quit, QAction.QuitRole))
 
         edit_menu = menubar.addMenu("编辑(&E)")
         from PySide6.QtWidgets import QApplication
@@ -879,7 +882,10 @@ class MainWindow(QMainWindow):
             self._update_login_status()
 
     def _on_update_available(self, release):
-        if self._update_in_progress:
+        if self._update_in_progress or self._quit_requested:
+            return
+        if self._quit_prompt_open or (self._lifecycle and self.isHidden()):
+            self._deferred_update = release
             return
         choice = UpdateDialog(release, self).exec()
         if choice == UpdateDialog.SKIP:
@@ -895,6 +901,11 @@ class MainWindow(QMainWindow):
         elif choice == UpdateDialog.UPDATE:
             self._show_settings_tab(3)
             self._updates.download(release)
+
+    def show_deferred_update(self):
+        release, self._deferred_update = self._deferred_update, None
+        if release is not None:
+            QTimer.singleShot(0, lambda: self._on_update_available(release))
 
     def _open_release_page(self):
         release = self._updates.release
@@ -912,6 +923,10 @@ class MainWindow(QMainWindow):
                 self._open_release_page()
 
     def _on_update_prepared(self, prepared):
+        if self._quit_requested:
+            return
+        if self._lifecycle and self.isHidden():
+            self._lifecycle.restore_window()
         if prepared.reason:
             self._on_update_failed(prepared.reason, True)
             return
@@ -975,7 +990,7 @@ class MainWindow(QMainWindow):
             self._update_shutdown_timer.stop()
             self._close_confirmed = True
             self._update_ready_to_close = True
-            self.close()
+            self.request_quit(confirmed=True, reason="update")
         elif self._update_helper.poll() is not None or time.monotonic() > self._helper_deadline:
             try:
                 message = json.loads((directory / "status.json").read_text("utf-8"))["message"]
@@ -1028,6 +1043,8 @@ class MainWindow(QMainWindow):
         self._tasks_nav.setToolTip(f"任务中心 · {count} 项下载 / {recording} 场录制")
         self._live_nav.setToolTip(f"直播录制 · {recording} 场正在录制")
         self._task_page.refresh_downloads()
+        if self._lifecycle:
+            self._lifecycle.refresh_activity()
 
     def _set_login_status_label(self, text, style_name, tooltip="", *, account_name=None):
         self._login_status_label.setText(text)
@@ -1822,62 +1839,118 @@ class MainWindow(QMainWindow):
     def _show_info(self, message: str):
         MessageBox("运行信息", message, self).exec()
 
-    def closeEvent(self, event: QCloseEvent):
-        """Cancel running downloads and close API client on window close."""
-        if self._update_in_progress and not self._update_ready_to_close:
-            event.ignore()
-            return
-        if self._settings_page.dirty and not self._can_leave_settings():
-            event.ignore()
-            return
-        live_service = self._live_page.service
-        if (
+    def has_background_tasks(self):
+        controller = self._live_controller
+        rows = controller.service.snapshot() if controller.service else controller.rows
+        return (
             self._download_list.has_active_workers
-            or (live_service and live_service.active)
-        ) and not self._close_confirmed:
-            box = MessageBox(
-                "退出 BiliFlow",
-                "仍有下载或直播录制正在运行。退出将停止录制并保留文件；直播离线期间无法补录。确认退出吗？",
-                self,
-                tone="warning",
-                buttons=QMessageBox.Yes | QMessageBox.No,
-                default=QMessageBox.No,
-            )
-            box.button(QMessageBox.Yes).setText("停止并退出")
-            box.button(QMessageBox.Yes).setObjectName("DangerButton")
-            if box.exec() != QMessageBox.Yes:
-                event.ignore()
-                return
-            self._close_confirmed = True
+            or controller.exporting
+            or (not controller._closed and (
+                (controller.service is not None and controller.service.active)
+                or any(row.get("enabled") for row in rows)
+            ))
+        )
 
+    def remember_close_action(self, action):
+        latest = self._config.load().model_copy(deep=True)
+        latest.windows_close_action = action
+        try:
+            self._config.save(latest)
+        except (OSError, ValueError) as exc:
+            self._settings_page._notice.set_message(f"无法记住关闭选择，本次操作仍会执行：{exc}", "warning")
+            self._status_bar.showMessage("无法记住关闭选择，下次仍会询问；本次操作继续执行。")
+            return
+        self._settings.windows_close_action = action
+        self._settings_page.sync_close_action(action)
+
+    def request_quit(self, _checked=False, *, confirmed=False, reason="user"):
+        """Approve a real exit, then drain owned workers without blocking Qt."""
+        if self._quit_requested:
+            return True
+        if self._quit_prompt_open:
+            return False
+        if self._update_in_progress and not self._update_ready_to_close:
+            return False
+        self._quit_prompt_open = True
+        try:
+            needs_confirmation = self.has_background_tasks() and not (confirmed or self._close_confirmed)
+            if reason != "update":
+                if self.isHidden() and (self._settings_page.dirty or needs_confirmation):
+                    if self._lifecycle:
+                        self._lifecycle.restore_window()
+                    else:
+                        self.show()
+                if not self._can_leave_settings():
+                    return False
+                if needs_confirmation:
+                    box = MessageBox(
+                        "退出 BiliFlow",
+                        "仍有下载、直播监控、录制或导出任务。退出会暂停下载并保留断点，"
+                        "停止监控和录制并保留文件，中止导出。直播离线期间无法补录。",
+                        self, tone="warning", buttons=QMessageBox.Yes | QMessageBox.No,
+                        default=QMessageBox.No,
+                    )
+                    box.button(QMessageBox.Yes).setText("停止任务并退出")
+                    box.button(QMessageBox.Yes).setObjectName("DangerButton")
+                    if box.exec() != QMessageBox.Yes:
+                        return False
+            self._close_confirmed = True
+            self._quit_requested = True
+        finally:
+            self._quit_prompt_open = False
+        self._begin_shutdown()
+        return True
+
+    def _begin_shutdown(self):
+        if self._shutdown_started:
+            return
+        self._shutdown_started = True
+        self._set_shell_enabled(False)
+        self._status_bar.showMessage("正在停止后台任务并完成录制收尾…")
         self._batch_page.cancel_resolution()
         self._updates.shutdown()
-        if not self._live_controller.background_stopped:
-            self._close_confirmed = True
+        if not self._live_controller._closed:
             self._live_page.shutdown()
-            self._download_list.pause_all_workers()
-            event.ignore()
-            QTimer.singleShot(100, self.close)
-            return
-
-        self._live_page.shutdown()
-        # Pause active workers so their durable tasks remain resumable.
         self._download_list.pause_all_workers()
-        # Give both pools a short grace period before closing their shared clients.
-        downloads_stopped = self._download_pool.waitForDone(2000)
-        services_stopped = self._service_pool.waitForDone(1000)
-        workers_stopped = downloads_stopped and services_stopped
-        if not workers_stopped:
-            logger.warning("Background tasks did not stop before window shutdown")
+        self._shutdown_timer = QTimer(self)
+        self._shutdown_timer.setInterval(100)
+        self._shutdown_timer.timeout.connect(self._poll_shutdown)
+        self._shutdown_timer.start()
+        QTimer.singleShot(0, self._poll_shutdown)
 
-        if workers_stopped:
-            for client in [self._api_client, *self._retired_api_clients]:
-                try:
-                    client.close()
-                except Exception:  # noqa: BLE001
-                    logger.debug("Failed to close API client", exc_info=True)
+    def _poll_shutdown(self):
+        if self._shutdown_complete:
+            return
+        if not (self._live_controller.background_stopped
+                and self._download_pool.waitForDone(0)
+                and self._service_pool.waitForDone(0)
+                and self._updates.pool.waitForDone(0)
+                and not self._batch_page._busy):
+            return
+        self._shutdown_timer.stop()
+        for client in [self._api_client, *self._retired_api_clients]:
+            try:
+                client.close()
+            except Exception:  # noqa: BLE001
+                logger.debug("Failed to close API client", exc_info=True)
+        self._shutdown_complete = True
+        self.close()
+        if self._lifecycle:
+            self._lifecycle.finish_quit()
 
-        super().closeEvent(event)
+    def closeEvent(self, event: QCloseEvent):
+        if self._shutdown_complete:
+            super().closeEvent(event)
+            return
+        event.ignore()
+        if self._update_in_progress and not self._update_ready_to_close:
+            return
+        if self._quit_requested:
+            return
+        if self._lifecycle and self._lifecycle.platform in ("darwin", "win32"):
+            self._lifecycle.close_window()
+        else:
+            self.request_quit()
 
 
 def _format_bytes(size: int) -> str:

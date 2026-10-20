@@ -366,6 +366,7 @@ def _launch_gui():
         from PySide6.QtWidgets import QApplication
 
         from bilibili_downloader.core.update_protocol import RuntimeLease, atomic_json
+        from bilibili_downloader.gui.lifecycle import ApplicationLifecycle
         from bilibili_downloader.gui.main_window import MainWindow
         from bilibili_downloader.gui.resources.paths import asset_path
         from bilibili_downloader.gui.resources.theme import ThemeManager
@@ -409,6 +410,7 @@ def _launch_gui():
     try:
         theme_manager.set_color_theme(config.load().appearance.theme)
         window = MainWindow(config, startup_paused=transaction is not None, theme_manager=theme_manager)
+        lifecycle = ApplicationLifecycle(app, window)
         window.show()
         if sys.platform == "darwin" and getattr(sys, "frozen", False):
             from pathlib import Path
@@ -443,6 +445,7 @@ def _launch_gui():
             QTimer.singleShot(1000, window.start_startup_update_check)
         # Keep the controller alive for system theme change notifications.
         app._theme_manager = theme_manager
+        app._lifecycle = lifecycle
         sys.exit(app.exec())
     finally:
         lease.release()
