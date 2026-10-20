@@ -62,14 +62,14 @@ This README is available in English and Simplified Chinese. The current desktop 
 | Batch and multi-part downloads | Select individual or all parts, preview/filter batches, track or cancel metadata imports, retry failed entries, read paginated sources, deduplicate tasks, and run 1–8 concurrent downloads |
 | Account login | Start with QR login or use the Cookie fallback; manage your account from the sidebar with username and avatar, retaining only allowed Cookie fields and preferring the system credential store |
 | Cross-platform desktop UI | A PySide6 interface with a responsive layout down to 900×640 and automatic system light/dark themes |
-| Themes and backgrounds | Compare Xinghe (pink/purple) and Qinghai (sky blue/soft rose) preview cards; preview cropping and adjust light/dark image visibility independently for each workspace before saving |
+| Themes and backgrounds | Xinghe and Qinghai themes; twelve Xiao Liu wallpapers or custom images, with large previews, filters, drag-and-drop imports, and independent light/dark visibility per workspace |
 | Update checks and installation | Check at startup or manually, choose stable or beta channels, and verify/install/restart official macOS/Windows packages with recovery if startup fails |
 
 `v0.8.3` adds the [official download mirror](https://1008.si/download/) for update discovery and package downloads, with GitHub fallback on network failures. Versions up to v0.8.2 use fixed GitHub endpoints; install v0.8.3 from the website to enable the mirror for future updates.
 
 Automatic updates are available starting with `v0.8.1b1` and are currently a beta feature. First install a version that includes the updater manually. Check [Releases](https://github.com/itsVicOC/bilibili-downloader/releases) for stable and prerelease status.
 
-The stable `v0.8.4` release fixes leaked danmaku coordinates, task status alignment, and settings backgrounds. It also improves character rendering, timestamp precision, and collision handling. Regenerate existing ASS/SRT files to apply these fixes; videos do not need to be downloaded again. See the [changelog](CHANGELOG.md#v084---2026-10-19) and [danmaku and subtitle guide](docs/USER_GUIDE.md#弹幕与字幕) (Chinese).
+Stable `v0.8.5` adds the Xiao Liu pixel mascot and twelve wallpapers, clearer backgrounds, and a unified wallpaper browser. It also adds full-session live MP4 exports, fixes recording-directory inheritance, and improves macOS window closing and Windows tray behavior. See the [changelog](CHANGELOG.md#v085---2026-10-20) and [Xiao Liu wallpaper gallery](docs/BUILTIN_BACKGROUNDS.md) (Chinese).
 
 Downloads, live recording, and settings share consistent footer cards. Tabs and task tools retain readable surfaces over custom backgrounds, theme cards distinguish selection from keyboard focus, and record removal uses a quieter action style.
 
