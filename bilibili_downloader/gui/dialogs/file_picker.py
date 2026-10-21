@@ -3,7 +3,7 @@
 import os
 import sys
 
-from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtCore import QDir, QEvent, QObject, Qt
 from PySide6.QtWidgets import QDialog, QFileDialog
 from shiboken6 import isValid
 
@@ -74,7 +74,8 @@ class FilePicker(QObject):
         dialog.deleteLater()
         owner = self.parent()
         if paths and isValid(owner) and owner.isVisible():
-            selected(paths[0])
+            # Qt returns forward slashes on Windows; keep stored/displayed paths native.
+            selected(QDir.toNativeSeparators(paths[0]))
 
     def cancel(self):
         if self.dialog is not None:

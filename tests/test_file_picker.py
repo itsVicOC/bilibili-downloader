@@ -1,6 +1,7 @@
 """Real file windows: responsive event loop, acceptance, cancellation and ownership."""
 
 import sys
+from pathlib import Path
 
 import pytest
 from PySide6.QtCore import Qt, QTimer
@@ -102,7 +103,7 @@ def test_file_selection_is_committed_once_and_reopens_after_cancel(qtbot, tmp_pa
         dialog = picker.save_file("导出", str(path), "MP4 (*.mp4)", selected.append, suffix="mp4")
     # selectFile deliberately leaves a focused, visible filename editor alone.
     dialog.findChild(QLineEdit, "fileNameEdit").setText(str(path))
-    assert dialog.selectedFiles() == [str(path)]
+    assert [Path(selected_path) for selected_path in dialog.selectedFiles()] == [path]
     dialog.accept()
     qtbot.waitUntil(lambda: picker.dialog is None)
     assert selected == [str(path)]

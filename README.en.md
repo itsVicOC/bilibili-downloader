@@ -28,7 +28,7 @@
   <a href="https://github.com/itsVicOC/bilibili-downloader/releases/latest"><img src="https://img.shields.io/github/v/release/itsVicOC/bilibili-downloader" alt="Latest stable release"></a>
   <a href="https://github.com/itsVicOC/bilibili-downloader/releases"><img src="https://img.shields.io/github/downloads/itsVicOC/bilibili-downloader/total" alt="Total GitHub Release downloads"></a>
   <a href="https://github.com/itsVicOC/bilibili-downloader/actions/workflows/ci.yml"><img src="https://github.com/itsVicOC/bilibili-downloader/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
-  <a href="docs/BUILDING.md"><img src="https://img.shields.io/badge/Python-3.10%20--%203.12-3776AB?logo=python&amp;logoColor=white" alt="Python 3.10–3.12"></a>
+  <a href="docs/BUILDING.md"><img src="https://img.shields.io/badge/Python-3.11%20--%203.12-3776AB?logo=python&amp;logoColor=white" alt="Python 3.11–3.12"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/itsVicOC/bilibili-downloader" alt="MIT License"></a>
 </p>
 
@@ -189,7 +189,7 @@ Use the separate live recording workspace for live room links. International Bil
 
 ## Run from source
 
-Requires Python 3.10–3.12 and FFmpeg:
+Requires Python 3.11–3.12 and FFmpeg. The minimum is now 3.11 to use Pillow 13 security fixes. Prebuilt applications bundle Python and require no separate Python upgrade:
 
 ```bash
 git clone https://github.com/itsVicOC/bilibili-downloader.git

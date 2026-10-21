@@ -59,7 +59,7 @@ pyinstaller --noconfirm --clean BilibiliDownloader.spec
 
 ## 代码约定
 
-- 支持 Python 3.10+，不要使用更高版本独占语法。
+- 支持 Python 3.11+，不要使用更高版本独占语法。
 - 后台网络与下载操作不得阻塞 Qt 主线程。
 - 不在日志、异常、截图或测试夹具中记录有效 Cookie。
 - 不实现或接受绕过会员、付费、地区、DRM 或账号限制的功能；权限判断应在创建媒体临时文件前完成。

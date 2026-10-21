@@ -2,7 +2,7 @@
 
 ## 开发环境
 
-- Python 3.10–3.12
+- Python 3.11–3.12
 - FFmpeg（真实下载与合并验证需要）
 - macOS、Windows 或 Linux
 
@@ -37,7 +37,9 @@ ruff check bilibili_downloader tests packaging_hooks scripts
 git diff --check
 ```
 
-CI 在 Ubuntu 和 Windows 上使用 Python 3.10、3.11、3.12 运行测试，并在 macOS/Python 3.12 做冒烟验证。GUI 测试使用 `QT_QPA_PLATFORM=offscreen`；Ubuntu runner 会先安装 PySide6 需要的 `libegl1` 与 `libgl1`，独立任务使用 `pip-audit` 检查已安装依赖。
+CI 在 Ubuntu 和 Windows 上使用 Python 3.11、3.12 运行测试，并在 macOS/Python 3.12 做冒烟验证。GUI 测试使用 `QT_QPA_PLATFORM=offscreen`；Ubuntu runner 会先安装 PySide6 需要的 `libegl1` 与 `libgl1`，独立任务使用 `pip-audit` 检查已安装依赖。
+
+源码最低版本为 Python 3.11，以使用包含安全修复的 Pillow 13；同时要求 certifi 2026.10.19 或更高版本。安装依赖时使用约束文件。预构建应用内置 Python，用户无需单独安装或升级 Python。
 
 `constraints.txt` 固定经过验证的直接运行与开发依赖。修改依赖时，应在三类系统的 CI 通过后同步更新约束版本；平台专属传递依赖由 pip 解析器管理。
 

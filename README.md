@@ -28,7 +28,7 @@
   <a href="https://github.com/itsVicOC/bilibili-downloader/releases/latest"><img src="https://img.shields.io/github/v/release/itsVicOC/bilibili-downloader" alt="最新正式版"></a>
   <a href="https://github.com/itsVicOC/bilibili-downloader/releases"><img src="https://img.shields.io/github/downloads/itsVicOC/bilibili-downloader/total" alt="GitHub Release 累计下载量"></a>
   <a href="https://github.com/itsVicOC/bilibili-downloader/actions/workflows/ci.yml"><img src="https://github.com/itsVicOC/bilibili-downloader/actions/workflows/ci.yml/badge.svg" alt="CI 状态"></a>
-  <a href="docs/BUILDING.md"><img src="https://img.shields.io/badge/Python-3.10%20--%203.12-3776AB?logo=python&amp;logoColor=white" alt="Python 3.10–3.12"></a>
+  <a href="docs/BUILDING.md"><img src="https://img.shields.io/badge/Python-3.11%20--%203.12-3776AB?logo=python&amp;logoColor=white" alt="Python 3.11–3.12"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/itsVicOC/bilibili-downloader" alt="MIT License"></a>
 </p>
 
@@ -183,7 +183,7 @@ Release 还包含 FFmpeg 固定源码归档、各安装包的 CycloneDX SBOM 和
 
 ## 从源码运行
 
-需要 Python 3.10–3.12 与 FFmpeg：
+需要 Python 3.11–3.12 与 FFmpeg；最低版本调整为 3.11，以使用 Pillow 13 的安全修复。预构建应用内置 Python，无需用户单独升级：
 
 ```bash
 git clone https://github.com/itsVicOC/bilibili-downloader.git

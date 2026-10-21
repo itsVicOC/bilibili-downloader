@@ -6,14 +6,14 @@ build-backend = "setuptools.build_meta"
 name = "bilibili-downloader"
 dynamic = ["version"]
 description = "Bilibili video downloader with desktop GUI and CLI modes"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "PySide6>=6.6",
-    "certifi>=2024.7.4",
+    "certifi>=2026.10.19",
     "httpx[http2]>=0.27",
     "pydantic>=2.0",
     "qrcode[pil]>=7.4",
-    "Pillow>=10.0",
+    "Pillow>=13.0.0",
     "defusedxml>=0.7",
     "keyring>=25.0",
     "packaging>=26.2",
