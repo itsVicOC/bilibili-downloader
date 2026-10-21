@@ -8,7 +8,7 @@ qrcode==8.2
 Pillow==13.0.0
 defusedxml==0.7.1
 keyring==25.7.0
-packaging==26.2
+packaging==26.3
 pytest==9.1.1
 pytest-qt==4.5.0
 responses==0.26.3
