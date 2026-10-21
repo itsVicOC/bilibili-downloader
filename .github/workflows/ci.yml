@@ -45,15 +45,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -c constraints.txt -e ".[dev]"
 
-      - name: Run tests
-        run: pytest -v
-
-      - name: Compile source
-        run: python -m compileall -q bilibili_downloader tests scripts
-
-      - name: Run static checks
-        run: ruff check bilibili_downloader tests packaging_hooks scripts
-
       - name: Check native desktop UI and capture parity evidence
         if: runner.os != 'Linux' && matrix.python-version == '3.12'
         shell: bash
@@ -72,6 +63,15 @@ jobs:
           name: ui-parity-${{ runner.os }}
           path: build/ui-parity
           retention-days: 7
+
+      - name: Run tests
+        run: pytest -v
+
+      - name: Compile source
+        run: python -m compileall -q bilibili_downloader tests scripts
+
+      - name: Run static checks
+        run: ruff check bilibili_downloader tests packaging_hooks scripts
 
   updater:
     name: Native updater (${{ matrix.platform }})

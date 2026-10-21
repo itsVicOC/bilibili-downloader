@@ -1199,6 +1199,10 @@ def _capture_ui_refresh(app, theme, window):
 
     _populate_main_window(window)
     _populate_live_page(window, Path(app.property("docsTempRoot")) / "ui-live")
+    batch = _make_batch_dialog()
+    window._batch_page._url_text.setPlainText(batch._url_text.toPlainText())
+    window._batch_page._on_resolved(batch._resolved_items, [])
+    batch.deleteLater()
     checks = []
     for theme_id in ("star_trail", "bilibili_blue"):
         window._settings.appearance.theme = theme_id
@@ -1228,6 +1232,13 @@ def _capture_ui_refresh(app, theme, window):
                 for index, name in ((1, "live"), (2, "tasks")):
                     window._show_workspace(index)
                     _save_widget(app, window, f"ui-{theme_id}-{name}-{mode}-{width}.png")
+                for index, name in ((1, "recording"), (2, "history")):
+                    window._show_tasks(index)
+                    _save_widget(app, window, f"ui-{theme_id}-{name}-{mode}-{width}.png")
+                window._show_workspace(0)
+                window._download_tabs.setCurrentIndex(1)
+                _save_widget(app, window, f"ui-{theme_id}-batch-{mode}-{width}.png")
+                window._download_tabs.setCurrentIndex(0)
                 checks.append({
                     "theme": theme_id, "mode": mode, "size": [width, height],
                     "menu_visible": not window.menuBar().isHidden(),
@@ -1250,7 +1261,14 @@ def _capture_ui_refresh(app, theme, window):
                     dialog._poll_timer.stop()
                     dialog._qr_status.setText("离线演示二维码，仅用于布局验收")
                     _save_widget(app, dialog, f"ui-{theme_id}-switch-qr-{mode}.png")
+                    dialog._tabs.setCurrentIndex(0)
+                    _save_widget(app, dialog, f"ui-{theme_id}-switch-cookie-{mode}.png")
                 dialog.deleteLater()
+            update = UpdateDialog(UpdateRelease(
+                "0.9.0", "v0.9.0", "2026-10-21T00:00:00Z", "离线演示更新说明", (),
+            ), window)
+            _save_widget(app, update, f"ui-{theme_id}-update-{mode}.png")
+            update.deleteLater()
             for sample, account in (
                 ("long-name", {"uname": "星海漫游的超长昵称" * 12, "mid": "123456789"}),
                 ("missing-avatar", {"uname": "星海漫游", "mid": "123456789"}),
@@ -1325,13 +1343,14 @@ def _capture_native_chrome(app, theme, window):
             checks.append({
                 "mode": mode, "state": name, "image": filename,
                 "frame": frame.getRect(), "client": window.geometry().getRect(),
-                "qwindow_flags": int(handle.flags()),
+                "qwidget_flags": int(window.windowFlags()), "qwindow_flags": int(handle.flags()),
                 "title": handle.title(), "icon_present": not handle.icon().isNull(),
             })
     (OUTPUT_DIR / "rendering-profile.json").write_text(json.dumps({
         "platform": sys.platform, "backend": app.platformName(), "qt": qVersion(),
         "logical_dpi": screen.logicalDotsPerInchY(), "dpr": screen.devicePixelRatio(),
-        "capture": "desktop compositor including native caption layer", "checks": checks,
+        "capture": "desktop compositor including native caption layer",
+        "enum_inverted_title_hint": int(~Qt.WindowTitleHint), "checks": checks,
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 

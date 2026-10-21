@@ -18,6 +18,8 @@ def test_expanded_windows_caption_preserves_identity_and_controls(qtbot):
     window.setWindowTitle("BiliFlow · 星轨收藏站")
     window.setWindowIcon(QIcon(asset_path("app_icon.png")))
     chrome = WindowChrome(window, "win32")
+    assert window.windowFlags() & Qt.CustomizeWindowHint
+    assert window.windowFlags() & Qt.WindowCloseButtonHint
     window.resize(900, 640)
     window.show()
     qtbot.waitUntil(lambda: not window.windowHandle().flags() & Qt.WindowTitleHint)
@@ -39,7 +41,10 @@ def test_expanded_windows_caption_preserves_identity_and_controls(qtbot):
     # QWidget can reapply its normalized flags when recreating/configuring the
     # window. The next show must clear the duplicate caption again.
     window.hide()
-    handle.setFlag(Qt.WindowTitleHint, True)
+    handle.setFlags(Qt.WindowType(
+        (int(handle.flags()) | int(Qt.WindowTitleHint))
+        & ~int(Qt.CustomizeWindowHint | Qt.WindowCloseButtonHint)
+    ))
     window.show()
     qtbot.waitUntil(lambda: not handle.flags() & Qt.WindowTitleHint)
     dialog = QDialog(window)

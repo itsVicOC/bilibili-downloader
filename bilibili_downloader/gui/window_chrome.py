@@ -33,7 +33,6 @@ class WindowChrome(QObject):
                     | Qt.WindowMaximizeButtonHint
                     | Qt.WindowCloseButtonHint
                 )
-                flags &= ~Qt.WindowTitleHint
             window.setWindowFlags(flags)
             window.setAttribute(Qt.WA_ContentsMarginsRespectsSafeArea, False)
         window.installEventFilter(self)
@@ -93,12 +92,20 @@ class WindowChrome(QObject):
 
     def _sync_windows_caption(self):
         handle = self.window.windowHandle()
-        if handle is not None and handle.flags() & Qt.WindowTitleHint:
+        if handle is not None:
             # QWidget.adjustFlags() adds WindowTitleHint back whenever caption
             # buttons are requested. Set the QWindow flag instead: Qt's Windows
             # expanded-titlebar renderer then omits BOTH the icon and caption,
             # while keeping the real title, icon, system menu and buttons.
-            handle.setFlag(Qt.WindowTitleHint, False)
+            # Use integer masking: Python's enum inversion can omit high flags
+            # such as CustomizeWindowHint/WindowCloseButtonHint on Windows.
+            flags = Qt.WindowType((int(handle.flags()) | int(
+                Qt.CustomizeWindowHint | Qt.WindowSystemMenuHint
+                | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint
+                | Qt.WindowCloseButtonHint
+            )) & ~int(Qt.WindowTitleHint))
+            if handle.flags() != flags:
+                handle.setFlags(flags)
 
     def native_event(self, message):
         """Expose the native maximize hit target on hover for Windows Snap."""
