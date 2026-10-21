@@ -46,6 +46,7 @@ jobs:
           pip install -c constraints.txt -e ".[dev]"
 
       - name: Check native desktop UI and capture parity evidence
+        timeout-minutes: 10
         if: runner.os != 'Linux' && matrix.python-version == '3.12'
         shell: bash
         env:

@@ -194,6 +194,8 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
     import json
     from ctypes import wintypes
     from pathlib import Path
+    from threading import Thread
+    from time import sleep
 
     from PySide6.QtCore import QPoint
     from PySide6.QtGui import QColor, QFont, QPalette
@@ -242,10 +244,24 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
     def click(x, y):
         assert user32.SetCursorPos(x, y)
         qtbot.wait(60)
-        for flag in (0x0002, 0x0004):  # MOUSEEVENTF_LEFTDOWN / LEFTUP
-            event = Input(type=0, data=InputData(mi=MouseInput(dwFlags=flag)))
-            assert user32.SendInput(1, ctypes.byref(event), ctypes.sizeof(Input)) == 1
-            qtbot.wait(80)
+        released = []
+
+        def release_button():
+            # DefWindowProc can run a modal caption-button tracking loop.
+            # Release from outside the GUI thread so that loop can finish.
+            sleep(0.12)
+            up = Input(type=0, data=InputData(mi=MouseInput(dwFlags=0x0004)))
+            released.append(user32.SendInput(1, ctypes.byref(up), ctypes.sizeof(Input)))
+
+        worker = Thread(target=release_button, daemon=True)
+        worker.start()
+        try:
+            down = Input(type=0, data=InputData(mi=MouseInput(dwFlags=0x0002)))
+            assert user32.SendInput(1, ctypes.byref(down), ctypes.sizeof(Input)) == 1
+            qtbot.wait(250)
+        finally:
+            worker.join(timeout=2)
+        assert not worker.is_alive() and released == [1]
 
     def maximize_point():
         origin, rect = wintypes.POINT(), wintypes.RECT()
