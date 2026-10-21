@@ -66,8 +66,13 @@ def main():
             function = getattr(graphics, name)
             function.argtypes = [ctypes.c_void_p]
             function.restype = ctypes.c_size_t
-        graphics.CGDisplaySetDisplayMode.argtypes = [ctypes.c_uint32, ctypes.c_void_p, ctypes.c_void_p]
-        graphics.CGDisplaySetDisplayMode.restype = ctypes.c_int32
+        graphics.CGBeginDisplayConfiguration.argtypes = [ctypes.POINTER(ctypes.c_void_p)]
+        graphics.CGBeginDisplayConfiguration.restype = ctypes.c_int32
+        graphics.CGConfigureDisplayWithDisplayMode.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_void_p]
+        graphics.CGConfigureDisplayWithDisplayMode.restype = ctypes.c_int32
+        graphics.CGCompleteDisplayConfiguration.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        graphics.CGCompleteDisplayConfiguration.restype = ctypes.c_int32
+        graphics.CGCancelDisplayConfiguration.argtypes = [ctypes.c_void_p]
         foundation.CFArrayGetCount.argtypes = [ctypes.c_void_p]
         foundation.CFArrayGetCount.restype = ctypes.c_long
         foundation.CFArrayGetValueAtIndex.argtypes = [ctypes.c_void_p, ctypes.c_long]
@@ -88,7 +93,18 @@ def main():
             if not candidates:
                 raise RuntimeError("The CI desktop needs a display mode of at least 1600x1000")
             _, width, height, mode = min(candidates)
-            result = graphics.CGDisplaySetDisplayMode(display, mode, None)
+            configuration = ctypes.c_void_p()
+            result = graphics.CGBeginDisplayConfiguration(ctypes.byref(configuration))
+            if result:
+                raise RuntimeError(f"Cannot begin CI display configuration: CGError {result}")
+            result = graphics.CGConfigureDisplayWithDisplayMode(configuration, display, mode, None)
+            if result:
+                graphics.CGCancelDisplayConfiguration(configuration)
+                raise RuntimeError(f"Cannot configure CI display mode: CGError {result}")
+            # kCGConfigureForSession: keep the ephemeral runner desktop large
+            # when the configuring process exits or another test app activates.
+            # Do not use kCGConfigurePermanently.
+            result = graphics.CGCompleteDisplayConfiguration(configuration, 1)
             if result:
                 raise RuntimeError(f"Cannot set CI display mode: CGError {result}")
             print(f"Native UI desktop: {width}x{height}")

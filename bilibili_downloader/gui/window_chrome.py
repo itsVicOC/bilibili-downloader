@@ -104,13 +104,38 @@ class WindowChrome(QObject):
                 | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint
                 | Qt.WindowCloseButtonHint
             )) & ~int(Qt.WindowTitleHint))
-            if handle.flags() != flags:
-                geometry = handle.geometry()
+            geometry = handle.geometry()
+            changed = handle.flags() != flags
+            if changed:
                 handle.setFlags(flags)
-                if not self.window.isMaximized() and not self.window.isFullScreen():
-                    # Changing WS_CAPTION changes the frame margins. Keep the
-                    # client size/position instead of growing it by one caption.
-                    handle.setGeometry(geometry)
+            # The Qt flag controls its caption painter. Keep the Win32 frame
+            # style so native resize margins, restore geometry and Snap retain
+            # their original metrics (Qt caches these for expanded windows).
+            frame_changed = self._keep_windows_frame(handle)
+            if (changed or frame_changed) and not self.window.isMaximized() and not self.window.isFullScreen():
+                handle.setGeometry(geometry)
+
+    def _keep_windows_frame(self, handle):
+        if sys.platform != "win32" or QApplication.platformName() != "windows" or self.window.isFullScreen():
+            return False
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+        user32.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
+        user32.GetWindowLongW.restype = wintypes.LONG
+        user32.SetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int, wintypes.LONG]
+        user32.SetWindowLongW.restype = wintypes.LONG
+        user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int,
+                                       ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT]
+        user32.SetWindowPos.restype = wintypes.BOOL
+        hwnd = wintypes.HWND(int(handle.winId()))
+        style = user32.GetWindowLongW(hwnd, -16)  # GWL_STYLE
+        if style & 0x00C00000 == 0x00C00000:  # WS_CAPTION
+            return False
+        user32.SetWindowLongW(hwnd, -16, style | 0x00C00000)
+        # SWP_NOSIZE | NOMOVE | NOZORDER | NOACTIVATE | FRAMECHANGED.
+        user32.SetWindowPos(hwnd, None, 0, 0, 0, 0, 0x0037)
+        return True
 
     def native_event(self, message):
         """Expose the native maximize hit target on hover for Windows Snap."""

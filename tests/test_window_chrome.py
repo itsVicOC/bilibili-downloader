@@ -23,7 +23,10 @@ def test_expanded_windows_caption_preserves_identity_and_controls(qtbot):
     window.resize(900, 640)
     window.show()
     qtbot.waitUntil(lambda: not window.windowHandle().flags() & Qt.WindowTitleHint)
-    qtbot.waitUntil(lambda: window.size() == QSize(900, 640))
+    def check_client_size():
+        assert window.size() == QSize(900, 640), window.geometry()
+
+    qtbot.waitUntil(check_client_size)
     handle = window.windowHandle()
     for transition in (window.showMaximized, window.showNormal, window.hide, window.show):
         transition()
@@ -87,6 +90,7 @@ def test_windows_native_caption_keeps_taskbar_icon_resize_and_system_menu(qtbot,
         # WS_THICKFRAME, WS_SYSMENU, WS_MINIMIZEBOX, WS_MAXIMIZEBOX.
         assert style & 0x00040000 and style & 0x00080000
         assert style & 0x00020000 and style & 0x00010000
+        assert style & 0x00C00000 == 0x00C00000  # Preserve native frame metrics.
         assert not user32.GetWindowLongW(hwnd, -20) & 0x00000080  # WS_EX_TOOLWINDOW
         assert user32.GetSystemMenu(hwnd, False)
         assert user32.SendMessageW(hwnd, 0x007F, 1, 0)  # WM_GETICON / ICON_BIG

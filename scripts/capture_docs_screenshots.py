@@ -1307,7 +1307,9 @@ def _capture_native_chrome(app, theme, window):
     window.resize(900, 640)
     window.move(window.screen().availableGeometry().topLeft() + QPoint(24, 40))
     for dark in (False, True):
-        theme.apply_theme(dark)
+        # Exercise the user-facing mode transition too: Qt's Windows caption
+        # layer follows styleHints().colorScheme(), not just the widget palette.
+        theme.set_mode("dark" if dark else "light")
         mode = "dark" if dark else "light"
         for name, transition in (
             ("windowed", window.showNormal),
@@ -1347,6 +1349,14 @@ def _capture_native_chrome(app, theme, window):
                         abs(color.blue() - sample.blue())) <= 3 for color in colors
                 )
                 assert matching / len(colors) >= 0.98, "Duplicate native caption is visible over the sidebar"
+                buttons = window.mapToGlobal(QPoint(window.width() - 144, 6)) - frame.topLeft()
+                glyph_pixels = sum(
+                    (image.pixelColor(round((buttons.x() + x) * dpr), round((buttons.y() + y) * dpr)).lightness() > 200)
+                    if dark else
+                    (image.pixelColor(round((buttons.x() + x) * dpr), round((buttons.y() + y) * dpr)).lightness() < 70)
+                    for x in range(136) for y in range(20)
+                )
+                assert glyph_pixels >= 8, "Caption buttons do not contrast with the selected appearance mode"
             checks.append({
                 "mode": mode, "state": name, "image": filename,
                 "frame": frame.getRect(), "client": window.geometry().getRect(),
@@ -1493,6 +1503,12 @@ def main(argv=None) -> int:
     OUTPUT_DIR = args.output_dir.resolve()
     if args.native:
         os.environ.pop("QT_QPA_PLATFORM", None)
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            from scripts.configure_ui_test_display import main as configure_display
+
+            # Configure the ephemeral runner session before Qt reads its screen
+            # geometry, including when this scene is run separately.
+            configure_display()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="biliflow-docs-") as temp_dir:
         temp_root = Path(temp_dir)
