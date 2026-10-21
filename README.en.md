@@ -70,7 +70,7 @@ This README is available in English and Simplified Chinese. The current desktop 
 
 Automatic updates are available starting with `v0.8.1b1` and are currently a beta feature. First install a version that includes the updater manually. Check [Releases](https://github.com/itsVicOC/bilibili-downloader/releases) for stable and prerelease status.
 
-Stable `v0.8.7` fixes the duplicate Windows title-bar icon and caption, updates window-button colors in dark mode, and gives macOS and Windows the same initial input focus. Native UI checks now cover both platforms and actual window sizes. Xiao Liu's time-based animations, wallpaper glass, and settings improvements remain available. See the [changelog](CHANGELOG.md#v087---2026-10-21) and [animation previews](docs/MASCOT_DESIGN.md) (Chinese).
+Stable `v0.8.8` fixes the legacy caption that could reappear after clicking a blank area on Windows 11, along with unresponsive maximize and restore buttons. Native Windows checks now exercise real mouse input, activation, and window state. Users on `v0.8.7` can check for an update in Settings → About & Updates. Xiao Liu's time-based animations, wallpaper glass, and settings improvements remain available. See the [changelog](CHANGELOG.md#v088---2026-10-21) and [animation previews](docs/MASCOT_DESIGN.md) (Chinese).
 
 Downloads, live recording, and settings share consistent footer cards. Tabs and task tools retain readable surfaces over custom backgrounds, theme cards distinguish selection from keyboard focus, and record removal uses a quieter action style.
 
