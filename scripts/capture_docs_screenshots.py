@@ -19,7 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from PySide6.QtCore import QPoint, QRect, Qt, qVersion
+from PySide6.QtCore import QPoint, QRect, QSize, Qt, qVersion
 from PySide6.QtGui import (
     QCloseEvent,
     QColor,
@@ -1214,6 +1214,10 @@ def _capture_ui_refresh(app, theme, window):
                 window.resize(width, height)
                 window._show_workspace(0)
                 window._workspace_scroll.verticalScrollBar().setValue(0)
+                window.show()
+                _flush_events(app)
+                if window.size() != QSize(width, height):
+                    raise AssertionError(f"Desktop clamped requested UI size {width}x{height} to {window.width()}x{window.height()}")
                 _save_widget(app, window, f"ui-{theme_id}-download-{mode}-{width}.png")
                 window._workspace_scroll.ensureWidgetVisible(window._metadata_check, 0, 12)
                 _save_widget(app, window, f"ui-{theme_id}-options-{mode}-{width}.png")
@@ -1241,8 +1245,11 @@ def _capture_ui_refresh(app, theme, window):
                 window._download_tabs.setCurrentIndex(0)
                 checks.append({
                     "theme": theme_id, "mode": mode, "size": [width, height],
+                    "actual_size": [window.width(), window.height()],
                     "menu_visible": not window.menuBar().isHidden(),
                     "font": window._url_input.font().family(),
+                    "resolved_font": QFontInfo(window._url_input.font()).family(),
+                    "font_pixels": QFontInfo(window._url_input.font()).pixelSize(),
                     "font_height": window._url_input.fontMetrics().height(),
                     "sidebar_width": window._sidebar.width(),
                     "option_card_heights": [card.height() for card in cards],

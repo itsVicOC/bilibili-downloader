@@ -20,7 +20,9 @@ class _ButtonFocusFilter(QObject):
         if isinstance(target, QAbstractButton):
             kind = event.type()
             if kind == QEvent.FocusIn:
-                visible = event.reason() != Qt.MouseFocusReason
+                visible = event.reason() in (
+                    Qt.TabFocusReason, Qt.BacktabFocusReason, Qt.ShortcutFocusReason,
+                )
             elif kind in (QEvent.FocusOut, QEvent.MouseButtonPress):
                 visible = False
             elif kind == QEvent.KeyPress:

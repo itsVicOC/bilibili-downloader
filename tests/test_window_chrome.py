@@ -4,7 +4,7 @@ import ctypes
 import sys
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QDialog, QMainWindow
 
@@ -23,6 +23,7 @@ def test_expanded_windows_caption_preserves_identity_and_controls(qtbot):
     window.resize(900, 640)
     window.show()
     qtbot.waitUntil(lambda: not window.windowHandle().flags() & Qt.WindowTitleHint)
+    qtbot.waitUntil(lambda: window.size() == QSize(900, 640))
     handle = window.windowHandle()
     for transition in (window.showMaximized, window.showNormal, window.hide, window.show):
         transition()
@@ -37,6 +38,8 @@ def test_expanded_windows_caption_preserves_identity_and_controls(qtbot):
             assert handle.flags() & flag
         assert handle.title() == window.windowTitle() == "BiliFlow · 星轨收藏站"
         assert not handle.icon().isNull() and not window.windowIcon().isNull()
+        if not window.isMaximized():
+            assert window.size() == QSize(900, 640)
 
     # QWidget can reapply its normalized flags when recreating/configuring the
     # window. The next show must clear the duplicate caption again.

@@ -105,7 +105,12 @@ class WindowChrome(QObject):
                 | Qt.WindowCloseButtonHint
             )) & ~int(Qt.WindowTitleHint))
             if handle.flags() != flags:
+                geometry = handle.geometry()
                 handle.setFlags(flags)
+                if not self.window.isMaximized() and not self.window.isFullScreen():
+                    # Changing WS_CAPTION changes the frame margins. Keep the
+                    # client size/position instead of growing it by one caption.
+                    handle.setGeometry(geometry)
 
     def native_event(self, message):
         """Expose the native maximize hit target on hover for Windows Snap."""

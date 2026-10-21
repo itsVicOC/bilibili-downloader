@@ -97,6 +97,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          python -m scripts.configure_ui_test_display
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           foreach ($scale in @('1', '1.25', '1.5', '2')) {
             $env:QT_SCALE_FACTOR = $scale
             python scripts/capture_docs_screenshots.py --native --checks-only --output-dir "$env:RUNNER_TEMP/biliflow-visuals/$scale"

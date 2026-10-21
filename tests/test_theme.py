@@ -3,8 +3,8 @@
 import sys
 
 import pytest
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QFontInfo, QFontMetricsF
+from PySide6.QtCore import QCoreApplication, QEvent, Qt
+from PySide6.QtGui import QFocusEvent, QFont, QFontInfo, QFontMetricsF
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QPushButton, QWidget
 
 from bilibili_downloader.gui.resources import load_stylesheet
@@ -30,6 +30,22 @@ def test_dark_and_light_styles_are_distinct():
     assert dark != light
     assert "background: #14131b" in dark
     assert "background: #f7f5fb" in light
+
+
+@pytest.mark.parametrize("reason,visible", [
+    (Qt.ActiveWindowFocusReason, False), (Qt.OtherFocusReason, False),
+    (Qt.MouseFocusReason, False), (Qt.TabFocusReason, True),
+    (Qt.BacktabFocusReason, True), (Qt.ShortcutFocusReason, True),
+])
+def test_button_activation_does_not_show_a_keyboard_outline(qapp, qtbot, reason, visible):
+    from bilibili_downloader.gui.resources.theme import _ButtonFocusFilter
+
+    button = QPushButton("视频下载")
+    qtbot.addWidget(button)
+    focus_filter = _ButtonFocusFilter(button)
+    button.installEventFilter(focus_filter)
+    QCoreApplication.sendEvent(button, QFocusEvent(QEvent.FocusIn, reason))
+    assert button.property("keyboardFocus") is visible
 
 
 def test_macos_typography_scale_increases_all_point_sizes():
