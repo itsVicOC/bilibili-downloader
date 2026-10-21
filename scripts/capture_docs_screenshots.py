@@ -8,6 +8,7 @@ import json
 import os
 import sys
 import tempfile
+from contextlib import ExitStack
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -1523,7 +1524,7 @@ def main(argv=None) -> int:
             # geometry, including when this scene is run separately.
             configure_display()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="biliflow-docs-") as temp_dir:
+    with tempfile.TemporaryDirectory(prefix="biliflow-docs-") as temp_dir, ExitStack() as cleanup:
         temp_root = Path(temp_dir)
         if (
             not QApplication.instance()
@@ -1561,6 +1562,7 @@ def main(argv=None) -> int:
             _capture_lifecycle(app, theme, temp_root)
             return 0
         window = _make_main_window(temp_root / "workspace")
+        cleanup.callback(window._live_controller.shutdown)
         if args.chrome_only:
             _capture_native_chrome(app, theme, window)
             window._live_controller.shutdown()

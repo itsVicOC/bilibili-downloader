@@ -46,11 +46,14 @@ class WindowChrome(QObject):
         return (24, 12, 164, 12)
 
     def eventFilter(self, target, event):
-        if self.expanded and event.type() in (
+        sync_events = (
             QEvent.Show,
             QEvent.WinIdChange,
             QEvent.WindowStateChange,
-        ):
+        )
+        if self.platform == "win32":
+            sync_events += (QEvent.PaletteChange, QEvent.ApplicationPaletteChange, QEvent.StyleChange)
+        if self.expanded and event.type() in sync_events:
             # Clear the Windows caption before the first exposed frame.
             if self.platform == "win32" and event.type() == QEvent.Show:
                 self._sync_native()
@@ -106,6 +109,17 @@ class WindowChrome(QObject):
             )) & ~int(Qt.WindowTitleHint))
             if handle.flags() != flags:
                 handle.setFlags(flags)
+            if sys.platform == "win32" and QApplication.platformName() == "windows" and self.window.isVisible():
+                from ctypes import wintypes
+
+                # Qt 6.11's separate expanded-titlebar layer repaints on native
+                # WM_PAINT/hit testing, but a widget palette change only updates
+                # the backing store. Invalidate the native window so the caption
+                # glyphs immediately follow light/dark mode too.
+                invalidate = ctypes.windll.user32.InvalidateRect
+                invalidate.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT), wintypes.BOOL]
+                invalidate.restype = wintypes.BOOL
+                invalidate(wintypes.HWND(int(handle.winId())), None, False)
 
     def native_event(self, message):
         """Expose the native maximize hit target on hover for Windows Snap."""
