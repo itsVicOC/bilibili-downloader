@@ -156,6 +156,13 @@ def test_sidebar_groups_settings_above_the_companion(workspace, qtbot):
     assert "跟随系统" in workspace._mode_button.toolTip()
 
 
+def test_initial_focus_is_the_source_field(workspace):
+    assert workspace.focusWidget() is workspace._url_input
+    workspace.show()
+    QApplication.processEvents()
+    assert workspace.focusWidget() is workspace._url_input
+
+
 def test_windows_has_no_menu_row_but_keeps_actions(tmp_path, qtbot):
     config = ConfigManager(tmp_path / "config.json")
     window = MainWindow(

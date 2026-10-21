@@ -184,6 +184,10 @@ class MainWindow(QMainWindow):
         self._setup_updates(update_service)
         self._set_shell_enabled(not startup_paused)
         self._restore_tasks()
+        if not startup_paused:
+            # Native styles choose different first focusable controls. Start
+            # both desktops at the source field so paste works immediately.
+            self._url_input.setFocus(Qt.OtherFocusReason)
 
         # Check login status on startup
         self._user_face = ""

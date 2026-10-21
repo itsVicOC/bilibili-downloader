@@ -51,7 +51,7 @@ jobs:
         env:
           QT_QPA_PLATFORM: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
         run: |
-          python -m pytest -q tests/test_window_chrome.py tests/test_theme.py::test_theme_applies_same_font_to_body_and_native_bold_labels
+          python -m pytest -q tests/test_window_chrome.py tests/test_theme.py::test_theme_applies_same_font_to_body_and_native_bold_labels tests/test_ui_refresh.py::test_initial_focus_is_the_source_field
           for scene in chrome ui-refresh appearance-controls glass; do
             python -m scripts.capture_docs_screenshots --native --physical-pixels "--${scene}-only" --output-dir "build/ui-parity/$scene"
           done
