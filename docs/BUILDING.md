@@ -185,6 +185,8 @@ python scripts/build_app_icons.py
 - 修复 PR #26 的提交 `08a0576` 已通过 [CI 39590612933](https://github.com/itsVicOC/bilibili-downloader/actions/runs/39590612933) 全部 11 项检查；Windows 原生界面专项 14 项通过，Windows Python 3.12 全量 970 项通过、13 项跳过。本地全量 979 项通过、4 项跳过，Ruff、编译和 diff 检查通过。
 - Windows 深浅模式均通过真实 Win32 鼠标点击，检查空白处点击、激活、最大化、还原与重新显示，核对桌面合成截图、Qt / Win32 窗口状态及还原尺寸。DPI 命中计算覆盖 100% / 150% 和负坐标显示器；实际 Snap 悬停菜单及混合 DPI 切换仍需实机复核。
 - 沿用标签发布流程：双平台构建、冻结更新与回滚、原生安装器、SBOM 和统一附件校验全部通过后创建正式 Release，发布后核对 14 个附件及安装包摘要。使用新补丁版本供 v0.8.7 用户检查升级，保留已有版本附件。
+- 发布提交 `3d19aaa` 的 [CI 39592756560](https://github.com/itsVicOC/bilibili-downloader/actions/runs/39592756560) 全部 11 项检查通过；[Release 39592788751](https://github.com/itsVicOC/bilibili-downloader/actions/runs/39592788751) 的 5 个任务全部成功。[v0.8.8](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.8) 已公开并标为 Latest，非草稿、非预发布版，14 个附件齐全；公开 SHA-256 清单的 13 个载荷摘要均与 GitHub digest 一致，两份原生安装验证报告绑定的安装器与 ZIP 摘要一致。
+- 官方镜像同步成功，公网 `latest.json` 指向 v0.8.8；六个 EXE / DMG / ZIP 下载目标的 HEAD 请求均为 200，大小与发布元信息一致，官网首页与下载页均为 200。实际更新查询确认 v0.8.7 可发现 v0.8.8，v0.8.8 不会再次提示同版本更新；验收仅读取元信息、校验清单与报告，不在本机下载或运行安装器。
 
 ### 0.8.7 发布检查（2026-10-21）
 
