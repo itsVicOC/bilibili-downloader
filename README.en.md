@@ -63,13 +63,14 @@ This README is available in English and Simplified Chinese. The current desktop 
 | Account login | Start with QR login or use the Cookie fallback; manage your account from the sidebar with username and avatar, retaining only allowed Cookie fields and preferring the system credential store |
 | Cross-platform desktop UI | A PySide6 interface with a responsive layout down to 900×640, manual light/dark modes, and automatic system theme switching |
 | Themes and backgrounds | Xinghe and Qinghai themes; twelve Xiao Liu wallpapers or custom images, with large previews, filters, drag-and-drop imports, and independent light/dark visibility per workspace |
+| Xiao Liu companion | Twelve pixel animations follow five local time periods, with a full action after 15–30 seconds of foreground idle time and time-aware captions; [animation previews](docs/MASCOT_DESIGN.md) |
 | Update checks and installation | Check at startup or manually, choose stable or beta channels, and verify/install/restart official macOS/Windows packages with recovery if startup fails |
 
 `v0.8.3` adds the [official download mirror](https://1008.si/download/) for update discovery and package downloads, with GitHub fallback on network failures. Versions up to v0.8.2 use fixed GitHub endpoints; install v0.8.3 from the website to enable the mirror for future updates.
 
 Automatic updates are available starting with `v0.8.1b1` and are currently a beta feature. First install a version that includes the updater manually. Check [Releases](https://github.com/itsVicOC/bilibili-downloader/releases) for stable and prerelease status.
 
-Stable `v0.8.5` adds the Xiao Liu pixel mascot and twelve wallpapers, clearer backgrounds, and a unified wallpaper browser. It also adds full-session live MP4 exports, fixes recording-directory inheritance, and improves macOS window closing and Windows tray behavior. See the [changelog](CHANGELOG.md#v085---2026-10-20) and [Xiao Liu wallpaper gallery](docs/BUILTIN_BACKGROUNDS.md) (Chinese).
+Stable `v0.8.6` adds twelve Xiao Liu pixel animations with five local time periods and matching captions. It also improves wallpaper glass blur, account and settings layouts, macOS file selection, Windows path handling, and dependency security. See the [changelog](CHANGELOG.md#v086---2026-10-21) and [animation previews](docs/MASCOT_DESIGN.md) (Chinese).
 
 Downloads, live recording, and settings share consistent footer cards. Tabs and task tools retain readable surfaces over custom backgrounds, theme cards distinguish selection from keyboard focus, and record removal uses a quieter action style.
 
@@ -144,6 +145,10 @@ See the [user guide](docs/USER_GUIDE.md) for task states, output templates, and 
 **Keep tasks running after closing the window:** On macOS, the red close button and `⌘W` close only the window; click the Dock icon to restore it, or use `⌘Q` / the app menu to quit. On Windows, closing offers Minimize to system tray or Quit, with an optional remembered choice. Change it in Settings → Appearance → Window (`设置 → 外观 → 窗口`). Click the tray icon to restore the window or use its context menu to quit. Downloads, live monitoring, recording, and exports continue while the window is closed or in the tray. Quitting confirms active tasks and waits for cleanup.
 
 ## Screenshots
+
+Xiao Liu follows five local time periods, playing a different action after 15–30 seconds of foreground idle time. Animations pause while the app is hidden, minimized, or inactive.
+
+![Twelve Xiao Liu animations](docs/images/mascot/actions/xiaoliu-actions.gif)
 
 Video downloads and live recording share one workspace. Adding downloads keeps the current page open; the task center brings together the download queue, active recordings, and recording history. Settings cover downloads, live recording, tools/storage, and software updates.
 

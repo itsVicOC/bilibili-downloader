@@ -8,6 +8,7 @@ import json
 import os
 import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -70,6 +71,7 @@ from bilibili_downloader.gui.resources.paths import asset_path
 from bilibili_downloader.gui.resources.theme import ThemeManager
 from bilibili_downloader.gui.settings_sections import SettingsSection
 from bilibili_downloader.gui.widgets.components import ElidedLabel
+from bilibili_downloader.gui.widgets.pixel_mascot import PixelMascot
 from bilibili_downloader.utils.config import ConfigManager
 
 OUTPUT_DIR = PROJECT_ROOT / "docs" / "images"
@@ -84,6 +86,9 @@ def _save_widget(app: QApplication, widget, filename: str, popup=None) -> None:
     widget.ensurePolished()
     widget.show()
     _flush_events(app)
+    if not filename.startswith(("biliflow-mascot-", "xiaoliu-")):
+        for mascot in widget.findChildren(PixelMascot):
+            mascot._freeze_preview(datetime(2026, 10, 21, 10))
     # Keep the actual temporary files for eligibility checks, but display a
     # stable demonstration path instead of machine-specific temporary roots.
     masked = []
@@ -1104,9 +1109,7 @@ def _capture_mascot(app, theme, window):
                 window.show()
                 _flush_events(app)
                 card = window._mascot_card
-                card.mascot._timer.stop()
-                card.mascot._frame_index = 0
-                card.mascot.update()
+                card.mascot._freeze_preview(datetime(2026, 10, 21, 10))
                 for control in (*window._nav_buttons, window._settings_nav, window._header_login):
                     assert window._sidebar.rect().contains(QRect(control.mapTo(window._sidebar, QPoint()), control.size()))
                 assert card.isVisible() == (width >= 1120)
@@ -1117,12 +1120,76 @@ def _capture_mascot(app, theme, window):
                 _save_widget(app, window, f"biliflow-mascot-{theme_id}-{mode}-{width}x{height}.png")
                 if width == 1120:
                     _save_widget(app, card, f"xiaoliu-card-{theme_id}-{mode}-{'mini' if card._mini else 'full'}.png")
+            for hour, key, action in ((6, "morning", "stretch"), (10, "day", "cheer"),
+                                      (14, "afternoon", "sip"), (20, "evening", "stargaze"),
+                                      (1, "night", "doze")):
+                for height in (640, 760):
+                    window.resize(1120, height)
+                    window.show()
+                    window._mascot_card.show()
+                    _flush_events(app)
+                    card = window._mascot_card
+                    assert card._mini == (height == 640)
+                    card.mascot._freeze_preview(datetime(2026, 10, 21, hour), action, 3)
+                    _save_widget(app, card, f"xiaoliu-{key}-{theme_id}-{mode}-{'mini' if card._mini else 'full'}.png")
     screen = app.primaryScreen()
     (OUTPUT_DIR / "rendering-profile.json").write_text(json.dumps({
         "platform": app.platformName(), "qt_version": qVersion(),
         "logical_dpi": screen.logicalDotsPerInch(), "dpr": screen.devicePixelRatio(),
         "note": "Offline demonstration data; screenshots normalized to logical pixels.",
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _refresh_document_previews(group):
+    """Refresh the stable filenames linked by guides from the captured matrix."""
+    aliases = {
+        "appearance-controls": {
+            "settings-light": "controls-star_trail-settings-light-1320",
+            "live-settings-light": "controls-star_trail-live-settings-light-1320",
+            "blur-light": "controls-star_trail-glass-light-900",
+            "blur-clear": "controls-star_trail-blur-0-light",
+            "blur-soft": "controls-star_trail-blur-40-light",
+            "gallery-light": "controls-star_trail-gallery-light",
+            "gallery-small": "controls-star_trail-gallery-small-light",
+        },
+        "glass": {
+            "download-empty-light": "glass-star_trail-builtin-empty-light-1320",
+            "download-resolved-light": "glass-star_trail-builtin-resolved-light-1320",
+            "live-light": "glass-star_trail-builtin-live-light-1320",
+            "custom-dark": "glass-star_trail-custom-resolved-dark-1120",
+            "download-empty-small": "glass-star_trail-builtin-empty-light-900",
+        },
+        "ui-refresh": {
+            "download-light": "ui-star_trail-download-light-1320",
+            "live-light-1120": "ui-star_trail-live-light-1120",
+            "live-dark-900": "ui-star_trail-live-dark-900",
+            "tasks-light": "ui-star_trail-tasks-light-1120",
+            "options-dark": "ui-star_trail-options-dark-900",
+            "appearance-light": "ui-star_trail-settings-appearance-light-1320",
+            "about-light": "ui-star_trail-settings-about-light-900",
+            "account-light": "ui-star_trail-account-valid-light",
+            "account-unknown-light": "ui-star_trail-account-unknown-light",
+            "account-long-name-dark": "ui-star_trail-account-long-name-dark",
+            "native-options-light": "ui-star_trail-options-light-900",
+            "native-account-light": "ui-star_trail-account-valid-light",
+            "native-switch-light": "ui-star_trail-switch-qr-light",
+            "naming-light": "ui-star_trail-naming-light-900",
+            "tools-light": "ui-star_trail-settings-tools-light-1120",
+        },
+    }
+    for name, source in aliases[group].items():
+        image = QImage(str(OUTPUT_DIR / f"{source}.png"))
+        if image.isNull():
+            raise RuntimeError(f"Missing screenshot source: {source}")
+        target = OUTPUT_DIR / f"{name}.png"
+        previous = QImage(str(target))
+        if not previous.isNull() and previous.size() != image.size():
+            # Keep the established logical/physical pixel sizes of linked images.
+            if abs(previous.width() / previous.height() - image.width() / image.height()) > 0.01:
+                raise RuntimeError(f"Unexpected screenshot aspect ratio: {name}")
+            image = image.scaled(previous.size(), Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+        if not image.save(str(target)):
+            raise RuntimeError(f"Cannot save documentation preview: {target}")
 
 
 def _capture_ui_refresh(app, theme, window):
@@ -1197,6 +1264,8 @@ def _capture_ui_refresh(app, theme, window):
         "scale_factor": os.environ.get("QT_SCALE_FACTOR", "system"),
         "physical_pixels": bool(app.property("capturePhysicalPixels")), "checks": checks,
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    _refresh_document_previews("ui-refresh")
+
 
 
 def _capture_glass(app, theme, window):
@@ -1243,6 +1312,8 @@ def _capture_glass(app, theme, window):
         "material": "Qt wallpaper glass: cached blur, refraction rim and highlights; native text remains separate",
         "matrix": "2 palettes x 2 modes x 2 wallpaper sources x 3 sizes x 3 states",
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    _refresh_document_previews("glass")
+
 
 
 def _capture_appearance_controls(app, theme, window):
@@ -1295,6 +1366,8 @@ def _capture_appearance_controls(app, theme, window):
         "blur_control":"appearance settings only; gallery uses the current draft for preview",
         "directories":"shared read-only picker for download and live",
     },ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+    _refresh_document_previews("appearance-controls")
+
 
 
 def main(argv=None) -> int:
