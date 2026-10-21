@@ -122,28 +122,51 @@ class WindowChrome(QObject):
                 invalidate(wintypes.HWND(int(handle.winId())), None, False)
 
     def native_event(self, message):
-        """Expose the native maximize hit target on hover for Windows Snap."""
+        """Keep legacy caption painting out of the expanded client area."""
         if not self.expanded or sys.platform != "win32" or self.platform != "win32":
             return None
         from ctypes import wintypes
 
         msg = wintypes.MSG.from_address(int(message))
+        if msg.message == 0x0086:  # WM_NCACTIVATE
+            # Qt 6.11 suppresses this default caption paint for frameless
+            # windows, but not expanded windows without WindowTitleHint.
+            # Let WM_ACTIVATE continue to manage focus; only suppress the
+            # legacy non-client paint over Qt's separate titlebar layer.
+            return 1
         if msg.message != 0x0084 or self.window.isFullScreen():  # WM_NCHITTEST
             return None
         user32 = ctypes.windll.user32
+        user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
+        user32.GetAsyncKeyState.restype = ctypes.c_short
+        if any(user32.GetAsyncKeyState(button) & 0x8000 for button in (0x01, 0x02)):
+            # Qt's expanded-titlebar hit test performs maximize/restore on
+            # press. Returning HTMAXBUTTON here bypasses that action. Only
+            # supply the idle hover target needed by Windows 11 Snap.
+            return None
         user32.GetDpiForWindow.argtypes = [wintypes.HWND]
+        user32.GetDpiForWindow.restype = wintypes.UINT
+        user32.GetClientRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+        user32.GetClientRect.restype = wintypes.BOOL
+        user32.ClientToScreen.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.POINT)]
+        user32.ClientToScreen.restype = wintypes.BOOL
+        user32.GetSystemMetricsForDpi.argtypes = [ctypes.c_int, wintypes.UINT]
+        user32.GetSystemMetricsForDpi.restype = ctypes.c_int
         rect = wintypes.RECT()
+        origin = wintypes.POINT()
         hwnd = wintypes.HWND(int(self.window.winId()))
-        if not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+        if not user32.GetClientRect(hwnd, ctypes.byref(rect)) or not user32.ClientToScreen(hwnd, ctypes.byref(origin)):
             return None
         dpi = user32.GetDpiForWindow(hwnd) or 96
-        height = round(32 * dpi / 96)
-        width = round(height * 1.5)
+        # Match Qt's expanded-titlebar metrics in physical client pixels,
+        # including the per-monitor frame and padded border at this DPI.
+        height = sum(user32.GetSystemMetricsForDpi(metric, dpi) for metric in (32, 92, 4))
+        width = int(height * 1.5)
         x = ctypes.c_short(msg.lParam & 0xFFFF).value
         y = ctypes.c_short((msg.lParam >> 16) & 0xFFFF).value
         if (
-            rect.right - 2 * width <= x < rect.right - width
-            and rect.top <= y < rect.top + height
+            origin.x + rect.right - 2 * width <= x < origin.x + rect.right - width
+            and origin.y <= y < origin.y + height
         ):
-            return 9  # HTMAXBUTTON; Windows owns the Snap flyout and resize action.
+            return 9  # HTMAXBUTTON; hover only, for the Windows Snap flyout.
         return None
