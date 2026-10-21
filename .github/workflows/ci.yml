@@ -54,6 +54,25 @@ jobs:
       - name: Run static checks
         run: ruff check bilibili_downloader tests packaging_hooks scripts
 
+      - name: Check native desktop UI and capture parity evidence
+        if: runner.os != 'Linux' && matrix.python-version == '3.12'
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
+        run: |
+          python -m pytest -q tests/test_window_chrome.py tests/test_theme.py::test_theme_applies_same_font_to_body_and_native_bold_labels
+          for scene in chrome ui-refresh appearance-controls glass; do
+            python -m scripts.capture_docs_screenshots --native --physical-pixels "--${scene}-only" --output-dir "build/ui-parity/$scene"
+          done
+
+      - name: Upload native desktop UI evidence
+        if: always() && runner.os != 'Linux' && matrix.python-version == '3.12'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ui-parity-${{ runner.os }}
+          path: build/ui-parity
+          retention-days: 7
+
   updater:
     name: Native updater (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}

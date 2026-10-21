@@ -68,6 +68,7 @@ from bilibili_downloader.gui.dialogs.update_dialog import UpdateDialog
 from bilibili_downloader.gui.live_controller import LiveUiController
 from bilibili_downloader.gui.main_window import MainWindow
 from bilibili_downloader.gui.resources.paths import asset_path
+from bilibili_downloader.gui.resources.styles import theme_palette
 from bilibili_downloader.gui.resources.theme import ThemeManager
 from bilibili_downloader.gui.settings_sections import SettingsSection
 from bilibili_downloader.gui.widgets.components import ElidedLabel
@@ -1267,6 +1268,73 @@ def _capture_ui_refresh(app, theme, window):
     _refresh_document_previews("ui-refresh")
 
 
+def _capture_native_chrome(app, theme, window):
+    """Capture the compositor, including Qt's separate Windows caption layer.
+
+    QWidget.grab() omits that layer and cannot catch duplicate caption icons.
+    Use only offline fixtures, and record the actual desktop/backend/DPI.
+    """
+    from PySide6.QtTest import QTest
+
+    if app.platformName() not in ("windows", "cocoa"):
+        raise RuntimeError("Chrome checks require a native desktop backend")
+    checks = []
+    window.resize(900, 640)
+    window.move(window.screen().availableGeometry().topLeft() + QPoint(24, 40))
+    for dark in (False, True):
+        theme.apply_theme(dark)
+        mode = "dark" if dark else "light"
+        for name, transition in (
+            ("windowed", window.showNormal),
+            ("maximized", window.showMaximized),
+            ("restored", window.showNormal),
+        ):
+            transition()
+            window.raise_()
+            window.activateWindow()
+            QTest.qWait(250)
+            window._chrome._sync_native()
+            _flush_events(app)
+            handle = window.windowHandle()
+            frame = window.frameGeometry()
+            screen = window.screen()
+            pixmap = screen.grabWindow(0, *frame.getRect())
+            if pixmap.isNull():
+                raise AssertionError("Native frame capture is unavailable")
+            filename = f"chrome-{mode}-{name}.png"
+            pixmap.save(str(OUTPUT_DIR / filename))
+            if sys.platform == "win32":
+                assert not handle.flags() & Qt.WindowTitleHint
+                assert not handle.icon().isNull()
+                # The sidebar starts its brand below y=24. This previously
+                # empty strip contained the duplicate 16px caption icon.
+                origin = window.mapToGlobal(QPoint(12, 6)) - frame.topLeft()
+                dpr = pixmap.devicePixelRatio()
+                image = pixmap.toImage()
+                expected = theme_palette(dark, theme.theme_id).sidebar
+                sample = QColor(expected)
+                colors = [
+                    image.pixelColor(round((origin.x() + x) * dpr), round((origin.y() + y) * dpr))
+                    for x in range(48) for y in range(12)
+                ]
+                matching = sum(
+                    max(abs(color.red() - sample.red()), abs(color.green() - sample.green()),
+                        abs(color.blue() - sample.blue())) <= 3 for color in colors
+                )
+                assert matching / len(colors) >= 0.98, "Duplicate native caption is visible over the sidebar"
+            checks.append({
+                "mode": mode, "state": name, "image": filename,
+                "frame": frame.getRect(), "client": window.geometry().getRect(),
+                "qwindow_flags": int(handle.flags()),
+                "title": handle.title(), "icon_present": not handle.icon().isNull(),
+            })
+    (OUTPUT_DIR / "rendering-profile.json").write_text(json.dumps({
+        "platform": sys.platform, "backend": app.platformName(), "qt": qVersion(),
+        "logical_dpi": screen.logicalDotsPerInchY(), "dpr": screen.devicePixelRatio(),
+        "capture": "desktop compositor including native caption layer", "checks": checks,
+    }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 
 def _capture_glass(app, theme, window):
     from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
@@ -1383,6 +1451,7 @@ def main(argv=None) -> int:
     )
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
     parser.add_argument("--ui-refresh-only", action="store_true", help="Capture navigation, download cards, modes and account states")
+    parser.add_argument("--chrome-only", action="store_true", help="Check native captions using desktop compositor captures")
     parser.add_argument("--glass-only", action="store_true", help="Capture glass wallpaper and complete download guidance in both modes")
     parser.add_argument("--appearance-controls-only", action="store_true", help="Capture centered account, five settings sections and blur controls")
     parser.add_argument("--physical-pixels", action="store_true", help="Preserve native pixels for typography review")
@@ -1437,6 +1506,11 @@ def main(argv=None) -> int:
             _capture_lifecycle(app, theme, temp_root)
             return 0
         window = _make_main_window(temp_root / "workspace")
+        if args.chrome_only:
+            _capture_native_chrome(app, theme, window)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
         if args.appearance_controls_only:
             _capture_appearance_controls(app,theme,window)
             window._live_controller.shutdown()

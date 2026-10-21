@@ -52,11 +52,17 @@ class WindowChrome(QObject):
             QEvent.WinIdChange,
             QEvent.WindowStateChange,
         ):
+            # Clear the Windows caption before the first exposed frame.
+            if self.platform == "win32" and event.type() == QEvent.Show:
+                self._sync_native()
             QTimer.singleShot(0, self, self._sync_native)
         return False
 
     def _sync_native(self):
         if not isValid(self.window):
+            return
+        if self.expanded and self.platform == "win32":
+            self._sync_windows_caption()
             return
         if (
             sys.platform != "darwin"
@@ -84,6 +90,15 @@ class WindowChrome(QObject):
                 set_visibility(native, objc.sel_registerName(b"setTitleVisibility:"), 1)
         except (OSError, AttributeError):
             logger.debug("Native caption visibility unavailable", exc_info=True)
+
+    def _sync_windows_caption(self):
+        handle = self.window.windowHandle()
+        if handle is not None and handle.flags() & Qt.WindowTitleHint:
+            # QWidget.adjustFlags() adds WindowTitleHint back whenever caption
+            # buttons are requested. Set the QWindow flag instead: Qt's Windows
+            # expanded-titlebar renderer then omits BOTH the icon and caption,
+            # while keeping the real title, icon, system menu and buttons.
+            handle.setFlag(Qt.WindowTitleHint, False)
 
     def native_event(self, message):
         """Expose the native maximize hit target on hover for Windows Snap."""
