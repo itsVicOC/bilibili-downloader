@@ -7,8 +7,6 @@ from PySide6.QtCore import QSize, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
-    QFileDialog,
-    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -39,12 +37,14 @@ from bilibili_downloader.gui.widgets.components import (
     PopupMenu,
     SectionCard,
     StatusBadge,
+    TaskDetailPanel,
     repolish,
 )
 from bilibili_downloader.gui.widgets.download_list import (
     STATUS_TONE_ROLE,
     _StatusDelegate,
 )
+from bilibili_downloader.gui.widgets.glass_surface import GlassFrame
 from bilibili_downloader.gui.widgets.live_page import _duration, _size, live_tone
 
 CURRENT_STATES = {
@@ -80,7 +80,7 @@ class TaskPage(QWidget):
         self._live_rows = []
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(20)
+        layout.setSpacing(16)
         self.header = PageHeader("任务中心", "下载进度、正在录制与本地历史，一处查看")
         layout.addWidget(self.header)
         self.tabs = QTabWidget()
@@ -109,7 +109,7 @@ class TaskPage(QWidget):
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
-        self._download_tools = QFrame()
+        self._download_tools = GlassFrame()
         self._download_tools.setObjectName("ToolSurface")
         self._download_tools.setAttribute(Qt.WA_StyledBackground, True)
         toolbar = QHBoxLayout(self._download_tools)
@@ -172,10 +172,7 @@ class TaskPage(QWidget):
             EmptyState("没有匹配的任务", "切换筛选条件，查看其他任务。")
         )
         layout.addWidget(self._download_stack, 1)
-        self.download_detail = QPlainTextEdit()
-        self.download_detail.setReadOnly(True)
-        self.download_detail.setMaximumHeight(112)
-        self.download_detail.setPlaceholderText("选择任务查看完整状态与警告")
+        self.download_detail = TaskDetailPanel()
         self.download_detail.hide()
         layout.addWidget(self.download_detail)
         self.tabs.addTab(tab, "下载队列")
@@ -235,12 +232,15 @@ class TaskPage(QWidget):
         task_id = item.data(Qt.UserRole)
         status = self.downloads.item(row, 3)
         specification = self.downloads.item(row, 1)
-        text = [item.text(), specification.toolTip() if specification else "", status.text() if status else ""]
-        if status and status.toolTip() and status.toolTip() != status.text():
-            text.append(status.toolTip())
-        if self.downloads._output_paths.get(task_id):
-            text.append(f"保存位置：{self.downloads._output_paths[task_id]}")
-        self.download_detail.setPlainText("\n".join(text))
+        progress = self.downloads._progress_at(row)
+        state = status.text() if status else ""
+        self.download_detail.set_details(
+            item.text(), f"{state} · {progress.value()}%" if progress else state,
+            specification.toolTip() if specification else "",
+            self.downloads._output_paths.get(task_id, ""),
+            status.toolTip() if status and status.toolTip() != state else "",
+            status.data(STATUS_TONE_ROLE) if status else "muted",
+        )
         self.download_detail.show()
 
     def _current_tab(self):
@@ -272,9 +272,7 @@ class TaskPage(QWidget):
             EmptyState("星轨正在待命", "开播录制、重连和收尾状态会在这里同步显示。")
         )
         layout.addWidget(self._current_stack, 1)
-        self.current_detail = QPlainTextEdit()
-        self.current_detail.setReadOnly(True)
-        self.current_detail.setMaximumHeight(96)
+        self.current_detail = TaskDetailPanel()
         self.current_detail.hide()
         layout.addWidget(self.current_detail)
         self.tabs.addTab(tab, "当前录制")
@@ -397,8 +395,10 @@ class TaskPage(QWidget):
         )
         self.current_detail.setVisible(row is not None)
         if row:
-            self.current_detail.setPlainText(
-                f"{row['author']} · 房间 {row['room_id']}\n{row['state_label']} · {row['detail']}\n保存位置：{row['output_dir']}"
+            self.current_detail.set_details(
+                f"{row['author']} · 房间 {row['room_id']}", row["state_label"],
+                f"已录 {_duration(row['duration'])} · {_size(row['size'])} · {_size(row['speed'])}/s",
+                row["output_dir"], row["detail"], live_tone(row["state"]),
             )
 
     def _history_tab(self):
@@ -673,14 +673,16 @@ class TaskPage(QWidget):
         session = self._selected_session()
         segment = self.history.currentItem().parent() is not None
         proposed = path.with_suffix(".mp4") if segment else Path(session.directory) / "整场直播.mp4"
-        output, _ = QFileDialog.getSaveFileName(
-            self, self.export_button.text(), str(proposed), "MP4 (*.mp4)"
-        )
-        if output:
+        from bilibili_downloader.gui.dialogs.file_picker import file_picker
+
+        def selected(output):
             if segment:
                 self.controller.export(path, output)
             else:
                 self.controller.export_session(session.id, output)
+        file_picker(self).save_file(
+            self.export_button.text(), str(proposed), "MP4 (*.mp4)", selected, suffix="mp4",
+        )
 
     def _export_changed(self, busy, path):
         self._history_selection()

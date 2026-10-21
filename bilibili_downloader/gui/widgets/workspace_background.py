@@ -1,15 +1,16 @@
 """A viewport-fixed backdrop shared by all persistent workspaces."""
 
-from PySide6.QtCore import QRectF, Qt
+from PySide6.QtCore import QPoint, QRectF, Qt
 from PySide6.QtGui import QColor, QImageReader, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QStackedWidget, QWidget
 
-from bilibili_downloader.core.models import BackgroundVisibility
+from bilibili_downloader.core.models import DEFAULT_GLASS_BLUR, BackgroundVisibility
 from bilibili_downloader.gui.resources.styles import (
     background_overlay_alpha,
     theme_palette,
 )
 from bilibili_downloader.gui.widgets.background_readability import BackgroundReadability
+from bilibili_downloader.gui.widgets.glass_surface import GlassBackdrop
 
 
 def background_pixmap(path, size=None, *, pixel_art=False):
@@ -50,6 +51,8 @@ class WorkspaceStack(QStackedWidget):
         self._builtin = False
         self._pixel_art = False
         self._visibility = BackgroundVisibility()
+        self._glass = GlassBackdrop()
+        self._glass_blur = DEFAULT_GLASS_BLUR
         self.setProperty("customBackground", False)
         self.setProperty("mascotBackground", False)
         self._readability = BackgroundReadability(self)
@@ -66,6 +69,7 @@ class WorkspaceStack(QStackedWidget):
             self._background = QPixmap()
             self._background_key = None
         previous = self.property("customBackground")
+        self._glass.clear()
         self.setProperty("customBackground", not self._background.isNull())
         self._builtin = builtin and not self._background.isNull()
         self._pixel_art = pixel_art and not self._background.isNull()
@@ -82,6 +86,25 @@ class WorkspaceStack(QStackedWidget):
     def set_visibility(self, visibility):
         self._visibility = visibility.model_copy(deep=True)
         self.update()
+
+    def paint_glass(self, painter, widget):
+        app = QApplication.instance()
+        dark = bool(app.property("darkTheme"))
+        theme_id = app.property("colorTheme")
+        visible = self._visibility.dark if dark else self._visibility.light
+        key = (self._background.cacheKey(), theme_id, visible, self._builtin, self._pixel_art)
+        self._glass.prepare(
+            key, self.size(),
+            lambda p, rect: paint_workspace_background(p, rect, self._background, dark, theme_id, visible, builtin=self._builtin, pixel_art=self._pixel_art),
+            dark, theme_palette(dark, theme_id), self._glass_blur,
+        )
+        offset = widget.mapTo(self, QPoint())
+        self._glass.paint(painter, widget.rect(), QRectF(offset, widget.size()))
+
+    def set_glass_blur(self, value):
+        if self._glass_blur != value:
+            self._glass_blur = value
+            self.update()
 
     def paintEvent(self, event):
         super().paintEvent(event)

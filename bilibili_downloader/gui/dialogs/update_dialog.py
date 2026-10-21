@@ -43,15 +43,17 @@ class UpdateDialog(QDialog):
         footer = QHBoxLayout()
         for text, result in (
             ("跳过此版本", self.SKIP),
-            ("下次更新", self.LATER),
+            ("稍后提醒", self.LATER),
             ("立即更新", self.UPDATE),
         ):
             button = QPushButton(text)
             button.setObjectName(
-                "PrimaryButton" if result == self.UPDATE else "SubtleButton"
+                "PrimaryButton" if result == self.UPDATE else "TextButton" if result == self.SKIP else "SubtleButton"
             )
             button.clicked.connect(
                 lambda _checked=False, value=result: self.done(value)
             )
             footer.addWidget(button)
+            if result == self.SKIP:
+                footer.addStretch()
         layout.addLayout(footer)

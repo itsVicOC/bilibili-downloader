@@ -574,28 +574,55 @@ class BatchDialog(QDialog):
     def _show_errors(self):
         dialog = QDialog(self)
         dialog.setWindowTitle("来源解析详情")
-        dialog.resize(600, 400)
+        dialog.resize(760, 440)
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(24, 24, 24, 24)
         detail = QTableWidget(len(self._report.issues), 3)
-        detail.setHorizontalHeaderLabels(["内容", "原因", "重试链接"])
+        detail.setHorizontalHeaderLabels(["内容", "原因", "链接"])
         detail.setEditTriggers(QAbstractItemView.NoEditTriggers)
         detail.setSelectionBehavior(QAbstractItemView.SelectRows)
-        detail.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        header = detail.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.Fixed)
+        header.resizeSection(0, 180)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.Fixed)
+        header.resizeSection(2, 104)
+        detail.setWordWrap(True)
+        detail.setTextElideMode(Qt.ElideNone)
         detail.verticalHeader().hide()
         for row, issue in enumerate(self._report.issues):
             for column, value in enumerate(
                 (
                     issue.title or issue.source or "来源",
                     issue.message,
-                    issue.url or issue.source,
                 )
             ):
                 item = QTableWidgetItem(value)
                 item.setToolTip(value)
                 detail.setItem(row, column, item)
+            url = issue.url or issue.source
+            copy_link = QPushButton("复制链接")
+            copy_link.setObjectName("TableSubtleButton")
+            copy_link.setToolTip(url)
+            copy_link.setEnabled(bool(url))
+            copy_link.clicked.connect(lambda _checked=False, value=url: QApplication.clipboard().setText(value))
+            detail.setCellWidget(row, 2, copy_link)
+        detail.horizontalHeader().sectionResized.connect(lambda *_args: detail.resizeRowsToContents())
+        detail.resizeRowsToContents()
+        if self._report.issues:
+            detail.selectRow(0)
         layout.addWidget(detail)
         actions = QHBoxLayout()
+        full_reason = QPushButton("选中项的完整原因")
+        full_reason.setObjectName("TextButton")
+        full_reason.setEnabled(bool(self._report.issues))
+        def show_reason():
+            if detail.currentRow() < 0:
+                return
+            issue = self._report.issues[detail.currentRow()]
+            MessageBox("来源解析详情", f"{issue.title or issue.source}\n{issue.message}\n{issue.url or issue.source}", dialog).exec()
+        full_reason.clicked.connect(show_reason)
+        actions.addWidget(full_reason)
         copy = QPushButton("复制失败链接")
         copy.setEnabled(bool(self._failed_urls()))
         copy.clicked.connect(

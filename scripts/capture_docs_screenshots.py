@@ -68,6 +68,7 @@ from bilibili_downloader.gui.live_controller import LiveUiController
 from bilibili_downloader.gui.main_window import MainWindow
 from bilibili_downloader.gui.resources.paths import asset_path
 from bilibili_downloader.gui.resources.theme import ThemeManager
+from bilibili_downloader.gui.settings_sections import SettingsSection
 from bilibili_downloader.gui.widgets.components import ElidedLabel
 from bilibili_downloader.utils.config import ConfigManager
 
@@ -106,6 +107,13 @@ def _save_widget(app: QApplication, widget, filename: str, popup=None) -> None:
                 entry.setPlainText(visible)
     _flush_events(app)
     output = OUTPUT_DIR / filename
+    if isinstance(widget, LoginDialog) and widget._login_active and widget._tabs.currentIndex() == 1:
+        if not widget._qr_label.visibleRegion().boundingRect().contains(widget._qr_label.rect()):
+            raise AssertionError(f"二维码内容被裁切：{filename}")
+    if filename.startswith("ui-") and "-options-" in filename:
+        cards = (widget._danmaku_check, widget._subtitle_check, widget._cover_check, widget._metadata_check)
+        if not all(card.visibleRegion().boundingRect().contains(card.rect()) for card in cards):
+            raise AssertionError(f"下载附加项内容被裁切：{filename}")
     captured = widget.grab()
     capture_origin = widget.mapToGlobal(QPoint())
     # QWidget.grab is physical pixels on Retina; popup positions are logical.
@@ -124,7 +132,8 @@ def _save_widget(app: QApplication, widget, filename: str, popup=None) -> None:
     if popup_rect is not None:
         painter.drawPixmap(popup_rect.topLeft() - bounds.topLeft(), popup.grab())
     painter.end()
-    if not flattened.save(str(output), "PNG"):
+    result = captured if app.property("capturePhysicalPixels") and popup is None else flattened
+    if not result.save(str(output), "PNG"):
         raise RuntimeError(f"无法保存截图：{output}")
     for entry, text in masked:
         if isinstance(entry, QLineEdit):
@@ -421,9 +430,9 @@ def _capture_dropdowns(app, theme, window):
                 ),
                 (
                     "settings",
-                    lambda: window._show_settings_tab(0),
+                    lambda: window._show_settings_tab(SettingsSection.DOWNLOAD),
                     window._settings_page._quality_combo,
-                    window._settings_page.tabs.widget(0),
+                    window._settings_page.tabs.widget(window._settings_page._sections[SettingsSection.DOWNLOAD]),
                 ),
             )
             for name, navigate, combo, scroll in controls:
@@ -633,12 +642,12 @@ def _capture_states(app, theme, window, temp_root):
     window._live_controller.notify("MP4 导出完成（离线演示）", "success")
     window._task_page._export_changed(False, str(exported))
     _save_widget(app, window, "biliflow-state-export-done.png")
-    window._show_settings_tab(0)
+    window._show_settings_tab(SettingsSection.DOWNLOAD)
     window._settings_page._path_template.setText("../{title}")
     window._settings_page.validate()
     _save_widget(app, window, "biliflow-state-settings-invalid.png")
     window._settings_page.load_settings(window._settings)
-    for tab, name in ((0, "download"), (1, "live"), (2, "tools")):
+    for tab, name in ((SettingsSection.DOWNLOAD, "download"), (SettingsSection.LIVE, "live"), (SettingsSection.TOOLS, "tools")):
         window._show_settings_tab(tab)
         window.show()
         _flush_events(app)
@@ -661,8 +670,8 @@ def _capture_dialogs(app, window, suffix=""):
     with patch.object(QMessageBox, "exec", capture):
         name = "copyright"
         window._confirm_copyright_acknowledgement()
-        name = "about"
         window._on_about_triggered()
+        _save_widget(app, window, f"biliflow-about-updates{suffix}.png")
         name = "error"
         window._show_error("离线示例：保存目录暂时不可用，请检查目录权限并重试。")
         name = "settings-leave"
@@ -755,7 +764,7 @@ def _capture_appearance(app, theme, window, temp_root):
                     if index == 0:
                         window._download_tabs.setCurrentIndex(0)
                     if index == 3:
-                        window._settings_page.tabs.setCurrentIndex(4)
+                        window._settings_page.show_section(SettingsSection.APPEARANCE)
                     _save_widget(app, window, f"biliflow-appearance-{theme_id}-{name}-{mode}-{width}.png")
                     if index == 3 and width == 1320:
                         panel = window._settings_page
@@ -774,7 +783,7 @@ def _capture_appearance(app, theme, window, temp_root):
                     scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
                     _save_widget(app, window, f"biliflow-appearance-{theme_id}-backgrounds-{mode}-{width}.png")
                     scroll.verticalScrollBar().setValue(0)
-            window._show_settings_tab(0)
+            window._show_settings_tab(SettingsSection.DOWNLOAD)
             combo = window._settings_page._quality_combo
             combo.showPopup()
             _save_widget(app, window, f"biliflow-appearance-{theme_id}-dropdown-{mode}.png", popup=combo.view().window())
@@ -795,7 +804,7 @@ def _capture_appearance(app, theme, window, temp_root):
         window._download_tabs.setCurrentIndex(0)
         _save_widget(app, window, f"biliflow-appearance-bilibili_blue-default-download-{mode}-1120.png")
         window.resize(900, 640)
-        window._show_settings_tab(4)
+        window._show_settings_tab(SettingsSection.APPEARANCE)
         _save_widget(app, window, f"biliflow-appearance-bilibili_blue-default-settings-{mode}-900.png")
 
 
@@ -843,10 +852,10 @@ def _capture_ux_states(app, theme, temp_root):
         _save_widget(app, window, f"biliflow-ux-batch-cancelled-{mode}.png")
         with patch.object(QDialog, "exec", lambda dialog: (_save_widget(app, dialog, f"biliflow-ux-failure-details-{mode}.png"), QDialog.Rejected)[1]):
             batch._show_errors()
-        dialog = LoginDialog("demo-session", account={"uname": "星海漫游（演示）", "mid": "演示 UID"}, avatar_icon=QIcon(asset_path("alien.png")))
+        dialog = LoginDialog("demo-session", account={"uname": "星海漫游（演示）", "mid": "演示 UID", "vipStatus": 0}, account_valid=True, avatar_icon=QIcon(asset_path("alien.png")))
         _save_widget(app, dialog, f"biliflow-ux-account-{mode}.png")
         dialog.deleteLater()
-        window._show_settings_tab(4)
+        window._show_settings_tab(SettingsSection.APPEARANCE)
         picker = window._settings_page._background_pickers["download"]
         prepared = prepare_background(Path(asset_path("nebula.jpg")))
         window._background_store.install(prepared)
@@ -988,7 +997,7 @@ def _capture_lifecycle(app, theme, temp_root):
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     for platform in ("win32", "darwin"):
         window = _make_main_window(temp_root / f"lifecycle-{platform}", desktop_platform=platform)
-        window._show_settings_tab(2)
+        window._show_settings_tab(SettingsSection.APPEARANCE)
         for theme_id in ("star_trail", "bilibili_blue"):
             theme.set_color_theme(theme_id)
             for dark in (False, True):
@@ -1027,7 +1036,7 @@ def _capture_builtin_backgrounds(app, theme, window, temp_root):
         window.resize(1320, 860)
         window._show_workspace(("download", "live", "tasks", "settings").index(entry.workspace))
         if entry.workspace == "settings":
-            window._settings_page.tabs.setCurrentIndex(4)
+            window._settings_page.show_section(SettingsSection.APPEARANCE)
         window.show()
         _flush_events(app)
         assert window._workspace_pages.property("mascotBackground")
@@ -1064,6 +1073,9 @@ def _capture_builtin_backgrounds(app, theme, window, temp_root):
         assert dialog.scroll.horizontalScrollBar().maximum() == 0
         assert dialog.rect().contains(QRect(dialog.apply_button.mapTo(dialog, QPoint()), dialog.apply_button.size()))
         _save_widget(app, dialog, f"biliflow-background-gallery-{size[0]}.png")
+        if size[0] < 900:
+            dialog._set_compact_view("preview")
+            _save_widget(app, dialog, f"biliflow-background-gallery-preview-{size[0]}.png")
         if size[0] == 1080:
             dialog.effects.original_button.click()
             _save_widget(app, dialog, "biliflow-background-gallery-original.png")
@@ -1113,6 +1125,178 @@ def _capture_mascot(app, theme, window):
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def _capture_ui_refresh(app, theme, window):
+    """Seven UI improvements, using isolated fixtures and native-resolution evidence."""
+    import qrcode
+
+    _populate_main_window(window)
+    _populate_live_page(window, Path(app.property("docsTempRoot")) / "ui-live")
+    checks = []
+    for theme_id in ("star_trail", "bilibili_blue"):
+        window._settings.appearance.theme = theme_id
+        theme.set_color_theme(theme_id)
+        for dark in (False, True):
+            theme.apply_theme(dark)
+            mode = "dark" if dark else "light"
+            for width, height in ((900, 640), (1120, 760), (1320, 860)):
+                window.resize(width, height)
+                window._show_workspace(0)
+                window._workspace_scroll.verticalScrollBar().setValue(0)
+                _save_widget(app, window, f"ui-{theme_id}-download-{mode}-{width}.png")
+                window._workspace_scroll.ensureWidgetVisible(window._metadata_check, 0, 12)
+                _save_widget(app, window, f"ui-{theme_id}-options-{mode}-{width}.png")
+                cards = (window._danmaku_check, window._subtitle_check, window._cover_check, window._metadata_check)
+                assert all(card.height() >= 36 + card.fontMetrics().height() + 4 for card in cards)
+                for section in SettingsSection:
+                    window._show_settings_tab(section)
+                    _save_widget(app, window, f"ui-{theme_id}-settings-{section.value}-{mode}-{width}.png")
+                    if section == SettingsSection.DOWNLOAD:
+                        window._settings_page._templates_section.set_expanded(True)
+                        window.show()
+                        _flush_events(app)
+                        window._settings_page.tabs.currentWidget().ensureWidgetVisible(window._settings_page._templates_section)
+                        _save_widget(app, window, f"ui-{theme_id}-naming-{mode}-{width}.png")
+                        window._settings_page._templates_section.set_expanded(False)
+                for index, name in ((1, "live"), (2, "tasks")):
+                    window._show_workspace(index)
+                    _save_widget(app, window, f"ui-{theme_id}-{name}-{mode}-{width}.png")
+                checks.append({
+                    "theme": theme_id, "mode": mode, "size": [width, height],
+                    "menu_visible": not window.menuBar().isHidden(),
+                    "font": window._url_input.font().family(),
+                    "font_height": window._url_input.fontMetrics().height(),
+                    "sidebar_width": window._sidebar.width(),
+                    "option_card_heights": [card.height() for card in cards],
+                })
+            for state in ("valid", "checking", "unknown", "expired"):
+                dialog = LoginDialog("demo-session", account={
+                    "uname": "星海漫游（离线演示）", "mid": "演示 UID", "vipStatus": 1,
+                }, account_valid=True, account_state=state,
+                    avatar_icon=QIcon(asset_path("app_icon.png")))
+                _save_widget(app, dialog, f"ui-{theme_id}-account-{state}-{mode}.png")
+                if state == "valid":
+                    dialog._show_login_methods()
+                    _save_widget(app, dialog, f"ui-{theme_id}-switch-{mode}.png")
+                    dialog._generate_btn.hide()
+                    dialog._on_qr_generated("offline", "demo", qrcode.make("BiliFlow offline layout demo"))
+                    dialog._poll_timer.stop()
+                    dialog._qr_status.setText("离线演示二维码，仅用于布局验收")
+                    _save_widget(app, dialog, f"ui-{theme_id}-switch-qr-{mode}.png")
+                dialog.deleteLater()
+            for sample, account in (
+                ("long-name", {"uname": "星海漫游的超长昵称" * 12, "mid": "123456789"}),
+                ("missing-avatar", {"uname": "星海漫游", "mid": "123456789"}),
+            ):
+                dialog = LoginDialog("demo-session", account=account, account_valid=True)
+                _save_widget(app, dialog, f"ui-{theme_id}-account-{sample}-{mode}.png")
+                dialog.deleteLater()
+    screen = app.primaryScreen()
+    (OUTPUT_DIR / "rendering-profile.json").write_text(json.dumps({
+        "platform": sys.platform, "backend": app.platformName(), "qt": qVersion(),
+        "logical_dpi": screen.logicalDotsPerInchY(), "dpr": screen.devicePixelRatio(),
+        "scale_factor": os.environ.get("QT_SCALE_FACTOR", "system"),
+        "physical_pixels": bool(app.property("capturePhysicalPixels")), "checks": checks,
+    }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _capture_glass(app, theme, window):
+    from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
+
+    prepared = prepare_background(Path(asset_path("nebula.jpg")))
+    window._background_store.install(prepared)
+    for theme_id in ("star_trail", "bilibili_blue"):
+        window._settings.appearance.theme = theme_id
+        theme.set_color_theme(theme_id)
+        for dark in (False, True):
+            theme.apply_theme(dark)
+            mode = "dark" if dark else "light"
+            for source, reference in (("builtin", BUILTIN_BACKGROUNDS[0].reference), ("custom", prepared.reference)):
+                window._settings.appearance.backgrounds.download = reference
+                window._settings.appearance.backgrounds.live = reference
+                for width, height in ((900, 640), (1120, 760), (1320, 860)):
+                    window.resize(width, height)
+                    window._show_workspace(0)
+                    window._current_video = None
+                    window._resolved_url = ""
+                    window._download_result_state = "待解析"
+                    window._download_btn.setEnabled(False)
+                    window._content_section.hide()
+                    window._empty_download.show()
+                    window._url_input.clear()
+                    window._resolve_notice.set_message("")
+                    window._refresh_download_summary()
+                    window._workspace_scroll.verticalScrollBar().setValue(0)
+                    window.show()
+                    _flush_events(app)
+                    hero = window._hero
+                    for control in (window._hero_title, window._url_input, window._resolve_btn, window._empty_download):
+                        assert hero.rect().contains(QRect(control.mapTo(hero, QPoint()), control.size()))
+                    _save_widget(app, window, f"glass-{theme_id}-{source}-empty-{mode}-{width}.png")
+                    _populate_main_window(window)
+                    _save_widget(app, window, f"glass-{theme_id}-{source}-resolved-{mode}-{width}.png")
+                    window._show_workspace(1)
+                    _save_widget(app, window, f"glass-{theme_id}-{source}-live-{mode}-{width}.png")
+    screen = app.primaryScreen()
+    (OUTPUT_DIR / "rendering-profile.json").write_text(json.dumps({
+        "backend": app.platformName(), "qt": qVersion(), "dpr": screen.devicePixelRatio(),
+        "physical_pixels": bool(app.property("capturePhysicalPixels")),
+        "material": "Qt wallpaper glass: cached blur, refraction rim and highlights; native text remains separate",
+        "matrix": "2 palettes x 2 modes x 2 wallpaper sources x 3 sizes x 3 states",
+    }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _capture_appearance_controls(app, theme, window):
+    from PySide6.QtTest import QTest
+
+    from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
+    from bilibili_downloader.gui.dialogs.background_gallery import BackgroundGallery
+
+    window._on_login_status_result(window._login_status_request_id, {"isLogin":True,"uname":"星海漫游","mid":123})
+    window._header_login.set_avatar(Path(asset_path("app_icon.png")).read_bytes())
+    panel = window._settings_page
+    for theme_id in ("star_trail", "bilibili_blue"):
+        window._settings.appearance.theme = theme_id
+        theme.set_color_theme(theme_id)
+        for dark in (False, True):
+            theme.apply_theme(dark)
+            mode = "dark" if dark else "light"
+            for width, height in ((900,640), (1120,760), (1320,860)):
+                window.resize(width,height)
+                window._show_settings_tab(SettingsSection.DOWNLOAD)
+                _save_widget(app,window,f"controls-{theme_id}-settings-{mode}-{width}.png")
+                window._show_settings_tab(SettingsSection.LIVE)
+                _save_widget(app,window,f"controls-{theme_id}-live-settings-{mode}-{width}.png")
+                window._show_settings_tab(SettingsSection.APPEARANCE)
+                window.show()
+                _flush_events(app)
+                panel.tabs.currentWidget().ensureWidgetVisible(panel._glass_card, 0, 8)
+                _save_widget(app,window,f"controls-{theme_id}-glass-{mode}-{width}.png")
+            for value in (0,40):
+                panel._glass_blur.setValue(value)
+                _save_widget(app,window,f"controls-{theme_id}-blur-{value}-{mode}.png")
+            panel.load_settings(window._settings)
+            gallery = BackgroundGallery(panel._background_pickers["download"])
+            gallery.select_builtin(BUILTIN_BACKGROUNDS[0].reference)
+            for _ in range(100):
+                if not gallery.busy:
+                    break
+                QTest.qWait(10)
+            _save_widget(app,gallery,f"controls-{theme_id}-gallery-{mode}.png")
+            gallery.resize(720,520)
+            gallery._set_compact_view("preview")
+            _save_widget(app,gallery,f"controls-{theme_id}-gallery-small-{mode}.png")
+            gallery.deleteLater()
+    screen=app.primaryScreen()
+    (OUTPUT_DIR / "rendering-profile.json").write_text(json.dumps({
+        "backend":app.platformName(),"qt":qVersion(),"dpr":screen.devicePixelRatio(),
+        "physical_pixels":bool(app.property("capturePhysicalPixels")),
+        "sections":[section.value for section in SettingsSection],
+        "blur_range":[0,40],"default_blur":18,
+        "blur_control":"appearance settings only; gallery uses the current draft for preview",
+        "directories":"shared read-only picker for download and live",
+    },ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+
+
 def main(argv=None) -> int:
     global OUTPUT_DIR
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1125,6 +1309,10 @@ def main(argv=None) -> int:
         help="Capture font and long-dropdown checks at all three sizes",
     )
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
+    parser.add_argument("--ui-refresh-only", action="store_true", help="Capture navigation, download cards, modes and account states")
+    parser.add_argument("--glass-only", action="store_true", help="Capture glass wallpaper and complete download guidance in both modes")
+    parser.add_argument("--appearance-controls-only", action="store_true", help="Capture centered account, five settings sections and blur controls")
+    parser.add_argument("--physical-pixels", action="store_true", help="Preserve native pixels for typography review")
     parser.add_argument("--updates-only", action="store_true", help="Capture settings tabs and update dialogs only")
     parser.add_argument("--appearance-only", action="store_true", help="Capture both color themes and custom background workspaces")
     parser.add_argument("--ux-only", action="store_true", help="Capture source routing, import progress, account and wallpaper preview states")
@@ -1170,11 +1358,27 @@ def main(argv=None) -> int:
         app.setWindowIcon(QIcon(asset_path("app_icon.png")))
         theme = ThemeManager(app)
         app.setProperty("docsTempRoot", str(temp_root))
+        app.setProperty("capturePhysicalPixels", args.physical_pixels)
 
         if args.lifecycle_only:
             _capture_lifecycle(app, theme, temp_root)
             return 0
         window = _make_main_window(temp_root / "workspace")
+        if args.appearance_controls_only:
+            _capture_appearance_controls(app,theme,window)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
+        if args.glass_only:
+            _capture_glass(app, theme, window)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
+        if args.ui_refresh_only:
+            _capture_ui_refresh(app, theme, window)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
         if args.builtin_backgrounds_only:
             _capture_builtin_backgrounds(app, theme, window, temp_root)
             window._live_controller.shutdown()
@@ -1235,11 +1439,11 @@ def main(argv=None) -> int:
                     window._task_page.history.topLevelItem(0).child(0)
                 ),
             ),
-            "settings": lambda: window._show_settings_tab(0),
-            "live-settings": lambda: window._show_settings_tab(1),
-            "tools": lambda: window._show_settings_tab(2),
-            "updates": lambda: window._show_settings_tab(3),
-            "appearance": lambda: window._show_settings_tab(4),
+            "settings": lambda: window._show_settings_tab(SettingsSection.DOWNLOAD),
+            "live-settings": lambda: window._show_settings_tab(SettingsSection.LIVE),
+            "tools": lambda: window._show_settings_tab(SettingsSection.TOOLS),
+            "updates": lambda: window._show_settings_tab(SettingsSection.ABOUT),
+            "appearance": lambda: window._show_settings_tab(SettingsSection.APPEARANCE),
         }
         if args.updates_only:
             pages = {name: pages[name] for name in ("settings", "live-settings", "tools", "updates")}

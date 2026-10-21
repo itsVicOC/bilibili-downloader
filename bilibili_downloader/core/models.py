@@ -369,10 +369,16 @@ class WorkspaceBackgroundVisibility(BaseModel):
         return value if isinstance(value, (dict, BackgroundVisibility)) else {}
 
 
+DEFAULT_GLASS_BLUR = 18
+MAX_GLASS_BLUR = 40
+
+
 class AppearanceSettings(BaseModel):
     model_config = ConfigDict(validate_assignment=True)
 
     theme: str = "star_trail"
+    mode: str = "system"
+    glass_blur: int = DEFAULT_GLASS_BLUR
     backgrounds: WorkspaceBackgrounds = Field(default_factory=WorkspaceBackgrounds)
     background_visibility: WorkspaceBackgroundVisibility = Field(
         default_factory=WorkspaceBackgroundVisibility
@@ -382,6 +388,16 @@ class AppearanceSettings(BaseModel):
     @classmethod
     def valid_theme(cls, value):
         return value if value in ("star_trail", "bilibili_blue") else "star_trail"
+
+    @field_validator("mode", mode="before")
+    @classmethod
+    def valid_mode(cls, value):
+        return value if value in ("system", "light", "dark") else "system"
+
+    @field_validator("glass_blur", mode="before")
+    @classmethod
+    def valid_glass_blur(cls, value):
+        return value if type(value) is int and 0 <= value <= MAX_GLASS_BLUR else DEFAULT_GLASS_BLUR
 
     @field_validator("backgrounds", mode="before")
     @classmethod

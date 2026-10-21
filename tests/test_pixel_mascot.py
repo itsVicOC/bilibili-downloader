@@ -177,6 +177,7 @@ def test_sidebar_fits_both_mascot_sizes_and_compact_navigation(
             for control in (
                 *window._nav_buttons,
                 window._settings_nav,
+                window._mode_button,
                 window._header_login,
             ):
                 rect = QRect(control.mapTo(window._sidebar, QPoint()), control.size())
@@ -190,8 +191,9 @@ def test_sidebar_fits_both_mascot_sizes_and_compact_navigation(
                 assert not card.mascot._timer.isActive()
                 continue
             assert card.isVisible()
-            assert card._mini == (height == 640)
-            assert card.mascot.width() == (40 if height == 640 else 80)
+            required = window._side_layout.minimumSize().height() - card.minimumHeight() + card.height_for_mode(False)
+            assert card._mini == (window._sidebar.height() < required)
+            assert card.mascot.width() == (40 if card._mini else 80)
             assert card.mascot._timer.isActive()
             for child in (card.mascot, card.caption):
                 rect = QRect(child.mapTo(card, QPoint()), child.size())

@@ -42,4 +42,4 @@ def test_cover_preview_upgrades_api_http_url_and_keeps_job_alive(
     ]
     assert widget._cover_jobs == []
     assert widget._cover_label.pixmap() is not None
-    assert widget._cover_label.pixmap().width() >= 240
+    assert widget._cover_label.pixmap().width() == widget._cover_label.width()

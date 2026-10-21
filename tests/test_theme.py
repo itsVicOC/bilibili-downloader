@@ -57,18 +57,23 @@ def test_theme_applies_same_font_to_body_and_native_bold_labels(qapp, qtbot):
         body = QLineEdit("1080P60")
         heading = QLabel("视频下载")
         heading.setObjectName("PageTitle")
-        for widget in (body, heading):
+        dialog_heading = QLabel("连接 B 站账号")
+        dialog_heading.setObjectName("DialogTitle")
+        for widget in (body, heading, dialog_heading):
             qtbot.addWidget(widget)
             widget.ensurePolished()
         dpi = qapp.primaryScreen().logicalDotsPerInchY()
         reference_dpi = 96 if sys.platform == "darwin" else dpi
-        for widget, points in ((body, 10.5), (heading, 18)):
+        for widget, points in ((body, 10.5), (heading, None), (dialog_heading, 18)):
             info = QFontInfo(widget.font())
             assert info.family() == QFontInfo(qapp.font()).family()
             # Windows can report -1 for a point-sized font's pixelSize().
             # Compare actual paint-device metrics against the intended size.
             expected = QFont(qapp.font())
-            expected.setPointSizeF(points * reference_dpi / dpi)
+            if points is None:
+                expected.setPixelSize(16)
+            else:
+                expected.setPointSizeF(points * reference_dpi / dpi)
             expected.setWeight(widget.font().weight())
             actual_metrics = QFontMetricsF(widget.font(), widget)
             expected_metrics = QFontMetricsF(expected, widget)
@@ -271,22 +276,23 @@ def test_source_input_card_uses_a_plain_readable_surface(qapp, qtbot, dark, them
 
 @pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])
 @pytest.mark.parametrize("dark", [True, False])
-def test_shared_header_decorates_the_right_and_keeps_text_readable(theme_id, dark):
+def test_workspace_header_has_one_quiet_surface(theme_id, dark):
     from PySide6.QtCore import QRect
     from PySide6.QtGui import QImage, QPainter
 
     from bilibili_downloader.gui.widgets.header_backdrop import paint_header_backdrop
 
-    image = QImage(1320, 72, QImage.Format_RGB32)
+    image = QImage(1320, 56, QImage.Format_RGB32)
     painter = QPainter(image)
-    paint_header_backdrop(painter, QRect(0, 0, 1320, 72), dark, theme_id)
+    paint_header_backdrop(painter, QRect(0, 0, 1320, 56), dark, theme_id)
     painter.end()
     p = theme_palette(dark, theme_id)
-    assert image.pixelColor(24, 32).name() == p.surface
-    assert image.pixelColor(1200, 32).name() != p.surface
+    assert image.pixelColor(24, 32).name() == p.background
+    assert image.pixelColor(1200, 55).name() == p.divider
     for x in range(20, 1300, 20):
-        for y in (8, 24, 44, 60):
+        for y in (8, 24, 44):
             background = image.pixelColor(x, y).name()
+            assert background == p.background
             assert _contrast(p.text, background) >= 4.5
             assert _contrast(p.muted, background) >= 4.5
 

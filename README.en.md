@@ -61,7 +61,7 @@ This README is available in English and Simplified Chinese. The current desktop 
 | Live recording | Monitor rooms, record automatically or manually, reconnect, merge a session into one MP4 automatically or on demand, and use global or per-room directories; see the [live recording guide](docs/LIVE_RECORDING.md) |
 | Batch and multi-part downloads | Select individual or all parts, preview/filter batches, track or cancel metadata imports, retry failed entries, read paginated sources, deduplicate tasks, and run 1–8 concurrent downloads |
 | Account login | Start with QR login or use the Cookie fallback; manage your account from the sidebar with username and avatar, retaining only allowed Cookie fields and preferring the system credential store |
-| Cross-platform desktop UI | A PySide6 interface with a responsive layout down to 900×640 and automatic system light/dark themes |
+| Cross-platform desktop UI | A PySide6 interface with a responsive layout down to 900×640, manual light/dark modes, and automatic system theme switching |
 | Themes and backgrounds | Xinghe and Qinghai themes; twelve Xiao Liu wallpapers or custom images, with large previews, filters, drag-and-drop imports, and independent light/dark visibility per workspace |
 | Update checks and installation | Check at startup or manually, choose stable or beta channels, and verify/install/restart official macOS/Windows packages with recovery if startup fails |
 
@@ -141,7 +141,7 @@ See the [user guide](docs/USER_GUIDE.md) for task states, output templates, and 
 
 **Recording a live stream?** Add a room ID or live room URL on the Live recording page (`直播录制`) and enable monitoring. The task center shows active recordings and historical segments, with MP4 export. Monitoring requires the app to stay open; content missed while the app is closed, asleep, or offline cannot be recovered. See the [live recording guide](docs/LIVE_RECORDING.md).
 
-**Keep tasks running after closing the window:** On macOS, the red close button and `⌘W` close only the window; click the Dock icon to restore it, or use `⌘Q` / the app menu to quit. On Windows, closing offers Minimize to system tray or Quit, with an optional remembered choice. Change it in Settings → Tools & storage → Window & background operation (`设置 → 工具与存储 → 窗口与后台运行`). Click the tray icon to restore the window or use its context menu to quit. Downloads, live monitoring, recording, and exports continue while the window is closed or in the tray. Quitting confirms active tasks and waits for cleanup.
+**Keep tasks running after closing the window:** On macOS, the red close button and `⌘W` close only the window; click the Dock icon to restore it, or use `⌘Q` / the app menu to quit. On Windows, closing offers Minimize to system tray or Quit, with an optional remembered choice. Change it in Settings → Appearance → Window (`设置 → 外观 → 窗口`). Click the tray icon to restore the window or use its context menu to quit. Downloads, live monitoring, recording, and exports continue while the window is closed or in the tray. Quitting confirms active tasks and waits for cleanup.
 
 ## Screenshots
 

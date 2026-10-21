@@ -65,7 +65,7 @@ def test_expired_account_opens_qr_login_instead_of_management(qtbot):
     assert "失效" in dialog._caption.text()
 
 
-def test_account_management_keeps_switch_action_inside_card(qtbot):
+def test_account_management_places_switch_action_in_footer(qtbot):
     from PySide6.QtCore import QPoint, QRect
     from PySide6.QtWidgets import QApplication, QPushButton
 
@@ -75,7 +75,11 @@ def test_account_management_keeps_switch_action_inside_card(qtbot):
     QApplication.processEvents()
     switch = next(button for button in account.findChildren(QPushButton) if button.text() == "切换账号")
     assert account.width() == 500
-    assert account._account_card.rect().contains(QRect(switch.mapTo(account._account_card, QPoint()), switch.size()))
+    switch_rect = QRect(switch.mapTo(account, QPoint()), switch.size())
+    card_rect = QRect(account._account_card.mapTo(account, QPoint()), account._account_card.size())
+    assert account.rect().contains(switch_rect)
+    assert not card_rect.intersects(switch_rect)
+    assert switch_rect.left() > account._close_button.geometry().right()
 
 
 @pytest.mark.parametrize("target, url", [
@@ -148,7 +152,7 @@ def test_main_window_separates_download_and_service_pools(qtbot, tmp_path):
     assert window.minimumHeight() == 640
 
     controls = window.findChild(QWidget, "ControlPanel")
-    assert controls.layout().contentsMargins().left() == 20
+    assert controls.layout().contentsMargins().left() == 16
     assert controls.layout().spacing() == 12
     assert not window._download_btn.isEnabled()
 

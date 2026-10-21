@@ -129,7 +129,7 @@ python -m scripts.verify_native_installer \
 
 校验器将安装/复制得到的文件与同次构建的 full ZIP 按路径、摘要和符号链接目标逐项比较，运行冻结 CLI，并生成绑定 ZIP 与安装包 SHA-256 的 `*.verification.json`。Windows 还测试覆盖安装、运行中拦截、目录替换后的卸载与用户媒体保留；脚本会实际写入临时目录和当前用户的卸载注册表，只能在没有既有 BiliFlow 安装的干净测试账号中运行。macOS 检查镜像、Applications 链接、拖拽等效复制和应用签名。验证器不启动真实下载、录制或 GUI，也不读取账号。
 
-GUI 的原生验收单独执行：macOS 检查系统菜单、红黄绿按钮、融合工具栏、全屏和 Retina；Windows 检查 100%/150%/200% 缩放、窗口按钮、快捷键和文件选择器。发布演练另外上传 `BiliFlow-Windows-visuals-<release-id>`，其中三个缩放目录保存原生 Windows 后端的字体、下拉截图及渲染记录。Qt 控件截图用于布局比较；包含系统标题栏的截图应使用只捕获目标窗口的工具另行保存，避免带入其他应用或桌面内容。原生安装验证报告不代表 GUI 人工验收通过。
+GUI 的原生验收单独执行：macOS 检查系统菜单、红黄绿按钮、融合工具栏、全屏和 Retina；Windows 检查 100%/125%/150%/200% 缩放、窗口按钮、快捷键和文件选择器。发布演练另外上传 `BiliFlow-Windows-visuals-<release-id>`，其中三个缩放目录保存原生 Windows 后端的字体、下拉截图及渲染记录。Qt 控件截图用于布局比较；包含系统标题栏的截图应使用只捕获目标窗口的工具另行保存，避免带入其他应用或桌面内容。原生安装验证报告不代表 GUI 人工验收通过。
 
 独立更新程序只依赖 Python 标准库，不包含 Qt。Release 流水线通过 `python -m scripts.prepare_update_bundle` 为每个 full/lite 变体加入 `biliflow-updater`（Windows 为 `.exe`）和 `biliflow-build.json`；构建信息包含规范化版本、平台、架构、变体和更新协议。macOS 必须在嵌入这些文件之后签名。直接用应用 spec 构建的目录没有发行描述文件，自动安装会转为手动安装。
 
@@ -180,7 +180,7 @@ python scripts/build_app_icons.py
 - 版本由 `bilibili_downloader.__version__` 统一提供，正式标签为 `v0.8.2`；中英文 README、更新日志、用户指南和外观截图已同步。
 - 本地通过 566 项 Python 测试、编译、Ruff 与 diff 检查；macOS offscreen 与原生 Cocoa 各生成 277 张演示截图，复核范围见[视觉规范](UI_DESIGN.md)。
 - 使用 `v0.8.1` 标签导出的旧代码在临时目录创建真实任务库，再由本版打开；检查 schema、原始行、状态和备份保持一致，并验证记录移除/撤销及 schema 校验失败时保留原库。旧配置自动补全外观默认值。
-- 发布提交为 `3be4258`；[CI 39189925900](https://github.com/itsVicOC/bilibili-downloader/actions/runs/39189925900) 的 13 项检查与 [Release 39189955990](https://github.com/itsVicOC/bilibili-downloader/actions/runs/39189955990) 的 5 个任务全部通过。双平台完成媒体样本、内置 MP4 导出、冻结更新程序与背景目录回滚、原生安装器、SBOM 和统一产物校验；Windows 原生字体与下拉另通过 100%/150%/200% 缩放检查。
+- 发布提交为 `3be4258`；[CI 39189925900](https://github.com/itsVicOC/bilibili-downloader/actions/runs/39189925900) 的 13 项检查与 [Release 39189955990](https://github.com/itsVicOC/bilibili-downloader/actions/runs/39189955990) 的 5 个任务全部通过。双平台完成媒体样本、内置 MP4 导出、冻结更新程序与背景目录回滚、原生安装器、SBOM 和统一产物校验；Windows 原生字体与下拉另通过 100%/125%/150%/200% 缩放检查。
 - [v0.8.2 Release](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.2) 已公开并标为 Latest，非草稿、非预发布版，14 个附件齐全。下载后独立核对 macOS full DMG 及两份原生安装验证报告，SHA-256 均与清单一致；清单包含全部 13 个载荷附件的摘要。
 
 ### 本轮验证记录（2026-10-17）
@@ -192,7 +192,7 @@ python scripts/build_app_icons.py
 - macOS DMG 挂载、Applications 入口、复制、签名结构、载荷与 ZIP 对比、冻结 CLI 均通过。
 - Windows EXE 首次安装、覆盖安装、运行中拦截、目录替换后的卸载及用户媒体保留通过；卸载器延迟自清理也已纳入等待。
 - 两个平台的安装包、ZIP、SBOM、原生验证报告、FFmpeg 源码与 SHA-256 清单通过统一校验。
-- Windows 原生后端的 100%/150%/200% 字体与下拉检查、macOS Retina 菜单/快捷键/全屏复核见[视觉规范](UI_DESIGN.md)。Windows 系统边框、文件选择器及实际多屏切换仍需桌面人工复核。
+- Windows 原生后端的 100%/125%/150%/200% 字体与下拉检查、macOS Retina 菜单/快捷键/全屏复核见[视觉规范](UI_DESIGN.md)。Windows 系统边框、文件选择器及实际多屏切换仍需桌面人工复核。
 
 ### 无发布演练
 
@@ -262,3 +262,7 @@ git push origin vX.Y.Z
 未配置 `MACOS_CERTIFICATE` 时该步骤会跳过，保持未签名发布行为。Windows Authenticode 仍需维护者提供独立代码签名证书。所有凭据必须存放在 GitHub Secrets 中，不得提交到仓库。
 
 CI 与 Release workflow 中的第三方 Action 固定到完整提交 SHA，行尾注释记录对应主版本。Dependabot 的 `github-actions` 更新器负责提交 SHA 升级；不要手动改回浮动主版本标签。
+
+### 本轮界面验收
+
+`--ui-refresh-only` 使用隔离配置、数据库及离线账号，覆盖两套配色、深浅模式、三种尺寸、六类设置和账号状态。`--physical-pixels` 保留原生像素，供字体检查使用。主窗口标题栏需另在目标系统检查拖动、缩放、窗口按钮、全屏与贴靠；截图成功不代表这些系统交互均已验收。

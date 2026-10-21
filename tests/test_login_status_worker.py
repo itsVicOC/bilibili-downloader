@@ -44,7 +44,7 @@ def test_avatar_uses_cookie_free_https_and_normalizes_image(monkeypatch):
     content = load_avatar("http://i0.hdslb.com/bfs/face/demo.png")
     with Image.open(io.BytesIO(content)) as image:
         assert image.format == "PNG"
-        assert image.size == (96, 58)
+        assert image.size == (192, 115)
     method, url, options = calls[0]
     assert method == "GET"
     assert url.startswith("https://i0.hdslb.com/")

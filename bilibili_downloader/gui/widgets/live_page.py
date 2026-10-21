@@ -9,7 +9,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
     QDialogButtonBox,
-    QFileDialog,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -92,7 +91,7 @@ class LiveSettingsDialog(SettingsDialog):
 
 class LivePage(QWidget):
     settings_changed = Signal(object)
-    settings_requested = Signal(int)
+    settings_requested = Signal(str)
     history_requested = Signal()
 
     def __init__(self, config, confirm_copyright, parent=None, controller=None):
@@ -106,7 +105,7 @@ class LivePage(QWidget):
         self._quality_fingerprint = None
         root = QVBoxLayout(self)
         root.setContentsMargins(24, 24, 24, 24)
-        root.setSpacing(20)
+        root.setSpacing(16)
         header = PageHeader("直播录制", "守候开播，记录每一场喜欢的直播")
         self.header = header
         history = QPushButton("录制历史")
@@ -120,11 +119,11 @@ class LivePage(QWidget):
         body = QWidget()
         column = QVBoxLayout(body)
         column.setContentsMargins(0, 0, 4, 0)
-        column.setSpacing(20)
+        column.setSpacing(16)
         hero = HeroPanel()
         hero.set_compact(True)
         hero_layout = QVBoxLayout(hero)
-        hero_layout.setContentsMargins(20, 16, 20, 16)
+        hero_layout.setContentsMargins(16, 16, 16, 16)
         hero_layout.setSpacing(10)
         hint = QLabel("添加直播间 · 应用运行期间开播自动录制")
         hint.setObjectName("HeroTitle")
@@ -153,7 +152,7 @@ class LivePage(QWidget):
         self._content = QWidget()
         self._content_layout = QBoxLayout(QBoxLayout.LeftToRight, self._content)
         self._content_layout.setContentsMargins(0, 0, 0, 0)
-        self._content_layout.setSpacing(20)
+        self._content_layout.setSpacing(16)
         self._rooms_card = SectionCard("监控列表")
         self._count = StatusBadge("0 个直播间")
         self._rooms_card.header.addWidget(self._count)
@@ -187,6 +186,12 @@ class LivePage(QWidget):
         self._detail_card.setMinimumWidth(300)
         self._detail_badge = StatusBadge("未选择房间")
         self._detail_card.header.addWidget(self._detail_badge)
+        self._detail_toggle = QPushButton("展开")
+        self._detail_toggle.setObjectName("TextButton")
+        self._detail_toggle.setCheckable(True)
+        self._detail_toggle.setAccessibleName("展开或收起房间详情")
+        self._detail_toggle.toggled.connect(self._sync_detail_visibility)
+        self._detail_card.header.addWidget(self._detail_toggle)
         self._detail_empty = QLabel("选择一个直播间，查看状态与录制设置")
         self._detail_empty.setObjectName("MetaLabel")
         self._detail_empty.setWordWrap(True)
@@ -304,15 +309,30 @@ class LivePage(QWidget):
             self.engine_notice.set_message(str(exc), "warning")
 
     def resizeEvent(self, event):
-        narrow = event.size().width() < 1000 or event.size().height() < 700
+        # Both panes include their own padding; the 900px shell stays stacked.
+        narrow = event.size().width() < 880
+        previous = getattr(self, "_stacked_details", None)
         self._stacked_details = narrow
         self._content_layout.setDirection(
             QBoxLayout.TopToBottom if narrow else QBoxLayout.LeftToRight
         )
-        self._detail_card.setMaximumWidth(16777215 if narrow else 380)
-        self._room_stack.setMinimumHeight(180 if narrow else 280)
+        self._detail_card.setMaximumWidth(16777215 if narrow else 320)
+        self._detail_toggle.setVisible(narrow)
+        if previous != narrow:
+            self._detail_toggle.setChecked(not narrow)
+        self._room_stack.setMinimumHeight(160 if narrow else 200)
+        for index, width in ((1, 108), (2, 80), (3, 92)):
+            self.rooms.horizontalHeader().resizeSection(index, width)
+        self._sync_detail_visibility()
         self._update_table_height()
         super().resizeEvent(event)
+
+    def _sync_detail_visibility(self, *_args):
+        expanded = not getattr(self, "_stacked_details", True) or self._detail_toggle.isChecked()
+        selected = self._selected_row() is not None
+        self._detail_controls.setVisible(expanded and selected)
+        self._detail_empty.setVisible(expanded and not selected)
+        self._detail_toggle.setText("收起" if expanded else "展开")
 
     def _update_table_height(self):
         stacked = getattr(self, "_stacked_details", True)
@@ -326,6 +346,7 @@ class LivePage(QWidget):
         )
         # Stacked content scrolls as one page; never nest the room table's scroll.
         self.rooms.setMinimumHeight(max(140, height) if stacked else 140)
+        self._room_stack.setMinimumHeight(max(160, height) if stacked and self.rooms.rowCount() else 200)
 
     def _room_id(self):
         item = self.rooms.item(self.rooms.currentRow(), 0)
@@ -377,9 +398,8 @@ class LivePage(QWidget):
     def _selection_changed(self):
         row = self._selected_row()
         self._selected_id = row["room_id"] if row else None
-        self._detail_controls.setVisible(row is not None)
+        self._sync_detail_visibility()
         self._action_bar.setVisible(row is not None)
-        self._detail_empty.setVisible(row is None)
         if not row:
             self._detail_badge.setText("未选择房间")
             self._detail_badge.set_tone("muted")
@@ -452,7 +472,7 @@ class LivePage(QWidget):
 
     def _settings(self):
         if not self._own_controller:
-            self.settings_requested.emit(1)
+            self.settings_requested.emit("live")
             return
         dialog = LiveSettingsDialog(self._config.load().live, self)
         dialog.set_live_rooms(self.controller.rows)
@@ -492,7 +512,7 @@ class LivePage(QWidget):
         dialog.setMinimumWidth(560)
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(20)
+        layout.setSpacing(16)
         card = SectionCard("房间录制设置")
         mode = ComboBox()
         mode.addItem("跟随全局保存目录", "default")
@@ -513,11 +533,13 @@ class LivePage(QWidget):
         browse = QPushButton("选择…")
 
         def select_directory():
-            value = QFileDialog.getExistingDirectory(
-                dialog, "选择录制目录", directory.text()
-            )
-            if value:
+            from bilibili_downloader.gui.dialogs.file_picker import file_picker
+
+            def selected(value):
                 directory.setText(value)
+                directory.setToolTip(value)
+                draft_directory["custom"] = value
+            file_picker(dialog).directory("选择录制目录", directory.text(), selected)
 
         browse.clicked.connect(select_directory)
         path_layout.addWidget(browse)
@@ -621,6 +643,7 @@ class LivePage(QWidget):
                 self.rooms.selectRow(index)
                 self.rooms.scrollToItem(self.rooms.item(index, 0))
                 if getattr(self, "_stacked_details", False):
+                    self._detail_toggle.setChecked(True)
                     self._scroll.ensureWidgetVisible(self._detail_card)
                 break
 

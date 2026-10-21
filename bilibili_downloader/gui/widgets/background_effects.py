@@ -1,6 +1,6 @@
 """Shared, isolated appearance controls for imported and bundled pictures."""
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -12,12 +12,56 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from bilibili_downloader.core.models import DEFAULT_GLASS_BLUR, MAX_GLASS_BLUR
 from bilibili_downloader.gui.resources.styles import background_overlay_alpha
 from bilibili_downloader.gui.widgets.appearance_preview import WorkspacePreview
 
 
+class GlassBlurControl(QWidget):
+    """Keyboard-accessible global blur preference in appearance settings."""
+
+    valueChanged = Signal(int)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(12)
+        label = QLabel("玻璃模糊")
+        row.addWidget(label)
+        self.slider = QSlider(Qt.Horizontal)
+        self.slider.setRange(0, MAX_GLASS_BLUR)
+        self.slider.setPageStep(4)
+        self.slider.setAccessibleName("玻璃模糊程度")
+        self.slider.setToolTip("向左保留背景细节，向右更柔和；所有工作区共用")
+        label.setBuddy(self.slider)
+        row.addWidget(self.slider, 1)
+        self.display = QLabel()
+        self.display.setMinimumWidth(48)
+        self.display.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        row.addWidget(self.display)
+        self.reset = QPushButton("重置")
+        self.reset.setObjectName("OutputSecondaryButton")
+        self.reset.setAccessibleName("恢复玻璃模糊默认值")
+        self.reset.clicked.connect(lambda: self.setValue(DEFAULT_GLASS_BLUR))
+        row.addWidget(self.reset)
+        self.slider.valueChanged.connect(self._changed)
+        self.setValue(DEFAULT_GLASS_BLUR)
+
+    def value(self):
+        return self.slider.value()
+
+    def setValue(self, value):
+        self.slider.setValue(value)
+
+    def _changed(self, value):
+        self.display.setText(f"{value} px")
+        self.reset.setEnabled(value != DEFAULT_GLASS_BLUR)
+        self.valueChanged.emit(value)
+
+
 class BackgroundEffects(QWidget):
-    def __init__(self, title, theme_id, visibility, parent=None, *, workspace="download"):
+    def __init__(self, title, theme_id, visibility, parent=None, *, workspace="download", glass_blur=DEFAULT_GLASS_BLUR):
         super().__init__(parent)
         self._theme_id = theme_id
         layout = QVBoxLayout(self)
@@ -25,6 +69,8 @@ class BackgroundEffects(QWidget):
         self.preview = WorkspacePreview(
             title, QPixmap(), theme_id, visibility=visibility, workspace=workspace
         )
+        self.preview.setMinimumHeight(160)
+        self.preview.glass_blur = glass_blur
         row = QHBoxLayout()
         row.setSpacing(4)
         self._views = QButtonGroup(self)
@@ -55,14 +101,10 @@ class BackgroundEffects(QWidget):
         self.value.setMinimumWidth(80)
         self.value.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         row.addWidget(self.value)
-        layout.addLayout(row)
-        row = QHBoxLayout()
-        hint = QLabel("浅色和深色分别记忆")
-        hint.setObjectName("MetaLabel")
-        row.addWidget(hint)
-        row.addStretch()
-        self.reset = QPushButton("恢复当前模式默认")
+        self.reset = QPushButton("重置")
         self.reset.setObjectName("OutputSecondaryButton")
+        self.reset.setAccessibleName("恢复当前模式背景可见度")
+        self.reset.setToolTip("恢复当前深浅模式的默认可见度")
         self.reset.clicked.connect(self._reset)
         row.addWidget(self.reset)
         layout.addLayout(row)

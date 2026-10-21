@@ -3,13 +3,12 @@
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal
+from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QComboBox,
     QDialog,
-    QFileDialog,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -23,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from bilibili_downloader import __version__
+from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
 from bilibili_downloader.core.errors import redact_sensitive_text
 from bilibili_downloader.core.ffmpeg import FFmpegManager
 from bilibili_downloader.core.models import (
@@ -35,18 +35,30 @@ from bilibili_downloader.core.models import (
     WindowCloseAction,
 )
 from bilibili_downloader.core.recorder import check_recorder, find_recorder
+from bilibili_downloader.gui.dialogs.file_picker import file_picker
+from bilibili_downloader.gui.resources.paths import background_path
+from bilibili_downloader.gui.resources.styles import UI_METRICS
+from bilibili_downloader.gui.settings_sections import APPEARANCE_MODES, SettingsSection
 from bilibili_downloader.gui.widgets.appearance_preview import ThemePreviewButton
+from bilibili_downloader.gui.widgets.background_effects import GlassBlurControl
 from bilibili_downloader.gui.widgets.background_picker import BackgroundPicker
 from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
     ActionBar,
+    CollapsibleSection,
     ElidedLabel,
     FieldRow,
     Notice,
     SectionCard,
+    help_text,
     scroll_area,
     stepper,
 )
+from bilibili_downloader.gui.widgets.download_options import (
+    DownloadOptionCard,
+    DownloadOptions,
+)
+from bilibili_downloader.gui.widgets.workspace_background import WorkspaceStack
 from bilibili_downloader.utils.validators import render_path_template
 
 
@@ -111,6 +123,7 @@ class SettingsDialog(QDialog):
     update_page_requested = Signal()
     update_channel_changed = Signal()
     dirty_changed = Signal(bool)
+    appearance_mode_requested = Signal(str)
 
     def __init__(self, settings: AppSettings, parent=None, embedded=False, background_store=None, *, desktop_platform=None):
         super().__init__(parent)
@@ -153,30 +166,20 @@ class SettingsDialog(QDialog):
         layout.setSpacing(16)
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs, 1)
-        download, live, tools, updates = [
-            self._tab(name) for name in ("下载", "直播", "工具与存储", "软件更新")
+        self._sections = {}
+        download, live, appearance, tools, updates = [
+            self._tab(name, section) for name, section in (
+                ("下载", SettingsSection.DOWNLOAD),
+                ("直播", SettingsSection.LIVE), ("外观", SettingsSection.APPEARANCE),
+                ("工具与存储", SettingsSection.TOOLS), ("关于与更新", SettingsSection.ABOUT),
+            )
         ]
-        paths = SectionCard("保存位置与目录模板")
+        paths = SectionCard("保存位置")
         self._output_dir = _LeadingPathLineEdit()
-        self._output_dir.setReadOnly(True)
         self._controls["output_dir"] = self._output_dir
         self._field(
             "output_dir", paths, "保存目录", self._path_row(self._output_dir, True)
         )
-        self._path_template = self._entry("path_template", paths, "目录模板")
-        self._path_template.setPlaceholderText("{author}/{title}{part_suffix}")
-        self._path_template.setToolTip(
-            "字段：title、author、bvid、page、part、part_suffix、collection、quality、codec"
-        )
-        self._bangumi_path_template = self._entry(
-            "bangumi_path_template", paths, "番剧模板"
-        )
-        hint = QLabel(
-            "模板控制相对目录与文件名；支持作品、UP 主、分 P 和番剧章节字段。"
-        )
-        hint.setObjectName("MetaLabel")
-        hint.setWordWrap(True)
-        paths.body.addWidget(hint)
         download.addWidget(paths)
         formats = SectionCard("默认媒体规格")
         self._output_mode_combo = self._combo(
@@ -213,40 +216,51 @@ class SettingsDialog(QDialog):
         self._concurrency_up.setToolTip("增加并发数")
         download.addWidget(formats)
         options = SectionCard("归档附加内容")
-        options_grid = QGridLayout()
-        options_grid.setHorizontalSpacing(16)
-        options_grid.setVerticalSpacing(4)
-        positions = [(0, 0), (0, 1), (1, 1), (2, 0), (2, 1)]
-        for index, (key, label, attr) in enumerate(
-            (
-                ("download_danmaku", "默认下载弹幕", "_danmaku_check"),
-                ("download_subtitle", "默认下载字幕", "_subtitle_check"),
-                ("download_all_subtitles", "默认下载全部字幕", "_all_subtitles_check"),
-                ("download_cover", "默认保存封面", "_cover_check"),
-                ("download_metadata", "默认保存元数据", "_metadata_check"),
-            )
+        for key, label, description, icon, attr in (
+            ("download_danmaku", "下载弹幕", "ASS", "star", "_danmaku_check"),
+            ("download_subtitle", "下载字幕", "SRT", "info", "_subtitle_check"),
+            ("download_cover", "保存封面", "图片", "folder", "_cover_check"),
+            ("download_metadata", "保存元数据", "JSON", "tasks", "_metadata_check"),
         ):
-            control = QCheckBox(label)
+            control = DownloadOptionCard(label, description, icon)
             self._controls[key] = control
             setattr(self, attr, control)
-            if key == "download_all_subtitles":
-                wrapper = QWidget()
-                wrapper_layout = QHBoxLayout(wrapper)
-                wrapper_layout.setContentsMargins(24, 0, 0, 0)
-                wrapper_layout.addWidget(control)
-                options_grid.addWidget(wrapper, *positions[index])
-            else:
-                options_grid.addWidget(control, *positions[index])
-        options.body.addLayout(options_grid)
+        self._all_subtitles_check = QCheckBox("全部字幕")
+        self._controls["download_all_subtitles"] = self._all_subtitles_check
+        self._subtitle_check.toggled.connect(self._all_subtitles_check.setEnabled)
+        self._subtitle_check.toggled.connect(
+            lambda checked: self._all_subtitles_check.setChecked(False) if not checked else None
+        )
         self._all_subtitles_check.toggled.connect(
             lambda checked: self._subtitle_check.setChecked(True) if checked else None
         )
+        options.body.addWidget(DownloadOptions(
+            self._danmaku_check, self._subtitle_check, self._all_subtitles_check,
+            self._cover_check, self._metadata_check,
+        ))
         download.addWidget(options)
+        self._templates_section = CollapsibleSection("高级命名与目录模板")
+        self._template_previews = {}
+        for key, label, attr in (
+            ("path_template", "目录模板", "_path_template"),
+            ("bangumi_path_template", "番剧模板", "_bangumi_path_template"),
+        ):
+            entry = self._entry(key, self._templates_section, label)
+            setattr(self, attr, entry)
+            preview = help_text("")
+            self._template_previews[key] = preview
+            self._templates_section.body.addWidget(preview)
+            entry.textChanged.connect(self._update_template_previews)
+        self._path_template.setPlaceholderText("{author}/{title}{part_suffix}")
+        self._templates_section.body.addWidget(help_text(
+            "支持 title、author、bvid、part_suffix、collection 和番剧章节字段；扩展名由输出格式决定。"
+        ))
+        download.addWidget(self._templates_section)
         defaults = SectionCard("默认录制位置与分段")
         self._review_directories_button = QPushButton("核对旧房间目录")
         self._review_directories_button.setObjectName("TextButton")
         self._review_directories_button.clicked.connect(
-            lambda: self.tabs.widget(1).ensureWidgetVisible(self._directory_review)
+            lambda: self.tabs.widget(self._sections[SettingsSection.LIVE]).ensureWidgetVisible(self._directory_review)
         )
         self._review_directories_button.hide()
         defaults.header.addWidget(self._review_directories_button)
@@ -260,12 +274,12 @@ class SettingsDialog(QDialog):
         )
         self._number("live.segment_seconds", defaults, "分段时长", 1, 1440, " 分钟")
         defaults.body.addWidget(
-            Notice("跟随全局的房间在下一场使用此目录；本场录制继续保存在原位置。分段时长用于新增房间。")
+            help_text("跟随全局的房间在下一场使用此目录；本场录制继续保存在原位置。分段时长用于新增房间。")
         )
         self._auto_merge_live = QCheckBox("录制结束后自动合并 MP4")
         self._controls["live.auto_merge_mp4"] = self._auto_merge_live
         defaults.body.addWidget(self._auto_merge_live)
-        defaults.body.addWidget(Notice("正常下播或手动停止后合并到场次目录，保留原始分段。"))
+        defaults.body.addWidget(help_text("正常下播或手动停止后合并到场次目录，保留原始分段。"))
         quality_hint = QLabel(
             "默认使用当前可用最高画质；单房间画质可在直播工作台设置，下次拉流生效。"
         )
@@ -291,51 +305,32 @@ class SettingsDialog(QDialog):
             )
         )
         live.addWidget(limits)
-        if self._desktop_platform in ("darwin", "win32"):
-            window_card = SectionCard("窗口与后台运行")
-            if self._desktop_platform == "win32":
-                self._combo(
-                    "windows_close_action", window_card, "关闭窗口时",
-                    [("每次询问", WindowCloseAction.ASK),
-                     ("最小化到系统托盘", WindowCloseAction.TRAY),
-                     ("彻底退出", WindowCloseAction.QUIT)],
-                )
-                explanation = "最小化到托盘后，后台任务继续运行。点击托盘图标可恢复窗口；右键菜单可退出。有任务时，彻底退出仍需确认。"
-            else:
-                explanation = "点击红色关闭按钮或按 ⌘W 仅关闭窗口，后台任务继续运行。点击 Dock 图标可恢复窗口；按 ⌘Q 或选择应用菜单中的「退出 BiliFlow」可退出。"
-            hint = QLabel(explanation)
-            hint.setObjectName("MetaLabel")
-            hint.setWordWrap(True)
-            window_card.body.addWidget(hint)
-            tools.addWidget(window_card)
-        engines = SectionCard("媒体工具")
         self._ffmpeg_path = QLineEdit()
         self._controls["ffmpeg_path"] = self._ffmpeg_path
         self._ffmpeg_path.setPlaceholderText("留空自动检测内置版本或系统 FFmpeg")
-        self._field(
-            "ffmpeg_path", engines, "FFmpeg", self._path_row(self._ffmpeg_path, False)
-        )
         self._recorder_path = QLineEdit()
         self._controls["live.recorder_path"] = self._recorder_path
         self._recorder_path.setPlaceholderText("full 包自动检测；lite 包选择配套引擎")
-        self._field(
-            "live.recorder_path",
-            engines,
-            "录制引擎",
-            self._path_row(self._recorder_path, False),
-        )
-        probe_row = QHBoxLayout()
+        self._probe_notices = {}
         for kind, text in (("ffmpeg", "检查 FFmpeg"), ("recorder", "检查录制引擎")):
-            button = QPushButton(text)
+            key = "ffmpeg_path" if kind == "ffmpeg" else "live.recorder_path"
+            entry = self._controls[key]
+            engines = SectionCard("FFmpeg" if kind == "ffmpeg" else "录制引擎")
+            self._field(key, engines, "可执行文件", self._path_row(entry, False))
+            button = QPushButton("检测")
+            button.setAccessibleName(text)
+            button.setObjectName("TextButton")
             button.clicked.connect(
                 lambda _checked=False, k=kind, b=button: self._probe(k, b)
             )
-            probe_row.addWidget(button)
-        probe_row.addStretch()
-        engines.body.addLayout(probe_row)
-        self._probe_notice = Notice("可检测当前填写的路径；检测不会保存草稿。")
-        engines.body.addWidget(self._probe_notice)
-        tools.addWidget(engines)
+            engines.header.addWidget(button)
+            engines.body.addWidget(help_text(f"{entry.placeholderText()}。检测使用当前路径，不会保存设置。"))
+            notice = Notice()
+            self._probe_notices[kind] = notice
+            entry.textChanged.connect(lambda _text, n=notice: n.set_message(""))
+            engines.body.addWidget(notice)
+            tools.addWidget(engines)
+        self._probe_notice = self._probe_notices["ffmpeg"]
         storage = SectionCard("断点缓存")
         storage.body.addWidget(
             Notice(
@@ -348,6 +343,11 @@ class SettingsDialog(QDialog):
         clear.clicked.connect(self.cache_requested.emit)
         storage.body.addWidget(clear, alignment=Qt.AlignLeft)
         tools.addWidget(storage)
+        identity = SectionCard("BiliFlow · 星轨收藏站")
+        description = QLabel("视频下载、批量导入与直播录制，统一的本地收藏工作台。")
+        description.setWordWrap(True)
+        description.setObjectName("MetaLabel")
+        identity.body.addWidget(description)
         update_card = SectionCard("软件更新")
         version = QLabel(f"当前版本：v{__version__}")
         version.setObjectName("MetaLabel")
@@ -360,8 +360,8 @@ class SettingsDialog(QDialog):
             [("仅更新正式版", UpdateChannel.STABLE), ("更新最新版（包含 beta、rc 版）", UpdateChannel.LATEST)],
         )
         self._update_channel.currentIndexChanged.connect(lambda *_args: self.update_channel_changed.emit())
-        update_card.body.addWidget(Notice("启动检查使用已保存设置；手动检查使用当前选中的通道。跳过版本只影响自动提醒。"))
-        self._update_notice = Notice("手动检查可查看已跳过的版本。")
+        update_card.body.addWidget(help_text("启动检查使用已保存设置；手动检查使用当前通道，也能查看已跳过的版本。"))
+        self._update_notice = Notice()
         update_card.body.addWidget(self._update_notice)
         self._update_progress = QProgressBar()
         self._update_progress.setRange(0, 100)
@@ -371,6 +371,7 @@ class SettingsDialog(QDialog):
         self._check_update_btn = QPushButton("检查更新")
         self._check_update_btn.setObjectName("PrimaryButton")
         self._check_update_btn.clicked.connect(lambda: self.update_check_requested.emit(self._update_channel.currentData()))
+        update_card.header.addWidget(self._check_update_btn)
         self._install_update_btn = QPushButton("安装并重启")
         self._install_update_btn.setObjectName("PrimaryButton")
         self._install_update_btn.clicked.connect(self.update_install_requested.emit)
@@ -378,7 +379,7 @@ class SettingsDialog(QDialog):
         self._cancel_update_btn = QPushButton("取消下载")
         self._cancel_update_btn.clicked.connect(self.update_cancel_requested.emit)
         self._cancel_update_btn.hide()
-        for button in (self._check_update_btn, self._install_update_btn, self._cancel_update_btn):
+        for button in (self._install_update_btn, self._cancel_update_btn):
             update_actions.addWidget(button)
         update_actions.addStretch()
         update_card.body.addLayout(update_actions)
@@ -391,14 +392,41 @@ class SettingsDialog(QDialog):
         release_page.clicked.connect(self.update_page_requested.emit)
         update_card.body.addWidget(release_page, alignment=Qt.AlignLeft)
         updates.addWidget(update_card)
-        appearance = self._tab("外观")
-        theme = SectionCard("应用配色")
+        updates.addWidget(identity)
+        mode_card = SectionCard("显示模式 · 立即生效")
+        self._mode_buttons = QButtonGroup(self)
+        modes = QHBoxLayout()
+        for index, (label, mode) in enumerate(APPEARANCE_MODES):
+            button = QPushButton(label)
+            button.setCheckable(True)
+            button.setObjectName("SegmentButton")
+            button.setAccessibleName(f"外观模式：{label}")
+            button.setMinimumWidth(100)
+            button.setMaximumWidth(144)
+            self._mode_buttons.addButton(button, index)
+            modes.addWidget(button)
+        self._mode_buttons.idClicked.connect(
+            lambda index: self.appearance_mode_requested.emit(APPEARANCE_MODES[index][1])
+        )
+        modes.addStretch()
+        mode_card.body.addLayout(modes)
+        appearance.addWidget(mode_card)
+        if self._desktop_platform == "win32":
+            window_card = SectionCard("窗口")
+            self._combo(
+                "windows_close_action", window_card, "关闭窗口时",
+                [("每次询问", WindowCloseAction.ASK),
+                 ("最小化到系统托盘", WindowCloseAction.TRAY),
+                 ("彻底退出", WindowCloseAction.QUIT)],
+            )
+            appearance.addWidget(window_card)
+        theme = SectionCard("应用配色 · 保存后生效")
         self._theme_combo = self._combo(
             "appearance.theme", theme, "主题",
             [("星河", "star_trail"), ("晴海", "bilibili_blue")],
         )
-        self._theme_combo.setItemData(0, "粉紫星空，深浅色跟随系统", Qt.ToolTipRole)
-        self._theme_combo.setItemData(1, "晴空青蓝与柔粉微光，深浅色跟随系统", Qt.ToolTipRole)
+        self._theme_combo.setItemData(0, "粉紫星空，支持日间与夜间", Qt.ToolTipRole)
+        self._theme_combo.setItemData(1, "晴空青蓝与柔粉微光，支持日间与夜间", Qt.ToolTipRole)
         self._field_rows["appearance.theme"].hide()
         previews = QHBoxLayout()
         self._theme_buttons = QButtonGroup(self)
@@ -412,10 +440,29 @@ class SettingsDialog(QDialog):
         self._theme_buttons.idClicked.connect(self._theme_combo.setCurrentIndex)
         self._theme_combo.currentIndexChanged.connect(self._sync_appearance_preview)
         theme.body.addLayout(previews)
-        theme.body.addWidget(Notice("深浅色自动跟随系统。保存后立即生效，下次启动继续使用。"))
         appearance.addWidget(theme)
+        glass = SectionCard("玻璃效果 · 保存后生效")
+        self._glass_card = glass
+        self._glass_blur = GlassBlurControl()
+        self._controls["appearance.glass_blur"] = self._glass_blur
+        glass.body.addWidget(self._glass_blur)
+        self._glass_preview = WorkspaceStack()
+        self._glass_preview.setFixedHeight(160)
+        example_page = QWidget()
+        example_layout = QVBoxLayout(example_page)
+        example_layout.setContentsMargins(16, 16, 16, 16)
+        example_card = SectionCard("玻璃效果预览")
+        example_card.body.addWidget(help_text("背景保留细节，文字清晰可读。"))
+        example_layout.addWidget(example_card)
+        example_layout.addStretch()
+        self._glass_preview.addWidget(example_page)
+        self._glass_preview.set_background(background_path(BUILTIN_BACKGROUNDS[0].reference), builtin=True)
+        glass.body.addWidget(self._glass_preview)
+        glass.body.addWidget(help_text("应用于所有工作区的图片背景。"))
+        self._glass_blur.valueChanged.connect(self._sync_glass_blur)
+        appearance.addWidget(glass)
         self._background_grid = QGridLayout()
-        self._background_grid.setSpacing(20)
+        self._background_grid.setSpacing(16)
         self._background_cards = []
         self._appearance_columns = 0
         appearance.addLayout(self._background_grid)
@@ -427,7 +474,7 @@ class SettingsDialog(QDialog):
             self._background_cards.append(card)
             self._background_pickers[workspace] = picker
         self._layout_background_cards()
-        appearance.addWidget(Notice("可选择小流的 12 张背景，或导入自己的静态 PNG、JPEG、WebP（20 MiB / 4000 万像素以内）。四个页面分别保存，支持深浅模式预览与可见度调节；自定义图片保存应用内副本。"))
+        appearance.addWidget(help_text("背景在保存设置后生效。四个页面独立设置，支持小流图库和 PNG、JPEG、WebP 图片，以及深浅模式可见度调节。"))
         for column in (download, live, tools, updates, appearance):
             column.addStretch()
         self._notice = Notice()
@@ -464,6 +511,24 @@ class SettingsDialog(QDialog):
         for picker in self._background_pickers.values():
             picker.set_theme(self._theme_combo.currentData())
 
+    def _sync_glass_blur(self, *_args):
+        value = self._glass_blur.value()
+        self._glass_preview.set_glass_blur(value)
+        for picker in self._background_pickers.values():
+            picker.set_glass_blur(value)
+
+    def _update_template_previews(self, *_args):
+        values = dict(title="星轨旅记", author="示例UP主", bvid="BV1DEMO", page="1",
+                      part="正片", part_suffix="_P1", collection="城市漫游", quality="1080P",
+                      codec="HEVC", series="示例番剧", season="第一季", section="正片",
+                      episode="出发", episode_number="01")
+        for key, preview in self._template_previews.items():
+            try:
+                path = render_path_template(self._controls[key].text(), values)
+                preview.setText(f"示例路径：{path}")
+            except ValueError as exc:
+                preview.setText(f"示例暂不可用：{exc}")
+
     def _layout_background_cards(self):
         columns = 2 if self.width() >= 960 else 1
         if columns == self._appearance_columns:
@@ -492,13 +557,27 @@ class SettingsDialog(QDialog):
         self._install_update_btn.setVisible(prepared is not None and not prepared.reason)
         self._open_update_archive.setVisible(prepared is not None)
 
-    def _tab(self, name):
+    def _tab(self, name, section):
         body = QWidget()
         column = QVBoxLayout(body)
         column.setContentsMargins(0, 0, 4, 0)
-        column.setSpacing(20)
-        self.tabs.addTab(scroll_area(body), name)
+        column.setSpacing(16)
+        self._sections[section] = self.tabs.addTab(scroll_area(body), name)
         return column
+
+    def show_section(self, section):
+        self.tabs.setCurrentIndex(self._sections[SettingsSection(section)])
+
+    @property
+    def current_section(self):
+        return next(section for section, index in self._sections.items() if index == self.tabs.currentIndex())
+
+    def sync_appearance_mode(self, mode):
+        """Rebase the immediate preference without replacing any other draft."""
+        self._settings.appearance.mode = mode
+        index = next(i for i, (_, value) in enumerate(APPEARANCE_MODES) if value == mode)
+        self._mode_buttons.button(index).setChecked(True)
+        self._draft_changed()
 
     def _field(self, key, card, label, control):
         row = FieldRow(label, control)
@@ -518,6 +597,8 @@ class SettingsDialog(QDialog):
             combo.addItem(text, value)
         self._controls[key] = combo
         self._field(key, card, label, combo)
+        combo.setMaximumWidth(UI_METRICS.short_field_width)
+        self._field_rows[key].setMaximumWidth(104 + UI_METRICS.short_field_width)
         return combo
 
     def _number(self, key, card, label, low, high, suffix=""):
@@ -527,9 +608,13 @@ class SettingsDialog(QDialog):
         self._controls[key] = spin
         row, down, up = stepper(spin)
         self._field(key, card, label, row)
+        row.setMaximumWidth(UI_METRICS.number_field_width)
+        self._field_rows[key].setMaximumWidth(104 + UI_METRICS.number_field_width)
         return spin, down, up
 
     def _path_row(self, entry, folder):
+        # Directories share one picker interaction; executable paths remain editable.
+        entry.setReadOnly(folder)
         row = QWidget()
         row.setFocusProxy(entry)
         layout = QHBoxLayout(row)
@@ -542,15 +627,15 @@ class SettingsDialog(QDialog):
         return row
 
     def _browse(self, entry, folder):
-        value = (
-            QFileDialog.getExistingDirectory(self, "选择保存目录", entry.text())
-            if folder
-            else QFileDialog.getOpenFileName(self, "选择可执行文件", entry.text())[0]
-        )
-        if value:
+        def selected(value):
             entry.setText(value)
             entry.setToolTip(value)
             entry.setCursorPosition(0)
+        picker = file_picker(self)
+        if folder:
+            picker.directory("选择保存目录", entry.text(), selected)
+        else:
+            picker.open_file("选择可执行文件", entry.text(), "", selected)
 
     def load_settings(self, settings, *, keep_directory_choices=False):
         previous_channel = self._update_channel.currentData()
@@ -586,9 +671,15 @@ class SettingsDialog(QDialog):
             picker.set_reference(getattr(settings.appearance.backgrounds, workspace))
             picker.set_visibility(getattr(settings.appearance.background_visibility, workspace))
         self._notice.set_message("")
+        for notice in self._probe_notices.values():
+            notice.set_message("")
         self._update_directory_previews()
         self._draft_changed()
         self._sync_appearance_preview()
+        self._sync_glass_blur()
+        self.sync_appearance_mode(settings.appearance.mode)
+        self._all_subtitles_check.setEnabled(self._subtitle_check.isChecked())
+        self._update_template_previews()
         if previous_channel != self._update_channel.currentData():
             self.update_channel_changed.emit()
 
@@ -792,20 +883,22 @@ class SettingsDialog(QDialog):
                 store.install(picker.prepared)
 
     def _show_validation(self, entry, message):
-        tab = (
-            1
-            if entry is self._live_directory
-            else 2
-            if entry in (self._ffmpeg_path, self._recorder_path)
-            else 0
+        section = (
+            SettingsSection.LIVE if entry is self._live_directory else
+            SettingsSection.TOOLS if entry in (self._ffmpeg_path, self._recorder_path) else
+            SettingsSection.DOWNLOAD
         )
-        self.tabs.setCurrentIndex(tab)
+        self.show_section(section)
+        if entry in (self._path_template, self._bangumi_path_template):
+            self._templates_section.set_expanded(True)
         self._notice.set_message(message, "danger")
         for key, control in self._controls.items():
             if control is entry and key in self._field_rows:
                 row = self._field_rows[key]
                 row.set_error(message)
-                self.tabs.currentWidget().ensureWidgetVisible(row)
+                scroll = self.tabs.currentWidget()
+                # Expansion and error text change the layout on the next pass.
+                QTimer.singleShot(0, scroll, lambda: scroll.ensureWidgetVisible(row, 0, 16))
                 break
         entry.setFocus()
 
@@ -817,6 +910,9 @@ class SettingsDialog(QDialog):
         if kind in self._probes:
             return
         button.setEnabled(False)
+        button.setText("检测中…")
+        notice = self._probe_notices[kind]
+        self._probe_notice = notice
         signals = _ProbeSignals(self)
         entry = self._ffmpeg_path if kind == "ffmpeg" else self._recorder_path
         requested_path = entry.text().strip()
@@ -825,14 +921,15 @@ class SettingsDialog(QDialog):
 
         def finished(ok, message):
             button.setEnabled(True)
+            button.setText("检测")
             if entry.text().strip() != requested_path:
-                self._probe_notice.set_message(
+                notice.set_message(
                     "检查期间路径已修改，请再次检查当前路径。", "warning"
                 )
             else:
-                self._probe_notice.set_message(message, "success" if ok else "danger")
+                notice.set_message(message, "success" if ok else "danger")
             self._probes.pop(kind, None)
 
         signals.finished.connect(finished)
-        self._probe_notice.set_message("正在检查媒体工具…")
+        notice.set_message("正在检查当前路径…")
         QThreadPool.globalInstance().start(runner)

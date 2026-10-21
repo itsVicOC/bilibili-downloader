@@ -1,6 +1,104 @@
 # BiliFlow 视觉规范与验证
 
-本轮将点播下载、直播录制、任务与设置统一为「星轨收藏工作台」。星轨与主题渐变集中在顶部工作区横幅和空状态；链接输入卡、表单与任务列表使用纯色表面。保留 BiliFlow 图标与吉祥物线索，功能入口使用统一的 SVG 线性图标。
+## 文件选择窗口响应修复（2026-10-21）
+
+目录、图片、工具与导出入口共用有生命周期管理的文件选择器。macOS 使用 Qt Widgets 文件窗口规避系统面板未显示却锁住父窗的路径；Windows 保留原生文件窗口。统一以异步 `open()` 显示，父窗口使用来源控件所属的真实窗口，明确置前；重复点击复用，取消及来源窗口关闭不提交结果。目录和图片选择仍保留设置草稿语义，图片解码继续异步，直播房间切换目录规则时保留新选择的独立目录。
+
+回归从替换静态文件调用改为操作真实文件窗口，检查窗口可见且主事件循环计时器持续运行，覆盖选择、取消、重开、父窗口关闭及一次性结果提交。背景图片窗口附属于背景选择弹窗。两个平台的窗口边框和系统按钮沿用平台结构，文件浏览内容在 macOS 统一使用应用字体与样式。
+
+本轮全量离屏回归 886 项通过、1 项跳过，Cocoa 原生专项 135 项通过。macOS 27.0.1 / Qt 6.11.2 打包程序中实际点击目录选择与取消、打开图片文件窗口、选入项目测试图片并完成预览，再取消背景选择，确认设置保持已保存状态；当前运行包来自 `dist/local-picker-fix-20261021`。旧版偶发面板不显示未稳定复现，保留排查范围说明，未把正常等待选择的线程样本判为系统死锁。
+
+## 目录一致性与背景窗口精简（2026-10-21）
+
+下载与直播设置的目录统一采用只读路径框和「选择…」按钮，可选中复制完整路径；两处共用创建策略、尺寸、底色及焦点样式。取消选择保持原值，更改后保留为草稿，工具的可执行文件路径仍可编辑。
+
+玻璃模糊只在外观页调节，背景选择窗口使用当前模糊草稿进行预览。选择窗口移除重复标题、页面用途、全局模糊说明和第二个滑块；保留图片名称、筛选结果数量、深浅预览、可见度与就近的「重置」，底部仅提示「选用后需保存设置」。画风及推荐信息保留在图库卡片上，自定义图片保留格式、大小限制及错误反馈。释放出的空间用于放大预览，小窗口继续切换浏览与预览。
+
+验收覆盖两套配色、深浅模式及三种尺寸的目录实际底色和高度、选择与取消、草稿与保存；背景窗口检查可见度分模式重置、选用和取消、恢复主题默认不会修改模糊草稿，以及小窗口预览、滑块、操作区互不遮挡。
+
+本轮全量离屏回归 876 项通过、1 项跳过，Cocoa 原生专项合计 170 项通过。预览颜色采样测试补齐 Retina 像素密度换算后，四种配色 / 模式组合在两个后端均通过；原生专项排除下文已记录的两项前台激活 / 全屏环境限制。Ruff、编译及 diff 检查通过，本地包通过签名、冻结程序入口与压缩包完整性校验。
+
+最新原生截图：[下载目录](images/appearance-controls/settings-light.png)、[直播目录](images/appearance-controls/live-settings-light.png)、[精简背景选择](images/appearance-controls/gallery-light.png)、[小窗口预览](images/appearance-controls/gallery-small.png)。
+
+## 账号居中、精简设置与玻璃调节（2026-10-21）
+
+侧栏账号将头像和昵称作为一组居中，窄侧栏仍仅显示居中的头像；保留长昵称省略、完整身份提示与原有账号入口。回归按实际绘制像素检查整组位置，覆盖两套配色及深浅模式。
+
+移除独立「通用」分类及所有窗口行为说明，不迁移这些说明到其他页面。设置为下载、直播、外观、工具与存储、关于与更新五类，首次进入下载，本次运行继续保留所选分类。Windows 的关闭方式仅作为外观页中的可选字段保留，关闭、托盘及退出逻辑继续兼容。
+
+新增 `appearance.glass_blur`，取值为 0–40 个逻辑像素，默认 18；旧配置、无效类型及越界值恢复默认。外观页提供带示例的滑块，背景选择窗口使用当前值预览实际图片。四个工作区共用此值，深浅模式也保持一致；调节只模糊背景，文字、焦点与控件独立绘制，最低值仍保留文字对比度保护。
+
+拖动实时更新预览，四个背景选择器在下次打开时使用同一模糊草稿。保存成功后应用并记忆，撤销恢复已保存值，保存失败保留草稿及原界面。即时保存深浅模式不会提交或清除模糊草稿，符合其余外观选项的保存语义。
+
+验收截图：[外观滑块](images/appearance-controls/blur-light.png)、[背景选择](images/appearance-controls/gallery-light.png)、[小窗口](images/appearance-controls/gallery-small.png)、[居中账号与五个分类](images/appearance-controls/settings-light.png)。[渲染记录](images/appearance-controls/rendering-profile.json)包含 Qt、后端及原始像素信息。
+
+本轮全量离屏测试 862 项通过、1 项跳过，原生界面专项 127 项通过；编译、Ruff 和 diff 检查通过。原生测试进程被 macOS 保持为 ApplicationInactive，快捷键前台派发和系统全屏转换两项检查未通过，单独复查也受同一限制；这两项不计入通过数。新增的账号像素居中、五类导航、滑块同步、取消、保存失败、撤销及持久化检查均在原生后端通过。
+
+## 背景玻璃与输入卡修复（2026-10-21）
+
+下载空状态的标题、输入框、说明与批量入口不再共用固定 120px 高度，改为按布局和文字换行计算自然高度；三种尺寸下完整显示，不与固定底栏冲突。解析后隐藏引导时，输入卡恢复紧凑高度。
+
+启用内置图库或自定义图片后，输入卡、资料卡、设置卡、列表外层及底部操作区改为液态玻璃风格。参考 [Apple 材质指南](https://developer.apple.com/design/human-interface-guidelines/materials)，使用与工作区固定背景对应的采样、18px 背景模糊、色彩保留、窄边缘折射和高光。实现由 Qt 绘制，不调用苹果原生 Liquid Glass 控件；没有背景图片时沿用原有实色卡片。输入框、选择状态及表格数据保留清晰表面。
+
+玻璃只处理背景图，文字、图标和焦点仍由 Qt 独立绘制。小字使用适合玻璃底色的前景色，背景亮度受对比度约束；每个工作区共用一份模糊缓存，滚动、选项勾选和更新文字不重新模糊，换图、尺寸、配色、模式或可见度变化时重建。外观预览使用同一材质函数。
+
+回归：835 项通过、1 项跳过，macOS Cocoa 专项 102 项通过；包含输入卡完整文字区域与重叠检查、黑白及高饱和背景的对比度、内置 / 自定义背景、缓存重用和无图回退。截图矩阵覆盖两套配色、深浅模式、两种图片来源、三种尺寸及空状态 / 已解析 / 直播，共 72 组。
+
+原生 Retina 示例：[下载空状态](images/glass/download-empty-light.png)、[已解析](images/glass/download-resolved-light.png)、[直播](images/glass/live-light.png)、[深色自定义背景](images/glass/custom-dark.png)。[渲染环境](images/glass/rendering-profile.json)记录原始像素与后端；这些示例使用离线演示数据。
+
+## 全界面体检落地（2026-10-21）
+
+延续现有配色、小流、贯顶侧栏、56px 页头和固定底部操作区，集中修复空间分配、内容裁切与小窗口可达性。参考 [Linear 的界面整理](https://linear.app/now/behind-the-latest-design-refresh)、[Raycast 设置分组](https://manual.raycast.com/settings)、[HandBrake 队列流程](https://handbrake.fr/docs/en/latest/advanced/queue.html)和 [OBS 录制控制](https://obsproject.com/kb/quick-start-guide)，采用以下规则：
+
+| 区域 | 当前规则 |
+|---|---|
+| 下载资料与规格 | 资料卡按内容自然高度显示，封面约 176×99px；规格在有足够宽度时采用两列，下载附加项固定 76px 完整高度，空间不足时由页面滚动 |
+| 下载状态 | 输入引导合并到链接卡；来源修改或解析失败后禁止提交旧结果，资料及底栏明确说明失效状态 |
+| 二维码登录 | 扫码视图移除内部滚动，220×220px 二维码完整可见；返回当前账号移入底部，生成、过期及错误共用状态区域 |
+| 直播 | 页面宽度至少 880px 时列表和详情并排；更窄时详情可展开，房间表格和详情由外层统一滚动，操作栏固定 |
+| 任务与失败详情 | 名称、状态与进度、规格、路径、异常原因分层；完整诊断可打开复制。导入失败表格优先给原因分配宽度，允许换行，每项可复制链接 |
+| 设置 | 枚举控件最大 320px，数字控件最大 184px；路径保留宽度。命名模板默认折叠并显示示例，验证失败自动展开；保留草稿、保存与撤销语义 |
+| 外观与背景 | 即时保存模式独立分组；配色及背景明确保存后生效。卡片和链接输入区使用统一阅读底色，卡片内文字不再逐段添加底色 |
+| 背景选择 | 宽窗口同时显示图库与预览，宽度不足 900px 时切换浏览与预览；切换不丢失选择，选用后仍需保存设置 |
+| 工具与更新 | FFmpeg、录制引擎各自显示路径、检测操作和结果；更新卡放在简介前，检查操作位于卡片顶部；更新弹窗突出立即更新，延后操作为「稍后提醒」 |
+
+共享间距采用 8 / 12 / 16 / 24px，卡片内边距为 16px；正文保持约 14px，次要按钮使用常规字重。普通帮助使用辅助文字，需要处理的异常使用提示条。工作区预览同步采用紧凑资料卡、附加项及独立的模式分组。
+
+回归检查除可见、可点击外，还检查卡片完整文字区域和实际高度、二维码完整可见区域、窄窗口详情与固定操作、模板验证定位、检测结果隔离以及背景上文字对比度和阅读底色一致性。截图覆盖星河 / 晴海、日间 / 夜间、900×640 / 1120×760 / 1320×860，以及内置和自定义图片；截图使用离线演示数据。
+
+本轮截图：[900px 下载卡片](images/ui-refresh/options-dark.png)、[1120px 直播](images/ui-refresh/live-light-1120.png)、[任务摘要](images/ui-refresh/task-detail-light.png)、[高级命名模板](images/ui-refresh/naming-light.png)、[工具检测](images/ui-refresh/tools-light.png)、[失败详情](images/ui-refresh/failure-details-light.png)、[小窗口浏览](images/ui-refresh/gallery-browse-small.png)、[小窗口预览](images/ui-refresh/gallery-preview-small.png)、[原生二维码](images/ui-refresh/native-switch-light.png)。原生缩放及字体环境见[渲染记录](images/ui-refresh/rendering-profile.json)。
+
+macOS 使用 Cocoa 原生 Qt 和 Retina 原始像素截图验证；窗口拖动、按钮避让及全屏回归沿用专项检查。Windows 的缩放、贴靠、最大化悬停菜单及混合 DPI 多屏仍需实机复核。此处记录优先于下方历史版本的横幅和局部文字底色说明。
+
+本轮离屏全量回归为 817 项通过、1 项跳过，Cocoa 原生专项为 84 项通过；Python 编译、Ruff 和 diff 检查通过。截图生成时也断言四张卡片的文字高度和完整可见区域，以及扫码视图的二维码完整区域。原生截图保留 2× 像素；演示二维码仅用于布局验收，不包含登录授权。
+
+## 界面与账号体验整理（2026-10-20）
+
+当前界面沿用 Qt Widgets。主窗口页头延伸至原生标题栏区域；macOS 保留红黄绿按钮与系统菜单，Windows 移除重复的窗口内菜单栏，快捷键与页面入口继续使用共享动作。原生标题栏能力按 Qt 版本检测，旧版本回退系统窗口结构。
+
+页头参考 [Linear 的界面整理](https://linear.app/now/how-we-redesigned-the-linear-ui)，采用 56px 单行工具栏与 16px 中等字重的页面名称，标题和正文左边缘对齐。侧栏直接贯通窗口顶部，页头只属于右侧工作区，侧栏上方不再留单独的矩形或横向分隔线；macOS 侧栏顶部为红黄绿按钮保留空间。页头不再绘制渐变、星轨或可见副标题；说明保留为无障碍描述。右侧操作避让原生窗口按钮。页头和侧栏空白区域支持拖动及双击最大化，按钮独立处理点击。外观设置中的工作区预览使用相同的结构。
+
+侧栏依次显示视频下载、直播录制、任务中心和分隔后的设置；小流位于弹性区域，深浅模式与账号固定在底部。设置分类为通用、下载、直播、外观、工具与存储、关于与更新。首次打开通用，后续保留本次访问的分类；关于、更新及工具入口使用稳定分类标识定位，不依赖页签下标。窗口关闭偏好移至通用。
+
+侧栏及外观页均支持跟随系统、日间、夜间，选择后立即保存并同步；配色和背景仍需保存设置。即时提交只更新 `appearance.mode`，保留其他草稿，撤销草稿不撤销已提交模式。旧配置默认跟随系统；手动模式忽略系统切换，返回自动时读取当前状态。
+
+弹幕、字幕、封面、元数据使用共享可勾选卡片，支持整卡点击、键盘焦点与空格操作；两列布局空间不足时变为一列。全部字幕是字幕选项的从属项。文字按平台字体直接绘制：Windows 优先微软雅黑 UI 并使用完整字形微调，macOS 优先苹方并保留平台微调策略；高 DPI 由 Qt 处理。
+
+已登录账号打开独立概览弹窗，参考 [Raycast 的身份与信息分区](https://manual.raycast.com/settings)：64px 圆形头像与 20px 昵称居中，下方使用居中的 240px 紧凑信息面板，按 UID、会员信息、登录状态分行，标签和值就近排列，不再铺满弹窗宽度。概览内部不重复显示窗口标题。账号头像保留源像素，不放大侧栏缩略图；长昵称省略并保留完整提示，UID 可选择复制。正常状态省去重复说明，其余状态在列表下显示辅助说明。退出入口低强调置左，关闭与切换账号成组置右，授权说明使用弱化文字。切换账号默认扫码，返回或取消保留原凭据，旧异步响应不会提交；网络失败保留已知身份并显示状态待确认。未知会员信息不会显示成普通会员。退出仍需现有确认。
+
+最新离屏示例：[下载工作台](images/ui-refresh/download-light.png)、[窄窗口直播](images/ui-refresh/live-dark-900.png)、[任务中心](images/ui-refresh/tasks-light.png)、[下载选项](images/ui-refresh/options-dark.png)、[外观设置](images/ui-refresh/appearance-light.png)、[关于与更新](images/ui-refresh/about-light.png)、[当前账号](images/ui-refresh/account-light.png)、[网络异常](images/ui-refresh/account-unknown-light.png)、[长昵称与缺失头像](images/ui-refresh/account-long-name-dark.png)。原生 Retina 示例：[下载选项](images/ui-refresh/native-options-light.png)、[账号概览](images/ui-refresh/native-account-light.png)，原始分辨率及字体环境见[渲染记录](images/ui-refresh/rendering-profile.json)。下方历史验收记录及截图保留对应迭代背景。
+
+生成本轮独立演示截图：
+
+```bash
+python scripts/capture_docs_screenshots.py --ui-refresh-only --output-dir /tmp/biliflow-ui-review
+python scripts/capture_docs_screenshots.py --native --physical-pixels --ui-refresh-only --output-dir /tmp/biliflow-ui-native
+```
+
+离屏全量测试与 macOS Cocoa 专项回归覆盖本轮交互，包括标题随侧栏变化对齐、页头操作、拖动请求和双击最大化、账号概览与登录视图往返、原生窗口按钮和全屏往返。截图矩阵覆盖两套配色、深浅模式、三种尺寸及四个工作区，并包含图片背景与异常账号状态。原生 Qt 控件截图不包含系统合成的窗口按钮。Windows 发布工作流已配置 100% / 125% / 150% / 200% 字体缩放及本轮界面截图；贴靠、最大化悬停菜单、混合 DPI 多屏和系统窗口按钮仍需 Windows 桌面实机复核，不以 macOS 或离屏截图代替。
+
+
+早期版本将点播下载、直播录制、任务与设置统一为「星轨收藏工作台」，曾在顶部工作区横幅使用星轨与主题渐变；当前页头已改为上述紧凑纯色布局。保留 BiliFlow 图标与吉祥物线索，功能入口使用统一的 SVG 线性图标。
 
 ## 像素看板娘「小流」
 
@@ -78,7 +176,7 @@
 
 本轮通过 566 项 Python 测试，包含两套主题、深浅模式及三种尺寸下的工作区与底栏几何检查，以及主按钮键盘操作和实际焦点像素检查。编译、Ruff 与 diff 检查通过，macOS offscreen 与原生 Cocoa 各生成 277 张演示截图，完成代表场景视觉复核；本地 macOS 应用打包、签名结构及 ZIP 完整性检查通过。macOS 原生演示截图：[直播底栏](images/native/final/biliflow-appearance-bilibili_blue-live-light-900.png)、[任务筛选与记录操作](images/native/final/biliflow-appearance-star_trail-tasks-dark-900.png)、[主题选择与键盘焦点](images/native/final/biliflow-appearance-bilibili_blue-theme-focus-light.png)。
 
-所有工作区共用一个不可拖动、不可浮动的顶部工具栏，集中显示工作区标题、说明和页头动作。macOS 使用系统标题栏融合能力，Windows 保留原生边框及窗口内菜单；页内仍保留页签、筛选、主要操作与反馈。设置、关于、退出使用明确的系统菜单角色。来源聚焦和工作区切换分别支持 Cmd/Ctrl+L、Cmd/Ctrl+1–4；多行 Enter 与中文输入法提交沿用 Qt 原有行为。
+所有工作区共用一个不可拖动、不可浮动的顶部工具栏，集中显示工作区标题、说明和页头动作。macOS 使用系统标题栏融合能力，Windows 保留原生窗口行为并移除重复菜单栏；页内仍保留页签、筛选、主要操作与反馈。设置、关于、退出使用明确的系统菜单角色。来源聚焦和工作区切换分别支持 Cmd/Ctrl+L、Cmd/Ctrl+1–4；多行 Enter 与中文输入法提交沿用 Qt 原有行为。
 
 窗口关闭与应用退出分别处理：macOS 关闭后保留 Dock 入口，Windows 默认明确选择后台运行或退出，并可记住。关闭提示采用具体动作按钮、默认后台运行、低强调危险色退出及取消入口；配色、字体和间距沿用现有组件。完整依据见[交互调研](WINDOW_LIFECYCLE_RESEARCH.md)，提示框可查看[星河浅色](images/lifecycle/1/biliflow-close-active-star_trail-light.png)、[星河深色](images/lifecycle/1/biliflow-close-active-star_trail-dark.png)、[晴海浅色](images/lifecycle/1/biliflow-close-active-bilibili_blue-light.png)、[晴海深色](images/lifecycle/1/biliflow-close-active-bilibili_blue-dark.png)。
 

@@ -6,6 +6,7 @@ from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QMenu,
@@ -18,10 +19,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from bilibili_downloader.gui.resources.styles import theme_palette
-from bilibili_downloader.gui.widgets.header_backdrop import paint_header_backdrop
+from bilibili_downloader.gui.resources.styles import UI_METRICS, theme_palette
+from bilibili_downloader.gui.widgets.glass_surface import GlassFrame
+from bilibili_downloader.gui.widgets.header_backdrop import (
+    HEADER_HEIGHT,
+    paint_header_backdrop,
+)
 
 _ICON_PATHS = {
+    "appearance": '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z"/>',
     "download": '<path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/>',
     "live": '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="m9 9 6 3-6 3z"/>',
     "tasks": '<rect x="4" y="3" width="16" height="18" rx="3"/><path d="m7 8 1 1 2-2m2 1h5m-10 6 1 1 2-2m2 1h5"/>',
@@ -123,6 +129,10 @@ class AccountButton(IconButton):
             self._avatar.loadFromData(data)
         self._sync_icon()
 
+    def account_icon(self):
+        """Give the account view the source pixels rather than a sidebar thumbnail."""
+        return QIcon(self._avatar) if not self._avatar.isNull() else line_icon("account", size=64)
+
     def _sync_icon(self):
         if self._avatar.isNull():
             self.setIconSize(QSize(20, 20))
@@ -174,7 +184,7 @@ class ElidedLabel(QLabel):
         super().resizeEvent(event)
 
 
-class ActionBar(QFrame):
+class ActionBar(GlassFrame):
     """A stable, readable surface for workspace confirmation actions."""
 
     def __init__(self, parent=None):
@@ -235,25 +245,50 @@ class OutputActionBar(ActionBar):
         self.actions.addWidget(self.primary_button)
 
 
-class PageHeader(QWidget):
+class WindowDragSurface(QFrame):
+    """Move the native window from unused chrome, leaving controls interactive."""
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and self.window().windowHandle():
+            if self.window().windowHandle().startSystemMove():
+                event.accept()
+                return
+        super().mousePressEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            window = self.window()
+            window.showNormal() if window.isMaximized() else window.showMaximized()
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
+
+class PageHeader(WindowDragSurface):
     def __init__(self, title, caption, parent=None):
         super().__init__(parent)
+        self.setObjectName("PageHeader")
+        self.setAccessibleName(title)
+        self.setAccessibleDescription(caption)
+        self.setFixedHeight(HEADER_HEIGHT)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
-        copy = QVBoxLayout()
-        copy.setSpacing(4)
         self.title = QLabel(title)
         self.title.setObjectName("PageTitle")
-        self.caption = QLabel(caption)
+        # Keep the caption API for callers, without a second visual heading.
+        self.caption = QLabel(caption, self)
         self.caption.setObjectName("Caption")
-        self.caption.setWordWrap(True)
-        copy.addWidget(self.title)
-        copy.addWidget(self.caption)
-        row.addLayout(copy, 1)
+        self.caption.hide()
+        row.addWidget(self.title, 1)
         self.actions = QHBoxLayout()
         self.actions.setSpacing(8)
         row.addLayout(self.actions)
+
+    def set_shell_geometry(self, sidebar_width, margins):
+        left, top, right, bottom = margins
+        self.layout().setContentsMargins(max(24, left - sidebar_width), top, right, bottom)
+        self.update()
 
     def paintEvent(self, event):
         super().paintEvent(event)
@@ -267,13 +302,14 @@ class PageHeader(QWidget):
         painter.end()
 
 
-class SectionCard(QFrame):
+class SectionCard(GlassFrame):
     def __init__(self, title="", parent=None):
         super().__init__(parent)
         self.setObjectName("SectionCard")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.body = QVBoxLayout(self)
-        self.body.setContentsMargins(20, 20, 20, 20)
+        padding = UI_METRICS.card_padding
+        self.body.setContentsMargins(padding, padding, padding, padding)
         self.body.setSpacing(12)
         self.header = QHBoxLayout()
         if title:
@@ -285,6 +321,69 @@ class SectionCard(QFrame):
             self.body.addLayout(self.header)
 
 
+class CollapsibleSection(SectionCard):
+    """Keep advanced fields discoverable without consuming the first screen."""
+
+    def __init__(self, title, parent=None):
+        super().__init__(title, parent)
+        self.toggle = QPushButton("展开")
+        self.toggle.setObjectName("TextButton")
+        self.toggle.setCheckable(True)
+        self.toggle.setAccessibleName(f"展开或收起{title}")
+        self.header.addWidget(self.toggle)
+        self.content = QWidget()
+        self.body.addWidget(self.content)
+        self.body = QVBoxLayout(self.content)
+        self.body.setContentsMargins(0, 0, 0, 0)
+        self.body.setSpacing(12)
+        self.content.hide()
+        self.toggle.toggled.connect(self.set_expanded)
+
+    def set_expanded(self, expanded):
+        self.toggle.setChecked(expanded)
+        self.toggle.setText("收起" if expanded else "展开")
+        self.content.setVisible(expanded)
+
+
+class ResponsiveFields(QWidget):
+    """Use a second form column only when both controls have room to breathe."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._rows = []
+        self._columns = 0
+        self._grid = QGridLayout(self)
+        self._grid.setContentsMargins(0, 0, 0, 0)
+        self._grid.setSpacing(12)
+
+    def add_field(self, field):
+        self._rows.append(field)
+        self._reflow()
+
+    def _reflow(self):
+        columns = 2 if self.width() >= 560 else 1
+        if columns == self._columns and self._grid.count() == len(self._rows):
+            return
+        self._columns = columns
+        for index, field in enumerate(self._rows):
+            self._grid.removeWidget(field)
+            self._grid.addWidget(field, index // columns, index % columns)
+        self._grid.setColumnStretch(0, 1)
+        self._grid.setColumnStretch(1, 1 if columns == 2 else 0)
+
+    def resizeEvent(self, event):
+        self._reflow()
+        super().resizeEvent(event)
+
+
+def help_text(text):
+    label = QLabel(text)
+    label.setObjectName("MetaLabel")
+    label.setWordWrap(True)
+    label.setTextFormat(Qt.PlainText)
+    return label
+
+
 class StatusBadge(QLabel):
     def __init__(self, text="", tone="muted", parent=None):
         super().__init__(text, parent)
@@ -294,6 +393,53 @@ class StatusBadge(QLabel):
     def set_tone(self, tone):
         self.setProperty("tone", tone)
         repolish(self)
+
+
+class TaskDetailPanel(SectionCard):
+    """A scan-friendly summary with complete, selectable diagnostics on demand."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        self._full_text = ""
+        self.body.setSpacing(8)
+        heading = QHBoxLayout()
+        self.title = ElidedLabel()
+        self.title.setObjectName("SectionTitle")
+        self.status = StatusBadge()
+        heading.addWidget(self.title, 1)
+        heading.addWidget(self.status)
+        self.body.addLayout(heading)
+        self.specs = ElidedLabel()
+        self.specs.setObjectName("MetaLabel")
+        self.path = ElidedLabel()
+        self.path.setObjectName("MetaLabel")
+        self.diagnostics = ElidedLabel()
+        self.diagnostics.setObjectName("MetaLabel")
+        self.body.addWidget(self.specs)
+        footer = QHBoxLayout()
+        footer.addWidget(self.path, 1)
+        self.details_button = QPushButton("完整详情")
+        self.details_button.setObjectName("TextButton")
+        self.details_button.clicked.connect(lambda: MessageBox("任务详情", self._full_text, self).exec())
+        footer.addWidget(self.details_button)
+        self.body.addLayout(footer)
+        self.body.addWidget(self.diagnostics)
+
+    def set_details(self, title, status, specs, path, diagnostics="", tone="muted"):
+        self.title.set_full_text(title)
+        self.status.setText(status.replace("\n", " · "))
+        self.status.set_tone(tone)
+        self.specs.set_full_text(specs.replace("\n", " · "))
+        self.specs.setVisible(bool(specs))
+        self.path.set_full_text(f"保存位置：{path}" if path else "保存位置尚未生成")
+        self.diagnostics.set_full_text(diagnostics.replace("\n", " · "))
+        self.diagnostics.setVisible(bool(diagnostics))
+        self.diagnostics.setProperty("tone", tone)
+        repolish(self.diagnostics)
+        self._full_text = "\n".join(filter(None, (title, status, specs, f"保存位置：{path}" if path else "", diagnostics)))
+
+    def toPlainText(self):
+        return self._full_text
 
 
 class MessageBox(QMessageBox):

@@ -22,20 +22,23 @@ from bilibili_downloader.gui.dialogs.background_gallery import BackgroundGallery
 from bilibili_downloader.gui.resources.styles import contrast_ratio, theme_palette
 from bilibili_downloader.gui.resources.theme import ThemeManager
 from bilibili_downloader.gui.widgets.background_picker import BackgroundPicker
+from bilibili_downloader.gui.widgets.hero_panel import HeroPanel
 from bilibili_downloader.gui.widgets.workspace_background import WorkspaceStack
 from tests.test_builtin_backgrounds import restore_theme as restore_theme
 
 
 @pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])
 @pytest.mark.parametrize("dark", [False, True])
-def test_real_labels_keep_contrast_without_covering_blank_card_space(qapp, qtbot, tmp_path, theme_id, dark):
+@pytest.mark.parametrize("card_kind", ["section", "hero"])
+def test_real_labels_keep_contrast_without_covering_blank_card_space(qapp, qtbot, tmp_path, theme_id, dark, card_kind):
     theme = ThemeManager(qapp, theme_id)
     theme.apply_theme(dark)
     colors = theme_palette(dark, theme_id)
     stack = WorkspaceStack()
     qtbot.addWidget(stack)
-    page = QWidget()
-    page.setObjectName("SectionCard")
+    page = HeroPanel() if card_kind == "hero" else QWidget()
+    if card_kind == "section":
+        page.setObjectName("SectionCard")
     stack.addWidget(page)
     stack.resize(640, 360)
     labels = []
@@ -58,6 +61,11 @@ def test_real_labels_keep_contrast_without_covering_blank_card_space(qapp, qtbot
         stack.set_visibility(BackgroundVisibility(light=100, dark=100))
         QApplication.processEvents()
         assert stack.property("customBackground")
+        for label in labels:
+            label.hide()
+        without_text = stack.grab().toImage()
+        for label in labels:
+            label.show()
         image = stack.grab().toImage()
         dpr = image.devicePixelRatio()
         for label in labels:
@@ -66,6 +74,7 @@ def test_real_labels_keep_contrast_without_covering_blank_card_space(qapp, qtbot
             background = image.pixelColor(round(point.x() * dpr), round(point.y() * dpr)).name()
             foreground = label.palette().color(QPalette.WindowText).name()
             assert contrast_ratio(foreground, background) >= 4.5
+            assert background == without_text.pixelColor(round(point.x() * dpr), round(point.y() * dpr)).name()
         if pattern != "white":
             assert image.pixelColor(round(500 * dpr), round(200 * dpr)).name() != colors.surface
     stack.set_background(None)
@@ -115,10 +124,20 @@ def test_keyboard_browsing_and_preview_changes_do_not_decode_again(qtbot, tmp_pa
         gallery.resize(width, height)
         QApplication.processEvents()
         assert gallery.size().width() == width and gallery.size().height() == height
+        if width < 900:
+            assert gallery.tabs.isVisible() and gallery._preview_pane.isHidden()
+            gallery._view_buttons["preview"].click()
+            QApplication.processEvents()
         for widget in (gallery.apply_button, gallery.effects.preview, gallery.default_button):
+            assert widget.isVisible()
             assert gallery.rect().contains(widget.mapTo(gallery, QPoint()))
             assert gallery.rect().contains(widget.mapTo(gallery, widget.rect().bottomRight()))
+        assert gallery.effects.preview.visibleRegion().boundingRect().contains(gallery.effects.preview.rect())
+        if width < 900:
+            gallery._view_buttons["browse"].click()
+            QApplication.processEvents()
         assert gallery.scroll.horizontalScrollBar().maximum() == 0
+    assert gallery._generation == generation
     qtbot.keyClick(gallery, Qt.Key_Escape)
     assert gallery.result() == QDialog.Rejected
     assert picker.reference == ""

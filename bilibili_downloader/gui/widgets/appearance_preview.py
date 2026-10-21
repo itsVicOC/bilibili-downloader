@@ -1,18 +1,22 @@
 """Theme selection cards and faithful, isolated wallpaper effect previews."""
 
 from PySide6.QtCore import QEvent, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPen, QPixmap
+from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QAbstractButton, QApplication, QSizePolicy, QWidget
 
-from bilibili_downloader.core.models import BackgroundVisibility
+from bilibili_downloader.core.models import DEFAULT_GLASS_BLUR, BackgroundVisibility
 from bilibili_downloader.gui.resources.styles import (
     background_reading_alpha,
-    background_surface_alpha,
+    glass_text_color,
     theme_palette,
 )
 from bilibili_downloader.gui.widgets.background_readability import paint_reading_surface
 from bilibili_downloader.gui.widgets.components import palette
-from bilibili_downloader.gui.widgets.header_backdrop import paint_header_backdrop
+from bilibili_downloader.gui.widgets.glass_surface import GlassBackdrop
+from bilibili_downloader.gui.widgets.header_backdrop import (
+    HEADER_HEIGHT,
+    paint_header_backdrop,
+)
 from bilibili_downloader.gui.widgets.workspace_background import (
     paint_workspace_background,
 )
@@ -63,10 +67,9 @@ class ThemePreviewButton(QAbstractButton):
         painter.fillRect(canvas, QColor(p.background))
         painter.fillRect(QRectF(12, 12, 28, 74), QColor(p.sidebar))
         painter.fillRect(QRectF(18, 32, 16, 5), QColor(p.accent))
-        sky = QLinearGradient(50, 18, self.width() - 14, 60)
-        sky.setColorAt(0, QColor(p.hero_start or p.surface))
-        sky.setColorAt(1, QColor(p.hero_end or p.selection))
-        painter.fillRect(QRectF(48, 18, self.width() - 62, 26), sky)
+        painter.fillRect(QRectF(48, 18, self.width() - 62, 14), QColor(p.background))
+        painter.fillRect(QRectF(48, 34, self.width() - 62, 1), QColor(p.divider))
+        painter.fillRect(QRectF(48, 39, self.width() - 130, 5), QColor(p.muted))
         painter.fillRect(QRectF(48, 51, self.width() - 130, 26), QColor(p.surface))
         painter.fillRect(
             QRectF(self.width() - 73, 51, 58, 26), QColor(p.primary or p.accent)
@@ -140,6 +143,8 @@ class WorkspacePreview(QWidget):
         self.workspace = workspace
         self.viewport_size = QSize(1320, 860)
         self.original = False
+        self._glass = GlassBackdrop()
+        self.glass_blur = DEFAULT_GLASS_BLUR
         self.setMinimumSize(320, 200)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
@@ -149,7 +154,7 @@ class WorkspacePreview(QWidget):
 
     def background_rect(self):
         sidebar = 72 if self.viewport_size.width() < 1120 else 208
-        return QRectF(sidebar, 70, self.viewport_size.width() - sidebar, self.viewport_size.height() - 106)
+        return QRectF(sidebar, HEADER_HEIGHT, self.viewport_size.width() - sidebar, self.viewport_size.height() - HEADER_HEIGHT - 36)
 
     def paintEvent(self, event):
         p = theme_palette(self.is_dark, self.theme_id)
@@ -174,23 +179,33 @@ class WorkspacePreview(QWidget):
             self.visibility.dark if self.is_dark else self.visibility.light,
             builtin=self.builtin, pixel_art=self.pixel_art,
         )
-        paint_header_backdrop(
-            painter, QRectF(0, 0, width, 70), self.is_dark, self.theme_id
-        )
+        if not self.pixmap.isNull():
+            visible = self.visibility.dark if self.is_dark else self.visibility.light
+            key = (self.pixmap.cacheKey(), self.theme_id, visible, self.builtin, self.pixel_art)
+            self._glass.prepare(
+                key, content.size().toSize(),
+                lambda p, r: paint_workspace_background(p, r, self.pixmap, self.is_dark, self.theme_id, visible, builtin=self.builtin, pixel_art=self.pixel_art),
+                self.is_dark, p, self.glass_blur,
+            )
         sidebar = content.left()
-        painter.fillRect(QRectF(0, 70, sidebar, height - 70), QColor(p.sidebar))
+        painter.fillRect(QRectF(0, 0, sidebar, height), QColor(p.sidebar))
+        painter.fillRect(QRectF(sidebar - 1, 0, 1, height), QColor(p.divider))
+        paint_header_backdrop(
+            painter, QRectF(sidebar, 0, width - sidebar, HEADER_HEIGHT),
+            self.is_dark, self.theme_id,
+        )
         painter.fillRect(QRectF(0, height - 36, width, 36), QColor(p.sidebar))
         font = QFont(painter.font())
         font.setPixelSize(14)
         painter.setFont(font)
 
-        def text(rect, value, *, muted=False, protected=True, bold=False):
+        def text(rect, value, *, muted=False, protected=False, bold=False):
             rect = QRectF(rect)
             painter.save()
             f = QFont(painter.font())
             f.setBold(bold)
             painter.setFont(f)
-            color = p.muted if muted else p.text
+            color = (glass_text_color(p) if not self.pixmap.isNull() else p.muted) if muted else p.text
             label = painter.fontMetrics().elidedText(value, Qt.ElideRight, max(1, int(rect.width())))
             if protected and not self.pixmap.isNull():
                 bounds = painter.fontMetrics().boundingRect(rect.toRect(), int(Qt.AlignLeft | Qt.AlignVCenter), label)
@@ -200,9 +215,12 @@ class WorkspacePreview(QWidget):
             painter.restore()
 
         def card(rect, solid=False):
+            if not self.pixmap.isNull():
+                self._glass.paint(painter, rect, QRectF(rect).translated(-content.topLeft()))
+                return
             surface = QColor(p.surface)
             if not solid and not self.pixmap.isNull():
-                surface.setAlpha(background_surface_alpha(self.is_dark))
+                surface.setAlpha(background_reading_alpha(p.surface, p.text, p.muted, p.active_text))
             painter.setBrush(surface)
             painter.setPen(QPen(QColor(p.divider), 1))
             painter.drawRoundedRect(rect, 14, 14)
@@ -229,17 +247,16 @@ class WorkspacePreview(QWidget):
                 for column, label in enumerate(values):
                     text(QRectF(rect.left() + column * cell + 12, row_rect.top(), cell - 24, 56), label, protected=False)
 
-        text(QRectF(24, 12, width - 48, 32), self.title, protected=False, bold=True)
-        text(QRectF(24, 42, width - 48, 22), "背景效果示例 · 不包含实际任务数据", muted=True, protected=False)
+        text(QRectF(sidebar + 24, 0, width - sidebar - 48, HEADER_HEIGHT), self.title, protected=False, bold=True)
         names = ("视频下载", "直播录制", "任务中心", "设置")
         keys = ("download", "live", "tasks", "settings")
         for i, name in enumerate(names):
-            rect = QRectF(12, 170 + i * 56, sidebar - 24, 42)
+            rect = QRectF(12, 130 + i * 56, sidebar - 24, 42)
             if keys[i] == self.workspace:
                 painter.fillRect(rect, QColor(p.selection))
             text(rect.adjusted(12, 0, -2, 0), name if sidebar > 100 else name[:2], protected=False)
         if sidebar > 100:
-            text(QRectF(24, 92, sidebar - 40, 36), "BiliFlow", protected=False, bold=True)
+            text(QRectF(24, 48, sidebar - 40, 36), "BiliFlow", protected=False, bold=True)
         inner = content.adjusted(24, 24, -24, -24)
         footer = QRectF(inner.left(), inner.bottom() - 72, inner.width(), 72)
         top = inner.top()
@@ -250,8 +267,11 @@ class WorkspacePreview(QWidget):
             control(QRectF(hero.left() + 20, top + 60, hero.width() - 160, 40), "直播间链接或房间号" if self.workspace == "live" else "视频链接或 BV 号")
             control(QRectF(hero.right() - 128, top + 60, 108, 40), "添加并监控" if self.workspace == "live" else "开始解析", True)
             top += 140
-            left = QRectF(inner.left(), top, inner.width() * .55 - 10, max(200, footer.top() - top - 20))
-            right = QRectF(left.right() + 20, top, inner.right() - left.right() - 20, left.height())
+            live = self.workspace == "live"
+            available_height = max(200, footer.top() - top - 16)
+            left_width = inner.width() * (.62 if live else .4) - 8
+            left = QRectF(inner.left(), top, left_width, available_height if live else 230)
+            right = QRectF(left.right() + 16, top, inner.right() - left.right() - 16, available_height)
             card(left)
             card(right)
             text(left.adjusted(20, 14, -20, -left.height() + 44), "监控列表" if self.workspace == "live" else "作品资料卡", bold=True)
@@ -259,16 +279,29 @@ class WorkspacePreview(QWidget):
             if self.workspace == "live":
                 table(QRectF(left.left() + 20, top + 58, left.width() - 40, left.height() - 78), ("直播间", "状态", "已录时长"), (("城市漫游", "录制中", "00:43:12"), ("星轨电台", "等待开播", "00:00:00")))
             else:
-                control(QRectF(left.left() + 20, top + 66, left.width() * .45, 140), "视频封面")
-                text(QRectF(left.left() + left.width() * .5 + 12, top + 66, left.width() * .5 - 30, 36), "星轨旅记：城市夜航", bold=True)
-                text(QRectF(left.left() + left.width() * .5 + 12, top + 108, left.width() * .5 - 30, 30), "UP 主 · 示例", muted=True)
+                control(QRectF(left.left() + 16, top + 58, 176, 99), "视频封面")
+                text(QRectF(left.left() + 16, top + 165, left.width() - 32, 28), "星轨旅记：城市夜航", bold=True)
+                text(QRectF(left.left() + 16, top + 195, left.width() - 32, 24), "UP 主 · 示例    时长 12:34", muted=True)
             labels = ("当前房间", "下次拉流画质", "保存目录") if self.workspace == "live" else ("分 P 范围", "输出类型", "画面质量", "视频编码")
+            columns = 2 if not live and right.width() >= 560 else 1
+            field_width = (right.width() - 32 - (columns - 1) * 12) / columns
             for i, label in enumerate(labels):
-                y = top + 58 + i * 52
+                x = right.left() + 16 + (i % columns) * (field_width + 12)
+                y = top + 58 + (i // columns) * 52
                 if y + 40 > footer.top() - 24:
                     break
-                text(QRectF(right.left() + 20, y, 92, 40), label, muted=True)
-                control(QRectF(right.left() + 116, y, max(50, right.width() - 136), 40), ("原画" if self.workspace == "live" else "1080P") if i == 2 else "当前设置")
+                text(QRectF(x, y, 92, 40), label, muted=True)
+                control(QRectF(x + 104, y, max(50, field_width - 104), 40), ("原画" if live else "1080P") if i == 2 else "当前设置")
+            if not live:
+                option_top = top + 58 + (len(labels) // columns) * 52
+                option_width = (right.width() - 44) / 2
+                for i, label in enumerate(("下载弹幕 · ASS", "下载字幕 · SRT", "保存封面 · 图片", "保存元数据 · JSON")):
+                    y = option_top + (i // 2) * 84
+                    if y + 76 > right.bottom() - 12:
+                        break
+                    option = QRectF(right.left() + 16 + (i % 2) * (option_width + 12), y, option_width, 76)
+                    card(option, True)
+                    text(option.adjusted(12, 0, -12, 0), label)
         elif self.workspace == "tasks":
             text(QRectF(inner.left(), top, inner.width(), 36), "下载队列       当前录制       录制历史", bold=True)
             tools = QRectF(inner.left(), top + 52, inner.width(), 56)
@@ -276,10 +309,14 @@ class WorkspacePreview(QWidget):
             text(tools.adjusted(16, 0, -16, 0), "全部任务                 当前筛选                 3 项", protected=False)
             table(QRectF(inner.left(), top + 124, inner.width(), inner.height() - 124), ("作品", "规格", "传输进度", "任务状态"), (("星轨旅记：城市夜航", "4K · HEVC", "68%", "下载中 · 14.2 MB/s"), ("晨光抵达", "1080P · AVC", "32%", "已暂停"), ("创作幕后", "Hi-Res · FLAC", "100%", "完成")))
         else:
-            text(QRectF(inner.left(), top, inner.width(), 36), "下载       直播       工具与存储       软件更新       外观", bold=True)
-            theme = QRectF(inner.left(), top + 52, inner.width(), 180)
+            text(QRectF(inner.left(), top, inner.width(), 36), "下载    直播    外观    工具与存储    关于与更新", bold=True)
+            modes = QRectF(inner.left(), top + 52, inner.width(), 100)
+            card(modes)
+            text(QRectF(modes.left() + 16, modes.top() + 10, modes.width() - 32, 28), "显示模式 · 立即生效", bold=True)
+            control(QRectF(modes.left() + 16, modes.top() + 48, 320, 36), "跟随系统      日间      夜间")
+            theme = QRectF(inner.left(), modes.bottom() + 16, inner.width(), 180)
             card(theme)
-            text(theme.adjusted(20, 12, -20, -136), "应用配色", bold=True)
+            text(theme.adjusted(20, 12, -20, -136), "应用配色 · 保存后生效", bold=True)
             control(QRectF(theme.left() + 20, theme.top() + 62, (theme.width() - 60) / 2, 80), "星河 · 粉紫星空")
             control(QRectF(theme.center().x() + 10, theme.top() + 62, (theme.width() - 60) / 2, 80), "晴海 · 晴空青蓝")
             columns = 1 if width < 1120 else 2

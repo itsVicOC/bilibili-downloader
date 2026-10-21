@@ -212,13 +212,7 @@ def test_settings_merge_appearance_per_field_and_discard(qtbot, tmp_path):
     dialog.load_settings(latest)
     assert not dialog.dirty
     assert "丢失" in dialog._background_pickers["live"].status.text()
-    assert [dialog.tabs.tabText(i) for i in range(5)] == [
-        "下载",
-        "直播",
-        "工具与存储",
-        "软件更新",
-        "外观",
-    ]
+    assert [dialog.tabs.tabText(i) for i in range(5)] == ["下载", "直播", "外观", "工具与存储", "关于与更新"]
 
 
 def test_save_failure_preserves_background_and_draft(
@@ -378,7 +372,7 @@ def test_preview_visibility_is_local_until_applied(qtbot, monkeypatch, tmp_path,
         assert slider.value() == 30
         slider.setValue(45)
         assert picker.visibility == baseline
-        reset = next(b for b in dialog.findChildren(QPushButton) if "当前模式默认" in b.text())
+        reset = next(b for b in dialog.findChildren(QPushButton) if b.accessibleName() == "恢复当前模式背景可见度")
         reset.click()
         assert preview.visibility.dark is None
         dialog.effects.light_button.setChecked(True)
@@ -420,8 +414,12 @@ def test_preview_and_workspace_render_identical_visibility(qapp, qtbot, tmp_path
         visibility = BackgroundVisibility(light=percent, dark=percent)
         workspace.set_visibility(visibility)
         preview.visibility = visibility
-        actual = workspace.grab().toImage().pixelColor(QPoint(8, 8))
-        draft = preview.grab().toImage().pixelColor(QPoint(80, 78))
+        actual_image = workspace.grab().toImage()
+        draft_image = preview.grab().toImage()
+        # Sample logical workspace coordinates at the backend's actual DPR.
+        actual_dpr, draft_dpr = actual_image.devicePixelRatio(), draft_image.devicePixelRatio()
+        actual = actual_image.pixelColor(QPoint(round(8 * actual_dpr), round(8 * actual_dpr)))
+        draft = draft_image.pixelColor(QPoint(round(80 * draft_dpr), round(78 * draft_dpr)))
         assert actual == draft
         colors.append(actual.name())
     assert len(set(colors)) == 3
@@ -517,7 +515,7 @@ def test_full_settings_page_reveals_fixed_workspace_background(
                 assert widget_color(card, QPoint(card.width() - 24, 20)) != QColor(
                     theme_palette(dark, theme_id).surface
                 )
-            assert widget_color(panel._action_bar, QPoint(8, 36)) == QColor(
+            assert widget_color(panel._action_bar, QPoint(8, 36)) != QColor(
                 theme_palette(dark, theme_id).surface
             )
         for reference in ("", prepared.reference):

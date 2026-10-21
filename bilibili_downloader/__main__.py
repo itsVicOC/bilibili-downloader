@@ -384,6 +384,7 @@ def _launch_gui():
     app.setApplicationName("BiliFlow")
     app.setOrganizationName("bilibili-downloader")
     app.setWindowIcon(QIcon(asset_path("app_icon.png")))
+    config = ConfigManager()
     theme_manager = ThemeManager(app)
 
     from bilibili_downloader.core.installation import (
@@ -399,7 +400,6 @@ def _launch_gui():
             MessageBox("暂时无法启动", str(exc), tone="warning").exec()
             return
 
-    config = ConfigManager()
     transaction = startup_transaction(config.data_dir)
     failure = startup_failure(config.data_dir)
     lease = RuntimeLease(config.data_dir / "runtime.lock")
@@ -408,7 +408,9 @@ def _launch_gui():
         MessageBox("正在安装更新", "更新程序正在替换应用，请稍后重新打开。", tone="warning").exec()
         return
     try:
-        theme_manager.set_color_theme(config.load().appearance.theme)
+        appearance = config.load().appearance
+        theme_manager.set_color_theme(appearance.theme)
+        theme_manager.set_mode(appearance.mode)
         window = MainWindow(config, startup_paused=transaction is not None, theme_manager=theme_manager)
         lifecycle = ApplicationLifecycle(app, window)
         window.show()

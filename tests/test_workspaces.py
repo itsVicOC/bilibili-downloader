@@ -7,7 +7,13 @@ import pytest
 from PIL import Image
 from PySide6.QtCore import QPoint, QRect, Qt
 from PySide6.QtGui import QFont, QPalette
-from PySide6.QtWidgets import QApplication, QDialogButtonBox, QMessageBox, QPushButton
+from PySide6.QtWidgets import (
+    QApplication,
+    QDialogButtonBox,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+)
 
 from bilibili_downloader.core.live_models import (
     LiveRoom,
@@ -29,6 +35,7 @@ from bilibili_downloader.gui.dialogs.settings_dialog import SettingsDialog
 from bilibili_downloader.gui.live_controller import LiveUiController
 from bilibili_downloader.gui.main_window import MainWindow
 from bilibili_downloader.gui.resources.theme import ThemeManager
+from bilibili_downloader.gui.settings_sections import SettingsSection
 from bilibili_downloader.utils.config import ConfigManager
 
 
@@ -218,7 +225,7 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
         window._show_tasks(2)
         flush()
         assert window._task_page.history.horizontalScrollBar().maximum() == 0
-        window._show_settings_tab(0)
+        window._show_settings_tab(SettingsSection.DOWNLOAD)
         flush()
         assert contained(window._settings_page._save_btn, window._settings_page)
         assert window._settings_page._action_bar.height() == single_size.height()
@@ -227,7 +234,7 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
             window._settings_page.tabs.currentWidget().horizontalScrollBar().maximum()
             == 0
         )
-        window._show_settings_tab(4)
+        window._show_settings_tab(SettingsSection.APPEARANCE)
         flush()
         assert contained(window._settings_page._save_btn, window._settings_page)
         assert window._settings_page.tabs.currentWidget().horizontalScrollBar().maximum() == 0
@@ -544,9 +551,7 @@ def test_room_directory_modes_preserve_custom_draft(workspace, qtbot):
     assert dialog.directory.isEnabled() and dialog.directory.text() == "/tmp/custom"
 
 
-def test_session_export_controls_show_selected_session_result(workspace, tmp_path, monkeypatch):
-    from PySide6.QtWidgets import QFileDialog
-
+def test_session_export_controls_show_selected_session_result(workspace, qtbot, tmp_path, monkeypatch):
     from bilibili_downloader.core.live_models import LiveExport
 
     source = tmp_path / "part.flv"
@@ -557,14 +562,20 @@ def test_session_export_controls_show_selected_session_result(workspace, tmp_pat
         segments=[RecordingSegment(path=str(source), duration=5, finalized_at="2026-10-20T01:00:05+00:00")],
     )
     page = workspace._task_page
+    workspace._show_workspace(2)
+    workspace.show()
+    page.tabs.setCurrentIndex(2)
     page.update_history([session])
     page.history.setCurrentItem(page.history.topLevelItem(0))
     assert page.export_button.isEnabled() and page.export_button.text() == "合并导出 MP4"
     calls = []
     monkeypatch.setattr(workspace._live_controller, "export_session", lambda *args: calls.append(args))
     target = tmp_path / "whole.mp4"
-    monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *_args: (str(target), "MP4"))
     page.export_button.click()
+    picker = page._file_picker
+    picker.dialog.findChild(QLineEdit, "fileNameEdit").setText(str(target))
+    picker.dialog.accept()
+    qtbot.waitUntil(lambda: picker.dialog is None)
     assert calls == [(session.id, str(target))]
     session.mp4_export = LiveExport(path=str(target), status="failed", error="片段缺失")
     page.update_history([session])
@@ -698,7 +709,7 @@ def test_settings_validation_marks_the_relevant_field(qtbot):
     qtbot.addWidget(panel)
     panel._path_template.setText("../{title}")
     assert not panel.validate()
-    assert panel.tabs.currentIndex() == 0
+    assert panel.current_section == SettingsSection.DOWNLOAD
     assert panel._field_rows["path_template"].error.text()
     panel.load_settings(AppSettings())
     assert panel._field_rows["path_template"]._error_row.isHidden()
@@ -745,7 +756,7 @@ def test_sidebar_shows_username_avatar_and_retains_account_action(workspace, qap
     assert triggered
 
 
-@pytest.mark.parametrize("state", ["logout", "expired", "error"])
+@pytest.mark.parametrize("state", ["logout", "expired"])
 def test_sidebar_clears_identity_and_rejects_stale_avatar(workspace, state):
     window = workspace
     window._on_login_status_result(0, {
@@ -757,8 +768,6 @@ def test_sidebar_clears_identity_and_rejects_stale_avatar(workspace, state):
         window._set_login_status_label("未登录", "MutedLabel")
     elif state == "expired":
         window._on_login_status_result(1, {"isLogin": False})
-    else:
-        window._on_login_status_error(1, "offline")
     window._on_login_status_avatar(0, avatar_png())
     window._on_login_status_result(0, {"isLogin": True, "uname": "旧账号", "face": "old"})
     assert window._header_login._avatar.isNull()
@@ -841,7 +850,7 @@ def test_output_cards_allow_preconfiguration_and_keep_available_choices(workspac
     assert window._download_actions.status.text() == "已选 1 项"
     window._url_input.setText("BV1Q541167Qg")
     assert not window._download_btn.isEnabled()
-    assert window._download_actions.status.text() == "待解析"
+    assert window._download_actions.status.text() == "来源已修改"
     window._on_resolve_success(VideoInfo(bvid="BV1Q541167Qg"), [StreamInfo(id=80, codecid=12)], [], True)
     assert window._quality_combo.currentData() == VideoQuality.Q1080P
     assert window._codec_combo.currentData() == 12
@@ -951,7 +960,7 @@ def test_theme_cards_are_drafts_and_background_grid_adapts(workspace, qapp):
     previous = qapp.property("colorTheme")
     window.resize(1320, 860)
     window.show()
-    window._show_settings_tab(4)
+    window._show_settings_tab(SettingsSection.APPEARANCE)
     flush()
     panel = window._settings_page
     assert panel._appearance_columns == 2

@@ -27,7 +27,6 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QDialog,
     QDialogButtonBox,
-    QFileDialog,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -240,28 +239,39 @@ class BackgroundGallery(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
-        header = QHBoxLayout()
-        title = QLabel("选择背景")
-        title.setObjectName("DialogTitle")
-        header.addWidget(title)
-        header.addStretch()
-        target = QLabel(f"用于{WORKSPACE_TITLES[self._workspace]}")
-        target.setObjectName("MetaLabel")
-        header.addWidget(target)
-        layout.addLayout(header)
+        self._compact_view = "browse"
+        self._view_switcher = QWidget()
+        switches = QHBoxLayout(self._view_switcher)
+        switches.setContentsMargins(0, 0, 0, 0)
+        switches.setSpacing(8)
+        self._view_group = QButtonGroup(self)
+        self._view_buttons = {}
+        for key, label in (("browse", "浏览背景"), ("preview", "预览效果")):
+            button = QPushButton(label)
+            button.setObjectName("SegmentButton")
+            button.setCheckable(True)
+            self._view_group.addButton(button)
+            self._view_buttons[key] = button
+            button.clicked.connect(lambda _checked=False, view=key: self._set_compact_view(view))
+            switches.addWidget(button)
+        switches.addStretch()
+        self._view_buttons["browse"].setChecked(True)
+        layout.addWidget(self._view_switcher)
         body = QHBoxLayout()
         body.setSpacing(16)
         layout.addLayout(body, 1)
-        left = QVBoxLayout()
+        self._preview_pane = QWidget()
+        left = QVBoxLayout(self._preview_pane)
+        left.setContentsMargins(0, 0, 0, 0)
         left.setSpacing(8)
         self.selection_label = QLabel()
         self.selection_label.setObjectName("SectionTitle")
         left.addWidget(self.selection_label)
-        self.effects = BackgroundEffects(picker._title, picker._theme_id, picker.visibility, workspace=self._workspace)
+        self.effects = BackgroundEffects(picker._title, picker._theme_id, picker.visibility, workspace=self._workspace, glass_blur=picker.glass_blur)
         if picker.window().width() >= 720:
             self.effects.preview.viewport_size = picker.window().size()
         left.addWidget(self.effects, 1)
-        body.addLayout(left, 1)
+        body.addWidget(self._preview_pane, 1)
         self.tabs = QTabWidget()
         self.tabs.setMinimumWidth(288)
         self.tabs.setMaximumWidth(340)
@@ -323,7 +333,7 @@ class BackgroundGallery(QDialog):
         self.import_button = QPushButton("选择本地图片…")
         self.import_button.clicked.connect(self._choose_custom)
         column.addWidget(self.import_button)
-        self.import_status = QLabel("支持 PNG、JPEG、WebP，最大 20 MiB。保存时保留应用内副本。")
+        self.import_status = QLabel("PNG / JPEG / WebP · 最大 20 MiB")
         self.import_status.setObjectName("MetaLabel")
         self.import_status.setWordWrap(True)
         column.addWidget(self.import_status)
@@ -336,12 +346,12 @@ class BackgroundGallery(QDialog):
         self.default_button.clicked.connect(self.restore_default)
         footer.addWidget(self.default_button)
         footer.addStretch()
-        self.save_hint = QLabel("保存设置后生效")
+        self.save_hint = QLabel("选用后需保存设置")
         self.save_hint.setObjectName("MetaLabel")
         footer.addWidget(self.save_hint)
         self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         self.apply_button = self.buttons.button(QDialogButtonBox.Ok)
-        self.apply_button.setText("使用此背景")
+        self.apply_button.setText("选用背景")
         self.apply_button.setObjectName("PrimaryButton")
         self.buttons.button(QDialogButtonBox.Cancel).setText("取消")
         for button in self.findChildren(QPushButton):
@@ -371,6 +381,22 @@ class BackgroundGallery(QDialog):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if hasattr(self, "tabs"):
+            self._sync_layout()
+
+    def _set_compact_view(self, view):
+        self._compact_view = view
+        self._view_buttons[view].setChecked(True)
+        self._sync_layout()
+
+    def _sync_layout(self):
+        compact = self.width() < 900
+        self._view_switcher.setVisible(compact)
+        self._preview_pane.setVisible(not compact or self._compact_view == "preview")
+        self.tabs.setVisible(not compact or self._compact_view == "browse")
+        if compact:
+            self.tabs.setMinimumWidth(0)
+            self.tabs.setMaximumWidth(16777215)
+        else:
             self.tabs.setFixedWidth(max(288, min(340, round(self.width() * .30))))
 
     def _reflow(self, *_args):
@@ -391,7 +417,7 @@ class BackgroundGallery(QDialog):
                 self.grid.addWidget(card, index // self._columns, index % self._columns)
                 self._visible_cards.append(card)
         hidden = self.reference and builtin_background(self.reference) and not any(c.isChecked() for c in self._visible_cards)
-        self.filter_status.setText("当前选择不在此筛选中" if hidden else f"{len(self._visible_cards)} 幅作品 · 此页推荐优先")
+        self.filter_status.setText("当前选择不在此筛选中" if hidden else f"{len(self._visible_cards)} 幅作品")
 
     def eventFilter(self, watched, event):
         if watched is self.scroll.viewport() and event.type() == QEvent.Resize:
@@ -426,7 +452,7 @@ class BackgroundGallery(QDialog):
             return
         self.tabs.setCurrentIndex(0)
         self.reference, self.prepared = reference, None
-        self.import_status.setText("支持 PNG、JPEG、WebP，最大 20 MiB。保存时保留应用内副本。")
+        self.import_status.setText("PNG / JPEG / WebP · 最大 20 MiB")
         self._check_selection()
         self._load_reference()
 
@@ -471,7 +497,7 @@ class BackgroundGallery(QDialog):
     def _refresh_selection(self):
         entry = builtin_background(self.reference)
         self.effects.set_image(self._selected_image, builtin=entry is not None, pixel_art=entry is not None and entry.style == "pixel")
-        self.selection_label.setText(f"{entry.title} · {STYLE_TITLES[entry.style]}" if entry else "自定义图片" if self.reference else "主题默认")
+        self.selection_label.setText(entry.title if entry else "自定义图片" if self.reference else "主题默认")
         if self.busy:
             self.selection_label.setText(self.selection_label.text() + " · 正在读取…")
         elif not self._selection_valid:
@@ -491,9 +517,12 @@ class BackgroundGallery(QDialog):
         self._refresh_selection()
 
     def _choose_custom(self):
-        path = QFileDialog.getOpenFileName(self, "选择背景图片", "", "静态图片 (*.png *.jpg *.jpeg *.webp)")[0]
-        if path:
-            self.select_path(Path(path))
+        from bilibili_downloader.gui.dialogs.file_picker import file_picker
+
+        file_picker(self).open_file(
+            "选择背景图片", "", "静态图片 (*.png *.jpg *.jpeg *.webp)",
+            lambda path: self.select_path(Path(path)),
+        )
 
     def dragEnterEvent(self, event):
         if _dropped_path(event.mimeData()):
@@ -534,7 +563,7 @@ class BackgroundGallery(QDialog):
             self.reference, self.prepared = image.reference, image
             self._selected_image.loadFromData(image.png)
             self._selection_valid = not self._selected_image.isNull()
-            self.import_status.setText("图片已准备好。使用此背景后，返回设置页保存。")
+            self.import_status.setText("图片已就绪")
             self._check_selection()
         self._refresh_selection()
 

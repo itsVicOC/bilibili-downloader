@@ -1,0 +1,20 @@
+{
+  "backend": "cocoa",
+  "qt": "6.11.2",
+  "dpr": 2.0,
+  "physical_pixels": true,
+  "sections": [
+    "download",
+    "live",
+    "appearance",
+    "tools",
+    "about"
+  ],
+  "blur_range": [
+    0,
+    40
+  ],
+  "default_blur": 18,
+  "blur_control": "appearance settings only; gallery uses the current draft for preview",
+  "directories": "shared read-only picker for download and live"
+}

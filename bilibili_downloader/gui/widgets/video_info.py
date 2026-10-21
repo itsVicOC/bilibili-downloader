@@ -6,14 +6,15 @@ from PIL import Image, UnidentifiedImageError
 from PySide6.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
+    QBoxLayout,
     QHBoxLayout,
     QLabel,
     QSizePolicy,
     QVBoxLayout,
-    QWidget,
 )
 
 from bilibili_downloader.gui.widgets.components import StatusBadge, line_icon
+from bilibili_downloader.gui.widgets.glass_surface import GlassWidget
 from bilibili_downloader.utils.network import BILIBILI_RESOURCE_HOSTS, trusted_https_url
 
 MAX_COVER_BYTES = 10 * 1024 * 1024
@@ -27,21 +28,21 @@ class _AspectCoverLabel(QLabel):
         super().__init__(parent)
         self._source = QPixmap()
         self._expand = False
-        self.setMinimumSize(240, 135)
-        self.setMaximumSize(260, 146)
+        self.setMinimumSize(160, 90)
+        self.setMaximumSize(176, 99)
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
 
     def hasHeightForWidth(self) -> bool:
         return True
 
     def heightForWidth(self, width: int) -> int:
-        return max(135, min(146, round(width * 9 / 16)))
+        return max(90, min(99, round(width * 9 / 16)))
 
     def sizeHint(self) -> QSize:
-        return QSize(260, 146)
+        return QSize(176, 99)
 
     def minimumSizeHint(self) -> QSize:
-        return QSize(240, 135)
+        return QSize(160, 90)
 
     def set_source_pixmap(self, pixmap: QPixmap, *, expand: bool = False) -> None:
         self._source = pixmap
@@ -139,7 +140,7 @@ class _CoverLoadRunner(QRunnable):
             self._worker.finished.emit(self._worker)
 
 
-class VideoInfoWidget(QWidget):
+class VideoInfoWidget(GlassWidget):
     """Displays video metadata (title, author, duration, cover)."""
 
     def __init__(self):
@@ -153,8 +154,8 @@ class VideoInfoWidget(QWidget):
         layout = QVBoxLayout(self)
         self.setObjectName("Panel")
         self.setAttribute(Qt.WA_StyledBackground, True)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(13)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
 
         header_layout = QHBoxLayout()
         title = QLabel("作品资料卡")
@@ -187,12 +188,13 @@ class VideoInfoWidget(QWidget):
             label.setObjectName("InfoChip")
 
         # Layout
-        top_layout = QHBoxLayout()
-        top_layout.setSpacing(18)
+        top_layout = QBoxLayout(QBoxLayout.LeftToRight)
+        self._identity_layout = top_layout
+        top_layout.setSpacing(16)
         top_layout.addWidget(self._cover_label, 0, Qt.AlignTop)
 
         info_layout = QVBoxLayout()
-        info_layout.setSpacing(9)
+        info_layout.setSpacing(8)
         info_layout.addWidget(self._title_label)
         info_layout.addWidget(self._author_label)
         info_layout.addWidget(self._duration_label)
@@ -202,6 +204,12 @@ class VideoInfoWidget(QWidget):
 
         layout.addLayout(top_layout)
         layout.addStretch()
+
+    def resizeEvent(self, event):
+        self._identity_layout.setDirection(
+            QBoxLayout.TopToBottom if event.size().width() < 380 else QBoxLayout.LeftToRight
+        )
+        super().resizeEvent(event)
 
     def set_video_info(self, info):
         """Update display with video info."""

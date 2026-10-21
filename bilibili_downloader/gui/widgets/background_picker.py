@@ -17,7 +17,7 @@ from bilibili_downloader.core.builtin_backgrounds import (
     WORKSPACE_TITLES,
     builtin_background,
 )
-from bilibili_downloader.core.models import BackgroundVisibility
+from bilibili_downloader.core.models import DEFAULT_GLASS_BLUR, BackgroundVisibility
 from bilibili_downloader.gui.resources.paths import background_path
 from bilibili_downloader.gui.widgets.appearance_preview import (
     BackgroundThumbnail,
@@ -57,6 +57,7 @@ class BackgroundPicker(QWidget):
         self.reference = ""
         self.prepared = None
         self.visibility = BackgroundVisibility()
+        self.glass_blur = DEFAULT_GLASS_BLUR
         self.busy = False
         self._generation = 0
         self._jobs = {}
@@ -119,6 +120,9 @@ class BackgroundPicker(QWidget):
     def set_visibility(self, visibility):
         self.visibility = visibility.model_copy(deep=True)
         self.changed.emit()
+
+    def set_glass_blur(self, value):
+        self.glass_blur = value
 
     def _restore_default(self):
         self.set_visibility(BackgroundVisibility())

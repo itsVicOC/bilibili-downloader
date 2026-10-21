@@ -1,0 +1,8 @@
+{
+  "backend": "cocoa",
+  "qt": "6.11.2",
+  "dpr": 2.0,
+  "physical_pixels": true,
+  "material": "Qt wallpaper glass: cached blur, refraction rim and highlights; native text remains separate",
+  "matrix": "2 palettes x 2 modes x 2 wallpaper sources x 3 sizes x 3 states"
+}

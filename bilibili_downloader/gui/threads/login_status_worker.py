@@ -27,7 +27,7 @@ def load_avatar(url: str) -> bytes:
         if image.width * image.height > MAX_AVATAR_PIXELS:
             raise ValueError("头像像素尺寸过大")
         image = ImageOps.exif_transpose(image)
-        image.thumbnail((96, 96), Image.Resampling.LANCZOS)
+        image.thumbnail((192, 192), Image.Resampling.LANCZOS)
         image = image.convert("RGBA")
         output = io.BytesIO()
         image.save(output, format="PNG")

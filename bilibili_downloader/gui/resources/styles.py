@@ -29,8 +29,11 @@ class UiMetrics:
     row_height: int = 56
     compact_row_height: int = 44
     page_margin: int = 24
-    section_gap: int = 20
-    card_padding: int = 20
+    section_gap: int = 16
+    card_padding: int = 16
+    option_card_height: int = 76
+    short_field_width: int = 320
+    number_field_width: int = 184
 
 
 @dataclass(frozen=True)
@@ -171,6 +174,12 @@ def contrast_ratio(first: str, second: str) -> float:
     return (high + .05) / (low + .05)
 
 
+def glass_text_color(colors: ThemePalette) -> str:
+    """Keep small secondary text readable on a more transparent material."""
+    channels = [round(int(colors.text[i:i + 2], 16) * .85 + int(colors.muted[i:i + 2], 16) * .15) for i in (1, 3, 5)]
+    return "#" + "".join(f"{channel:02x}" for channel in channels)
+
+
 @lru_cache(maxsize=128)
 def background_reading_alpha(surface: str, *foregrounds: str) -> int:
     """Smallest safe reading surface over any picture, even at 100% visibility.
@@ -195,7 +204,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     notice = "#342c22" if is_dark else "#fff5e0"
     success_surface = "#20362e" if is_dark else "#edf8f2"
     surface_rgb = ", ".join(str(int(p.surface[i:i + 2], 16)) for i in (1, 3, 5))
-    wallpaper_surface = f"rgba({surface_rgb}, {background_surface_alpha(is_dark)})"
+    wallpaper_surface = f"rgba({surface_rgb}, {background_reading_alpha(p.surface, p.text, p.muted, p.active_text)})"
     row_alpha = background_reading_alpha(p.surface, p.text)
     reading_surface = f"rgba({surface_rgb}, {row_alpha})"
     primary = p.primary or p.accent
@@ -214,16 +223,25 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QMainWindow, QDialog, #AppSurface, #Workspace {{ background: {p.background}; }}
     QDialog#SettingsEditor[embedded="true"] {{ background: transparent; }}
     #Sidebar {{ background: {p.sidebar}; border-right: 1px solid {p.divider}; }}
-    QLabel#BrandTitle {{ font-size: 15pt; font-weight: 800; }}
-    QLabel#PageTitle, QLabel#DialogTitle {{ font-size: 18pt; font-weight: 600; }}
-    QLabel#SectionTitle, QLabel#VideoTitle {{ font-size: 12pt; font-weight: 700; }}
+    QLabel#BrandTitle {{ font-size: 15pt; font-weight: 600; }}
+    QLabel#PageTitle {{ font-size: 16px; font-weight: 500; }}
+    QLabel#DialogTitle {{ font-size: 18pt; font-weight: 600; }}
+    QLabel#SectionTitle, QLabel#VideoTitle {{ font-size: 12pt; font-weight: 600; }}
     QLabel#Caption, QLabel#DialogCaption, QLabel#MetaLabel, QLabel#MutedLabel,
     QLabel#SidebarCaption, QLabel#FieldLabel, QLabel#InfoChip {{ color: {p.muted}; font-size: 9pt; }}
     QLabel#NavSection {{ color: {p.muted}; font-size: 9pt; padding: 8px; }}
     QLabel#HeroEyebrow {{ color: {p.muted}; font-size: 9pt; }}
     QLabel#HeroTitle {{ font-size: 12pt; font-weight: 700; }}
-    QToolBar#WorkspaceToolbar {{ background: {p.background}; border: none; border-bottom: 1px solid {p.divider}; padding: 0; spacing: 8px; }}
-    #WorkspaceHeaders {{ background: transparent; min-height: 52px; }}
+    QToolBar#WorkspaceToolbar {{ background: {p.background}; border: none; padding: 0; spacing: 0; }}
+    #WorkspaceHeaders {{ background: transparent; }}
+    #PageHeader QPushButton {{ min-height: 30px; max-height: 30px; padding: 0 12px; }}
+    QFrame#SidebarDivider {{ background: {p.divider}; border: none; }}
+    QLabel#AccountName {{ font-size: 20px; font-weight: 600; }}
+    QFrame#AccountIdentity {{ background: transparent; border: none; }}
+    QFrame#AccountDetails {{ background: {p.surface}; border: 1px solid {p.divider}; border-radius: 12px; }}
+    QFrame#AccountDivider {{ background: {p.divider}; border: none; }}
+    QLabel#AccountValue {{ font-size: 14px; }}
+    QPushButton#SidebarAction::menu-indicator {{ image: none; width: 0; }}
     QMenuBar {{ background: {p.sidebar}; color: {p.text}; border-bottom: 1px solid {p.divider}; padding: 2px 8px; }}
     QMenuBar::item {{ padding: 5px 10px; background: transparent; border-radius: 5px; }}
     QMenuBar::item:selected {{ background: {p.selection}; }}
@@ -234,6 +252,20 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QStackedWidget[customBackground="true"] #SectionCard,
     QStackedWidget[customBackground="true"] #ControlPanel,
     QStackedWidget[customBackground="true"] QGroupBox#SettingsSection {{ background: {wallpaper_surface}; }}
+    QStackedWidget[customBackground="true"] #Panel[glassSurface="true"],
+    QStackedWidget[customBackground="true"] #SectionCard[glassSurface="true"],
+    QStackedWidget[customBackground="true"] #ControlPanel[glassSurface="true"],
+    QStackedWidget[customBackground="true"] #HeroPanel[glassSurface="true"],
+    QStackedWidget[customBackground="true"] #ActionBar[glassSurface="true"],
+    QStackedWidget[customBackground="true"] #OutputActionBar[glassSurface="true"],
+    QStackedWidget[customBackground="true"] #ToolSurface[glassSurface="true"] {{ background: transparent; border: none; }}
+    QStackedWidget[customBackground="true"] QLabel#MetaLabel,
+    QStackedWidget[customBackground="true"] QLabel#FieldLabel,
+    QStackedWidget[customBackground="true"] QLabel#InfoChip,
+    QStackedWidget[customBackground="true"] QLabel#Caption {{ color: {glass_text_color(p)}; }}
+    QStackedWidget[customBackground="true"] QLabel#HeroTitle {{ color: {p.text}; }}
+    QStackedWidget[customBackground="true"] QPushButton#TextButton,
+    QStackedWidget[customBackground="true"] QPushButton#OutputSecondaryButton {{ color: {glass_text_color(p)}; }}
     QLabel#InfoChip {{ background: transparent; border: none; padding: 0; }}
     QLabel#EmptyCover {{ background: {p.surface_raised}; border: 1px solid {p.divider}; border-radius: 10px; }}
     QLabel#LoginInstructions {{ background: {p.surface_raised}; border: 1px solid {p.divider}; border-radius: 10px; padding: 12px; }}
@@ -258,7 +290,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QPushButton {{
         min-height: {m.control_height - 4}px; padding: 0 14px;
         border: 2px solid transparent; border-radius: 8px;
-        background: {p.surface_raised}; color: {p.text}; font-weight: 600;
+        background: {p.surface_raised}; color: {p.text}; font-weight: 500;
     }}
     QPushButton:hover {{ background: {p.selection}; }}
     QPushButton:pressed {{ background: {p.surface}; border-color: {p.border}; }}
@@ -268,14 +300,14 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QPushButton#SegmentButton:checked {{ background: {p.selection}; color: {p.active_text}; border-color: {p.focus}; }}
     QPushButton#SegmentButton:focus {{ border-color: {p.focus}; }}
     QPushButton#PrimaryButton, QPushButton#DownloadButton, QPushButton#HeroButton {{
-        min-height: {m.primary_height - 4}px; background: {primary}; color: {primary_text}; border-color: transparent;
+        min-height: {m.primary_height - 4}px; background: {primary}; color: {primary_text}; border-color: transparent; font-weight: 600;
     }}
     QPushButton#PrimaryButton:hover, QPushButton#DownloadButton:hover, QPushButton#HeroButton:hover {{ background: {primary_hover}; }}
     QPushButton#PrimaryButton:pressed, QPushButton#DownloadButton:pressed, QPushButton#HeroButton:pressed {{ background: {primary_pressed}; }}
     QPushButton#PrimaryButton[keyboardFocus="true"]:focus, QPushButton#DownloadButton[keyboardFocus="true"]:focus, QPushButton#HeroButton[keyboardFocus="true"]:focus {{ border-color: {primary_text}; }}
     QPushButton#PrimaryButton:disabled, QPushButton#DownloadButton:disabled, QPushButton#HeroButton:disabled {{ background: {p.surface_raised}; color: {p.disabled}; border-color: {p.divider}; }}
     QPushButton#SubtleButton, QPushButton#SecondaryButton, QPushButton#SidebarAction {{ background: {p.surface_raised}; }}
-    QPushButton#SidebarAction[signedIn="true"] {{ text-align: left; padding: 0 10px; }}
+    QPushButton#SidebarAction[signedIn="true"] {{ text-align: center; padding: 0 10px; }}
     QPushButton#SidebarAction[compact="true"] {{ text-align: center; padding: 0; }}
     QPushButton#GhostButton, QPushButton#TextButton, QPushButton#ActivityButton {{ background: transparent; color: {p.muted}; }}
     QPushButton#TextButton:hover, QPushButton#GhostButton:hover, QPushButton#ActivityButton:hover {{ background: {p.selection}; color: {p.text}; }}
@@ -323,6 +355,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
         outline: none; padding: 6px;
     }}
     QCheckBox {{ spacing: 8px; min-height: 26px; }}
+    QCheckBox#DownloadOptionCard {{ min-height: {m.option_card_height}px; max-height: {m.option_card_height}px; padding: 0; border: none; }}
     QCheckBox::indicator {{ width: 16px; height: 16px; border: 2px solid {p.border}; border-radius: 5px; background: {p.surface}; }}
     QCheckBox::indicator:checked {{ background: {p.accent}; border-color: {p.focus}; image: url(__CHECKMARK_ICON__); }}
     QCheckBox::indicator:hover {{ border-color: {p.border_hover}; }}
@@ -428,7 +461,6 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     if theme_id == "bilibili_blue":
         # Keep neutral reading surfaces, with localized sky and rose accents.
         stylesheet += f"""
-        QToolBar#WorkspaceToolbar {{ background: {p.surface}; }}
         QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QComboBox {{
             border-width: 1px; min-height: 38px;
         }}

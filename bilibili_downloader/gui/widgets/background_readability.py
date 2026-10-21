@@ -56,6 +56,8 @@ class BackgroundReadability(QObject):
             return False
         if not isinstance(widget, (QLabel, QCheckBox, QPushButton)):
             return False
+        if widget.objectName() == "DownloadOptionCard":
+            return False
         if widget.window() != self.stack.window() or not self.stack.isAncestorOf(widget):
             return False
         text = widget.text()
@@ -66,6 +68,7 @@ class BackgroundReadability(QObject):
             if current.objectName() in {
                 "ActionBar", "OutputActionBar", "ToolSurface", "Notice", "StatusBadge",
                 "StatusPill", "EmptyCover", "LoginInstructions", "WarningBanner",
+                "Panel", "SectionCard", "ControlPanel", "SettingsSection", "HeroPanel",
             }:
                 return False
             current = current.parentWidget()

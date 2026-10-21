@@ -93,16 +93,18 @@ jobs:
       - name: Run tests
         run: pytest -q
 
-      - name: Capture Windows native typography at three scales
+      - name: Capture Windows native typography at four scales
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          foreach ($scale in @('1', '1.5', '2')) {
+          foreach ($scale in @('1', '1.25', '1.5', '2')) {
             $env:QT_SCALE_FACTOR = $scale
             python scripts/capture_docs_screenshots.py --native --checks-only --output-dir "$env:RUNNER_TEMP/biliflow-visuals/$scale"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
           Remove-Item Env:QT_SCALE_FACTOR
+          python scripts/capture_docs_screenshots.py --native --physical-pixels --ui-refresh-only --output-dir "$env:RUNNER_TEMP/biliflow-visuals/ui-refresh"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload Windows native visual checks
         if: runner.os == 'Windows'

@@ -54,11 +54,13 @@ class ThemeManager(QObject):
 
     changed = Signal()
 
-    def __init__(self, app, theme_id="star_trail"):
+    def __init__(self, app, theme_id="star_trail", mode="system"):
         super().__init__(app)
         self._app = app
         self._is_dark = False
         self._theme_id = theme_id
+        self._mode = "system"
+        self._native_dark = app.palette().color(QPalette.Window).lightness() < 128
         if not hasattr(app, "_button_focus_filter"):
             app._button_focus_filter = _ButtonFocusFilter(app)
             app.installEventFilter(app._button_focus_filter)
@@ -69,7 +71,7 @@ class ThemeManager(QObject):
         style_hints = app.styleHints()
         if hasattr(style_hints, "colorSchemeChanged"):
             style_hints.colorSchemeChanged.connect(self._on_color_scheme_changed)
-        self.apply_theme(self._system_prefers_dark())
+        self.set_mode(mode)
 
     def _apply_platform_font(self) -> None:
         """Use a native CJK UI font while preserving platform DPI scaling."""
@@ -86,6 +88,10 @@ class ThemeManager(QObject):
         if family:
             font.setFamily(family)
         font.setPointSizeF(DEFAULT_FONT_POINT_SIZE * self._font_scale)
+        font.setStyleStrategy(QFont.PreferAntialias)
+        font.setHintingPreference(
+            QFont.PreferFullHinting if sys.platform == "win32" else QFont.PreferDefaultHinting
+        )
         self._font_family = font.family()
         self._app.setFont(font)
 
@@ -97,6 +103,21 @@ class ThemeManager(QObject):
     def theme_id(self) -> str:
         return self._theme_id
 
+    @property
+    def mode(self) -> str:
+        return self._mode
+
+    def set_mode(self, mode: str) -> None:
+        self._mode = mode if mode in ("system", "light", "dark") else "system"
+        hints = self._app.styleHints()
+        if hasattr(hints, "setColorScheme"):
+            hints.setColorScheme({
+                "system": Qt.ColorScheme.Unknown,
+                "light": Qt.ColorScheme.Light,
+                "dark": Qt.ColorScheme.Dark,
+            }[self._mode])
+        self.apply_theme(self._system_prefers_dark() if self._mode == "system" else self._mode == "dark")
+
     def set_color_theme(self, theme_id: str) -> None:
         self._theme_id = theme_id if theme_id in ("star_trail", "bilibili_blue") else "star_trail"
         self.apply_theme(self._is_dark)
@@ -107,10 +128,11 @@ class ThemeManager(QObject):
             return True
         if scheme == Qt.ColorScheme.Light:
             return False
-        window = self._app.palette().color(QPalette.Window)
-        return window.lightness() < 128
+        return self._native_dark
 
     def _on_color_scheme_changed(self, scheme):
+        if self._mode != "system":
+            return
         if scheme == Qt.ColorScheme.Unknown:
             self.apply_theme(self._system_prefers_dark())
         else:
@@ -121,6 +143,7 @@ class ThemeManager(QObject):
         self._is_dark = is_dark
         self._app.setProperty("darkTheme", is_dark)
         self._app.setProperty("colorTheme", self._theme_id)
+        self._app.setProperty("appearanceMode", self._mode)
         colors = theme_palette(is_dark, self._theme_id)
         palette = QPalette(self._app.palette())
         for role, color in (
