@@ -318,6 +318,23 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
     user32.SendMessageW.restype = ctypes.c_ssize_t
     user32.IsZoomed.argtypes = [wintypes.HWND]
     user32.IsZoomed.restype = wintypes.BOOL
+    user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+    user32.SetForegroundWindow.restype = wintypes.BOOL
+    user32.GetForegroundWindow.argtypes = []
+    user32.GetForegroundWindow.restype = wintypes.HWND
+
+    def foreground():
+        # A new Python process can bring the hosted runner's terminal above
+        # Qt's window. isActiveWindow() alone can briefly retain stale state;
+        # verify Win32 foreground ownership before real input/compositor grabs.
+        window.raise_()
+        window.activateWindow()
+
+        def acquired():
+            user32.SetForegroundWindow(hwnd)
+            return user32.GetForegroundWindow() == hwnd.value
+
+        qtbot.waitUntil(acquired)
 
     class MouseInput(ctypes.Structure):
         _fields_ = [("dx", wintypes.LONG), ("dy", wintypes.LONG),
@@ -334,6 +351,7 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
     user32.SendInput.restype = wintypes.UINT
 
     def click(x, y):
+        foreground()
         assert user32.SetCursorPos(x, y)
         qtbot.wait(60)
         released = []
@@ -373,6 +391,7 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
     checks = []
 
     def assert_clear(stage):
+        foreground()
         qtbot.wait(150)
         frame = window.frameGeometry()
         pixmap = window.screen().grabWindow(0, *frame.getRect())
@@ -398,6 +417,7 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
         # Capture the desktop compositor: QWidget.grab() misses Qt's separate
         # layered titlebar HWND, which is where this regression occurs.
         assert not window.windowHandle().flags() & Qt.NoTitleBarBackgroundHint
+        foreground()
         x, y, right, height, width = caption_bounds()
         for button, distance in (("minimize", 3), ("maximize", 2)):
             left = x + right - width * distance
@@ -432,7 +452,8 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
 
     try:
         window.resize(900, 640)
-        window.move(window.screen().availableGeometry().topLeft() + QPoint(32, 40))
+        # Keep the entire 900x640 client on the CI desktop at 150% Qt scale.
+        window.move(window.screen().availableGeometry().topLeft() + QPoint(24, 8))
         window.show()
         window.raise_()
         window.activateWindow()
