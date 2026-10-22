@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QAbstractButton, QApplication, QSizePolicy, QWidge
 
 from bilibili_downloader.core.models import DEFAULT_GLASS_BLUR, BackgroundVisibility
 from bilibili_downloader.gui.resources.styles import (
+    UI_METRICS,
     background_reading_alpha,
     glass_text_color,
     theme_palette,
@@ -56,9 +57,9 @@ class ThemePreviewButton(QAbstractButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         selected = self.isChecked()
-        painter.setPen(QPen(QColor(palette().focus if selected else palette().divider), 2 if selected else 1))
+        painter.setPen(QPen(QColor(palette().focus if selected else palette().card_border), 2 if selected else 1))
         painter.setBrush(QColor(p.surface))
-        painter.drawRoundedRect(QRectF(self.rect()).adjusted(5, 5, -5, -5), 10, 10)
+        painter.drawRoundedRect(QRectF(self.rect()).adjusted(5, 5, -5, -5), UI_METRICS.card_radius, UI_METRICS.card_radius)
         if self.hasFocus() and self.property("keyboardFocus"):
             painter.setBrush(Qt.NoBrush)
             painter.setPen(QPen(QColor(palette().focus), 1.5, Qt.DashLine))

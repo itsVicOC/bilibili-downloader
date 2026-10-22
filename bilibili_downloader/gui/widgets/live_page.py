@@ -321,7 +321,8 @@ class LivePage(QWidget):
         if previous != narrow:
             self._detail_toggle.setChecked(not narrow)
         self._room_stack.setMinimumHeight(160 if narrow else 200)
-        for index, width in ((1, 108), (2, 80), (3, 92)):
+        duration_width = max(80, self.rooms.fontMetrics().horizontalAdvance("000:00:00") + 24)
+        for index, width in ((1, 108), (2, duration_width), (3, 92)):
             self.rooms.horizontalHeader().resizeSection(index, width)
         self._sync_detail_visibility()
         self._update_table_height()
@@ -613,6 +614,8 @@ class LivePage(QWidget):
                     item = QTableWidgetItem()
                     self.rooms.setItem(index, column, item)
                 item.setText(value.replace("\\n", "\n"))
+                if column == 2:
+                    item.setTextAlignment(Qt.AlignCenter)
                 item.setToolTip(
                     value.replace("\\n", "\n")
                     + ("\n" + row["detail"] if column == 1 else "")

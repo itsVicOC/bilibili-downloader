@@ -4,6 +4,7 @@ from PySide6.QtCore import QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
+from bilibili_downloader.gui.resources.styles import UI_METRICS
 from bilibili_downloader.gui.widgets.components import palette
 from bilibili_downloader.gui.widgets.glass_surface import paint_widget_glass
 
@@ -49,6 +50,6 @@ class HeroPanel(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         surface = QColor(colors.surface)
         painter.setBrush(surface)
-        painter.setPen(QPen(QColor(colors.divider), 1))
-        painter.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 14, 14)
+        painter.setPen(QPen(QColor(colors.card_border), 1))
+        painter.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), UI_METRICS.card_radius, UI_METRICS.card_radius)
         painter.end()

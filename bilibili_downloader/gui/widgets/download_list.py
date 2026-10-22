@@ -27,7 +27,6 @@ from bilibili_downloader.core.models import (
 )
 from bilibili_downloader.gui.resources.styles import (
     UI_METRICS,
-    readable_fill_text,
 )
 from bilibili_downloader.gui.widgets.background_readability import (
     paint_reading_surface,
@@ -75,21 +74,22 @@ class _SpecificationDelegate(QStyledItemDelegate):
 
 
 class _ReadableProgressBar(QProgressBar):
-    """Paint text with separate contrast on the filled and empty tracks."""
+    """Separate percentage text from the thin semantic progress track."""
 
     def __init__(self):
         super().__init__()
         self.setTextVisible(False)
+        self.setProperty("captioned", True)
 
     def paintEvent(self, event):
-        super().paintEvent(event)
         p = palette()
         painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
         text = f"{self.value()}%"
         painter.setPen(QColor(p.text))
-        painter.drawText(self.rect(), Qt.AlignCenter, text)
+        painter.setFont(self.font())
+        painter.drawText(self.rect().adjusted(0, 0, 0, -10), Qt.AlignRight | Qt.AlignVCenter, text)
         width = round(self.width() * self.value() / max(1, self.maximum()))
-        painter.setClipRect(QRect(0, 0, width, self.height()))
         fill = {
             "CompletedProgress": p.success,
             "WarningProgress": p.warning,
@@ -97,8 +97,13 @@ class _ReadableProgressBar(QProgressBar):
             "PausedProgress": p.border,
             "CancelledProgress": p.border,
         }.get(self.objectName(), p.accent)
-        painter.setPen(QColor(readable_fill_text(fill, p.accent_text)))
-        painter.drawText(self.rect(), Qt.AlignCenter, text)
+        track = self.rect().adjusted(0, self.height() - 6, 0, 0)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(p.surface_raised))
+        painter.drawRoundedRect(track, 3, 3)
+        if width > 0:
+            painter.setBrush(QColor(fill))
+            painter.drawRoundedRect(QRect(track.left(), track.top(), width, track.height()), 3, 3)
         painter.end()
 
 

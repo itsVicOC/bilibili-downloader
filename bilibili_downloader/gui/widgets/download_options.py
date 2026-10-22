@@ -11,8 +11,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from bilibili_downloader.gui.resources.styles import UI_METRICS
+from bilibili_downloader.gui.resources.styles import UI_METRICS, blend_color
 from bilibili_downloader.gui.widgets.components import line_icon, palette
+from bilibili_downloader.gui.widgets.motion import StateTransition
 
 
 class DownloadOptionCard(QCheckBox):
@@ -30,6 +31,9 @@ class DownloadOptionCard(QCheckBox):
         self.setAttribute(Qt.WA_Hover)
         self.setMinimumWidth(124)
         self.setFixedHeight(UI_METRICS.option_card_height)
+        self._selection = StateTransition(self)
+        self._hover = StateTransition(self)
+        self.toggled.connect(lambda checked: self._selection.to(float(checked)))
 
     def sizeHint(self):
         return QSize(148, UI_METRICS.option_card_height)
@@ -41,6 +45,11 @@ class DownloadOptionCard(QCheckBox):
         return self.rect().contains(pos)
 
     def event(self, event):
+        if hasattr(self, "_hover"):
+            if event.type() == QEvent.HoverEnter:
+                self._hover.to(1)
+            elif event.type() == QEvent.HoverLeave:
+                self._hover.to(0)
         if event.type() in (
             QEvent.HoverEnter,
             QEvent.HoverLeave,
@@ -56,23 +65,27 @@ class DownloadOptionCard(QCheckBox):
         checked = self.isChecked()
         foreground = colors.text if enabled else colors.disabled
         accent = colors.active_text if enabled else colors.disabled
-        fill = colors.selection if checked and enabled else colors.surface_raised
+        fill = blend_color(colors.control_fill, colors.control_hover, self._hover.value)
+        if enabled:
+            fill = blend_color(fill, colors.subtle_selection, self._selection.value)
+        else:
+            fill = colors.control_fill
         border = (
             colors.focus
             if self.hasFocus() and self.property("keyboardFocus") is not False
             else (
-                colors.accent
+                blend_color(colors.card_border, colors.accent, .35)
                 if checked and enabled
                 else colors.border_hover
                 if self.underMouse() and enabled
-                else colors.divider
+                else colors.card_border
             )
         )
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(QPen(QColor(border), 1.5))
+        painter.setPen(QPen(QColor(border), 2 if self.hasFocus() and self.property("keyboardFocus") else 1))
         painter.setBrush(QColor(fill))
-        painter.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), 10, 10)
+        painter.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), UI_METRICS.radius, UI_METRICS.radius)
         line_icon(self.icon_name, accent if checked else foreground).paint(
             painter, QRect(12, 12, 18, 18)
         )
@@ -99,7 +112,7 @@ class DownloadOptionCard(QCheckBox):
         font = self.font()
         font.setWeight(font.Weight.Medium)
         painter.setFont(font)
-        text_rect = QRect(12, 36, self.width() - 24, max(20, self.fontMetrics().height() + 4))
+        text_rect = QRect(12, 32, self.width() - 24, max(20, self.fontMetrics().height() + 4))
         painter.drawText(text_rect, Qt.AlignLeft | Qt.AlignVCenter, self.text())
         # A short format label sits alongside the icon, leaving the title intact.
         font.setWeight(font.Weight.Normal)

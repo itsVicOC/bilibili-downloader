@@ -72,6 +72,8 @@
 
 下载、直播与设置采用统一底部操作卡；页签和任务工具栏保留清晰底色，支持键盘焦点提示。主题卡分别标识选中与焦点，任务记录移除使用轻量操作。
 
+当前开发分支包含 [Fluent Design 全界面精修](docs/FLUENT_DESIGN.md)：保留粉紫／青蓝与小流，统一控件、材质和状态反馈，优化下载选项、任务进度及设置表单。截图展示当前分支界面，正式发布版本以 Releases 为准。
+
 ## 下载与安装
 
 访问 **[BiliFlow 官网 · 1008.si](https://1008.si/)** 了解项目，或直接从 **[GitHub Releases 下载最新正式版](https://github.com/itsVicOC/bilibili-downloader/releases/latest)**。想体验 beta 功能，可查看[全部版本](https://github.com/itsVicOC/bilibili-downloader/releases)；预发布版会带有 `Pre-release` 标记。

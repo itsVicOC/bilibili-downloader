@@ -49,6 +49,7 @@ from bilibili_downloader.gui.widgets.components import (
     ElidedLabel,
     FieldRow,
     Notice,
+    ResponsiveFields,
     SectionCard,
     help_text,
     scroll_area,
@@ -214,6 +215,14 @@ class SettingsDialog(QDialog):
         )
         self._concurrency_down.setToolTip("减少并发数")
         self._concurrency_up.setToolTip("增加并发数")
+        format_fields = ResponsiveFields(column_width=430)
+        for key in ("default_output_mode", "default_quality", "default_video_codec",
+                    "default_audio_quality", "max_concurrent_downloads"):
+            row = self._field_rows[key]
+            row.setMinimumWidth(row.maximumWidth())
+            formats.body.removeWidget(row)
+            format_fields.add_field(row)
+        formats.body.addWidget(format_fields)
         download.addWidget(formats)
         options = SectionCard("归档附加内容")
         for key, label, description, icon, attr in (

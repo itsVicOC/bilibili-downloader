@@ -225,8 +225,8 @@ class LoginDialog(QDialog):
         # -- Manual Cookie Tab --
         cookie_tab = QWidget()
         cookie_layout = QVBoxLayout(cookie_tab)
-        cookie_layout.setContentsMargins(14, 14, 14, 14)
-        cookie_layout.setSpacing(10)
+        cookie_layout.setContentsMargins(16, 16, 16, 16)
+        cookie_layout.setSpacing(12)
 
         # Instructions
         steps_label = QLabel("获取 SESSDATA 的步骤")

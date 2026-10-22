@@ -1500,6 +1500,7 @@ def main(argv=None) -> int:
         help="Capture font and long-dropdown checks at all three sizes",
     )
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
+    parser.add_argument("--color-theme", choices=("star_trail", "bilibili_blue"), default="star_trail", help="Color theme for the complete workspace and dialog matrix")
     parser.add_argument("--ui-refresh-only", action="store_true", help="Capture navigation, download cards, modes and account states")
     parser.add_argument("--chrome-only", action="store_true", help="Check native captions using desktop compositor captures")
     parser.add_argument("--glass-only", action="store_true", help="Capture glass wallpaper and complete download guidance in both modes")
@@ -1552,6 +1553,7 @@ def main(argv=None) -> int:
             )
             os.environ["QT_QPA_PLATFORM"] = f"offscreen:configfile={screen_config}"
         app = QApplication.instance() or QApplication(sys.argv)
+        app.setProperty("uiAnimationsEnabled", False)
         app.setApplicationName("BiliFlow Docs")
         app.setWindowIcon(QIcon(asset_path("app_icon.png")))
         theme = ThemeManager(app)
@@ -1562,6 +1564,8 @@ def main(argv=None) -> int:
             _capture_lifecycle(app, theme, temp_root)
             return 0
         window = _make_main_window(temp_root / "workspace")
+        window._settings.appearance.theme = args.color_theme
+        theme.set_color_theme(args.color_theme)
         cleanup.callback(window._live_controller.shutdown)
         if args.chrome_only:
             _capture_native_chrome(app, theme, window)

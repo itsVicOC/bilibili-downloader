@@ -34,6 +34,7 @@ class UpdateDialog(QDialog):
         version = QLabel(
             f"当前版本 v{__version__}  →  新版本 v{release.version}\n发布日期：{release.published_at[:10] or '未提供'}"
         )
+        version.setObjectName("DialogCaption")
         version.setTextFormat(Qt.PlainText)
         version.setWordWrap(True)
         layout.addWidget(version)
@@ -41,6 +42,7 @@ class UpdateDialog(QDialog):
         self.notes.setReadOnly(True)
         layout.addWidget(self.notes, 1)
         footer = QHBoxLayout()
+        footer.setSpacing(8)
         for text, result in (
             ("跳过此版本", self.SKIP),
             ("稍后提醒", self.LATER),

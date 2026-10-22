@@ -65,6 +65,8 @@ README 和用户指南中的软件截图由离线脚本生成，不依赖 Bilibi
 python scripts/capture_docs_screenshots.py
 ```
 
+Fluent 精修的完整矩阵支持 `--color-theme star_trail`（默认）和 `--color-theme bilibili_blue`，使用不同的 `--output-dir` 保存结果。原生后端追加 `--native --physical-pixels`；CI 在 Windows／macOS 上分别保存两套配色的全部页面和弹窗截图。截图进程关闭界面过渡动画，业务逻辑和用户配置不受影响。参数及复核说明见 [Fluent Design 精修规范](FLUENT_DESIGN.md)。
+
 脚本会更新 `docs/images/` 中九个工作区页签的深浅主题 × 三种尺寸截图，以及登录、房间设置、空状态、解析失败、直播重连与收尾、导出状态等截图。完整索引见[视觉规范与验证](UI_DESIGN.md)。小流动作与五个时段的专项截图可使用 `python scripts/capture_docs_screenshots.py --mascot-only --output-dir docs/images/mascot/offscreen`；macOS 原生后端追加 `--native` 并将输出目录改为 `docs/images/mascot/native`。任务、作品、路径与账号状态均为演示数据；不得改为真实 Cookie、账号标识、带签名播放 URL、个人目录或受版权保护的媒体内容。
 
 提交截图前应人工检查：

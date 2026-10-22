@@ -1,6 +1,6 @@
 """Shared presentation primitives; no service or persistence ownership."""
 
-from PySide6.QtCore import QByteArray, QEvent, QRectF, QSize, Qt, Signal
+from PySide6.QtCore import QByteArray, QEvent, QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
@@ -25,6 +25,7 @@ from bilibili_downloader.gui.widgets.header_backdrop import (
     HEADER_HEIGHT,
     paint_header_backdrop,
 )
+from bilibili_downloader.gui.widgets.motion import StateTransition
 
 _ICON_PATHS = {
     "appearance": '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z"/>',
@@ -92,6 +93,12 @@ class IconButton(QPushButton):
         self.setAccessibleName(text)
         self.setToolTip(text)
         self._sync_icon()
+        self._nav_transition = StateTransition(self, float(role == "NavButtonActive"))
+
+    def setObjectName(self, name):
+        super().setObjectName(name)
+        if hasattr(self, "_nav_transition"):
+            self._nav_transition.to(name == "NavButtonActive")
 
     def _sync_icon(self):
         color = palette().active_text if self.objectName() == "NavButtonActive" else None
@@ -100,7 +107,23 @@ class IconButton(QPushButton):
     def event(self, event):
         if event.type() == QEvent.StyleChange and hasattr(self, "icon_name"):
             self._sync_icon()
+            if hasattr(self, "_nav_transition"):
+                self._nav_transition.to(self.objectName() == "NavButtonActive")
         return super().event(event)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if not hasattr(self, "_nav_transition") or self._nav_transition.value <= 0:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        color = QColor(palette().accent)
+        color.setAlphaF(self._nav_transition.value)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(color)
+        height = 8 + 12 * self._nav_transition.value
+        painter.drawRoundedRect(QRectF(2, (self.height() - height) / 2, 3, height), 1.5, 1.5)
+        painter.end()
 
     def set_compact(self, compact):
         self.setText("" if compact else self.full_text)
@@ -326,7 +349,7 @@ class CollapsibleSection(SectionCard):
 
     def __init__(self, title, parent=None):
         super().__init__(title, parent)
-        self.toggle = QPushButton("展开")
+        self.toggle = DisclosureButton("展开")
         self.toggle.setObjectName("TextButton")
         self.toggle.setCheckable(True)
         self.toggle.setAccessibleName(f"展开或收起{title}")
@@ -345,11 +368,33 @@ class CollapsibleSection(SectionCard):
         self.content.setVisible(expanded)
 
 
+class DisclosureButton(QPushButton):
+    """Animate the disclosure glyph without delaying content or validation."""
+
+    def __init__(self, text, parent=None):
+        super().__init__(text, parent)
+        self.setProperty("disclosure", True)
+        self._turn = StateTransition(self, duration=UI_METRICS.motion_expand)
+        self.toggled.connect(lambda checked: self._turn.to(float(checked)))
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.translate(self.width() - 14, self.height() / 2)
+        painter.rotate(180 * self._turn.value)
+        painter.setPen(QPen(QColor(palette().muted), 1.5, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        painter.drawLine(QPointF(-3, -1.5), QPointF(0, 1.5))
+        painter.drawLine(QPointF(0, 1.5), QPointF(3, -1.5))
+        painter.end()
+
+
 class ResponsiveFields(QWidget):
     """Use a second form column only when both controls have room to breathe."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, column_width=280):
         super().__init__(parent)
+        self._column_width = column_width
         self._rows = []
         self._columns = 0
         self._grid = QGridLayout(self)
@@ -361,13 +406,16 @@ class ResponsiveFields(QWidget):
         self._reflow()
 
     def _reflow(self):
-        columns = 2 if self.width() >= 560 else 1
+        columns = 2 if self.width() >= self._column_width * 2 else 1
         if columns == self._columns and self._grid.count() == len(self._rows):
             return
         self._columns = columns
         for index, field in enumerate(self._rows):
             self._grid.removeWidget(field)
-            self._grid.addWidget(field, index // columns, index % columns)
+            alignment = Qt.AlignTop
+            if field.maximumWidth() < 16777215:
+                alignment |= Qt.AlignLeft
+            self._grid.addWidget(field, index // columns, index % columns, alignment)
         self._grid.setColumnStretch(0, 1)
         self._grid.setColumnStretch(1, 1 if columns == 2 else 0)
 
