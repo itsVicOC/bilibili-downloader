@@ -252,12 +252,36 @@ def test_caption_material_region_tracks_resize_and_dpi_without_repeated_gdi_work
     assert not chrome._clip_windows_caption(handle)
 
 
+def test_snap_hover_only_invalidates_on_enter_and_leave(qtbot, monkeypatch):
+    from ctypes import wintypes
+    from types import SimpleNamespace
+
+    import bilibili_downloader.gui.window_chrome as module
+
+    window = QMainWindow()
+    qtbot.addWidget(window)
+    chrome = WindowChrome(window, "win32")
+    invalidations = []
+    monkeypatch.setattr(chrome, "_invalidate_windows_caption", lambda: invalidations.append(True))
+    chrome._set_snap_hover(True)
+    for _ in range(10):
+        chrome._set_snap_hover(True)
+    assert invalidations == [True]
+    monkeypatch.setattr(module, "sys", SimpleNamespace(platform="win32"))
+    message = wintypes.MSG(message=0x02A2)  # WM_NCMOUSELEAVE
+    assert chrome.native_event(ctypes.addressof(message)) is None
+    assert invalidations == [True, True]
+    chrome.native_event(ctypes.addressof(message))
+    assert invalidations == [True, True]
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="Requires native Windows")
 @pytest.mark.parametrize("mode", ["light", "dark"])
 @pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])
 def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspace, mode, theme_id):
     """Exercise real Win32 input; QTest.mouseClick bypasses WM_NCHITTEST."""
     import json
+    import os
     from ctypes import wintypes
     from pathlib import Path
     from threading import Thread
@@ -342,7 +366,7 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
         x, y, right, height, width = caption_bounds()
         return x + right - width * 3 // 2, y + height // 2
 
-    evidence = Path("build/ui-parity/chrome-regression")
+    evidence = Path("build/ui-parity/chrome-regression") / f"scale-{os.environ.get('QT_SCALE_FACTOR', '1')}"
     evidence.mkdir(parents=True, exist_ok=True)
     checks = []
 

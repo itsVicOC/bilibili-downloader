@@ -17,6 +17,7 @@ class WindowChrome(QObject):
         self.window = window
         self.platform = platform
         self._caption_clip = None
+        self._snap_hover = False
         self.expanded = platform in ("darwin", "win32") and hasattr(
             Qt, "ExpandedClientAreaHint"
         )
@@ -119,16 +120,29 @@ class WindowChrome(QObject):
             if handle.flags() != flags:
                 handle.setFlags(flags)
             if sys.platform == "win32" and QApplication.platformName() == "windows" and self.window.isVisible():
-                from ctypes import wintypes
-
                 # Qt 6.11's separate expanded-titlebar layer repaints on native
                 # WM_PAINT/hit testing, but a widget palette change only updates
                 # the backing store. Invalidate the native window so the caption
                 # glyphs immediately follow light/dark mode too.
-                invalidate = ctypes.windll.user32.InvalidateRect
-                invalidate.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT), wintypes.BOOL]
-                invalidate.restype = wintypes.BOOL
-                invalidate(wintypes.HWND(int(handle.winId())), None, False)
+                self._invalidate_windows_caption()
+
+    def _invalidate_windows_caption(self):
+        if sys.platform != "win32" or QApplication.platformName() != "windows":
+            return
+        from ctypes import wintypes
+
+        invalidate = ctypes.windll.user32.InvalidateRect
+        invalidate.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT), wintypes.BOOL]
+        invalidate.restype = wintypes.BOOL
+        invalidate(wintypes.HWND(int(self.window.winId())), None, False)
+
+    def _set_snap_hover(self, hovered):
+        if self._snap_hover != hovered:
+            self._snap_hover = hovered
+            # Our HTMAXBUTTON result skips Qt's normal hit-test repaint. One
+            # invalidation per enter/leave keeps its layered glyph/material in
+            # sync, without repainting continuously while the pointer rests.
+            self._invalidate_windows_caption()
 
     def _clip_windows_caption(self, handle):
         """Keep Qt's opaque caption material inside its native button bounds.
@@ -197,6 +211,9 @@ class WindowChrome(QObject):
             # Let WM_ACTIVATE continue to manage focus; only suppress the
             # legacy non-client paint over Qt's separate titlebar layer.
             return 1
+        if msg.message == 0x02A2:  # WM_NCMOUSELEAVE
+            self._set_snap_hover(False)
+            return None
         if msg.message != 0x0084 or self.window.isFullScreen():  # WM_NCHITTEST
             return None
         user32 = ctypes.windll.user32
@@ -206,6 +223,7 @@ class WindowChrome(QObject):
             # Qt's expanded-titlebar hit test performs maximize/restore on
             # press. Returning HTMAXBUTTON here bypasses that action. Only
             # supply the idle hover target needed by Windows 11 Snap.
+            self._set_snap_hover(False)
             return None
         user32.GetDpiForWindow.argtypes = [wintypes.HWND]
         user32.GetDpiForWindow.restype = wintypes.UINT
@@ -227,9 +245,11 @@ class WindowChrome(QObject):
         width = int(height * 1.5)
         x = ctypes.c_short(msg.lParam & 0xFFFF).value
         y = ctypes.c_short((msg.lParam >> 16) & 0xFFFF).value
-        if (
+        hovered = (
             origin.x + rect.right - 2 * width <= x < origin.x + rect.right - width
             and origin.y <= y < origin.y + height
-        ):
+        )
+        self._set_snap_hover(hovered)
+        if hovered:
             return 9  # HTMAXBUTTON; hover only, for the Windows Snap flyout.
         return None

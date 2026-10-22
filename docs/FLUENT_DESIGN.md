@@ -28,7 +28,7 @@
 
 设置中的默认媒体规格在可用宽度达到 860 个逻辑像素时采用两列，窄窗口回到单列。直播时长列按字体宽度计算，完整显示超过 99 小时的时间。已有的侧栏收窄、下载表单重排、直播详情折叠与背景图库小窗口模式继续生效。原生窗口按钮、快捷键、托盘行为和文件选择器的平台差异保留。
 
-Windows 的 Qt 6.11 扩展标题栏存在透明悬停图层的合成问题：白色半透明像素经非预乘 ARGB 图像传入分层窗口，可能变成亮白块，遮住夜间的浅色图标。应用将 Qt 的原生标题栏图层裁剪到三个窗口按钮，并为其启用不透明中性材质，保留 Qt／Windows 的图标、窗口操作、系统菜单和 Snap 悬停。裁剪区域随窗口尺寸、DPI 和句柄变化更新；尺寸不变时不重复创建 GDI 区域。找不到对应原生图层时保留透明标题栏。依据：[Qt 标题栏绘制](https://github.com/qt/qtbase/blob/v6.11.1/src/plugins/platforms/windows/qwindowswindow.cpp)、[Qt 位图转换](https://github.com/qt/qtbase/blob/v6.11.1/src/gui/image/qpixmap_win.cpp)。
+Windows 的 Qt 6.11 扩展标题栏存在透明悬停图层的合成问题：白色半透明像素经非预乘 ARGB 图像传入分层窗口，可能变成亮白块，遮住夜间的浅色图标。应用将 Qt 的原生标题栏图层裁剪到三个窗口按钮，并为其启用不透明中性材质，保留 Qt／Windows 的图标、窗口操作、系统菜单和 Snap 悬停。裁剪区域随窗口尺寸、DPI 和句柄变化更新；尺寸不变时不重复创建 GDI 区域。最大化按钮的 Snap 命中逻辑仅在悬停进入／离开时补一次原生重绘，避免绕过 Qt 命中处理后留下旧的悬停画面；没有持续刷新。找不到对应原生图层时保留透明标题栏。依据：[Qt 标题栏绘制](https://github.com/qt/qtbase/blob/v6.11.1/src/plugins/platforms/windows/qwindowswindow.cpp)、[Qt 位图转换](https://github.com/qt/qtbase/blob/v6.11.1/src/gui/image/qpixmap_win.cpp)。
 
 ## 微动效
 
