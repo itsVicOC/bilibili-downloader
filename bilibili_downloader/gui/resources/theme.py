@@ -157,8 +157,8 @@ class ThemeManager(QObject):
             (QPalette.ButtonText, colors.text),
             (QPalette.PlaceholderText, colors.muted),
             (QPalette.Link, colors.active_text),
-            (QPalette.Highlight, colors.selection),
-            (QPalette.HighlightedText, colors.text),
+            (QPalette.Highlight, colors.text_selection),
+            (QPalette.HighlightedText, colors.text_selection_text),
         ):
             palette.setColor(role, QColor(color))
         self._app.setPalette(palette)

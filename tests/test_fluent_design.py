@@ -2,7 +2,15 @@
 
 import pytest
 from PySide6.QtCore import QAbstractAnimation, QEvent, Qt
-from PySide6.QtWidgets import QLineEdit, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtGui import QColor, QPalette
+from PySide6.QtWidgets import (
+    QLineEdit,
+    QPlainTextEdit,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 from bilibili_downloader.gui.resources.styles import contrast_ratio, theme_palette
 from bilibili_downloader.gui.resources.theme import ThemeManager
@@ -27,6 +35,60 @@ def test_reading_surfaces_keep_small_text_readable(theme_id, dark):
     for tone in ("success", "warning", "danger", "active"):
         text = p.active_text if tone == "active" else getattr(p, tone)
         assert contrast_ratio(text, p.tone_surface(tone)) >= 4.5
+
+
+@pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])
+@pytest.mark.parametrize("dark", [False, True])
+def test_text_selection_remains_visible_with_and_without_keyboard_focus(qapp, qtbot, theme_id, dark):
+    """Check actual editor pixels, not only the configured palette roles."""
+    from pathlib import Path
+
+    theme = ThemeManager(qapp, theme_id)
+    theme.set_mode("dark" if dark else "light")
+    host = QWidget()
+    qtbot.addWidget(host)
+    layout = QVBoxLayout(host)
+    fields = [QLineEdit(), QTextEdit(), QPlainTextEdit()]
+    for field in fields:
+        field.setFixedHeight(80 if not isinstance(field, QLineEdit) else 44)
+        text = "https://www.bilibili.com/video/BV1234567890 测试选中文本"
+        if isinstance(field, QLineEdit):
+            field.setText(text)
+        else:
+            field.setPlainText(text)
+        layout.addWidget(field)
+    button = QPushButton("键盘焦点")
+    button.setObjectName("PrimaryButton")
+    layout.addWidget(button)
+    host.resize(680, 320)
+    host.show()
+    host.activateWindow()
+    qtbot.waitExposed(host)
+    p = theme_palette(dark, theme_id)
+    for group in (QPalette.Active, QPalette.Inactive, QPalette.Disabled):
+        assert qapp.palette().color(group, QPalette.Highlight) == QColor(p.text_selection)
+        assert qapp.palette().color(group, QPalette.HighlightedText) == QColor(p.text_selection_text)
+    for index, field in enumerate(fields):
+        field.setFocus()
+        field.selectAll()
+        qtbot.wait(30)
+        for focused in (True, False):
+            if not focused:
+                button.setFocus()
+                # QLineEdit normally deselects on Tab/mouse focus loss. A
+                # programmatic selection in an unfocused field must still use
+                # the same readable inactive palette.
+                field.selectAll()
+                qtbot.wait(30)
+            image = field.grab().toImage()
+            colors = [image.pixelColor(x, y).name()
+                      for x in range(image.width()) for y in range(image.height())]
+            assert colors.count(p.text_selection) > 200, (index, focused)
+            assert colors.count(p.text_selection_text) > 20, (index, focused)
+    evidence = Path("build/ui-parity/selection")
+    evidence.mkdir(parents=True, exist_ok=True)
+    assert host.grab().save(str(evidence / f"{theme_id}-{'dark' if dark else 'light'}.png"))
+    theme.deleteLater()
 
 
 @pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])

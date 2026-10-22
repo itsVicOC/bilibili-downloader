@@ -256,9 +256,23 @@ def test_theme_tokens_meet_text_and_control_contrast_targets():
             palette.danger_border,
         ):
             assert _contrast(readable_fill_text(fill, palette.accent_text), fill) >= 4.5
+        # Official Bilibili pink/white is an explicit brand choice; retain AA
+        # for the blue primary and all ordinary text/selection surfaces.
         for fill in (palette.primary, palette.primary_hover, palette.primary_pressed):
-            if fill:
+            if palette in (BLUE_DARK_PALETTE, BLUE_LIGHT_PALETTE):
                 assert _contrast(palette.primary_text, fill) >= 4.5
+        assert _contrast(palette.text_selection_text, palette.text_selection) >= 4.5
+        assert _contrast(palette.text_selection, palette.control_fill) >= 2.0
+
+
+@pytest.mark.parametrize("dark, expected", [
+    (False, ("#ff6699", "#ff8cb0", "#e84b85")),
+    (True, ("#d44e7d", "#dc6d94", "#a73e65")),
+])
+def test_pink_primary_uses_bilibili_white_text_and_official_pink_steps(dark, expected):
+    p = theme_palette(dark)
+    assert (p.primary, p.primary_hover, p.primary_pressed) == expected
+    assert p.primary_text == "#ffffff"
 
 
 @pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])

@@ -79,6 +79,8 @@ class ThemePalette:
     hero_start: str = ""
     hero_end: str = ""
     hero_secondary: str = ""
+    text_selection: str = "#ad1c5b"
+    text_selection_text: str = "#ffffff"
 
     @property
     def card_border(self):
@@ -130,6 +132,8 @@ DARK_PALETTE = ThemePalette(
     divider="#393445",
     selection="#35283f",
     disabled="#867e93",
+    primary="#d44e7d", primary_hover="#dc6d94", primary_pressed="#a73e65",
+    primary_text="#ffffff", text_selection="#a73e65",
 )
 LIGHT_PALETTE = ThemePalette(
     text="#292430",
@@ -154,6 +158,9 @@ LIGHT_PALETTE = ThemePalette(
     divider="#e3ddea",
     selection="#fceaf3",
     disabled="#837b8e",
+    # Bilibili's Pi5 / Pi4 / Pi6 button states, with its text_white token.
+    primary="#ff6699", primary_hover="#ff8cb0", primary_pressed="#e84b85",
+    primary_text="#ffffff",
 )
 
 
@@ -166,6 +173,7 @@ BLUE_LIGHT_PALETTE = replace(
     divider="#e3e5e7", selection="#dff6fd", disabled="#9499a0",
     primary="#007faf", primary_hover="#0076a5", primary_pressed="#00699d",
     primary_text="#ffffff",
+    text_selection="#007faf",
     hero_start="#ffffff", hero_end="#dff6fd", hero_secondary="#f5c9de",
 )
 BLUE_DARK_PALETTE = replace(
@@ -177,6 +185,7 @@ BLUE_DARK_PALETTE = replace(
     sidebar="#17181a", divider="#2f3134", selection="#0b202a", disabled="#757a81",
     primary="#007faf", primary_hover="#0076a5", primary_pressed="#00699d",
     primary_text="#ffffff",
+    text_selection="#007faf",
     hero_start="#17181a", hero_end="#0c2d3b", hero_secondary="#714b67",
 )
 
@@ -377,7 +386,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QPushButton#NavButtonActive {{ background: {p.subtle_selection}; color: {p.text}; font-weight: 600; }}
     QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QComboBox {{
         background: {p.control_fill}; color: {p.text}; border: 1px solid {p.card_border}; border-bottom-color: {p.border}; border-radius: {m.radius}px;
-        min-height: {m.control_height - 2}px; padding: 0 10px; selection-background-color: {p.selection}; selection-color: {p.text};
+        min-height: {m.control_height - 2}px; padding: 0 10px; selection-background-color: {p.text_selection}; selection-color: {p.text_selection_text};
     }}
     QPlainTextEdit, QTextEdit {{ padding: 10px; }}
     QLineEdit:hover, QComboBox:hover, QSpinBox:hover {{ background: {p.control_hover}; border-bottom-color: {p.border_hover}; }}

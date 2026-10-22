@@ -16,6 +16,7 @@ class WindowChrome(QObject):
         super().__init__(window)
         self.window = window
         self.platform = platform
+        self._caption_clip = None
         self.expanded = platform in ("darwin", "win32") and hasattr(
             Qt, "ExpandedClientAreaHint"
         )
@@ -52,7 +53,7 @@ class WindowChrome(QObject):
             QEvent.WindowStateChange,
         )
         if self.platform == "win32":
-            sync_events += (QEvent.PaletteChange, QEvent.ApplicationPaletteChange, QEvent.StyleChange)
+            sync_events += (QEvent.Resize, QEvent.PaletteChange, QEvent.ApplicationPaletteChange, QEvent.StyleChange)
         if self.expanded and event.type() in sync_events:
             # Clear the Windows caption before the first exposed frame.
             if self.platform == "win32" and event.type() == QEvent.Show:
@@ -107,6 +108,14 @@ class WindowChrome(QObject):
                 | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint
                 | Qt.WindowCloseButtonHint
             )) & ~int(Qt.WindowTitleHint))
+            if self._clip_windows_caption(handle):
+                # Qt 6.11 hands a straight-alpha hover image to the layered
+                # window compositor. White hover pixels saturate on Windows
+                # in dark mode. An opaque caption base avoids that conversion;
+                # the native region limits it to the existing three buttons.
+                flags = Qt.WindowType(int(flags) & ~int(Qt.NoTitleBarBackgroundHint))
+            else:
+                flags |= Qt.NoTitleBarBackgroundHint
             if handle.flags() != flags:
                 handle.setFlags(flags)
             if sys.platform == "win32" and QApplication.platformName() == "windows" and self.window.isVisible():
@@ -120,6 +129,60 @@ class WindowChrome(QObject):
                 invalidate.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT), wintypes.BOOL]
                 invalidate.restype = wintypes.BOOL
                 invalidate(wintypes.HWND(int(handle.winId())), None, False)
+
+    def _clip_windows_caption(self, handle):
+        """Keep Qt's opaque caption material inside its native button bounds.
+
+        This is a Qt Windows backend workaround, not a replacement caption:
+        Qt/Windows still own glyphs, input, the system menu and Snap handling.
+        If the backend changes, retain the transparent expanded titlebar.
+        """
+        if sys.platform != "win32" or QApplication.platformName() != "windows":
+            return False
+        from ctypes import wintypes
+
+        try:
+            user32, gdi32 = ctypes.windll.user32, ctypes.windll.gdi32
+            user32.FindWindowExW.argtypes = [wintypes.HWND, wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR]
+            user32.FindWindowExW.restype = wintypes.HWND
+            user32.GetClientRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+            user32.GetClientRect.restype = wintypes.BOOL
+            user32.GetDpiForWindow.argtypes = [wintypes.HWND]
+            user32.GetDpiForWindow.restype = wintypes.UINT
+            user32.GetSystemMetricsForDpi.argtypes = [ctypes.c_int, wintypes.UINT]
+            user32.GetSystemMetricsForDpi.restype = ctypes.c_int
+            user32.SetWindowRgn.argtypes = [wintypes.HWND, wintypes.HRGN, wintypes.BOOL]
+            user32.SetWindowRgn.restype = ctypes.c_int
+            gdi32.CreateRectRgn.argtypes = [ctypes.c_int] * 4
+            gdi32.CreateRectRgn.restype = wintypes.HRGN
+            gdi32.DeleteObject.argtypes = [wintypes.HGDIOBJ]
+            gdi32.DeleteObject.restype = wintypes.BOOL
+            hwnd = wintypes.HWND(int(handle.winId()))
+            caption = user32.FindWindowExW(hwnd, None, "_q_titlebar", None)
+            rect = wintypes.RECT()
+            if not caption or not user32.GetClientRect(caption, ctypes.byref(rect)):
+                return False
+            dpi = user32.GetDpiForWindow(hwnd) or 96
+            height = sum(user32.GetSystemMetricsForDpi(metric, dpi) for metric in (32, 92, 4))
+            width = rect.right - rect.left
+            button_width = int(height * 1.5)
+            if width <= 0 or height <= 0:
+                return False
+            bounds = (caption, width, height, button_width)
+            if self._caption_clip == bounds:
+                return True
+            region = gdi32.CreateRectRgn(max(0, width - 3 * button_width), 0, width, height)
+            if not region:
+                return False
+            if not user32.SetWindowRgn(caption, region, True):
+                # Windows owns the region only after SetWindowRgn succeeds.
+                gdi32.DeleteObject(region)
+                return False
+            self._caption_clip = bounds
+            return True
+        except (OSError, AttributeError):
+            logger.debug("Native caption clipping unavailable", exc_info=True)
+            return False
 
     def native_event(self, message):
         """Keep legacy caption painting out of the expanded client area."""
