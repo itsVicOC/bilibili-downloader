@@ -53,4 +53,4 @@ python -m scripts.capture_docs_screenshots --glass-only --output-dir build/fluen
 
 本轮测试结果和截图索引记录在工作目录 `build/fluent-design/`；本地复核入口为该目录的 `index.html`。稳定的主要截图同步到 `docs/images/`，供 README 和用户指南引用。
 
-2026-10-22 本地验收：Python 3.11.15／Qt 6.11.2，离屏回归 **996 项通过、4 项平台相关跳过**；原生 Cocoa 专项 **107 项通过、3 项 Windows 平台专项跳过**。Ruff、源码编译和 diff 检查通过。原生窗口另外验证深浅模式下普通、最大化、还原六种合成画面，保留标题元信息、图标与系统窗口按钮；两套配色的原生完整页面矩阵已生成。Windows／Linux 的本次原生实机结果尚未验证，未将上述结果计作对应平台验收。
+2026-10-22 首次精修验收：Python 3.11.15／Qt 6.11.2，离屏回归 **996 项通过、4 项平台相关跳过**；原生 Cocoa 专项 **107 项通过、3 项 Windows 平台专项跳过**。两套配色的原生完整页面矩阵已生成。后续的粉底白字、文本选区及 Windows 悬停修复更新了主要文档截图，新增真实 Windows 桌面合成与缩放检查；当前结果及验证边界见 [可读性验收记录](UI_READABILITY_VALIDATION.md)。
