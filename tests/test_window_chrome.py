@@ -323,7 +323,7 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
     user32.GetForegroundWindow.argtypes = []
     user32.GetForegroundWindow.restype = wintypes.HWND
 
-    def foreground():
+    def ensure_foreground():
         # A new Python process can bring the hosted runner's terminal above
         # Qt's window. isActiveWindow() alone can briefly retain stale state;
         # verify Win32 foreground ownership before real input/compositor grabs.
@@ -351,7 +351,7 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
     user32.SendInput.restype = wintypes.UINT
 
     def click(x, y):
-        foreground()
+        ensure_foreground()
         assert user32.SetCursorPos(x, y)
         qtbot.wait(60)
         released = []
@@ -391,7 +391,7 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
     checks = []
 
     def assert_clear(stage):
-        foreground()
+        ensure_foreground()
         qtbot.wait(150)
         frame = window.frameGeometry()
         pixmap = window.screen().grabWindow(0, *frame.getRect())
@@ -417,7 +417,7 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
         # Capture the desktop compositor: QWidget.grab() misses Qt's separate
         # layered titlebar HWND, which is where this regression occurs.
         assert not window.windowHandle().flags() & Qt.NoTitleBarBackgroundHint
-        foreground()
+        ensure_foreground()
         x, y, right, height, width = caption_bounds()
         for button, distance in (("minimize", 3), ("maximize", 2)):
             left = x + right - width * distance
