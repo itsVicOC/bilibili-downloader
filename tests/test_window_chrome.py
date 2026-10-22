@@ -329,6 +329,16 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
         # verify Win32 foreground ownership before real input/compositor grabs.
         window.raise_()
         window.activateWindow()
+        if user32.GetForegroundWindow() != hwnd.value:
+            # A second GUI process (the 150% run) can inherit the console's
+            # foreground lock. Real Alt input releases it, as documented by
+            # LockSetForegroundWindow; keep this inside the input test harness.
+            keys = (Input * 2)(
+                Input(type=1, data=InputData(ki=KeyboardInput(wVk=0x12))),
+                Input(type=1, data=InputData(ki=KeyboardInput(wVk=0x12, dwFlags=0x0002))),
+            )
+            assert user32.SendInput(2, keys, ctypes.sizeof(Input)) == 2
+            qtbot.wait(30)
 
         def acquired():
             user32.SetForegroundWindow(hwnd)
@@ -341,8 +351,13 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
                     ("mouseData", wintypes.DWORD), ("dwFlags", wintypes.DWORD),
                     ("time", wintypes.DWORD), ("dwExtraInfo", ctypes.c_size_t)]
 
+    class KeyboardInput(ctypes.Structure):
+        _fields_ = [("wVk", wintypes.WORD), ("wScan", wintypes.WORD),
+                    ("dwFlags", wintypes.DWORD), ("time", wintypes.DWORD),
+                    ("dwExtraInfo", ctypes.c_size_t)]
+
     class InputData(ctypes.Union):
-        _fields_ = [("mi", MouseInput)]
+        _fields_ = [("mi", MouseInput), ("ki", KeyboardInput)]
 
     class Input(ctypes.Structure):
         _fields_ = [("type", wintypes.DWORD), ("data", InputData)]
