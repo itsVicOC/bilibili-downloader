@@ -175,11 +175,13 @@ def test_snap_hover_uses_client_origin_and_current_dpi(qtbot, monkeypatch, dpi, 
         GetClientRect=NativeFunction(get_rect),
         ClientToScreen=NativeFunction(to_screen),
         GetSystemMetricsForDpi=NativeFunction(lambda metric, actual_dpi: metrics[actual_dpi][metric]),
+        InvalidateRect=NativeFunction(lambda *_: True),
     )
     window = QMainWindow()
     qtbot.addWidget(window)
     chrome = WindowChrome(window, "win32")
     monkeypatch.setattr(module, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(module.QApplication, "platformName", lambda: "windows")
     monkeypatch.setattr(ctypes, "windll", SimpleNamespace(user32=user32), raising=False)
     # These points are in the maximize/close buttons on a negative-X monitor.
     x = (-150 if dpi == 96 else -185) if on_button else -90
