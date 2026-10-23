@@ -72,7 +72,9 @@
 
 下载、直播与设置采用统一底部操作卡；页签和任务工具栏保留清晰底色，支持键盘焦点提示。主题卡分别标识选中与焦点，任务记录移除使用轻量操作。
 
-`v0.8.9b1`（0.8.9 beta1）包含 [Fluent Design 全界面精修](docs/FLUENT_DESIGN.md)：保留粉紫／青蓝与小流，统一控件、材质和状态反馈，优化下载选项、任务进度及设置表单；粉色主按钮采用白字，并修复夜间文字选区和 Windows 窗口按钮悬停。试用请查看 [beta 预发布版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9b1)；自动更新需选择包含预发布版的通道。截图展示 beta 界面，稳定版仍为 `v0.8.8`。[更新日志](CHANGELOG.md#v089b1---2026-10-22) · [验收记录](docs/UI_READABILITY_VALIDATION.md)。
+`v0.8.9b1`（0.8.9 beta1）包含 [Fluent Design 全界面精修](docs/FLUENT_DESIGN.md)：保留粉紫／青蓝与小流，统一控件、材质和状态反馈，优化下载选项、任务进度及设置表单；粉色主按钮采用白字，并修复夜间文字选区和 Windows 窗口按钮悬停。试用请查看 [beta 预发布版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9b1)；自动更新需选择包含预发布版的通道。稳定版仍为 `v0.8.8`。[更新日志](CHANGELOG.md#v089b1---2026-10-22) · [验收记录](docs/UI_READABILITY_VALIDATION.md)。
+
+**开发分支预览：** 当前分支继续精修全界面，加入 Windows 自绘窗口按钮、Markdown 更新说明，并修正三张背景的手部。首页截图随开发分支更新；这些后续改动尚未发布，版本号与现有标签保持不变。[第二轮验收](docs/FLUENT_V2_VALIDATION.md) · [背景手部对比](docs/BACKGROUND_HAND_REVIEW.md)。
 
 ## 下载与安装
 

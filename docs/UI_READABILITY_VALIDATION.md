@@ -1,5 +1,7 @@
 # 按钮、文本选区与 Windows 标题栏复核
 
+本记录归档 `v0.8.9b1` 的第一轮实现。开发分支的 Windows 自绘按钮、Markdown 阅读区和背景手部修正见[第二轮验收](FLUENT_V2_VALIDATION.md)。
+
 日期：2026-10-22。分支：`codex/fluent-design-polish`。
 
 ## 实现
