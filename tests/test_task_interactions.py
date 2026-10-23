@@ -18,6 +18,14 @@ def flush():
         QApplication.processEvents()
 
 
+def activate(window, qtbot):
+    window.show()
+    window.raise_()
+    window.activateWindow()
+    qtbot.waitExposed(window)
+    qtbot.waitUntil(window.isActiveWindow)
+
+
 def sample(image, x, y):
     scale = image.devicePixelRatio()
     return image.pixelColor(round(x * scale), round(y * scale))
@@ -56,7 +64,7 @@ def test_hover_crosses_cells_progress_and_buttons_with_one_row_color(workspace, 
                        download_id=identity, status=TaskStatus.PAUSED)
     workspace.resize(1120, 760)
     workspace._show_tasks(0)
-    workspace.show()
+    activate(workspace, qtbot)
     table.clearSelection()
     table.setCurrentCell(-1, -1)
     flush()
@@ -92,7 +100,7 @@ def test_history_hover_includes_indentation_and_tracks_child_rows(workspace, qtb
     workspace._live_controller.repository.save_session(session)
     workspace._live_controller.refresh()
     workspace._show_tasks(2)
-    workspace.show()
+    activate(workspace, qtbot)
     tree = workspace._task_page.history
     root = tree.topLevelItem(0)
     root.setExpanded(True)
@@ -117,7 +125,7 @@ def test_hover_rehits_after_filter_scroll_and_deletion(workspace, qtbot):
                        download_id=identity, status=TaskStatus.PAUSED)
     workspace.resize(900, 640)
     workspace._show_tasks(0)
-    workspace.show()
+    activate(workspace, qtbot)
     flush()
     point = table.visualItemRect(table.item(0, 0)).center()
     qtbot.mouseMove(table.viewport(), point)

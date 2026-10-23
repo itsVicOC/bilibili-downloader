@@ -150,6 +150,7 @@ class LiveRepository:
         """Remove only the DB record; leave all media and manifests untouched."""
         with self._lock:
             with self._db() as db:
+                db.execute("BEGIN IMMEDIATE")
                 row = db.execute("SELECT payload FROM sessions WHERE id=?", (session_id,)).fetchone()
                 if row is None:
                     return None

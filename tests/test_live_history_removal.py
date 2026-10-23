@@ -2,7 +2,7 @@
 
 import sqlite3
 from concurrent.futures import Future
-from contextlib import closing
+from contextlib import closing, contextmanager
 
 import pytest
 
@@ -79,6 +79,39 @@ def test_delete_failure_is_atomic_and_restore_never_overwrites(tmp_path):
     assert repository.restore_session(replacement)
     assert not repository.restore_session(removed)
     assert repository.session(session.id).warnings == ['new record']
+
+
+def test_removal_locks_state_before_another_database_writer_can_change_it(tmp_path, monkeypatch):
+    repository = LiveRepository(tmp_path / 'live.sqlite3')
+    session = recording(tmp_path / 'media')
+    repository.save_session(session)
+    active = session.model_copy(update={'status': 'recording'})
+    attempts = []
+
+    class CompetingConnection(sqlite3.Connection):
+        def execute(self, sql, parameters=()):
+            cursor = super().execute(sql, parameters)
+            if sql.startswith('SELECT payload FROM sessions WHERE id='):
+                with closing(sqlite3.connect(repository.path, timeout=0)) as other:
+                    try:
+                        with other:
+                            other.execute('UPDATE sessions SET payload=? WHERE id=?',
+                                          (active.model_dump_json(), session.id))
+                        attempts.append('updated')
+                    except sqlite3.OperationalError:
+                        attempts.append('locked')
+            return cursor
+
+    @contextmanager
+    def competing_db():
+        with repository._lock, closing(sqlite3.connect(repository.path, factory=CompetingConnection)) as db, db:
+            yield db
+
+    with monkeypatch.context() as patch:
+        patch.setattr(repository, '_db', competing_db)
+        assert repository.remove_session(session.id) == session
+    assert attempts == ['locked']
+    assert repository.session(session.id) is None
 
 
 @pytest.mark.parametrize('owner', ['recording', 'session-export', 'segment-export'])
