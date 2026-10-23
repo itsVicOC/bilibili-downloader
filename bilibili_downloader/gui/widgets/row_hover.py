@@ -1,5 +1,7 @@
 """View-owned row feedback, including index widgets, without model mutations."""
 
+import weakref
+
 from PySide6.QtCore import QEvent, QObject, QPersistentModelIndex, QRect, Qt, QTimer
 from PySide6.QtGui import QColor, QCursor
 from PySide6.QtWidgets import (
@@ -37,7 +39,7 @@ class RowDelegate(QStyledItemDelegate):
 class RowHover(QObject):
     def __init__(self, view):
         super().__init__(view)
-        self.view = view
+        self._view = weakref.ref(view)
         self.index = QPersistentModelIndex()
         self._pinned = QPersistentModelIndex()
         self._menu = None
@@ -58,6 +60,10 @@ class RowHover(QObject):
         if isinstance(view, QTreeWidget):
             view.expanded.connect(self.schedule)
             view.collapsed.connect(self.schedule)
+
+    @property
+    def view(self):
+        return self._view()
 
     def matches(self, index):
         return (self.index.isValid() and index.isValid()
@@ -80,11 +86,11 @@ class RowHover(QObject):
     def schedule(self, *_args):
         if not self._queued:
             self._queued = True
-            QTimer.singleShot(0, self.sync)
+            QTimer.singleShot(0, self, self.sync)
 
     def sync(self):
         self._queued = False
-        if not isValid(self.view):
+        if self.view is None or not isValid(self.view):
             return
         if not self.view.isVisible() or self._suspended:
             self.set_index(QPersistentModelIndex())
@@ -118,32 +124,33 @@ class RowHover(QObject):
         self.set_index(self._pinned)
 
     def eventFilter(self, watched, event):
-        if not isValid(self.view):
+        if self.view is None or not isValid(self.view):
             return False
         kind = event.type()
         view = self.view
+        window = self._window() if self._window else None
         if watched is self._menu and kind in (QEvent.Hide, QEvent.Close):
             self._menu = None
             self._pinned = QPersistentModelIndex()
             self._suspended = False
             self.schedule()
-        elif watched is self._window and kind in (QEvent.WindowDeactivate, QEvent.Hide):
+        elif watched is window and kind in (QEvent.WindowDeactivate, QEvent.Hide):
             if self._menu is None:
                 self._suspended = True
                 self.set_index(QPersistentModelIndex())
-        elif watched is self._window and kind == QEvent.WindowActivate:
+        elif watched is window and kind == QEvent.WindowActivate:
             self._suspended = False
             self.schedule()
         elif watched is view and kind in (QEvent.Hide, QEvent.Show, QEvent.Resize):
             if kind == QEvent.Hide:
                 self.set_index(QPersistentModelIndex())
             else:
-                window = view.window()
-                if window is not self._window:
-                    if self._window is not None and isValid(self._window):
-                        self._window.removeEventFilter(self)
-                    self._window = window
-                    window.installEventFilter(self)
+                owner = view.window()
+                if owner is not window:
+                    if window is not None and isValid(window):
+                        window.removeEventFilter(self)
+                    self._window = weakref.ref(owner)
+                    owner.installEventFilter(self)
                 self._suspended = False
                 self.schedule()
         elif kind in (QEvent.MouseMove, QEvent.Enter, QEvent.Leave, QEvent.MouseButtonPress):
@@ -162,6 +169,10 @@ class RowHoverTable(QTableWidget):
     def setCellWidget(self, row, column, widget):
         super().setCellWidget(row, column, widget)
         self._row_hover.register(widget)
+
+    def setRowHidden(self, row, hide):
+        super().setRowHidden(row, hide)
+        self._row_hover.schedule()
 
 
 class RowHoverTree(QTreeWidget):
