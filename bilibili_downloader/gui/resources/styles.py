@@ -38,6 +38,8 @@ class UiMetrics:
     field_gap: int = 12
     motion_fast: int = 120
     motion_expand: int = 160
+    caption_width: int = 46
+    caption_height: int = 32
 
 
 def blend_color(base: str, overlay: str, amount: float) -> str:
@@ -84,7 +86,7 @@ class ThemePalette:
 
     @property
     def card_border(self):
-        return blend_color(self.surface, self.divider, .75)
+        return blend_color(self.surface, self.divider, .55)
 
     @property
     def control_fill(self):
@@ -92,15 +94,34 @@ class ThemePalette:
 
     @property
     def control_hover(self):
-        return blend_color(self.surface_raised, self.selection, .25)
+        return blend_color(self.control_fill, self.text, .045)
+
+    @property
+    def control_pressed(self):
+        return blend_color(self.control_fill, self.text, .08)
+
+    @property
+    def row_divider(self):
+        return blend_color(self.surface, self.divider, .4)
 
     @property
     def subtle_selection(self):
-        return blend_color(self.surface, self.selection, .45)
+        return blend_color(self.surface, self.selection, .35)
 
     @property
     def popup(self):
         return blend_color(self.surface, self.surface_raised, .25)
+
+    @property
+    def caption_hover(self):
+        return blend_color(self.background, self.text, .08)
+
+    @property
+    def caption_pressed(self):
+        return blend_color(self.background, self.text, .14)
+
+    caption_close_hover = "#c42b1c"
+    caption_close_pressed = "#a1261b"
 
     def tone_surface(self, tone):
         foreground = {"active": self.active_text, "success": self.success,
@@ -284,13 +305,13 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QFrame#SidebarDivider {{ background: {p.divider}; border: none; }}
     QLabel#AccountName {{ font-size: 20px; font-weight: 600; }}
     QFrame#AccountIdentity {{ background: transparent; border: none; }}
-    QFrame#AccountDetails {{ background: {p.surface}; border: 1px solid {p.divider}; border-radius: 12px; }}
+    QFrame#AccountDetails {{ background: {p.surface}; border: 1px solid {p.card_border}; border-radius: 12px; }}
     QFrame#AccountDivider {{ background: {p.divider}; border: none; }}
     QLabel#AccountValue {{ font-size: 14px; }}
     QPushButton#SidebarAction::menu-indicator {{ image: none; width: 0; }}
     QMenuBar {{ background: {p.sidebar}; color: {p.text}; border-bottom: 1px solid {p.divider}; padding: 2px 8px; }}
     QMenuBar::item {{ padding: 5px 10px; background: transparent; border-radius: 5px; }}
-    QMenuBar::item:selected {{ background: {p.selection}; }}
+    QMenuBar::item:selected {{ background: {p.control_hover}; }}
     #Panel, #SectionCard, #ControlPanel, #MascotCard {{
         background: {p.surface}; border: 1px solid {p.card_border}; border-radius: {m.card_radius}px;
     }}
@@ -316,7 +337,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QLabel#EmptyCover {{ background: {p.surface_raised}; border: 1px solid {p.divider}; border-radius: 10px; }}
     QLabel#LoginInstructions {{ background: {p.surface_raised}; border: 1px solid {p.divider}; border-radius: 10px; padding: 12px; }}
     QGroupBox#SettingsSection {{
-        background: {p.surface}; border: 1px solid {p.divider}; border-radius: {m.card_radius}px;
+        background: {p.surface}; border: 1px solid {p.card_border}; border-radius: {m.card_radius}px;
         margin-top: 14px; padding: 20px 16px 16px; font-size: 12pt; font-weight: 600;
     }}
     QGroupBox#SettingsSection::title {{ subcontrol-origin: margin; left: 16px; padding: 0 4px; }}
@@ -339,7 +360,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
         background: {p.control_fill}; color: {p.text}; font-weight: 500;
     }}
     QPushButton:hover {{ background: {p.control_hover}; }}
-    QPushButton:pressed {{ background: {p.surface_raised}; border-color: {p.card_border}; }}
+    QPushButton:pressed {{ background: {p.control_pressed}; border-color: {p.card_border}; }}
     QPushButton[keyboardFocus="true"]:focus {{ border-color: {p.focus}; }}
     QPushButton:disabled {{ background: {p.surface_raised}; color: {p.disabled}; }}
     QPushButton#SegmentButton {{ min-height: 30px; max-height: 30px; padding: 0 8px; font-weight: 500; border: 1px solid transparent; }}
@@ -356,13 +377,13 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QPushButton#SubtleButton:hover, QPushButton#SecondaryButton:hover,
     QPushButton#SidebarAction:hover {{ background: {p.control_hover}; }}
     QPushButton#SubtleButton:pressed, QPushButton#SecondaryButton:pressed,
-    QPushButton#SidebarAction:pressed {{ background: {p.surface_raised}; }}
+    QPushButton#SidebarAction:pressed {{ background: {p.control_pressed}; }}
     QPushButton#SubtleButton:disabled, QPushButton#SecondaryButton:disabled,
     QPushButton#SidebarAction:disabled {{ background: {p.control_fill}; color: {p.disabled}; border-color: {p.card_border}; }}
     QPushButton#SidebarAction[signedIn="true"] {{ text-align: center; padding: 0 10px; }}
     QPushButton#SidebarAction[compact="true"] {{ text-align: center; padding: 0; }}
     QPushButton#GhostButton, QPushButton#TextButton, QPushButton#ActivityButton {{ background: transparent; border-color: transparent; color: {p.muted}; }}
-    QPushButton#TextButton:hover, QPushButton#GhostButton:hover, QPushButton#ActivityButton:hover {{ background: {p.selection}; color: {p.text}; }}
+    QPushButton#TextButton:hover, QPushButton#GhostButton:hover, QPushButton#ActivityButton:hover {{ background: {p.control_hover}; color: {p.text}; }}
     QPushButton#DangerButton, QPushButton#TableDangerButton {{ color: {p.danger}; background: {p.danger_surface}; }}
     QPushButton#DangerButton:hover, QPushButton#TableDangerButton:hover {{ border-color: {p.danger_border}; }}
     QPushButton#DangerButton:pressed, QPushButton#TableDangerButton:pressed {{ background: {p.danger_border}; }}
@@ -370,7 +391,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QPushButton#TablePrimaryButton, QPushButton#TableSubtleButton, QPushButton#TableDangerButton, QPushButton#TableRemoveButton,
     QPushButton#ActivityButton {{ min-height: 30px; max-height: 30px; padding: 0 10px; font-size: 9pt; }}
     QPushButton#TablePrimaryButton, QPushButton#TableSubtleButton {{ background: {p.surface_raised}; }}
-    QPushButton#TablePrimaryButton:hover, QPushButton#TableSubtleButton:hover {{ background: {p.selection}; }}
+    QPushButton#TablePrimaryButton:hover, QPushButton#TableSubtleButton:hover {{ background: {p.control_hover}; }}
     QPushButton#TableSubtleButton:pressed, QPushButton#TablePrimaryButton:pressed {{ border-color: {p.border}; }}
     QPushButton#TablePrimaryButton:disabled, QPushButton#TableSubtleButton:disabled {{ color: {p.disabled}; }}
     QPushButton#TablePrimaryButton[keyboardFocus="true"]:focus,
@@ -389,6 +410,9 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
         min-height: {m.control_height - 2}px; padding: 0 10px; selection-background-color: {p.text_selection}; selection-color: {p.text_selection_text};
     }}
     QPlainTextEdit, QTextEdit {{ padding: 10px; }}
+    QTextBrowser#ReleaseNotes {{ background: {p.surface}; color: {p.text}; border: 1px solid {p.card_border}; border-radius: {m.radius}px; padding: 12px; selection-background-color: {p.text_selection}; selection-color: {p.text_selection_text}; }}
+    QTextBrowser#ReleaseNotes:focus {{ border-color: {p.card_border}; min-height: 0; }}
+    QTextBrowser#ReleaseNotes[keyboardFocus="true"]:focus {{ border-color: {p.focus}; }}
     QLineEdit:hover, QComboBox:hover, QSpinBox:hover {{ background: {p.control_hover}; border-bottom-color: {p.border_hover}; }}
     QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QTextEdit:focus, QPlainTextEdit:focus {{ border: 1px solid {p.focus}; min-height: {m.control_height - 2}px; }}
     QLineEdit[readOnly="true"], QPlainTextEdit[readOnly="true"] {{ background: {p.surface_raised}; border: 1px solid {p.card_border}; color: {p.muted}; min-height: {m.control_height - 2}px; }}
@@ -420,10 +444,10 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QCheckBox::indicator:checked:disabled {{ background: {p.border}; }}
     QTableWidget, QTreeWidget {{
         background: {p.surface}; alternate-background-color: {p.surface}; color: {p.text};
-        border: none; border-radius: {m.radius}px; gridline-color: {p.divider};
+        border: none; border-radius: {m.radius}px; gridline-color: {p.row_divider};
         selection-background-color: {p.selection}; selection-color: {p.text}; outline: none;
     }}
-    QTableWidget::item, QTreeWidget::item {{ padding: 8px; border-bottom: 1px solid {p.card_border}; }}
+    QTableWidget::item, QTreeWidget::item {{ padding: 8px; border-bottom: 1px solid {p.row_divider}; }}
     QTableWidget::item:hover, QTreeWidget::item:hover {{ background: {p.surface_raised}; }}
     QTableWidget::item:selected, QTreeWidget::item:selected {{ background: {p.selection}; color: {p.text}; }}
     QStackedWidget[customBackground="true"] QTableWidget,
@@ -453,11 +477,11 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
         border-radius: {m.radius}px; min-height: 36px; padding: 0 16px; margin-right: 4px;
     }}
     QTabBar::tab:selected {{ background: {p.subtle_selection}; color: {p.active_text}; border-bottom-color: {p.accent}; }}
-    QTabBar::tab:hover {{ background: {p.surface_raised}; color: {p.text}; }}
+    QTabBar::tab:hover:!selected {{ background: {p.control_hover}; color: {p.text}; }}
     QTabBar::tab:focus {{ border-color: {p.focus}; }}
     QStackedWidget[customBackground="true"] QTabBar::tab {{ background: {p.surface}; color: {p.muted}; }}
     QStackedWidget[customBackground="true"] QTabBar::tab:selected {{ background: {p.subtle_selection}; color: {p.active_text}; }}
-    QStackedWidget[customBackground="true"] QTabBar::tab:hover {{ background: {p.control_hover}; color: {p.text}; }}
+    QStackedWidget[customBackground="true"] QTabBar::tab:hover:!selected {{ background: {p.control_hover}; color: {p.text}; }}
     QScrollArea, QScrollArea > QWidget > QWidget {{ background: transparent; border: none; }}
     QScrollBar:vertical {{ width: 10px; background: transparent; margin: 4px 1px; }}
     QScrollBar:horizontal {{ height: 10px; background: transparent; margin: 1px 4px; }}
@@ -471,7 +495,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QStatusBar::item {{ border: none; }}
     QMenu {{ background: {p.popup}; color: {p.text}; border: 1px solid {p.card_border}; border-radius: {m.radius}px; padding: 6px; }}
     QMenu::item {{ padding: 9px 18px; border: 1px solid transparent; border-radius: 6px; }}
-    QMenu::item:selected {{ background: {p.selection}; color: {p.active_text}; }}
+    QMenu::item:selected {{ background: {p.subtle_selection}; color: {p.active_text}; }}
     QMenu::item:disabled {{ color: {p.disabled}; }}
     QMenu::separator {{ height: 1px; background: {p.divider}; margin: 6px 12px; }}
     QPushButton[menuButton="true"], QPushButton#TableSubtleButton[menuButton="true"],
@@ -501,7 +525,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
         background: transparent; color: {p.muted}; font-size: 9pt; font-weight: 500;
     }}
     QPushButton#OutputSecondaryButton:hover {{ background: {p.surface_raised}; color: {p.text}; }}
-    QPushButton#OutputSecondaryButton:pressed {{ background: {p.selection}; color: {p.text}; }}
+    QPushButton#OutputSecondaryButton:pressed {{ background: {p.control_pressed}; color: {p.text}; }}
     QPushButton#OutputSecondaryButton[keyboardFocus="true"]:focus {{ border-color: {p.focus}; }}
     QPushButton#OutputSecondaryButton:disabled {{ background: transparent; color: {p.disabled}; }}
     QPushButton#OutputPrimaryButton {{

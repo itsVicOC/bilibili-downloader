@@ -5,12 +5,12 @@ from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
     QLabel,
-    QPlainTextEdit,
     QPushButton,
     QVBoxLayout,
 )
 
 from bilibili_downloader import __version__
+from bilibili_downloader.gui.widgets.release_notes import ReleaseNotesBrowser
 
 
 class UpdateDialog(QDialog):
@@ -21,8 +21,10 @@ class UpdateDialog(QDialog):
     def __init__(self, release, parent=None):
         super().__init__(parent)
         self.setWindowTitle("发现新版本")
-        self.setMinimumSize(460, 340)
-        self.resize(560, 440)
+        screen = parent.screen() if parent is not None else self.screen()
+        available = screen.availableGeometry().adjusted(24, 24, -24, -24)
+        self.setMinimumSize(min(480, available.width()), min(360, available.height()))
+        self.resize(min(680, available.width()), min(520, available.height()))
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
@@ -38,8 +40,7 @@ class UpdateDialog(QDialog):
         version.setTextFormat(Qt.PlainText)
         version.setWordWrap(True)
         layout.addWidget(version)
-        self.notes = QPlainTextEdit(release.notes or "此版本未提供更新说明。")
-        self.notes.setReadOnly(True)
+        self.notes = ReleaseNotesBrowser(release, self)
         layout.addWidget(self.notes, 1)
         footer = QHBoxLayout()
         footer.setSpacing(8)

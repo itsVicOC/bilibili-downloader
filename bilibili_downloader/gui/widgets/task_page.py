@@ -113,7 +113,7 @@ class TaskPage(QWidget):
         self._download_tools.setObjectName("ToolSurface")
         self._download_tools.setAttribute(Qt.WA_StyledBackground, True)
         toolbar = QHBoxLayout(self._download_tools)
-        toolbar.setContentsMargins(10, 8, 10, 8)
+        toolbar.setContentsMargins(12, 8, 12, 8)
         toolbar.setSpacing(8)
         self.filter = ComboBox()
         for text, key in (

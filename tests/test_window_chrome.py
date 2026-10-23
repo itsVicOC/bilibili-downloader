@@ -1,280 +1,12 @@
-"""Caption visibility without losing desktop window identity or controls."""
+"""Native desktop compositor and real Windows input regressions."""
 
 import ctypes
 import sys
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication, QDialog, QMainWindow
 
-from bilibili_downloader.gui.resources.paths import asset_path
-from bilibili_downloader.gui.window_chrome import WindowChrome
 from tests.test_workspaces import workspace as workspace
-
-
-def test_expanded_windows_caption_preserves_identity_and_controls(qtbot):
-    window = QMainWindow()
-    qtbot.addWidget(window)
-    window.setWindowTitle("BiliFlow · 星轨收藏站")
-    window.setWindowIcon(QIcon(asset_path("app_icon.png")))
-    chrome = WindowChrome(window, "win32")
-    assert window.windowFlags() & Qt.CustomizeWindowHint
-    assert window.windowFlags() & Qt.WindowCloseButtonHint
-    window.resize(900, 640)
-    window.show()
-    qtbot.waitUntil(lambda: not window.windowHandle().flags() & Qt.WindowTitleHint)
-    handle = window.windowHandle()
-    for transition in (window.showMaximized, window.showNormal, window.hide, window.show):
-        transition()
-        QApplication.processEvents()
-        chrome._sync_native()
-        assert not handle.flags() & Qt.WindowTitleHint
-        assert not handle.flags() & Qt.FramelessWindowHint
-        for flag in (
-            Qt.ExpandedClientAreaHint, Qt.CustomizeWindowHint, Qt.WindowSystemMenuHint,
-            Qt.WindowMinimizeButtonHint, Qt.WindowMaximizeButtonHint, Qt.WindowCloseButtonHint,
-        ):
-            assert handle.flags() & flag
-        assert handle.title() == window.windowTitle() == "BiliFlow · 星轨收藏站"
-        assert not handle.icon().isNull() and not window.windowIcon().isNull()
-
-    # QWidget can reapply its normalized flags when recreating/configuring the
-    # window. The next show must clear the duplicate caption again.
-    window.hide()
-    handle.setFlags(Qt.WindowType(
-        (int(handle.flags()) | int(Qt.WindowTitleHint))
-        & ~int(Qt.CustomizeWindowHint | Qt.WindowCloseButtonHint)
-    ))
-    window.show()
-    qtbot.waitUntil(lambda: not handle.flags() & Qt.WindowTitleHint)
-    dialog = QDialog(window)
-    qtbot.addWidget(dialog)
-    dialog.setWindowTitle("选择背景")
-    dialog.show()
-    assert dialog.windowHandle().flags() & Qt.WindowTitleHint
-    assert not dialog.windowHandle().flags() & Qt.ExpandedClientAreaHint
-
-
-@pytest.mark.skipif(sys.platform != "win32", reason="Requires native Windows")
-def test_windows_native_caption_keeps_taskbar_icon_resize_and_system_menu(qtbot, qapp):
-    if qapp.platformName() != "windows":
-        pytest.skip("Requires the Windows Qt backend")
-    from ctypes import wintypes
-
-    window = QMainWindow()
-    qtbot.addWidget(window)
-    window.setWindowTitle("BiliFlow · 星轨收藏站")
-    window.setWindowIcon(QIcon(asset_path("app_icon.png")))
-    chrome = WindowChrome(window, "win32")
-    window.show()
-    qtbot.waitUntil(lambda: not window.windowHandle().flags() & Qt.WindowTitleHint)
-    user32 = ctypes.windll.user32
-    user32.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
-    user32.GetWindowLongW.restype = wintypes.LONG
-    user32.GetSystemMenu.argtypes = [wintypes.HWND, wintypes.BOOL]
-    user32.GetSystemMenu.restype = wintypes.HMENU
-    user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
-    user32.SendMessageW.restype = ctypes.c_ssize_t
-    hwnd = wintypes.HWND(int(window.winId()))
-    for transition in (window.showMaximized, window.showNormal):
-        transition()
-        QApplication.processEvents()
-        chrome._sync_native()
-        style = user32.GetWindowLongW(hwnd, -16)
-        # WS_THICKFRAME, WS_SYSMENU, WS_MINIMIZEBOX, WS_MAXIMIZEBOX.
-        assert style & 0x00040000 and style & 0x00080000
-        assert style & 0x00020000 and style & 0x00010000
-        assert not user32.GetWindowLongW(hwnd, -20) & 0x00000080  # WS_EX_TOOLWINDOW
-        assert user32.GetSystemMenu(hwnd, False)
-        assert user32.SendMessageW(hwnd, 0x007F, 1, 0)  # WM_GETICON / ICON_BIG
-        assert not window.windowHandle().flags() & Qt.WindowTitleHint
-
-
-@pytest.mark.parametrize("active", [False, True])
-def test_expanded_caption_suppresses_legacy_activation_paint(qtbot, monkeypatch, active):
-    from ctypes import wintypes
-    from types import SimpleNamespace
-
-    import bilibili_downloader.gui.window_chrome as module
-
-    window = QMainWindow()
-    qtbot.addWidget(window)
-    chrome = WindowChrome(window, "win32")
-    monkeypatch.setattr(module, "sys", SimpleNamespace(platform="win32"))
-    message = wintypes.MSG(message=0x0086, wParam=int(active))  # WM_NCACTIVATE
-    assert chrome.native_event(ctypes.addressof(message)) == 1
-
-    # Other platforms must keep their normal activation handling.
-    chrome.platform = "darwin"
-    assert chrome.native_event(ctypes.addressof(message)) is None
-
-
-@pytest.mark.parametrize("button", [0x01, 0x02])
-def test_pressed_caption_buttons_are_left_to_qt(qtbot, monkeypatch, button):
-    from ctypes import wintypes
-    from types import SimpleNamespace
-
-    import bilibili_downloader.gui.window_chrome as module
-
-    class NativeFunction:
-        def __init__(self, callback):
-            self.callback = callback
-
-        def __call__(self, *args):
-            return self.callback(*args)
-
-    def get_rect(_hwnd, pointer):
-        rect = ctypes.cast(pointer, ctypes.POINTER(wintypes.RECT)).contents
-        rect.left, rect.top, rect.right, rect.bottom = 100, 0, 1000, 640
-        return True
-
-    user32 = SimpleNamespace(
-        GetAsyncKeyState=NativeFunction(lambda key: 0x8000 if key == button else 0),
-        GetDpiForWindow=NativeFunction(lambda _hwnd: 96),
-        GetWindowRect=NativeFunction(get_rect),
-    )
-    window = QMainWindow()
-    qtbot.addWidget(window)
-    chrome = WindowChrome(window, "win32")
-    monkeypatch.setattr(module, "sys", SimpleNamespace(platform="win32"))
-    monkeypatch.setattr(ctypes, "windll", SimpleNamespace(user32=user32), raising=False)
-    message = wintypes.MSG(message=0x0084, lParam=(16 << 16) | 920)  # WM_NCHITTEST
-    assert chrome.native_event(ctypes.addressof(message)) is None
-
-
-@pytest.mark.parametrize("dpi", [96, 144])
-@pytest.mark.parametrize("on_button", [False, True])
-def test_snap_hover_uses_client_origin_and_current_dpi(qtbot, monkeypatch, dpi, on_button):
-    from ctypes import wintypes
-    from types import SimpleNamespace
-
-    import bilibili_downloader.gui.window_chrome as module
-
-    class NativeFunction:
-        def __init__(self, callback):
-            self.callback = callback
-
-        def __call__(self, *args):
-            return self.callback(*args)
-
-    def get_rect(_hwnd, pointer):
-        rect = ctypes.cast(pointer, ctypes.POINTER(wintypes.RECT)).contents
-        rect.left, rect.top, rect.right, rect.bottom = 0, 0, 1200, 800
-        return True
-
-    def to_screen(_hwnd, pointer):
-        point = ctypes.cast(pointer, ctypes.POINTER(wintypes.POINT)).contents
-        point.x, point.y = -1280, 100
-        return True
-
-    metrics = {96: {32: 4, 92: 4, 4: 23}, 144: {32: 6, 92: 6, 4: 35}}
-    user32 = SimpleNamespace(
-        GetAsyncKeyState=NativeFunction(lambda _key: 0),
-        GetDpiForWindow=NativeFunction(lambda _hwnd: dpi),
-        GetClientRect=NativeFunction(get_rect),
-        ClientToScreen=NativeFunction(to_screen),
-        GetSystemMetricsForDpi=NativeFunction(lambda metric, actual_dpi: metrics[actual_dpi][metric]),
-        InvalidateRect=NativeFunction(lambda *_: True),
-    )
-    window = QMainWindow()
-    qtbot.addWidget(window)
-    chrome = WindowChrome(window, "win32")
-    monkeypatch.setattr(module, "sys", SimpleNamespace(platform="win32"))
-    monkeypatch.setattr(module.QApplication, "platformName", lambda: "windows")
-    monkeypatch.setattr(ctypes, "windll", SimpleNamespace(user32=user32), raising=False)
-    # These points are in the maximize/close buttons on a negative-X monitor.
-    x = (-150 if dpi == 96 else -185) if on_button else -90
-    message = wintypes.MSG(message=0x0084, lParam=(110 << 16) | (x & 0xFFFF))
-    assert chrome.native_event(ctypes.addressof(message)) == (9 if on_button else None)
-
-
-@pytest.mark.parametrize("dpi", [96, 144])
-def test_caption_material_region_tracks_resize_and_dpi_without_repeated_gdi_work(qtbot, monkeypatch, dpi):
-    from ctypes import wintypes
-    from types import SimpleNamespace
-
-    import bilibili_downloader.gui.window_chrome as module
-
-    class NativeFunction:
-        def __init__(self, callback):
-            self.callback = callback
-
-        def __call__(self, *args):
-            return self.callback(*args)
-
-    state = {"width": 1200, "caption": 42, "succeed": True}
-    regions, applied, deleted = [], [], []
-
-    def get_rect(_hwnd, pointer):
-        rect = ctypes.cast(pointer, ctypes.POINTER(wintypes.RECT)).contents
-        rect.right, rect.bottom = state["width"], 80
-        return True
-
-    def make_region(*bounds):
-        regions.append(bounds)
-        return 88
-
-    def set_region(*args):
-        applied.append(args)
-        return state["succeed"]
-
-    metrics = {96: {32: 4, 92: 4, 4: 23}, 144: {32: 6, 92: 6, 4: 35}}
-    user32 = SimpleNamespace(
-        FindWindowExW=NativeFunction(lambda *_: state["caption"]),
-        GetDpiForWindow=NativeFunction(lambda _: dpi),
-        GetClientRect=NativeFunction(get_rect),
-        GetSystemMetricsForDpi=NativeFunction(lambda metric, actual: metrics[actual][metric]),
-        SetWindowRgn=NativeFunction(set_region),
-    )
-    gdi32 = SimpleNamespace(
-        CreateRectRgn=NativeFunction(make_region),
-        DeleteObject=NativeFunction(deleted.append),
-    )
-    window = QMainWindow()
-    qtbot.addWidget(window)
-    chrome = WindowChrome(window, "win32")
-    monkeypatch.setattr(module, "sys", SimpleNamespace(platform="win32"))
-    monkeypatch.setattr(module.QApplication, "platformName", lambda: "windows")
-    monkeypatch.setattr(ctypes, "windll", SimpleNamespace(user32=user32, gdi32=gdi32), raising=False)
-    handle = SimpleNamespace(winId=lambda: 1)
-    height = sum(metrics[dpi].values())
-    assert chrome._clip_windows_caption(handle)
-    assert regions == [(1200 - 3 * int(height * 1.5), 0, 1200, height)]
-    assert chrome._clip_windows_caption(handle)
-    assert len(applied) == 1 and deleted == []
-    state["width"] = 900
-    assert chrome._clip_windows_caption(handle)
-    assert regions[-1][2] == 900 and len(applied) == 2
-    state["caption"] = 43  # A recreated native titlebar needs its own region.
-    state["succeed"] = False
-    assert not chrome._clip_windows_caption(handle)
-    assert deleted == [88]
-    state["caption"] = 0  # Backend changed: retain the transparent fallback.
-    assert not chrome._clip_windows_caption(handle)
-
-
-def test_snap_hover_only_invalidates_on_enter_and_leave(qtbot, monkeypatch):
-    from ctypes import wintypes
-    from types import SimpleNamespace
-
-    import bilibili_downloader.gui.window_chrome as module
-
-    window = QMainWindow()
-    qtbot.addWidget(window)
-    chrome = WindowChrome(window, "win32")
-    invalidations = []
-    monkeypatch.setattr(chrome, "_invalidate_windows_caption", lambda: invalidations.append(True))
-    chrome._set_snap_hover(True)
-    for _ in range(10):
-        chrome._set_snap_hover(True)
-    assert invalidations == [True]
-    monkeypatch.setattr(module, "sys", SimpleNamespace(platform="win32"))
-    message = wintypes.MSG(message=0x02A2)  # WM_NCMOUSELEAVE
-    assert chrome.native_event(ctypes.addressof(message)) is None
-    assert invalidations == [True, True]
-    chrome.native_event(ctypes.addressof(message))
-    assert invalidations == [True, True]
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Requires native Windows")
@@ -288,12 +20,14 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
     from pathlib import Path
     from threading import Thread
     from time import sleep
+    from types import SimpleNamespace
 
     from PySide6.QtCore import QPoint, QRect
     from PySide6.QtGui import QColor, QFont, QPalette
 
     from bilibili_downloader.gui.resources.styles import contrast_ratio, theme_palette
     from bilibili_downloader.gui.resources.theme import ThemeManager
+    from bilibili_downloader.gui.widgets.caption_controls import caption_rects
 
     if qapp.platformName() != "windows":
         pytest.skip("Requires the Windows Qt backend")
@@ -392,14 +126,38 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
         origin, rect = wintypes.POINT(), wintypes.RECT()
         assert user32.ClientToScreen(hwnd, ctypes.byref(origin))
         assert user32.GetClientRect(hwnd, ctypes.byref(rect))
-        dpi = user32.GetDpiForWindow(hwnd)
-        height = sum(user32.GetSystemMetricsForDpi(metric, dpi) for metric in (32, 92, 4))
-        width = int(height * 1.5)
+        height = round(32 * window.devicePixelRatioF())
+        width = round(46 * window.devicePixelRatioF())
         return origin.x, origin.y, rect.right, height, width
 
     def maximize_point():
         x, y, right, height, width = caption_bounds()
         return x + right - width * 3 // 2, y + height // 2
+
+    def drag_right_edge():
+        ensure_foreground()
+        origin, rect = wintypes.POINT(), wintypes.RECT()
+        assert user32.ClientToScreen(hwnd, ctypes.byref(origin))
+        assert user32.GetClientRect(hwnd, ctypes.byref(rect))
+        x, y = origin.x + rect.right - 2, origin.y + rect.bottom // 2
+        assert user32.SetCursorPos(x, y)
+        completed = []
+        def finish():
+            sleep(.12)
+            user32.SetCursorPos(x + 40, y)
+            sleep(.12)
+            up = Input(type=0, data=InputData(mi=MouseInput(dwFlags=0x0004)))
+            completed.append(user32.SendInput(1, ctypes.byref(up), ctypes.sizeof(Input)))
+        worker = Thread(target=finish, daemon=True)
+        worker.start()
+        before = window.width()
+        down = Input(type=0, data=InputData(mi=MouseInput(dwFlags=0x0002)))
+        assert user32.SendInput(1, ctypes.byref(down), ctypes.sizeof(Input)) == 1
+        qtbot.wait(350)
+        worker.join(timeout=2)
+        assert not worker.is_alive() and completed == [1]
+        qtbot.waitUntil(lambda: window.width() > before)
+        window.resize(900, 640)
 
     evidence = Path("build/ui-parity/chrome-regression") / f"scale-{os.environ.get('QT_SCALE_FACTOR', '1')}"
     evidence.mkdir(parents=True, exist_ok=True)
@@ -426,16 +184,21 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
         matching = sum(max(abs(c.red() - expected.red()), abs(c.green() - expected.green()),
                            abs(c.blue() - expected.blue())) <= 3 for c in colors)
         assert matching / len(colors) >= 0.98, f"Legacy caption repainted after {stage}"
-        assert not window.windowHandle().flags() & Qt.WindowTitleHint
+        for index in range(3):
+            sample = window.mapToGlobal(QPoint(window.width() - 138 + index * 46 + 3, 12)) - frame.topLeft()
+            actual = image.pixelColor(round(sample.x() * dpr), round(sample.y() * dpr))
+            expected = QColor(theme_palette(mode == "dark", theme_id).background)
+            assert max(abs(a - b) for a, b in zip(actual.getRgb()[:3], expected.getRgb()[:3])) <= 2
+        assert window.windowHandle().flags() & Qt.FramelessWindowHint
 
     def assert_hover(stage):
         # Capture the desktop compositor: QWidget.grab() misses Qt's separate
         # layered titlebar HWND, which is where this regression occurs.
-        assert not window.windowHandle().flags() & Qt.NoTitleBarBackgroundHint
+        assert not window.windowHandle().flags() & Qt.ExpandedClientAreaHint
         ensure_foreground()
         x, y, right, height, width = caption_bounds()
-        for button, distance in (("minimize", 3), ("maximize", 2)):
-            left = x + right - width * distance
+        for button, rect in caption_rects(right, window.devicePixelRatioF()).items():
+            left, width, height = x + rect.left(), rect.width(), rect.height()
             assert user32.SetCursorPos(left + width // 2, y + height // 2)
             qtbot.wait(100)
             screen = window.screen()
@@ -452,16 +215,12 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
             # entire area, leaving the white glyph invisible.
             colors = [image.pixelColor(px, py)
                       for px in range(4, width - 4) for py in range(4, height - 4)]
-            foreground = [c for c in colors if (
-                min(c.red(), c.green(), c.blue()) > 230 if mode == "dark"
-                else max(c.red(), c.green(), c.blue()) < 30
-            )]
             background = sorted(colors, key=lambda c: c.lightness())[len(colors) // 2]
+            palette = theme_palette(mode == "dark", theme_id)
+            expected = palette.caption_close_hover if button == "close" else palette.caption_hover
+            assert max(abs(a - b) for a, b in zip(background.getRgb()[:3], QColor(expected).getRgb()[:3])) <= 2
+            foreground = [c for c in colors if contrast_ratio(c.name(), background.name()) >= 3.0]
             assert len(foreground) >= 8, (stage, button, len(foreground))
-            if mode == "dark":
-                assert 55 <= background.lightness() <= 130, background.name()
-            else:
-                assert 150 <= background.lightness() <= 235, background.name()
             assert contrast_ratio(foreground[0].name(), background.name()) >= 3.0
         assert user32.SetCursorPos(x + 300, y + 200)
 
@@ -474,7 +233,10 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
         window.activateWindow()
         qtbot.waitUntil(window.isActiveWindow)
         hwnd = wintypes.HWND(int(window.winId()))
-        qtbot.waitUntil(lambda: not window.windowHandle().flags() & Qt.WindowTitleHint)
+        qtbot.waitUntil(lambda: window.windowHandle().flags() & Qt.FramelessWindowHint)
+        style = user32.GetWindowLongPtrW(hwnd, -16)
+        assert all(style & flag for flag in (0x00040000, 0x00080000, 0x00020000, 0x00010000))
+        assert user32.GetSystemMenu(hwnd, False)
         # The reported trigger: click empty download workspace, not the header.
         origin = wintypes.POINT()
         assert user32.ClientToScreen(hwnd, ctypes.byref(origin))
@@ -496,11 +258,32 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
         assert_clear("restored")
         assert_hover("restored")
         assert window.geometry() == normal
+        drag_right_edge()
+        assert_clear("edge-resize")
+        x, y, right, height, width = caption_bounds()
+        click(x + right - width * 5 // 2, y + height // 2)
+        qtbot.waitUntil(window.isMinimized)
+        window.showNormal()
+        ensure_foreground()
+        assert_clear("minimize-restored")
         window.hide()
         window.show()
         window.activateWindow()
         qtbot.waitUntil(window.isActiveWindow)
         assert_clear("reshown")
+        closed = []
+        previous_lifecycle = window._lifecycle
+        def close_to_tray():
+            closed.append(True)
+            window.hide()
+        window._lifecycle = SimpleNamespace(platform="win32", close_window=close_to_tray)
+        try:
+            x, y, right, height, width = caption_bounds()
+            click(x + right - width // 2, y + height // 2)
+            qtbot.waitUntil(window.isHidden)
+            assert closed == [True] and not window._quit_requested
+        finally:
+            window._lifecycle = previous_lifecycle
     finally:
         if hasattr(qapp.styleHints(), "unsetColorScheme"):
             qapp.styleHints().unsetColorScheme()

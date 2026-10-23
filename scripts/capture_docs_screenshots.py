@@ -77,6 +77,23 @@ from bilibili_downloader.gui.widgets.pixel_mascot import PixelMascot
 from bilibili_downloader.utils.config import ConfigManager
 
 OUTPUT_DIR = PROJECT_ROOT / "docs" / "images"
+DEMO_RELEASE_NOTES = """## Fluent 界面精修
+
+- **统一材质与交互**：保留粉紫／青蓝品牌，让内容更清晰。
+- 修复 Windows 窗口按钮的色差、悬停与图标对齐。
+- 更新说明支持标题、列表、表格与 `行内代码`。
+
+### 兼容与验证
+
+| 项目 | 说明 |
+| --- | --- |
+| 用户数据 | 保留账号、任务、录制历史和外观设置 |
+| 窗口行为 | 保留拖动、缩放和关闭流程 |
+
+> 此处为离线演示数据，不会执行更新。
+
+[查看发布说明](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9b1)
+"""
 
 
 def _flush_events(app: QApplication) -> None:
@@ -1283,7 +1300,7 @@ def _capture_ui_refresh(app, theme, window):
                     _save_widget(app, dialog, f"ui-{theme_id}-switch-cookie-{mode}.png")
                 dialog.deleteLater()
             update = UpdateDialog(UpdateRelease(
-                "0.9.0", "v0.9.0", "2026-10-21T00:00:00Z", "离线演示更新说明", (),
+                "0.9.0", "v0.9.0", "2026-10-21T00:00:00Z", DEMO_RELEASE_NOTES, (),
             ), window)
             _save_widget(app, update, f"ui-{theme_id}-update-{mode}.png")
             update.deleteLater()
@@ -1305,9 +1322,9 @@ def _capture_ui_refresh(app, theme, window):
 
 
 def _capture_native_chrome(app, theme, window):
-    """Capture the compositor, including Qt's separate Windows caption layer.
+    """Capture the desktop compositor, including the native frame boundaries.
 
-    QWidget.grab() omits that layer and cannot catch duplicate caption icons.
+    QWidget.grab() alone cannot catch a reappearing system titlebar or frame.
     Use only offline fixtures, and record the actual desktop/backend/DPI.
     """
     from PySide6.QtTest import QTest
@@ -1345,7 +1362,8 @@ def _capture_native_chrome(app, theme, window):
             filename = f"chrome-{mode}-{name}.png"
             pixmap.save(str(OUTPUT_DIR / filename))
             if sys.platform == "win32":
-                assert not handle.flags() & Qt.WindowTitleHint
+                assert handle.flags() & Qt.FramelessWindowHint
+                assert not handle.flags() & Qt.ExpandedClientAreaHint
                 assert not handle.icon().isNull()
                 # The sidebar starts its brand below y=24. This previously
                 # empty strip contained the duplicate 16px caption icon.
@@ -1380,7 +1398,7 @@ def _capture_native_chrome(app, theme, window):
     (OUTPUT_DIR / "rendering-profile.json").write_text(json.dumps({
         "platform": sys.platform, "backend": app.platformName(), "qt": qVersion(),
         "logical_dpi": screen.logicalDotsPerInchY(), "dpr": screen.devicePixelRatio(),
-        "capture": "desktop compositor including native caption layer",
+        "capture": "desktop compositor with client-painted Fluent caption controls",
         "enum_inverted_title_hint": int(~Qt.WindowTitleHint), "checks": checks,
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -1670,7 +1688,7 @@ def main(argv=None) -> int:
             theme.apply_theme(dark)
             dialog = UpdateDialog(UpdateRelease(
                 "0.9.0b1", "v0.9.0b1", "2026-10-14T00:00:00Z",
-                "更新说明（离线演示）\n\n新增启动自动检查与手动检查更新。\n支持正式版和包含 beta、rc 的最新版通道。\n立即更新将下载、校验、安装并重启。\n跳过版本只影响自动提醒，手动检查仍可更新。", (),
+                DEMO_RELEASE_NOTES, (),
             ), window)
             _save_widget(app, dialog, f"biliflow-dialog-update{'-light' if not dark else ''}.png")
             dialog.hide()
