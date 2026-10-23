@@ -611,6 +611,25 @@ class MainWindow(QMainWindow):
             return True, result
         return super().nativeEvent(event_type, message)
 
+    def showMaximized(self):
+        if not self._chrome.show_native(3):
+            super().showMaximized()
+
+    def showNormal(self):
+        if not self._chrome.show_native(1):
+            super().showNormal()
+
+    def showMinimized(self):
+        if not self._chrome.show_native(6):
+            super().showMinimized()
+
+    def setWindowState(self, state):
+        if self.isVisible() and not state & Qt.WindowFullScreen:
+            command = 6 if state & Qt.WindowMinimized else 3 if state & Qt.WindowMaximized else 1
+            if self._chrome.show_native(command):
+                return
+        super().setWindowState(state)
+
     def _focus_download_input(self):
         if self._show_workspace(0):
             self._download_tabs.setCurrentIndex(0)

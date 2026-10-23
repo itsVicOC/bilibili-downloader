@@ -112,3 +112,13 @@ class WindowChrome(QObject):
             self._native = WindowsFrame(self)
         self._native.hwnd = msg.hWnd
         return self._native.event(msg)
+
+    def show_native(self, command):
+        if self.platform != "win32" or sys.platform != "win32" or QApplication.platformName() != "windows" or self.window.isFullScreen():
+            return False
+        # QWidget still owns visibility, lifecycle and focus. Only the native
+        # state transition bypasses Qt's frameless MoveWindow emulation.
+        self.window.show()
+        self._sync_native()
+        self._native.show_window(command)
+        return True

@@ -9,6 +9,19 @@ from PySide6.QtCore import Qt
 from tests.test_workspaces import workspace as workspace
 
 
+def test_window_state_methods_share_the_platform_adapter(workspace, monkeypatch):
+    commands = []
+    monkeypatch.setattr(workspace._chrome, "show_native", lambda command: commands.append(command) or True)
+    monkeypatch.setattr(workspace, "isVisible", lambda: True)
+    workspace.showMaximized()
+    workspace.showNormal()
+    workspace.showMinimized()
+    workspace.setWindowState(Qt.WindowMaximized)
+    workspace.setWindowState(Qt.WindowMinimized | Qt.WindowMaximized)
+    workspace.setWindowState(Qt.WindowNoState)
+    assert commands == [3, 1, 6, 3, 6, 1]
+
+
 @pytest.mark.skipif(sys.platform != "win32", reason="Requires native Windows")
 @pytest.mark.parametrize("mode", ["light", "dark"])
 @pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])

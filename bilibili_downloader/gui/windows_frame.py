@@ -37,6 +37,7 @@ class WindowsFrame:
             "GetWindowLongPtrW": ([wintypes.HWND, ctypes.c_int], ctypes.c_ssize_t),
             "SetWindowLongPtrW": ([wintypes.HWND, ctypes.c_int, ctypes.c_ssize_t], ctypes.c_ssize_t),
             "SetWindowPos": ([wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT], wintypes.BOOL),
+            "ShowWindow": ([wintypes.HWND, ctypes.c_int], wintypes.BOOL),
             "GetClientRect": ([wintypes.HWND, ctypes.POINTER(wintypes.RECT)], wintypes.BOOL),
             "ScreenToClient": ([wintypes.HWND, ctypes.POINTER(wintypes.POINT)], wintypes.BOOL),
             "ClientToScreen": ([wintypes.HWND, ctypes.POINTER(wintypes.POINT)], wintypes.BOOL),
@@ -55,6 +56,12 @@ class WindowsFrame:
         for name, (arguments, result) in signatures.items():
             function = getattr(self.user32, name)
             function.argtypes, function.restype = arguments, result
+
+    def show_window(self, command):
+        # Qt implements frameless maximization with MoveWindow, leaving the
+        # native state normal. WM_SIZE from ShowWindow keeps both in sync and
+        # lets Windows own the normal placement and restore geometry.
+        self.user32.ShowWindow(self.hwnd, command)
 
     def configure(self):
         hwnd, api = int(self.window.winId()), self.user32
