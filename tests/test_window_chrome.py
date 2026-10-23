@@ -233,7 +233,7 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
         window.activateWindow()
         qtbot.waitUntil(window.isActiveWindow)
         hwnd = wintypes.HWND(int(window.winId()))
-        qtbot.waitUntil(lambda: window.windowHandle().flags() & Qt.FramelessWindowHint)
+        qtbot.waitUntil(lambda: bool(window.windowHandle().flags() & Qt.FramelessWindowHint))
         style = user32.GetWindowLongPtrW(hwnd, -16)
         assert all(style & flag for flag in (0x00040000, 0x00080000, 0x00020000, 0x00010000))
         assert user32.GetSystemMenu(hwnd, False)
