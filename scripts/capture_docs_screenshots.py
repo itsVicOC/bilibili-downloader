@@ -217,7 +217,7 @@ def _make_main_window(workdir: Path, *, desktop_platform=None) -> MainWindow:
     controller = LiveUiController(config, service_factory=DemoLiveService)
     window = MainWindow(
         config_manager=config, task_repository=repository, live_controller=controller,
-        desktop_platform=desktop_platform,
+        desktop_platform=desktop_platform, remember_window=False,
     )
     controller.timer.stop()
     window.resize(1320, 860)

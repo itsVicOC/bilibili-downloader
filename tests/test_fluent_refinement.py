@@ -78,17 +78,21 @@ def test_reflow_uses_viewport_and_preserves_controls_selection_and_audio_mode(wo
 
 
 @pytest.mark.parametrize("mode", [OutputMode.VIDEO, OutputMode.AUDIO])
-def test_directory_precedes_extras_in_keyboard_order(workspace, qtbot, mode):
+def test_directory_follows_extras_in_keyboard_order(workspace, qtbot, mode):
     resolve(workspace)
     workspace._output_mode_combo.setCurrentIndex(workspace._output_mode_combo.findData(mode))
     workspace.show()
     flush()
     codec = workspace._codec_stack.currentWidget()
+    QApplication.setActiveWindow(workspace)
     codec.setFocus()
     qtbot.keyClick(codec, Qt.Key_Tab)
+    assert QApplication.focusWidget() is workspace._danmaku_check
+    workspace._metadata_check.setFocus()
+    qtbot.keyClick(workspace._metadata_check, Qt.Key_Tab)
     assert QApplication.focusWidget() is workspace._output_summary
     qtbot.keyClick(workspace._output_summary, Qt.Key_Tab)
-    assert QApplication.focusWidget() is workspace._danmaku_check
+    assert QApplication.focusWidget() is workspace._download_actions.directory_button
 
 
 def test_settings_bar_stays_compact_and_actions_remain_visible(workspace):

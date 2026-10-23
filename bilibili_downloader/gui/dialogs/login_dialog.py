@@ -314,11 +314,11 @@ class LoginDialog(QDialog):
         self._refresh_btn.hide()
         qr_layout.addWidget(self._refresh_btn, alignment=Qt.AlignCenter)
 
-        qr_layout.addStretch()
+        qr_layout.setAlignment(Qt.AlignTop)
         self._tabs.addTab(qr_tab, "扫码登录")
         self._tabs.setCurrentIndex(1)
 
-        layout.addWidget(self._tabs, 1)
+        layout.addWidget(self._tabs, 0)
 
         self._overview_stretch = layout.count()
         layout.addStretch(1 if self._management else 0)

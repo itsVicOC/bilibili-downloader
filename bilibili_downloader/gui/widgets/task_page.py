@@ -153,6 +153,8 @@ class TaskPage(QWidget):
         self._clear_completed_action = menu.addAction("移除完成", self.clear_completed_requested.emit)
         self._bulk_buttons.append(self._clear_completed_action)
         menu.addAction("清理下载缓存", self.clear_cache_requested.emit)
+        self.undo_action = menu.addAction("撤销移除", self.undo_remove_requested.emit)
+        self.undo_action.setEnabled(False)
         more.setMenu(menu)
         actions.addWidget(more)
         layout.addWidget(self._download_tools)
@@ -395,11 +397,13 @@ class TaskPage(QWidget):
         )
         self.current_detail.setVisible(row is not None)
         if row:
+            quality = next((q["label"] for q in row["qualities"] if q["qn"] == row["quality"]), "当前最高画质")
             self.current_detail.set_details(
                 f"{row['author']} · 房间 {row['room_id']}", row["state_label"],
-                f"已录 {_duration(row['duration'])} · {_size(row['size'])} · {_size(row['speed'])}/s",
-                row["output_dir"], row["detail"], live_tone(row["state"]),
+                f"{quality} · 分段 {row['segment_seconds'] // 60} 分钟 · {'自动监控' if row['enabled'] else '监控关闭'}",
+                row["output_dir"], row["detail"] if row["detail"] != row["state_label"] else "", live_tone(row["state"]),
             )
+            self.current_detail._full_text += f"\n已录 {_duration(row['duration'])} · {_size(row['size'])} · {_size(row['speed'])}/s"
 
     def _history_tab(self):
         tab = QWidget()

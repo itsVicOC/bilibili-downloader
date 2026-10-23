@@ -5,6 +5,11 @@ from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QAbstractButton, QApplication, QSizePolicy, QWidget
 
 from bilibili_downloader.core.models import DEFAULT_GLASS_BLUR, BackgroundVisibility
+from bilibili_downloader.gui.layout_policy import (
+    density_for_height,
+    field_columns,
+    output_side_by_side,
+)
 from bilibili_downloader.gui.resources.styles import (
     UI_METRICS,
     background_reading_alpha,
@@ -258,81 +263,94 @@ class WorkspacePreview(QWidget):
             text(rect.adjusted(12, 0, -2, 0), name if sidebar > 100 else name[:2], protected=False)
         if sidebar > 100:
             text(QRectF(24, 48, sidebar - 40, 36), "BiliFlow", protected=False, bold=True)
-        inner = content.adjusted(24, 24, -24, -24)
-        footer = QRectF(inner.left(), inner.bottom() - 72, inner.width(), 72)
+        density = density_for_height(height)
+        margin, padding, gap = density.page_margin, density.card_padding, density.section_gap
+        inner = content.adjusted(margin, margin, -margin, -margin)
+        footer_height = UI_METRICS.settings_bar_height if self.workspace == "settings" else 72
+        footer = QRectF(inner.left(), inner.bottom() - footer_height, inner.width(), footer_height)
         top = inner.top()
-        if self.workspace in ("download", "live"):
-            hero = QRectF(inner.left(), top, inner.width(), 120)
+        painter.save()
+        painter.setClipRect(QRectF(inner.left(), top, inner.width(), max(0, footer.top() - top - gap)))
+        if self.workspace == "download":
+            text(QRectF(inner.left(), top, inner.width(), 32), "单个解析       批量导入", bold=True)
+            top += 40
+            hero = QRectF(inner.left(), top, inner.width(), UI_METRICS.source_resolved_height)
             card(hero)
-            text(hero.adjusted(20, 12, -20, -78), "添加直播间，守候下一场开播" if self.workspace == "live" else "喜欢的这一集，现在就带回本地。", bold=True)
-            control(QRectF(hero.left() + 20, top + 60, hero.width() - 160, 40), "直播间链接或房间号" if self.workspace == "live" else "视频链接或 BV 号")
-            control(QRectF(hero.right() - 128, top + 60, 108, 40), "添加并监控" if self.workspace == "live" else "开始解析", True)
-            top += 140
-            live = self.workspace == "live"
-            available_height = max(200, footer.top() - top - 16)
-            left_width = inner.width() * (.62 if live else .4) - 8
-            left = QRectF(inner.left(), top, left_width, available_height if live else 230)
-            right = QRectF(left.right() + 16, top, inner.right() - left.right() - 16, available_height)
-            card(left)
+            control(QRectF(hero.left() + padding, top + 12, hero.width() - 144 - padding, 44), "BV1DEMO2026A")
+            control(QRectF(hero.right() - 120, top + 12, 108, 44), "重新解析", True)
+            top = hero.bottom() + gap
+            summary = QRectF(inner.left(), top, inner.width(), density.cover_height + padding * 2)
+            card(summary)
+            cover = QRectF(summary.left() + padding, top + padding, density.cover_width, density.cover_height)
+            control(cover, "视频封面")
+            x = cover.right() + gap
+            text(QRectF(x, top + padding, summary.right() - x - 16, 28), "星轨旅记：城市夜航", bold=True)
+            text(QRectF(x, top + padding + 32, summary.right() - x - 16, 22), "UP 主 · 小流    已解析", muted=True)
+            text(QRectF(x, top + padding + 56, summary.right() - x - 16, 22), "12:34 · BV1DEMO2026A", muted=True)
+            top = summary.bottom() + gap
+            wide = output_side_by_side(inner.width())
+            spec_width = (inner.width() - gap) * .6 if wide else inner.width()
+            columns = field_columns(spec_width - 2 * padding)
+            field_height = 40 if density.compact else 68
+            specs = QRectF(inner.left(), top, spec_width, padding * 2 + 28 + gap + 2 * field_height + 12)
+            if columns == 1:
+                specs.setHeight(specs.height() + 2 * (field_height + 12))
+            card(specs)
+            text(QRectF(specs.left() + padding, top + padding, specs.width() - 2 * padding, 28), "输出规格", bold=True)
+            field_width = (specs.width() - 2 * padding - (columns - 1) * 12) / columns
+            for i, (label, value) in enumerate((("分 P 范围", "当前视频"), ("输出类型", "视频 / MP4"), ("画面质量", "1080P"), ("视频编码", "AVC"))):
+                x = specs.left() + padding + i % columns * (field_width + 12)
+                y = specs.top() + padding + 28 + gap + i // columns * (field_height + 12)
+                if density.compact:
+                    text(QRectF(x, y, 76, 40), label)
+                    control(QRectF(x + 84, y, max(40, field_width - 84), 40), value)
+                else:
+                    text(QRectF(x, y, field_width, 20), label)
+                    control(QRectF(x, y + 28, field_width, 40), value)
+            extras = QRectF(specs.right() + gap if wide else inner.left(), top if wide else specs.bottom() + gap,
+                            inner.width() - spec_width - gap if wide else inner.width(), padding * 2 + 28 + gap + 4 * 40 + 28)
+            card(extras)
+            text(QRectF(extras.left() + padding, extras.top() + padding, extras.width() - padding * 2, 28), "附加内容", bold=True)
+            for i, label in enumerate(("✓  下载弹幕 · ASS", "✓  下载字幕 · SRT", "✓  保存封面 · 图片", "✓  保存元数据 · JSON")):
+                y = extras.top() + padding + 28 + gap + i * 40 + (28 if i > 1 else 0)
+                text(QRectF(extras.left() + padding, y, extras.width() - padding * 2, 40), label)
+                if i == 1:
+                    text(QRectF(extras.left() + padding + 24, y + 40, extras.width() - padding * 2 - 24, 28), "□  全部字幕", muted=True)
+        elif self.workspace == "live":
+            hero = QRectF(inner.left(), top, inner.width(), 96)
+            card(hero)
+            text(QRectF(hero.left() + padding, top + 8, hero.width() - 2 * padding, 28), "添加直播间 · 开播自动录制", bold=True)
+            control(QRectF(hero.left() + padding, top + 44, hero.width() - 152, 40), "直播间链接或房间号")
+            control(QRectF(hero.right() - 128, top + 44, 112, 40), "添加并监控", True)
+            top = hero.bottom() + gap
+            wide = inner.width() >= 880
+            left_width = (inner.width() - gap) * .62 if wide else inner.width()
+            left = QRectF(inner.left(), top, left_width, 220)
+            table(left, ("直播间", "状态", "时长", "操作"), (("城市漫游", "录制中", "00:43:12", "停止本场"), ("星轨电台", "等待开播", "00:00:00", "更多")))
+            right = QRectF(left.right() + gap if wide else inner.left(), top if wide else left.bottom() + gap,
+                           inner.width() - left_width - gap if wide else inner.width(), 260)
             card(right)
-            text(left.adjusted(20, 14, -20, -left.height() + 44), "监控列表" if self.workspace == "live" else "作品资料卡", bold=True)
-            text(right.adjusted(20, 14, -20, -right.height() + 44), "房间详情" if self.workspace == "live" else "输出规格", bold=True)
-            if self.workspace == "live":
-                table(QRectF(left.left() + 20, top + 58, left.width() - 40, left.height() - 78), ("直播间", "状态", "已录时长"), (("城市漫游", "录制中", "00:43:12"), ("星轨电台", "等待开播", "00:00:00")))
-            else:
-                control(QRectF(left.left() + 16, top + 58, 176, 99), "视频封面")
-                text(QRectF(left.left() + 16, top + 165, left.width() - 32, 28), "星轨旅记：城市夜航", bold=True)
-                text(QRectF(left.left() + 16, top + 195, left.width() - 32, 24), "UP 主 · 示例    时长 12:34", muted=True)
-            labels = ("当前房间", "下次拉流画质", "保存目录") if self.workspace == "live" else ("分 P 范围", "输出类型", "画面质量", "视频编码")
-            columns = 2 if not live and right.width() >= 560 else 1
-            field_width = (right.width() - 32 - (columns - 1) * 12) / columns
-            for i, label in enumerate(labels):
-                x = right.left() + 16 + (i % columns) * (field_width + 12)
-                y = top + 58 + (i // columns) * 52
-                if y + 40 > footer.top() - 24:
-                    break
-                text(QRectF(x, y, 92, 40), label, muted=True)
-                control(QRectF(x + 104, y, max(50, field_width - 104), 40), ("原画" if live else "1080P") if i == 2 else "当前设置")
-            if not live:
-                option_top = top + 58 + (len(labels) // columns) * 52
-                option_width = (right.width() - 44) / 2
-                for i, label in enumerate(("下载弹幕 · ASS", "下载字幕 · SRT", "保存封面 · 图片", "保存元数据 · JSON")):
-                    y = option_top + (i // 2) * 84
-                    if y + 76 > right.bottom() - 12:
-                        break
-                    option = QRectF(right.left() + 16 + (i % 2) * (option_width + 12), y, option_width, 76)
-                    card(option, True)
-                    text(option.adjusted(12, 0, -12, 0), label)
+            for i, value in enumerate(("房间详情 · 城市漫游", "录制中 · 43:12 · 128 MB", "保存位置：~/Videos/BiliFlow", "下次拉流 · 当前最高画质", "✓ 自动监控并录制")):
+                text(QRectF(right.left() + padding, right.top() + padding + i * 44, right.width() - padding * 2, 40), value, bold=i == 0)
         elif self.workspace == "tasks":
             text(QRectF(inner.left(), top, inner.width(), 36), "下载队列       当前录制       录制历史", bold=True)
-            tools = QRectF(inner.left(), top + 52, inner.width(), 56)
+            tools = QRectF(inner.left(), top + 44, inner.width(), 44)
             card(tools, True)
-            text(tools.adjusted(16, 0, -16, 0), "全部任务                 当前筛选                 3 项", protected=False)
-            table(QRectF(inner.left(), top + 124, inner.width(), inner.height() - 124), ("作品", "规格", "传输进度", "任务状态"), (("星轨旅记：城市夜航", "4K · HEVC", "68%", "下载中 · 14.2 MB/s"), ("晨光抵达", "1080P · AVC", "32%", "已暂停"), ("创作幕后", "Hi-Res · FLAC", "100%", "完成")))
+            text(tools.adjusted(12, 0, -12, 0), "全部任务       当前筛选       3 项          暂停    继续    更多", protected=False)
+            table(QRectF(inner.left(), top + 100, inner.width(), max(200, inner.height() - 224)), ("作品", "规格", "进度", "状态", "操作"), (("城市夜航", "4K · HEVC", "68%", "下载中", "暂停"), ("晨光抵达", "1080P · AVC", "32%", "已暂停", "继续"), ("创作幕后", "FLAC", "100%", "完成", "打开目录")))
         else:
             text(QRectF(inner.left(), top, inner.width(), 36), "下载    直播    外观    工具与存储    关于与更新", bold=True)
-            modes = QRectF(inner.left(), top + 52, inner.width(), 100)
-            card(modes)
-            text(QRectF(modes.left() + 16, modes.top() + 10, modes.width() - 32, 28), "显示模式 · 立即生效", bold=True)
-            control(QRectF(modes.left() + 16, modes.top() + 48, 320, 36), "跟随系统      日间      夜间")
-            theme = QRectF(inner.left(), modes.bottom() + 16, inner.width(), 180)
-            card(theme)
-            text(theme.adjusted(20, 12, -20, -136), "应用配色 · 保存后生效", bold=True)
-            control(QRectF(theme.left() + 20, theme.top() + 62, (theme.width() - 60) / 2, 80), "星河 · 粉紫星空")
-            control(QRectF(theme.center().x() + 10, theme.top() + 62, (theme.width() - 60) / 2, 80), "晴海 · 晴空青蓝")
-            columns = 1 if width < 1120 else 2
-            for i, name in enumerate(names):
-                x = inner.left() + (i % columns) * ((inner.width() + 20) / columns)
-                y = theme.bottom() + 20 + (i // columns) * 148
-                if y + 128 > footer.top() - 20:
-                    break
-                tile = QRectF(x, y, (inner.width() - (columns - 1) * 20) / columns, 128)
-                card(tile)
-                text(tile.adjusted(20, 8, -20, -84), f"{name}背景", bold=True)
-                control(QRectF(tile.left() + 20, tile.top() + 58, 130, 40), "选择背景…")
-                text(QRectF(tile.left() + 168, tile.top() + 58, tile.width() - 188, 40), "小流 · 当前作品", muted=True)
+            for i, (heading, value) in enumerate((("显示模式 · 立即生效", "跟随系统      日间      夜间"), ("应用配色 · 保存后生效", "星河 · 粉紫星空       晴海 · 晴空青蓝"), ("工作区背景", "视频下载      直播录制      任务中心      设置"))):
+                panel = QRectF(inner.left(), top + 44 + i * (116 + gap), inner.width(), 116)
+                card(panel)
+                text(QRectF(panel.left() + padding, panel.top() + padding, panel.width() - 2 * padding, 28), heading, bold=True)
+                control(QRectF(panel.left() + padding, panel.top() + 56, panel.width() - 2 * padding, 40), value)
+        painter.restore()
         if self.workspace != "tasks":
             card(footer, True)
-            text(footer.adjusted(16, 0, -150, 0), "所有修改已保存" if self.workspace == "settings" else "已选 1 项 · 当前输出设置", muted=True, protected=False)
-            control(QRectF(footer.right() - 144, footer.top() + 16, 128, 40), "保存设置" if self.workspace == "settings" else "停止本场" if self.workspace == "live" else "加入下载队列", True)
+            text(footer.adjusted(16, 0, -156, -20 if self.workspace == "download" else 0), "所有修改已保存" if self.workspace == "settings" else "已选 1 项 · 当前输出设置", protected=False)
+            if self.workspace == "download":
+                text(QRectF(footer.left() + 16, footer.top() + 36, footer.width() - 180, 24), "保存至 ~/Downloads/BiliFlow · 修改目录", muted=True, protected=False)
+            button_height = 32 if self.workspace == "settings" else 44
+            control(QRectF(footer.right() - 144, footer.center().y() - button_height / 2, 128, button_height), "保存设置" if self.workspace == "settings" else "停止本场" if self.workspace == "live" else "加入下载队列", True)
         painter.end()

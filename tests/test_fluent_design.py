@@ -189,6 +189,9 @@ def test_tabs_keep_keyboard_focus_without_mouse_focus_ring(qapp, qtbot):
     qtbot.addWidget(tabs)
     tabs.show()
     tabs.activateWindow()
+    # These tests synthesize Qt input; the desktop may keep Codex or another
+    # application in front after the preceding minimize/restore tests.
+    qapp.setActiveWindow(tabs)
     qtbot.waitUntil(tabs.isActiveWindow)
     qtbot.mouseClick(tabs, Qt.LeftButton, pos=tabs.tabRect(1).center())
     assert tabs.property("keyboardFocus") is False

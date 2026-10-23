@@ -280,8 +280,8 @@ def test_enqueue_stays_on_source_and_reports_duplicates(workspace, monkeypatch):
     window._on_download_clicked()
     assert window._workspace_pages.currentIndex() == 0
     assert len(window._task_repository.list_tasks()) == 1
-    assert "重复" in window._enqueue_notice.label.text()
-    window._enqueue_notice.action.click()
+    assert "重复" in window._status_bar.currentMessage()
+    window._status_bar.action.click()
     assert window._workspace_pages.currentIndex() == 2
 
 
@@ -818,7 +818,7 @@ def test_empty_download_is_compact_and_parsed_summary_is_always_visible(workspac
     assert contained(window._download_actions, window._workspace_pages.currentWidget())
     window._edit_output_btn.click()
     flush()
-    assert window._workspace_scroll.verticalScrollBar().value() > 0
+    assert window._quality_combo.visibleRegion().boundingRect().contains(window._quality_combo.rect())
     window._output_mode_combo.setCurrentIndex(window._output_mode_combo.findData(OutputMode.AUDIO))
     assert "仅音频" in window._download_hint.toolTip()
     assert "各作品全部分 P" in window._batch_page._output_specs.toolTip()
@@ -914,8 +914,10 @@ def test_remove_filtered_completed_records_and_undo_preserve_files(workspace, tm
     window._on_clear_completed()
     assert repo.get(ids[0]) is None
     assert repo.get(ids[1]) is not None
-    assert "文件和断点仍保留" in page.undo_notice.label.text()
-    page.undo_notice.action.click()
+    assert "文件和断点仍保留" in window._status_bar.currentMessage()
+    assert page.undo_notice.isHidden() and page.undo_action.isEnabled()
+    window._status_bar.clearMessage()
+    page.undo_action.trigger()
     assert repo.get(ids[0]).warnings == ["字幕失败"]
     assert repo.get(ids[0]).progress == 1.0
     assert output.read_bytes() == b"demo-file"

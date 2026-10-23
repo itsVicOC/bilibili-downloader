@@ -7,11 +7,12 @@ from pathlib import Path
 from urllib.parse import quote
 
 
-def build(root: Path) -> tuple[Path, int]:
+def build(root: Path, *, title="BiliFlow 第三轮 Fluent Design 精修") -> tuple[Path, int]:
     root = root.resolve()
     pictures = sorted(root.rglob("*.png"))
     comparisons = []
-    for title, name in (
+    for heading, name in (
+        ("下载 · 紧凑布局 · 1120", "biliflow-download-light-1120.png"),
         ("单个下载 · 浅色 · 1320", "biliflow-download-light-1320.png"),
         ("设置 · 深色 · 900", "biliflow-settings-dark-900.png"),
         ("任务中心 · 深色 · 900", "biliflow-tasks-dark-900.png"),
@@ -22,7 +23,7 @@ def build(root: Path) -> tuple[Path, int]:
             if path.exists():
                 url = quote(path.relative_to(root).as_posix())
                 pair.append(f'<figure><figcaption>{label} · 离屏</figcaption><a href="{url}"><img src="{url}" alt="{label}" loading="lazy"></a></figure>')
-        comparisons.append(f'<h3>{title}</h3><div class="pair">{"".join(pair)}</div>')
+        comparisons.append(f'<h3>{heading}</h3><div class="pair">{"".join(pair)}</div>')
     groups = {}
     for path in pictures:
         relative = path.relative_to(root).as_posix()
@@ -50,6 +51,7 @@ __GALLERY__<script>
 document.querySelector('#search').addEventListener('input',event=>{const text=event.target.value.toLowerCase();document.querySelectorAll('details').forEach(group=>{let count=0;group.querySelectorAll('figure').forEach(item=>{const match=item.dataset.name.toLowerCase().includes(text);item.hidden=!match;if(match)count++});group.hidden=!count;if(text&&count)group.open=true})});
 document.querySelector('#expand').addEventListener('click',()=>document.querySelectorAll('details:not([hidden])').forEach(group=>group.open=true));
 </script></html>"""
+    page = page.replace("BiliFlow 第三轮 Fluent 精修复核", escape(title)).replace("BiliFlow 第三轮 Fluent Design 精修", escape(title))
     page = page.replace("__COMPARISONS__", "".join(comparisons)).replace("__COUNT__", str(len(pictures))).replace("__GALLERY__", gallery)
     target = root / "index.html"
     target.write_text(page, encoding="utf-8")
@@ -59,7 +61,9 @@ document.querySelector('#expand').addEventListener('click',()=>document.querySel
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path("build/fluent-v3"))
-    path, count = build(parser.parse_args().root)
+    parser.add_argument("--title", default="BiliFlow 第三轮 Fluent Design 精修")
+    args = parser.parse_args()
+    path, count = build(args.root, title=args.title)
     print(f"{path}: {count} images")
 
 

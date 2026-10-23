@@ -99,6 +99,7 @@ class ApplicationLifecycle(QObject):
                 self.window.remember_close_action(WindowCloseAction.QUIT)
 
     def hide_window(self):
+        self.window.flush_window_state()
         self._restore_state = self.window.windowState() & ~Qt.WindowMinimized
         self.window.hide()
         if self.tray and not self._tray_notified:

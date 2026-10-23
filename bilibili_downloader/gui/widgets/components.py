@@ -6,10 +6,12 @@ from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication,
     QBoxLayout,
+    QDialogButtonBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMenu,
     QMessageBox,
     QPushButton,
@@ -221,17 +223,47 @@ class ActionBar(GlassFrame):
         self.row.setSpacing(16)
 
 
+class ReadOnlyPath(QLineEdit):
+    """Selectable full path, with a whole-value copy action even when clipped."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("FooterPath")
+        self.setReadOnly(True)
+        self.setFixedHeight(22)
+        self.setMinimumWidth(0)
+        self.setAccessibleName("完整保存目录")
+        self._full_text = ""
+
+    def set_full_text(self, text):
+        if text == self.text():
+            return
+        self._full_text = text
+        self.setText(text)
+        self.setToolTip(text)
+        self.setCursorPosition(0)
+
+    def contextMenuEvent(self, event):
+        menu = self.createStandardContextMenu()
+        menu.addSeparator()
+        menu.addAction("复制完整路径", lambda: QApplication.clipboard().setText(self.text().removeprefix("保存至 ")))
+        menu.exec(event.globalPos())
+        menu.deleteLater()
+
+
 class OutputActionBar(ActionBar):
     """Shared fixed output confirmation card for single and batch downloads."""
 
     edit_requested = Signal()
     submit_requested = Signal()
+    directory_requested = Signal()
 
     def __init__(self, status="待解析", parent=None):
         super().__init__(parent)
         self.setObjectName("OutputActionBar")
         self.setAccessibleName("下载输出与队列操作")
         row = self.row
+        row.setContentsMargins(16, 8, 16, 8)
         copy = QVBoxLayout()
         copy.setSpacing(4)
         heading = QHBoxLayout()
@@ -245,9 +277,17 @@ class OutputActionBar(ActionBar):
         self.specs.setObjectName("MetaLabel")
         heading.addWidget(self.specs, 1)
         copy.addLayout(heading)
-        self.directory = ElidedLabel()
-        self.directory.setObjectName("MetaLabel")
-        copy.addWidget(self.directory)
+        path_row = QHBoxLayout()
+        path_row.setSpacing(8)
+        self.directory = ReadOnlyPath()
+        path_row.addWidget(self.directory, 1)
+        self.directory_button = QPushButton("修改目录")
+        self.directory_button.setObjectName("TextButton")
+        self.directory_button.setFixedHeight(32)
+        self.directory_button.setFocusPolicy(Qt.StrongFocus)
+        self.directory_button.clicked.connect(self.directory_requested.emit)
+        path_row.addWidget(self.directory_button)
+        copy.addLayout(path_row)
         row.addLayout(copy, 1)
         self.actions = QHBoxLayout()
         self.actions.setSpacing(8)
@@ -256,6 +296,7 @@ class OutputActionBar(ActionBar):
         self.edit_button.setObjectName("OutputSecondaryButton")
         self.edit_button.setCursor(Qt.PointingHandCursor)
         self.edit_button.setAutoDefault(False)
+        self.edit_button.setFocusPolicy(Qt.StrongFocus)
         self.edit_button.clicked.connect(self.edit_requested.emit)
         self.actions.addWidget(self.edit_button)
         self.primary_button = QPushButton("加入下载队列")
@@ -263,6 +304,7 @@ class OutputActionBar(ActionBar):
         self.primary_button.setFixedHeight(44)
         self.primary_button.setMinimumWidth(128)
         self.primary_button.setAutoDefault(False)
+        self.primary_button.setFocusPolicy(Qt.StrongFocus)
         self.primary_button.setCursor(Qt.PointingHandCursor)
         self.primary_button.setEnabled(False)
         self.primary_button.clicked.connect(self.submit_requested.emit)
@@ -443,7 +485,8 @@ class ResponsiveSplit(QWidget):
         self.row.addWidget(second, 2, Qt.AlignTop)
 
     def resizeEvent(self, event):
-        wide = event.size().width() >= UI_METRICS.output_split_width
+        from bilibili_downloader.gui.layout_policy import output_side_by_side
+        wide = output_side_by_side(event.size().width())
         self.row.setDirection(QBoxLayout.LeftToRight if wide else QBoxLayout.TopToBottom)
         self.row.setStretch(0, 3 if wide else 0)
         self.row.setStretch(1, 2 if wide else 0)
@@ -519,9 +562,8 @@ class TaskDetailPanel(SectionCard):
         heading.addWidget(self.status)
         self.body.addLayout(heading)
         self.specs = ElidedLabel()
-        self.specs.setObjectName("MetaLabel")
-        self.path = ElidedLabel()
-        self.path.setObjectName("MetaLabel")
+        self.specs.setObjectName("DetailValue")
+        self.path = ReadOnlyPath()
         self.diagnostics = ElidedLabel()
         self.diagnostics.setObjectName("MetaLabel")
         self.body.addWidget(self.specs)
@@ -543,7 +585,7 @@ class TaskDetailPanel(SectionCard):
         self.path.set_full_text(f"保存位置：{path}" if path else "保存位置尚未生成")
         self.diagnostics.set_full_text(diagnostics.replace("\n", " · "))
         self.diagnostics.setVisible(bool(diagnostics))
-        self.diagnostics.setProperty("tone", tone)
+        self.diagnostics.setProperty("tone", tone if tone in ("warning", "danger") else "muted")
         repolish(self.diagnostics)
         self._full_text = "\n".join(filter(None, (title, status, specs, f"保存位置：{path}" if path else "", diagnostics)))
 
@@ -569,7 +611,17 @@ class MessageBox(QMessageBox):
         self.setWindowTitle(title)
         self.setTextFormat(Qt.RichText if rich_text else Qt.PlainText)
         self.setText(title)
-        self.setInformativeText(text)
+        if len(text) > 700 or text.count("\n") > 12:
+            self.setInformativeText("完整信息可在下方选择、复制。")
+            from PySide6.QtWidgets import QTextEdit
+            self.setDetailedText(text)
+            self.reading_area = self.findChild(QTextEdit)
+            self.reading_area.setMinimumWidth(360)
+            self.reading_area.setFixedHeight(200)
+            self.reading_area.setAccessibleName("完整信息")
+            self._reader_opened = False
+        else:
+            self.setInformativeText(text)
         self.setTextInteractionFlags(
             Qt.TextSelectableByMouse | Qt.LinksAccessibleByMouse
         )
@@ -603,6 +655,20 @@ class MessageBox(QMessageBox):
         for button in self.buttons():
             repolish(button)
         super().showEvent(event)
+        self._layout_reading_area()
+
+    def _layout_reading_area(self):
+        if not hasattr(self, "reading_area"):
+            return
+        buttons = self.findChild(QDialogButtonBox)
+        for button in buttons.buttons():
+            if buttons.buttonRole(button) == QDialogButtonBox.ActionRole:
+                if not self._reader_opened:
+                    self._reader_opened = True
+                    button.click()
+                    button.clicked.connect(lambda: button.setText("收起详情" if self.reading_area.isVisible() else "展开详情"))
+                button.setText("收起详情" if self.reading_area.isVisible() else "展开详情")
+                break
 
     def _sync_icon(self):
         p = palette()
@@ -614,6 +680,8 @@ class MessageBox(QMessageBox):
     def changeEvent(self, event):
         if event.type() == QEvent.StyleChange and hasattr(self, "_tone"):
             self._sync_icon()
+            if self.isVisible():
+                self._layout_reading_area()
         super().changeEvent(event)
 
 
@@ -717,6 +785,7 @@ class FieldRow(QWidget):
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(4)
         row = QVBoxLayout() if stacked else QHBoxLayout()
+        self._field_layout = row
         row.setSpacing(8 if stacked else 12)
         self.label = QLabel(label)
         self.label.setObjectName("FieldLabel")
@@ -730,6 +799,7 @@ class FieldRow(QWidget):
         column.addLayout(row)
         self._error_row = QWidget()
         errors = QHBoxLayout(self._error_row)
+        self._errors_layout = errors
         errors.setContentsMargins(0 if stacked else 104, 0, 0, 0)
         self.error = QLabel()
         self.error.setObjectName("FieldError")
@@ -738,6 +808,13 @@ class FieldRow(QWidget):
         errors.addWidget(self.error)
         column.addWidget(self._error_row)
         self._error_row.hide()
+
+    def set_stacked(self, stacked):
+        self._field_layout.setDirection(QBoxLayout.TopToBottom if stacked else QBoxLayout.LeftToRight)
+        self._field_layout.setSpacing(8)
+        self.label.setMinimumWidth(0 if stacked else 76)
+        self.label.setMaximumWidth(16777215 if stacked else 76)
+        self._errors_layout.setContentsMargins(0 if stacked else 84, 0, 0, 0)
 
     def set_error(self, message):
         self.error.setText(message)

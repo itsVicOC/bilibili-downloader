@@ -321,24 +321,25 @@ class SettingsDialog(QDialog):
         self._controls["live.recorder_path"] = self._recorder_path
         self._recorder_path.setPlaceholderText("full 包自动检测；lite 包选择配套引擎")
         self._probe_notices = {}
+        engines = SectionCard("工具路径")
+        tools.addWidget(engines)
         for kind, text in (("ffmpeg", "检查 FFmpeg"), ("recorder", "检查录制引擎")):
             key = "ffmpeg_path" if kind == "ffmpeg" else "live.recorder_path"
             entry = self._controls[key]
-            engines = SectionCard("FFmpeg" if kind == "ffmpeg" else "录制引擎")
-            self._field(key, engines, "可执行文件", self._path_row(entry, False))
+            path_row = self._path_row(entry, False)
+            self._field(key, engines, "FFmpeg" if kind == "ffmpeg" else "录制引擎", path_row)
             button = QPushButton("检测")
             button.setAccessibleName(text)
             button.setObjectName("TextButton")
             button.clicked.connect(
                 lambda _checked=False, k=kind, b=button: self._probe(k, b)
             )
-            engines.header.addWidget(button)
-            engines.body.addWidget(help_text(f"{entry.placeholderText()}。检测使用当前路径，不会保存设置。"))
+            path_row.layout().addWidget(button)
             notice = Notice()
             self._probe_notices[kind] = notice
             entry.textChanged.connect(lambda _text, n=notice: n.set_message(""))
             engines.body.addWidget(notice)
-            tools.addWidget(engines)
+        engines.body.addWidget(help_text("检测使用当前草稿路径，不会自动保存设置。"))
         self._probe_notice = self._probe_notices["ffmpeg"]
         storage = SectionCard("断点缓存")
         storage.body.addWidget(

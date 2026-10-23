@@ -53,7 +53,7 @@ jobs:
           QT_QPA_PLATFORM: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
         run: |
           python -m scripts.configure_ui_test_display
-          python -X faulthandler -m pytest -vv -s --maxfail=1 tests/test_caption_controls.py tests/test_release_notes.py tests/test_theme.py::test_theme_applies_same_font_to_body_and_native_bold_labels tests/test_ui_refresh.py::test_initial_focus_is_the_source_field tests/test_fluent_design.py tests/test_fluent_refinement.py
+          python -X faulthandler -m pytest -vv -s --maxfail=1 tests/test_caption_controls.py tests/test_release_notes.py tests/test_theme.py::test_theme_applies_same_font_to_body_and_native_bold_labels tests/test_ui_refresh.py::test_initial_focus_is_the_source_field tests/test_fluent_design.py tests/test_fluent_refinement.py tests/test_window_state.py tests/test_fluent_window_polish.py
           for scene in chrome ui-refresh appearance-controls glass refinement; do
             python -m scripts.capture_docs_screenshots --native --physical-pixels "--${scene}-only" --output-dir "build/ui-parity/$scene"
           done

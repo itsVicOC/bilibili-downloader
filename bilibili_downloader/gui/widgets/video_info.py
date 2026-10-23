@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from bilibili_downloader.gui.layout_policy import COMFORTABLE
 from bilibili_downloader.gui.widgets.components import StatusBadge, line_icon
 from bilibili_downloader.gui.widgets.glass_surface import GlassWidget
 from bilibili_downloader.utils.network import BILIBILI_RESOURCE_HOSTS, trusted_https_url
@@ -28,6 +29,7 @@ class _AspectCoverLabel(QLabel):
         super().__init__(parent)
         self._source = QPixmap()
         self._expand = False
+        self._density = COMFORTABLE
         self.setMinimumSize(160, 90)
         self.setMaximumSize(176, 99)
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
@@ -36,13 +38,23 @@ class _AspectCoverLabel(QLabel):
         return True
 
     def heightForWidth(self, width: int) -> int:
+        if self._density.compact:
+            return self._density.cover_height
         return max(90, min(99, round(width * 9 / 16)))
 
     def sizeHint(self) -> QSize:
-        return QSize(176, 99)
+        return QSize(self._density.cover_width, self._density.cover_height)
 
     def minimumSizeHint(self) -> QSize:
+        if self._density.compact:
+            return self.sizeHint()
         return QSize(160, 90)
+
+    def set_density(self, density):
+        self._density = density
+        self.setMinimumSize(density.cover_width if density.compact else 160, density.cover_height if density.compact else 90)
+        self.setMaximumSize(density.cover_width, density.cover_height)
+        self.updateGeometry()
 
     def set_source_pixmap(self, pixmap: QPixmap, *, expand: bool = False) -> None:
         self._source = pixmap
@@ -103,12 +115,25 @@ class _TwoLineTitle(QLabel):
         super().__init__(text, parent)
         self.setTextFormat(Qt.PlainText)
         self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        self.compact = False
 
     def sizeHint(self):
-        return QSize(280, self.fontMetrics().lineSpacing() * 2)
+        return QSize(280, self.heightForWidth(self.width()))
 
     def minimumSizeHint(self):
-        return QSize(0, self.fontMetrics().lineSpacing() * 2)
+        return QSize(0, self.fontMetrics().lineSpacing() * (1 if self.compact else 2))
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, width):
+        lines = 1 if self.compact and self.fontMetrics().horizontalAdvance(self.text()) <= width else 2
+        return self.fontMetrics().lineSpacing() * lines
+
+    def resizeEvent(self, event):
+        if self.compact:
+            self.updateGeometry()
+        super().resizeEvent(event)
 
     def paintEvent(self, event):
         text = " ".join(self.text().splitlines())
@@ -252,6 +277,14 @@ class VideoInfoWidget(GlassWidget):
             QBoxLayout.TopToBottom if event.size().width() < 380 else QBoxLayout.LeftToRight
         )
         super().resizeEvent(event)
+
+    def set_density(self, density):
+        padding = density.card_padding
+        self.layout().setContentsMargins(padding, padding, padding, padding)
+        self._identity_layout.setSpacing(12 if density.compact else 16)
+        self._cover_label.set_density(density)
+        self._title_label.compact = density.compact
+        self._title_label.updateGeometry()
 
     def set_video_info(self, info):
         """Update display with video info."""

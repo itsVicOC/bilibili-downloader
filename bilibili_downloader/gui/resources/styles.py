@@ -512,6 +512,9 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
     QStatusBar {{ background: {p.sidebar}; color: {p.muted}; border-top: 1px solid {p.divider}; }}
     QStatusBar::item {{ border: none; }}
+    QLineEdit#FooterPath {{ background: transparent; border: 1px solid transparent;
+        border-radius: 4px; padding: 0 2px; min-height: 20px; font-size: 10.5pt; }}
+    QLineEdit#FooterPath:focus {{ border-color: {p.focus}; }}
     QMenu {{ background: {p.popup}; color: {p.text}; border: 1px solid {p.popup_border}; border-radius: {m.radius}px; padding: 6px; }}
     QMenu::item {{ padding: 9px 18px; border: 1px solid transparent; border-radius: 6px; }}
     QMenu::item:selected {{ background: {p.subtle_selection}; color: {p.active_text}; }}
