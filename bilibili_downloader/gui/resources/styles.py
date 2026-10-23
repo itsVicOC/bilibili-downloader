@@ -118,6 +118,10 @@ class ThemePalette:
         return blend_color(self.control_fill, self.text, .08)
 
     @property
+    def row_hover(self):
+        return blend_color(self.surface, self.text, .04)
+
+    @property
     def row_divider(self):
         return blend_color(self.surface, self.divider, .28)
 
@@ -479,6 +483,12 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QStackedWidget[customBackground="true"] QTreeWidget::item:hover {{ background: {p.surface_raised}; }}
     QStackedWidget[customBackground="true"] QTableWidget::item:selected,
     QStackedWidget[customBackground="true"] QTreeWidget::item:selected {{ background: {p.selection}; color: {p.text}; }}
+    QTableWidget[wholeRowHover="true"]::item:hover, QTreeWidget[wholeRowHover="true"]::item:hover,
+    QStackedWidget[customBackground="true"] QTableWidget[wholeRowHover="true"]::item:hover,
+    QStackedWidget[customBackground="true"] QTreeWidget[wholeRowHover="true"]::item:hover {{ background: {p.row_hover}; }}
+    QTableWidget[wholeRowHover="true"]::item:selected, QTreeWidget[wholeRowHover="true"]::item:selected,
+    QStackedWidget[customBackground="true"] QTableWidget[wholeRowHover="true"]::item:selected,
+    QStackedWidget[customBackground="true"] QTreeWidget[wholeRowHover="true"]::item:selected {{ background: {p.selection}; color: {p.text}; }}
     QHeaderView::section {{ background: {p.table_header}; color: {p.muted}; border: none; border-bottom: 1px solid {p.card_border}; padding: 0 10px; min-height: 40px; font-size: 9pt; }}
     QTableCornerButton::section {{ background: {p.surface_raised}; border: none; }}
     QProgressBar {{ min-height: 16px; max-height: 16px; border: none; border-radius: 5px; background: {p.surface_raised}; color: {p.text}; font-size: 9pt; text-align: center; }}
@@ -512,9 +522,17 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
     QStatusBar {{ background: {p.sidebar}; color: {p.muted}; border-top: 1px solid {p.divider}; }}
     QStatusBar::item {{ border: none; }}
+    #OutputActionBar QPushButton#TextButton {{ min-height: 30px; max-height: 30px; padding: 0 8px; }}
     QLineEdit#FooterPath {{ background: transparent; border: 1px solid transparent;
         border-radius: 4px; padding: 0 2px; min-height: 20px; font-size: 10.5pt; }}
     QLineEdit#FooterPath:focus {{ border-color: {p.focus}; }}
+    QFrame#ClipboardPrompt {{ background: {p.popup}; border: 1px solid {p.popup_border}; border-radius: {m.card_radius}px; }}
+    QFrame#ClipboardPrompt QPushButton {{ min-height: 30px; max-height: 30px; padding: 0 12px; }}
+    QPushButton#ClipboardResolveButton {{ background: {primary}; color: {primary_text}; border: 1px solid transparent; }}
+    QPushButton#ClipboardResolveButton:hover {{ background: {primary_hover}; }}
+    QPushButton#ClipboardResolveButton:pressed {{ background: {primary_pressed}; }}
+    QPushButton#ClipboardResolveButton:disabled {{ background: {p.control_fill}; color: {p.disabled}; }}
+    QPushButton#ClipboardResolveButton[keyboardFocus="true"]:focus {{ border-color: {p.focus}; }}
     QMenu {{ background: {p.popup}; color: {p.text}; border: 1px solid {p.popup_border}; border-radius: {m.radius}px; padding: 6px; }}
     QMenu::item {{ padding: 9px 18px; border: 1px solid transparent; border-radius: 6px; }}
     QMenu::item:selected {{ background: {p.subtle_selection}; color: {p.active_text}; }}

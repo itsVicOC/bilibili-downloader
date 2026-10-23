@@ -1377,6 +1377,142 @@ def _capture_ui_refresh(app, theme, window):
     _refresh_document_previews("ui-refresh")
 
 
+def _capture_interactions(app, theme, window):
+    """Actual row feedback, history menus and injected clipboard offers, offline."""
+    from PySide6.QtCore import QMimeData, QObject, Signal
+    from PySide6.QtTest import QTest
+
+    from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
+    from bilibili_downloader.gui.clipboard_controller import ClipboardController
+
+    class DemoClipboard(QObject):
+        dataChanged = Signal()
+
+        def __init__(self):
+            super().__init__()
+            self.mime = QMimeData()
+
+        def set(self, value):
+            self.mime.setText(value)
+            self.dataChanged.emit()
+
+        def mimeData(self):
+            return self.mime
+
+    _populate_main_window(window)
+    root = Path(app.property("docsTempRoot"))
+    _populate_live_page(window, root / "interaction-live")
+    clipboard = DemoClipboard()
+    controller = ClipboardController(window, clipboard=clipboard, foreground=lambda: True)
+    source = root / "interaction-contrast.png"
+    image = QImage(480, 320, QImage.Format_RGB32)
+    for y in range(320):
+        for x in range(480):
+            image.setPixelColor(x, y, QColor("#ffffff" if (x // 12 + y // 12) % 2 else "#080825"))
+    image.save(str(source))
+    custom = prepare_background(source)
+    window._background_store.install(custom)
+    checks = []
+
+    def capture(filename, popup=None):
+        _save_widget(app, window, filename, popup=popup)
+        window.show()
+        window.raise_()
+        window.activateWindow()
+        _flush_events(app)
+
+    def hover(view, index):
+        view.clearSelection()
+        _flush_events(app)
+        rect = view.visualRect(index)
+        QTest.mouseMove(view.viewport(), QPoint(30, rect.center().y()))
+        QTest.qWait(60)
+        _flush_events(app)
+        if not view._row_hover.matches(index):
+            raise AssertionError(f"Row hover did not follow actual mouse input: visible={view.isVisible()}, rect={rect}")
+
+    try:
+        for theme_id in ("star_trail", "bilibili_blue"):
+            theme.set_color_theme(theme_id)
+            window._settings.appearance.theme = theme_id
+            for dark in (False, True):
+                theme.apply_theme(dark)
+                mode = "dark" if dark else "light"
+                for width, height in ((900, 640), (1120, 760), (1320, 860)):
+                    clipboard.set("")
+                    controller.check()
+                    window.resize(width, height)
+                    window.show()
+                    _flush_events(app)
+                    for tab, name, view in ((0, "downloads", window._download_list),
+                                            (1, "recording", window._task_page.current),
+                                            (2, "history", window._task_page.history)):
+                        window._show_tasks(tab)
+                        view.clearSelection()
+                        QTest.mouseMove(window, QPoint(12, 80))
+                        capture(f"interaction-{theme_id}-{name}-default-{mode}-{width}.png")
+                        index = view.model().index(0, 0)
+                        hover(view, index)
+                        capture(f"interaction-{theme_id}-{name}-hover-{mode}-{width}.png")
+                        view.setCurrentIndex(index)
+                        capture(f"interaction-{theme_id}-{name}-selected-hover-{mode}-{width}.png")
+                    history = window._task_page.history
+                    history.expandAll()
+                    child = history.topLevelItem(0).child(0)
+                    hover(history, history.indexFromItem(child))
+                    capture(f"interaction-{theme_id}-history-child-hover-{mode}-{width}.png")
+                    history.setCurrentItem(child)
+                    menu = window._task_page.history_menu
+                    owner = window._task_page.history_more
+                    menu.popup(owner.mapToGlobal(QPoint(0, -menu.sizeHint().height())))
+                    capture(f"interaction-{theme_id}-history-menu-{mode}-{width}.png", popup=menu)
+                    menu.hide()
+                    window._show_workspace(0)
+                    window._download_tabs.setCurrentIndex(0)
+                    _flush_events(app)
+                    before = window._workspace_scroll.geometry()
+                    focus = QApplication.focusWidget()
+                    clipboard.set("【分享】BV1GJ411x7h7")
+                    controller.check()
+                    assert QApplication.focusWidget() is focus
+                    capture(f"interaction-{theme_id}-clipboard-{mode}-{width}.png")
+                    assert window._workspace_scroll.geometry() == before
+                    assert controller.prompt.geometry().right() < window._workspace_pages.width() - 14
+                    window._resolve_btn.setEnabled(False)
+                    controller.refresh_prompt()
+                    capture(f"interaction-{theme_id}-clipboard-busy-{mode}-{width}.png")
+                    window._resolve_btn.setEnabled(True)
+                    clipboard.set("ep123\nss456")
+                    controller.check()
+                    capture(f"interaction-{theme_id}-clipboard-batch-{mode}-{width}.png")
+                    clipboard.set("")
+                    controller.check()
+                    checks.append({"theme": theme_id, "dark": dark, "size": [width, height], "hover": True, "clipboard_layout_stable": True})
+                window._show_tasks(2)
+                assert window._live_controller.remove_history("demo-recording")
+                capture(f"interaction-{theme_id}-history-removed-{mode}.png")
+                assert window._live_controller.undo_remove_history()
+                capture(f"interaction-{theme_id}-history-restored-{mode}.png")
+                for kind, reference in (("builtin", BUILTIN_BACKGROUNDS[0].reference), ("contrast", custom.reference)):
+                    window.resize(1120, 760)
+                    window._settings.appearance.backgrounds.tasks = reference
+                    window._settings.appearance.backgrounds.download = reference
+                    window._show_tasks(0)
+                    hover(window._download_list, window._download_list.model().index(0, 0))
+                    capture(f"interaction-{theme_id}-hover-{kind}-{mode}.png")
+                    window._show_workspace(0)
+                    clipboard.set("av170001")
+                    controller.check()
+                    capture(f"interaction-{theme_id}-clipboard-{kind}-{mode}.png")
+                    clipboard.set("")
+                    controller.check()
+                window._settings.appearance.backgrounds.tasks = ""
+                window._settings.appearance.backgrounds.download = ""
+        (OUTPUT_DIR / "interaction-checks.json").write_text(json.dumps(checks, ensure_ascii=False, indent=2), encoding="utf-8")
+    finally:
+        controller.dispose()
+
+
 def _capture_native_chrome(app, theme, window):
     """Capture the desktop compositor, including the native frame boundaries.
 
@@ -1576,6 +1712,7 @@ def main(argv=None) -> int:
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
     parser.add_argument("--color-theme", choices=("star_trail", "bilibili_blue"), default="star_trail", help="Color theme for the complete workspace and dialog matrix")
     parser.add_argument("--ui-refresh-only", action="store_true", help="Capture navigation, download cards, modes and account states")
+    parser.add_argument("--interactions-only", action="store_true", help="Capture row hover, history removal and isolated clipboard prompts")
     parser.add_argument("--refinement-only", action="store_true", help="Capture audio, long-content, failure, draft and filtered-task states")
     parser.add_argument("--chrome-only", action="store_true", help="Check native captions using desktop compositor captures")
     parser.add_argument("--glass-only", action="store_true", help="Capture glass wallpaper and complete download guidance in both modes")
@@ -1654,6 +1791,11 @@ def main(argv=None) -> int:
             return 0
         if args.glass_only:
             _capture_glass(app, theme, window)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
+        if args.interactions_only:
+            _capture_interactions(app, theme, window)
             window._live_controller.shutdown()
             window.request_quit(confirmed=True)
             return 0

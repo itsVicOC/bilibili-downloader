@@ -74,6 +74,8 @@
 
 `v0.8.9b3`（0.8.9 beta 3）基于 `codex/fluent-design-polish` 分支完成新一轮 [Fluent Design 精修](docs/FLUENT_DESIGN.md)：横向作品摘要、响应式规格和附加内容、矮窗口紧凑布局、统一设置与任务操作，并自动记住主窗口大小、位置和最大化状态。保留粉紫／青蓝、小流、粉底白字、Markdown 更新说明及 Windows 自绘窗口按钮。试用请查看 [beta 3 预发布版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9b3)；自动更新需选择包含预发布版的通道。稳定版仍为 `v0.8.8`。[更新日志](CHANGELOG.md#v089b3---2026-10-23) · [第三轮验收](docs/FLUENT_V3_VALIDATION.md) · [第四轮验收与窗口记忆](docs/FLUENT_V4_VALIDATION.md)。
 
+开发分支在 beta 3 之后新增目录按钮邻近布局、任务整行悬停、录制历史整场移除与撤销，以及默认开启、需确认的前台剪贴板识别。尚未发布新版安装包，详见[第五轮交互验收](docs/FLUENT_V5_VALIDATION.md)。
+
 ## 下载与安装
 
 访问 **[BiliFlow 官网 · 1008.si](https://1008.si/)** 了解项目，或直接从 **[GitHub Releases 下载最新正式版](https://github.com/itsVicOC/bilibili-downloader/releases/latest)**。想体验 beta 功能，可查看[全部版本](https://github.com/itsVicOC/bilibili-downloader/releases)；预发布版会带有 `Pre-release` 标记。

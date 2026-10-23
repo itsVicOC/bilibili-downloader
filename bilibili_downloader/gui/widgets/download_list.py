@@ -33,6 +33,7 @@ from bilibili_downloader.gui.widgets.background_readability import (
     wallpaper_active,
 )
 from bilibili_downloader.gui.widgets.components import PopupMenu, line_icon, palette
+from bilibili_downloader.gui.widgets.row_hover import RowHoverTable, row_option
 
 ACTION_BUTTON_MIN_WIDTH = 60
 ACTION_BUTTON_GAP = 6
@@ -55,7 +56,7 @@ class _SpecificationDelegate(QStyledItemDelegate):
         self.initStyleOption(opt, index)
         text, opt.text = opt.text, ""
         style = opt.widget.style() if opt.widget else QApplication.style()
-        style.drawControl(QStyle.CE_ItemViewItem, opt, painter, opt.widget)
+        style.drawControl(QStyle.CE_ItemViewItem, row_option(opt, index), painter, opt.widget)
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing)
         p = palette()
@@ -132,7 +133,7 @@ class _StatusDelegate(QStyledItemDelegate):
         style = opt.widget.style() if opt.widget else QApplication.style()
         content = style.subElementRect(QStyle.SE_ItemViewItemText, opt, opt.widget)
         text, opt.text = opt.text, ""
-        style.drawControl(QStyle.CE_ItemViewItem, opt, painter, opt.widget)
+        style.drawControl(QStyle.CE_ItemViewItem, row_option(opt, index), painter, opt.widget)
         p = palette()
         color = {"active": p.active_text, "success": p.success, "warning": p.warning,
                  "danger": p.danger, "muted": p.muted}.get(tone, p.text)
@@ -254,7 +255,7 @@ def _wrap_btns(*widgets):
     return container
 
 
-class DownloadListWidget(QTableWidget):
+class DownloadListWidget(RowHoverTable):
     """Table showing download queue with progress bars and cancel buttons.
 
     Uses stable download IDs internally so row deletions do not corrupt

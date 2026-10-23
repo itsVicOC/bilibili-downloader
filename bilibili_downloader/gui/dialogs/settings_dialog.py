@@ -182,6 +182,12 @@ class SettingsDialog(QDialog):
             "output_dir", paths, "保存目录", self._path_row(self._output_dir, True)
         )
         download.addWidget(paths)
+        recognition = SectionCard("来源识别")
+        self._clipboard_check = QCheckBox("前台识别剪贴板中的 B 站内容")
+        self._controls["clipboard_monitor_enabled"] = self._clipboard_check
+        recognition.body.addWidget(self._clipboard_check)
+        recognition.body.addWidget(help_text("启动和切回前台时也会检查已复制的内容；确认后才联网解析。"))
+        download.addWidget(recognition)
         formats = SectionCard("默认媒体规格")
         self._output_mode_combo = self._combo(
             "default_output_mode",

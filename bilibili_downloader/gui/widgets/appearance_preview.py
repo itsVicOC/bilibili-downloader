@@ -9,6 +9,7 @@ from bilibili_downloader.gui.layout_policy import (
     density_for_height,
     field_columns,
     output_side_by_side,
+    path_preferred_width,
 )
 from bilibili_downloader.gui.resources.styles import (
     UI_METRICS,
@@ -350,7 +351,10 @@ class WorkspacePreview(QWidget):
             card(footer, True)
             text(footer.adjusted(16, 0, -156, -20 if self.workspace == "download" else 0), "所有修改已保存" if self.workspace == "settings" else "已选 1 项 · 当前输出设置", protected=False)
             if self.workspace == "download":
-                text(QRectF(footer.left() + 16, footer.top() + 36, footer.width() - 180, 24), "保存至 ~/Downloads/BiliFlow · 修改目录", muted=True, protected=False)
+                path = "保存至 ~/Downloads/BiliFlow"
+                path_width = min(path_preferred_width(painter.fontMetrics(), path), max(32, footer.width() - 300))
+                text(QRectF(footer.left() + 16, footer.top() + 36, path_width, 24), path, muted=True, protected=False)
+                text(QRectF(footer.left() + 16 + path_width + 8, footer.top() + 36, 80, 24), "修改目录", muted=True, protected=False)
             button_height = 32 if self.workspace == "settings" else 44
             control(QRectF(footer.right() - 144, footer.center().y() - button_height / 2, 128, button_height), "保存设置" if self.workspace == "settings" else "停止本场" if self.workspace == "live" else "加入下载队列", True)
         painter.end()

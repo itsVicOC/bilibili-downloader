@@ -76,6 +76,8 @@ Downloads, live recording, and settings share consistent footer cards. Tabs and 
 
 `v0.8.9b3` (0.8.9 beta 3) continues the [Fluent Design polish](docs/FLUENT_DESIGN.md) on `codex/fluent-design-polish`: horizontal media summaries, responsive specifications and extras, compact layouts for shorter windows, consistent settings and task actions, and automatic restoration of the main window's size, position, and maximized state. The pink/purple and blue themes, Xiao Liu, pink buttons with white labels, Markdown release notes, and custom Windows caption controls remain available. Try the [beta 3 prerelease](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9b3), or select the update channel that includes prereleases. The stable release remains `v0.8.8`. See the [changelog](CHANGELOG.md#v089b3---2026-10-23), [third-pass validation](docs/FLUENT_V3_VALIDATION.md), and [fourth-pass validation and window restoration](docs/FLUENT_V4_VALIDATION.md) (Chinese).
 
+The development branch adds adjacent path actions, task-wide row hover, recording-history removal with undo, and foreground clipboard recognition that requires confirmation. These additions are not in the published beta 3 packages. See the [fifth-pass interaction validation](docs/FLUENT_V5_VALIDATION.md) (Chinese).
+
 ## Download and install
 
 Visit the **[BiliFlow website · 1008.si](https://1008.si/)** or **[download the latest stable release from GitHub](https://github.com/itsVicOC/bilibili-downloader/releases/latest)**. To try beta features, browse [all releases](https://github.com/itsVicOC/bilibili-downloader/releases) and look for the `Pre-release` label.

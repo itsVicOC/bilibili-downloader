@@ -4,6 +4,8 @@
 
 项目入口：[官方网站 · 1008.si](https://1008.si/) · [中文 README](../README.md) · [English README](../README.en.md)。详细指南目前以简体中文为主。
 
+`codex/fluent-design-polish` 分支在 beta 3 之后增加目录按钮邻近布局、任务整行悬停、录制历史整场移除与撤销、前台剪贴板识别。本轮保留版本号，尚未发布安装包；功能说明与截图见[第五轮验收](FLUENT_V5_VALIDATION.md)，不能将其视为现有 beta 3 安装包的功能。
+
 `v0.8.9b3`（0.8.9 beta 3）基于 `codex/fluent-design-polish` 分支，包含第三、四轮 Fluent 精修、矮窗口紧凑布局和主窗口大小／位置／最大化状态记忆。截图、前后对比及验证范围见[第三轮验收](FLUENT_V3_VALIDATION.md)和[第四轮验收](FLUENT_V4_VALIDATION.md)，安装包见 [beta 3 预发布版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9b3)。
 
 `v0.8.9b2`（0.8.9 beta 2）基于 `codex/fluent-design-polish` 分支提供第二轮 Fluent 精修。Windows 自绘按钮、Markdown 更新说明、背景手部与截图记录见[第二轮验收](FLUENT_V2_VALIDATION.md)和[背景手部复核](BACKGROUND_HAND_REVIEW.md)。

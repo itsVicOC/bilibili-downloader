@@ -30,3 +30,7 @@ def output_side_by_side(width):
 
 def field_columns(width):
     return 2 if width >= UI_METRICS.download_field_column_width * 2 else 1
+
+
+def path_preferred_width(font_metrics, text):
+    return font_metrics.horizontalAdvance(text) + 8

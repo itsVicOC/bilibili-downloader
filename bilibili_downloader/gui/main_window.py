@@ -62,6 +62,10 @@ from bilibili_downloader.core.models import (
 from bilibili_downloader.core.task_repository import TaskRepository
 from bilibili_downloader.core.update_protocol import UpdateError, atomic_json
 from bilibili_downloader.core.updater import RELEASES_PAGE
+from bilibili_downloader.gui.clipboard_controller import (
+    ClipboardController,
+    clipboard_access_allowed,
+)
 from bilibili_downloader.gui.dialogs.batch_dialog import BatchDialog
 from bilibili_downloader.gui.dialogs.login_dialog import LoginDialog
 from bilibili_downloader.gui.dialogs.settings_dialog import SettingsDialog
@@ -115,6 +119,10 @@ from bilibili_downloader.gui.widgets.task_page import TaskPage
 from bilibili_downloader.gui.widgets.video_info import VideoInfoWidget
 from bilibili_downloader.gui.widgets.workspace_background import WorkspaceStack
 from bilibili_downloader.gui.window_chrome import WindowChrome
+from bilibili_downloader.utils.clipboard_sources import (
+    ClipboardCandidate,
+    extract_clipboard_sources,
+)
 from bilibili_downloader.utils.config import ConfigManager
 from bilibili_downloader.utils.validators import is_bilibili_url
 
@@ -124,7 +132,7 @@ logger = logging.getLogger(__name__)
 class MainWindow(QMainWindow):
     """Main application window."""
 
-    def __init__(self, config_manager=None, task_repository=None, live_controller=None, *, update_service=None, startup_paused=False, theme_manager=None, desktop_platform=None, remember_window=False):
+    def __init__(self, config_manager=None, task_repository=None, live_controller=None, *, update_service=None, startup_paused=False, theme_manager=None, desktop_platform=None, remember_window=False, monitor_clipboard=False):
         super().__init__()
         self.setWindowTitle("BiliFlow · 星轨收藏站")
         self.setMinimumSize(900, 640)
@@ -181,6 +189,7 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._setup_menu()
         self._setup_status_bar()
+        self._live_controller.history_feedback.connect(self._history_feedback)
         self._live_controller.message_changed.disconnect(self._live_page._notice.set_message)
         self._live_controller.message_changed.disconnect(self._task_page.notice.set_message)
         self._live_controller.message_changed.connect(self._present_live_message)
@@ -196,6 +205,7 @@ class MainWindow(QMainWindow):
             self._window_state = WindowStateStore(self, self._config.data_dir / "ui-state.json")
         self._set_shell_enabled(not startup_paused)
         self._restore_tasks()
+        self._clipboard = ClipboardController(self) if monitor_clipboard else None
         if not startup_paused:
             # Native styles choose different first focusable controls. Start
             # both desktops at the source field so paste works immediately.
@@ -952,7 +962,7 @@ class MainWindow(QMainWindow):
             "redo": writable and history.isRedoAvailable(),
             "cut": writable and selected,
             "copy": selected,
-            "paste": writable and bool(QApplication.clipboard().text()),
+            "paste": writable and clipboard_access_allowed(self) and bool(QApplication.clipboard().text()),
             "selectAll": editable and bool(editor.text() if line else editor.toPlainText()),
         }
         for name, enabled in states.items():
@@ -990,6 +1000,8 @@ class MainWindow(QMainWindow):
     def resume_startup(self):
         self._startup_paused = False
         self._set_shell_enabled(True)
+        if self._clipboard:
+            self._clipboard.schedule()
         self._live_controller.start_background()
         for item, task_id in self._startup_downloads:
             self._start_download(item, task_id)
@@ -1155,6 +1167,13 @@ class MainWindow(QMainWindow):
         if message and not inline:
             self._status_bar.showMessage(message)
 
+    def _history_feedback(self, message, undo):
+        self._task_page.notice.set_message("")
+        if undo:
+            self._status_bar.show_feedback(message, "撤销", self._live_controller.undo_remove_history)
+        else:
+            self._status_bar.showMessage(message)
+
     def _refresh_activity(self, *_args):
         if not hasattr(self, "_status_bar"):
             return
@@ -1241,7 +1260,43 @@ class MainWindow(QMainWindow):
         elif recovered:
             self._status_bar.showMessage(f"已恢复 {recovered} 个中断任务，可继续下载")
 
-    def _on_resolve_clicked(self):
+    def _clipboard_resolution_busy(self):
+        return not self._resolve_btn.isEnabled() or self._batch_page._busy
+
+    def _clipboard_target_occupied(self, target):
+        single = bool(self._url_input.text().strip() or self._current_video)
+        batch = bool(self._batch_page._url_text.toPlainText().strip() or self._batch_page._resolved_items)
+        if target == "batch":
+            return batch
+        if target == "auto":
+            return single or batch
+        return single
+
+    def _clipboard_source_is_current(self, candidate):
+        single = extract_clipboard_sources(self._url_input.text())
+        if (candidate.target != "batch" and single and single.fingerprint == candidate.fingerprint
+                and (not self._resolve_btn.isEnabled() or self._current_video is not None)):
+            return True
+        batch = self._batch_page
+        existing = extract_clipboard_sources(batch._url_text.toPlainText())
+        return bool(candidate.target == "batch" and existing and existing.fingerprint == candidate.fingerprint
+                    and (batch._busy or (batch._resolved_source == batch._url_text.toPlainText() and batch._resolved_items)))
+
+    def _accept_clipboard_source(self, candidate):
+        if self._clipboard_resolution_busy() or not self._show_workspace(0):
+            return False
+        if candidate.target == "batch":
+            self._download_tabs.setCurrentIndex(1)
+            self._batch_page._url_text.setPlainText("\n".join(candidate.sources))
+            self._batch_page._collapse_btn.setChecked(False)
+            self._batch_page._start_resolve()
+        else:
+            self._download_tabs.setCurrentIndex(0)
+            self._url_input.setText(candidate.sources[0])
+            self._on_resolve_clicked(from_clipboard=True)
+        return True
+
+    def _on_resolve_clicked(self, _checked=False, *, from_clipboard=False):
         """Resolve URL and show video info."""
         if not self._resolve_btn.isEnabled():
             return
@@ -1271,6 +1326,7 @@ class MainWindow(QMainWindow):
             return
 
         self._resolve_request_url = url
+        self._clipboard_resolve_source = url if from_clipboard else None
         self._current_video = None
         self._download_btn.setEnabled(False)
         self._refresh_download_summary()
@@ -1291,11 +1347,19 @@ class MainWindow(QMainWindow):
         self._service_pool.start(self._resolve_runner)
 
     def _on_resolve_route(self, target, source):
+        clipboard_route = getattr(self, "_clipboard_resolve_source", None) == self._resolve_request_url
+        self._clipboard_resolve_source = None
         self._resolve_btn.setEnabled(True)
         self._resolve_btn.setText("开始解析")
         self._video_info._state_label.setText("等待解析")
         if self._resolve_request_url != self._url_input.text().strip():
             self._resolve_notice.set_message("来源已修改，请重新解析。", "warning")
+            return
+        if clipboard_route:
+            if target == "batch":
+                self._accept_clipboard_source(ClipboardCandidate((source,), "batch"))
+            else:
+                self._resolve_notice.set_message("此短链指向直播间，请使用直播录制页面。", "warning")
             return
         self._status_bar.showMessage("已识别来源，请选择对应工作区。")
         self._suggest_source_route(target, "短链已识别为批量来源。" if target == "batch" else "短链已识别为直播间。", source)
@@ -1323,6 +1387,7 @@ class MainWindow(QMainWindow):
     def _on_resolve_success(self, info, video_streams, audio_streams, playurl_ok):
         """Handle successful URL resolution."""
         self._resolve_btn.setEnabled(True)
+        self._clipboard_resolve_source = None
         self._resolve_btn.setText("开始解析")
         if (
             getattr(self, "_resolve_request_url", self._url_input.text().strip())
@@ -1398,6 +1463,7 @@ class MainWindow(QMainWindow):
     def _on_resolve_error(self, error: str):
         """Handle resolution error."""
         self._resolve_btn.setEnabled(True)
+        self._clipboard_resolve_source = None
         self._resolve_btn.setText("开始解析")
         self._status_bar.showMessage("解析失败")
         self._download_btn.setEnabled(False)
@@ -1745,6 +1811,8 @@ class MainWindow(QMainWindow):
         self._live_controller.apply_live_settings(new_settings.live, modes)
         self._live_page.check_engine()
         self._settings_page.load_settings(new_settings, keep_directory_choices=bool(modes))
+        if self._clipboard:
+            self._clipboard.settings_changed()
         self._settings_page._notice.set_message("")
         self._status_bar.showMessage("设置已保存，正在应用房间目录规则…" if modes else "设置已保存")
         return True

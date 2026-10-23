@@ -24,12 +24,21 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def history_removal_reason(session: RecordingSession) -> str:
+    if session.status not in {"completed", "stopped", "failed", "interrupted"}:
+        return "请等待场次结束并完成收尾后再移除记录。"
+    if session.mp4_export and session.mp4_export.status in {"queued", "running"}:
+        return "此场次正在等待或执行导出，完成后可移除记录。"
+    return ""
+
+
 class LiveRepository:
     def __init__(self, path: Path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self.history_revision = 0
+        self._removed_session_ids = set()
         self.invalid_records = []
         self.recovered_database_path = None
         try:
@@ -137,7 +146,39 @@ class LiveRepository:
             session.mp4_export = export
             self._save_session(session)
 
+    def remove_session(self, session_id: str) -> RecordingSession | None:
+        """Remove only the DB record; leave all media and manifests untouched."""
+        with self._lock:
+            with self._db() as db:
+                row = db.execute("SELECT payload FROM sessions WHERE id=?", (session_id,)).fetchone()
+                if row is None:
+                    return None
+                session = RecordingSession.model_validate_json(row[0])
+                reason = history_removal_reason(session)
+                if reason:
+                    raise ValueError(reason)
+                db.execute("DELETE FROM sessions WHERE id=?", (session_id,))
+            self._removed_session_ids.add(session_id)
+            self.history_revision += 1
+            return session
+
+    def restore_session(self, session: RecordingSession) -> bool:
+        """Restore a removed snapshot without rewriting a manifest or another ID."""
+        with self._lock:
+            with self._db() as db:
+                cursor = db.execute(
+                    "INSERT INTO sessions(id, payload) VALUES (?, ?) ON CONFLICT(id) DO NOTHING",
+                    (session.id, self._serialize(session)),
+                )
+                restored = cursor.rowcount == 1
+            if restored:
+                self._removed_session_ids.discard(session.id)
+                self.history_revision += 1
+            return restored
+
     def _save_session(self, session: RecordingSession):
+        if session.id in self._removed_session_ids:
+            raise ValueError("该场次记录已移除，不会重新写入旧快照")
         serialized = self._serialize(session)
         with self._db() as db:
             db.execute(

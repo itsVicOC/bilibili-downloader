@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from bilibili_downloader.gui.layout_policy import path_preferred_width
 from bilibili_downloader.gui.resources.styles import UI_METRICS, theme_palette
 from bilibili_downloader.gui.widgets.glass_surface import GlassFrame
 from bilibili_downloader.gui.widgets.header_backdrop import (
@@ -232,6 +233,7 @@ class ReadOnlyPath(QLineEdit):
         self.setReadOnly(True)
         self.setFixedHeight(22)
         self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
         self.setAccessibleName("完整保存目录")
         self._full_text = ""
 
@@ -242,6 +244,18 @@ class ReadOnlyPath(QLineEdit):
         self.setText(text)
         self.setToolTip(text)
         self.setCursorPosition(0)
+        self.updateGeometry()
+
+    def sizeHint(self):
+        return QSize(path_preferred_width(self.fontMetrics(), self.text()), 22)
+
+    def minimumSizeHint(self):
+        return QSize(0, 22)
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() in (QEvent.FontChange, QEvent.StyleChange):
+            self.updateGeometry()
 
     def contextMenuEvent(self, event):
         menu = self.createStandardContextMenu()
@@ -280,13 +294,15 @@ class OutputActionBar(ActionBar):
         path_row = QHBoxLayout()
         path_row.setSpacing(8)
         self.directory = ReadOnlyPath()
-        path_row.addWidget(self.directory, 1)
+        path_row.addWidget(self.directory)
         self.directory_button = QPushButton("修改目录")
         self.directory_button.setObjectName("TextButton")
         self.directory_button.setFixedHeight(32)
         self.directory_button.setFocusPolicy(Qt.StrongFocus)
+        self.directory_button.setCursor(Qt.PointingHandCursor)
         self.directory_button.clicked.connect(self.directory_requested.emit)
         path_row.addWidget(self.directory_button)
+        path_row.addStretch(1)
         copy.addLayout(path_row)
         row.addLayout(copy, 1)
         self.actions = QHBoxLayout()

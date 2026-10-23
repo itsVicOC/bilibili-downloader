@@ -411,7 +411,7 @@ def _launch_gui():
         appearance = config.load().appearance
         theme_manager.set_color_theme(appearance.theme)
         theme_manager.set_mode(appearance.mode)
-        window = MainWindow(config, startup_paused=transaction is not None, theme_manager=theme_manager, remember_window=True)
+        window = MainWindow(config, startup_paused=transaction is not None, theme_manager=theme_manager, remember_window=True, monitor_clipboard=True)
         lifecycle = ApplicationLifecycle(app, window)
         window.show_initial()
         if sys.platform == "darwin" and getattr(sys, "frozen", False):
