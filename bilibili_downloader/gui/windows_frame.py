@@ -43,6 +43,7 @@ class WindowsFrame:
             "ClientToScreen": ([wintypes.HWND, ctypes.POINTER(wintypes.POINT)], wintypes.BOOL),
             "GetCursorPos": ([ctypes.POINTER(wintypes.POINT)], wintypes.BOOL),
             "GetDpiForWindow": ([wintypes.HWND], wintypes.UINT),
+            "IsZoomed": ([wintypes.HWND], wintypes.BOOL),
             "GetSystemMetricsForDpi": ([ctypes.c_int, wintypes.UINT], ctypes.c_int),
             "SetCapture": ([wintypes.HWND], wintypes.HWND),
             "ReleaseCapture": ([], wintypes.BOOL),
@@ -64,6 +65,8 @@ class WindowsFrame:
         self.user32.ShowWindow(self.hwnd, command)
 
     def configure(self):
+        if self.window.isFullScreen():
+            return
         hwnd, api = int(self.window.winId()), self.user32
         # Qt remains frameless. Windows retains native resize, taskbar,
         # system-menu and Snap styles without painting a second titlebar.
@@ -148,19 +151,25 @@ class WindowsFrame:
         tracking = TrackMouse(ctypes.sizeof(TrackMouse), 0x12, self.hwnd, 0)
         self.user32.TrackMouseEvent(ctypes.byref(tracking))
 
-    def _max_bounds(self, lparam):
+    def _monitor_info(self):
         class MonitorInfo(ctypes.Structure):
             _fields_ = [("size", wintypes.DWORD), ("monitor", wintypes.RECT),
                         ("work", wintypes.RECT), ("flags", wintypes.DWORD)]
-
-        class MinMax(ctypes.Structure):
-            _fields_ = [(name, wintypes.POINT) for name in
-                        ("reserved", "maximum", "position", "minimum_track", "maximum_track")]
 
         info = MonitorInfo()
         info.size = ctypes.sizeof(info)
         monitor = self.user32.MonitorFromWindow(self.hwnd, 2)
         if not monitor or not self.user32.GetMonitorInfoW(monitor, ctypes.byref(info)):
+            return None
+        return info
+
+    def _max_bounds(self, lparam):
+        class MinMax(ctypes.Structure):
+            _fields_ = [(name, wintypes.POINT) for name in
+                        ("reserved", "maximum", "position", "minimum_track", "maximum_track")]
+
+        info = self._monitor_info()
+        if info is None:
             return None
         bounds = MinMax.from_address(lparam)
         bounds.position.x = info.work.left - info.monitor.left
@@ -170,6 +179,20 @@ class WindowsFrame:
         dpr = self.window.devicePixelRatioF()
         bounds.minimum_track.x = round(self.window.minimumWidth() * dpr)
         bounds.minimum_track.y = round(self.window.minimumHeight() * dpr)
+        return 0
+
+    def _calculate_client(self, lparam):
+        # Windows keeps its invisible resize border outside the work area
+        # when maximized. The painted client must start at the work-area edge,
+        # rather than losing the top/right 8 physical pixels off-screen.
+        if self.user32.IsZoomed(self.hwnd) and not self.window.isFullScreen():
+            info = self._monitor_info()
+            if info is not None:
+                rect = wintypes.RECT.from_address(lparam)
+                rect.left = max(rect.left, info.work.left)
+                rect.top = max(rect.top, info.work.top)
+                rect.right = min(rect.right, info.work.right)
+                rect.bottom = min(rect.bottom, info.work.bottom)
         return 0
 
     def system_menu(self, x, y):
@@ -182,7 +205,7 @@ class WindowsFrame:
     def event(self, msg):
         message = msg.message
         if message == 0x0083:  # WM_NCCALCSIZE: full client frame in both forms.
-            return 0
+            return self._calculate_client(msg.lParam)
         if message in (0x0085, 0x0086):  # WM_NCPAINT / WM_NCACTIVATE
             return 1
         if message == 0x0024:

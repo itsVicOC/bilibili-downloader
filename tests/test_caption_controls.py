@@ -205,6 +205,21 @@ def test_native_leave_checks_pointer_before_clearing_hover(qtbot):
     assert not window.chrome.controls.buttons["maximize"].hovered
 
 
+@pytest.mark.parametrize("origin", [(-1920, 40), (0, 0), (32, -1080)])
+def test_maximized_client_excludes_invisible_resize_border(qtbot, origin):
+    window = ChromeWindow()
+    qtbot.addWidget(window)
+    frame = fake_frame(window)
+    frame.user32.IsZoomed = lambda _: True
+    x, y = origin
+    frame._monitor_info = lambda: SimpleNamespace(work=wintypes.RECT(x, y, x + 1920, y + 1040))
+    for full_parameters in (False, True):
+        rect = wintypes.RECT(x - 8, y - 8, x + 1928, y + 1048)
+        assert frame.event(SimpleNamespace(message=0x0083, wParam=full_parameters,
+                                           lParam=ctypes.addressof(rect))) == 0
+        assert (rect.left, rect.top, rect.right, rect.bottom) == (x, y, x + 1920, y + 1040)
+
+
 @pytest.mark.parametrize("scale", [1, 1.25, 1.5, 2])
 def test_native_coordinates_on_negative_monitor(qtbot, scale):
     window = ChromeWindow()
