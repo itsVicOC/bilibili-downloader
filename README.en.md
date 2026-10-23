@@ -74,11 +74,7 @@ Stable `v0.8.8` fixes the legacy caption that could reappear after clicking a bl
 
 Downloads, live recording, and settings share consistent footer cards. Tabs and task tools retain readable surfaces over custom backgrounds, theme cards distinguish selection from keyboard focus, and record removal uses a quieter action style.
 
-`v0.8.9b1` (0.8.9 beta 1) adds a [Fluent Design polish](docs/FLUENT_DESIGN.md) across the application, with pink buttons and white labels, clearer text selection, and a fix for dark-mode Windows caption-button hover. The pink/purple and blue themes, Xiao Liu, navigation, and download/recording workflows remain available. Try the [beta prerelease](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9b1), or select the update channel that includes prereleases. The stable release remains `v0.8.8`. See the [changelog](CHANGELOG.md#v089b1---2026-10-22) and [validation record](docs/UI_READABILITY_VALIDATION.md) (Chinese).
-
-Available quality, codecs, audio tracks, and subtitles depend on the source, your account permissions, and Bilibili's API response.
-
-**Development preview:** This branch continues the Fluent polish with custom Windows caption controls, Markdown release notes, and hand corrections in three wallpapers. README screenshots follow the development branch. These follow-up changes are unreleased; the version and existing tags remain unchanged. See the [second-pass validation](docs/FLUENT_V2_VALIDATION.md) and [wallpaper comparisons](docs/BACKGROUND_HAND_REVIEW.md) (Chinese).
+`v0.8.9b2` (0.8.9 beta 2) continues the [Fluent Design polish](docs/FLUENT_DESIGN.md) on `codex/fluent-design-polish`, with quieter surfaces, custom Windows caption controls, corrected maximize/restore behavior, Markdown release notes, and hand corrections in four wallpapers. The pink/purple and blue themes, Xiao Liu, pink buttons with white labels, navigation, and download/recording workflows remain available. Try the [beta 2 prerelease](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9b2), or select the update channel that includes prereleases. The stable release remains `v0.8.8`. See the [changelog](CHANGELOG.md#v089b2---2026-10-23), [second-pass validation](docs/FLUENT_V2_VALIDATION.md), and [wallpaper comparisons](docs/BACKGROUND_HAND_REVIEW.md) (Chinese).
 
 ## Download and install
 

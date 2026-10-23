@@ -2,6 +2,8 @@
 
 2026-10-23，开发分支 `codex/fluent-design-polish`。逐张放大原图，按掌部、拇指连接、其余四指、关节和握持关系检查；合理遮挡不要求五指全部可见，像素画保留简化手形。
 
+补充复核：用户指出「萤光小舞台」左手六指。上轮将折指误判为合理遮挡；本次确认多指并补修，改为清楚可辨的五指摊掌。
+
 | 背景 | 处理与复核 |
 | --- | --- |
 | 云上收藏室 `download-anime-cloud` | 修正上下握胶片手部的拇指连接与重叠指形，消除多指错觉；[前后对比](images/fluent-v2/download-anime-cloud-hands.jpg) |
@@ -9,7 +11,7 @@
 | 海风信笺 `download-watercolor-sea` | 托腮与持卡手有合理遮挡，保留原图 |
 | 霓虹开播 `live-anime-neon` | 托腮握拳轮廓正常，另一手被衣物与身体遮挡，保留原图 |
 | 午夜电台 `live-pixel-radio` | 托腮与桌面手为简化像素形，保留原图 |
-| 萤光小舞台 `live-watercolor-firefly` | 持麦与掌心朝上手形按拇指、伸展指和弯曲指区分，保留原图 |
+| 萤光小舞台 `live-watercolor-firefly` | 修正画面右侧左手的六指，改为一根拇指与四根自然展开的手指，保留摊掌方向、袖口与持麦手；[前后对比](images/fluent-v2/live-watercolor-firefly-hands.jpg) |
 | 星轨调度 `tasks-anime-orbit` | 去掉伸展手多余的指形分叉，整理持盒手的遮挡关系；[前后对比](images/fluent-v2/tasks-anime-orbit-hands.jpg) |
 | 银河货运站 `tasks-pixel-cargo` | 握终端与搭箱手保持简化轮廓，保留原图 |
 | 星笺归档 `tasks-watercolor-letters` | 持信与托信手形有合理遮挡，保留原图 |
@@ -17,13 +19,19 @@
 | 像素小屋 `settings-pixel-cottage` | 握水壶手为简化像素形，保留原图 |
 | 薄荷手帐 `settings-watercolor-journal` | 握笔手与平放手的结构、遮挡合理，保留原图 |
 
-三张修改图使用内置 `image_gen` 编辑，原图宽高仍为 1672×941。已复核人物身份、服装、构图、光照和画风，背景与缩略图由 `scripts/build_background_assets.py` 统一导出。其余九张原图及对应运行时资源保持不变。
+四张修改图使用内置 `image_gen` 编辑，原图宽高仍为 1672×941。已复核人物身份、服装、构图、光照和画风，背景与缩略图由 `scripts/build_background_assets.py` 统一导出。其余八张原图及对应运行时资源保持不变。
 
-运行时插画为 2560×1440 WebP，像素画为 640×360 PNG，缩略图为 320×180 PNG；全十二景及缩略图合计 **7.84 MiB**，低于 12 MiB 预算。全部 `builtin:` 引用和资源路径保持兼容。修改前原图可从 `v0.8.9b1` 标签取得，原图现存于 `docs/images/backgrounds/originals/`，运行时文件位于 `bilibili_downloader/gui/assets/backgrounds/`。
+运行时插画为 2560×1440 WebP，像素画为 640×360 PNG，缩略图为 320×180 PNG；全十二景及缩略图合计 **7.75 MiB**，低于 12 MiB 预算。全部 `builtin:` 引用和资源路径保持兼容。修改前原图可从 `v0.8.9b1` 标签取得，原图现存于 `docs/images/backgrounds/originals/`，运行时文件位于 `bilibili_downloader/gui/assets/backgrounds/`。
 
 ## 实际编辑提示词
 
-每次只提供对应原图作为编辑目标，`transparent_background=false`。以下为三次调用的提示词，未使用 CLI 或外部图片接口。
+每次只提供对应原图作为编辑目标，`transparent_background=false`。以下为四张最终采用图片的编辑提示词，未使用 CLI 或外部图片接口。
+
+### 萤光小舞台（补修）
+
+```text
+Use case: precise-object-edit. Image 1 is the EDIT TARGET: the existing BiliFlow wallpaper live-watercolor-firefly.png. Repair ONLY the girl's anatomical LEFT hand, the open welcoming hand on the far RIGHT of the picture at x=87%-98%, y=67%-80%. It has six fingers. Redraw just this small hand as an anatomically natural open palm with exactly FIVE clearly countable digits: ONE thumb plus FOUR fingers. Keep the palm-up welcoming gesture and the same wrist, hand position, hand size and sleeve boundary. Let the four fingers be gently extended/curved and subtly fanned so each fingertip is individually readable; avoid the original tangled folded-finger bunch. The thumb must join the side of the palm naturally and the four fingers must arise from the knuckle arc, with sensible lengths. No extra digit, no duplicate fingertips, no fused/forked fingers and no extra finger-like crease protrusions. Preserve all other parts of the image as closely as possible: exact face and identity, hair, star clip, ribbons, clothes, the OTHER hand holding the microphone, microphone stand, flowers, terrace, lanterns, city, river, watercolor texture, original color palette and lighting. This is a local hand anatomy correction, not a redesign. Keep exactly 1672x941 pixels and full landscape framing; no cropping, text, watermark or new objects.
+```
 
 ### 星轨调度
 
