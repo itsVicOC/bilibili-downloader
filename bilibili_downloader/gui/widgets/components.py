@@ -252,11 +252,6 @@ class ReadOnlyPath(QLineEdit):
     def minimumSizeHint(self):
         return QSize(0, 22)
 
-    def changeEvent(self, event):
-        super().changeEvent(event)
-        if event.type() in (QEvent.FontChange, QEvent.StyleChange):
-            self.updateGeometry()
-
     def contextMenuEvent(self, event):
         menu = self.createStandardContextMenu()
         menu.addSeparator()

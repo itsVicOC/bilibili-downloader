@@ -70,7 +70,14 @@ jobs:
           retention-days: 7
 
       - name: Run tests
+        id: pytest
         run: pytest -v
+
+      - name: Diagnose a Linux native crash
+        if: failure() && steps.pytest.outcome == 'failure' && runner.os == 'Linux' && matrix.python-version == '3.11'
+        run: |
+          sudo apt-get install --yes gdb
+          gdb --batch -ex run -ex 'thread apply all bt 30' --args python -X faulthandler -m pytest -v
 
       - name: Compile source
         run: python -m compileall -q bilibili_downloader tests scripts
