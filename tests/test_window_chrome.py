@@ -18,7 +18,7 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
     import os
     from ctypes import wintypes
     from pathlib import Path
-    from threading import Thread
+    from threading import Event, Thread
     from time import sleep
     from types import SimpleNamespace
 
@@ -133,6 +133,78 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
     def maximize_point():
         x, y, right, height, width = caption_bounds()
         return x + right - width * 3 // 2, y + height // 2
+
+    def assert_pressed():
+        x, y, right, _, _ = caption_bounds()
+        normal = window.geometry()
+        for action, rect in caption_rects(right, window.devicePixelRatioF()).items():
+            control = window._chrome.controls.buttons[action]
+            assert user32.SetCursorPos(x + rect.center().x(), y + rect.center().y())
+            qtbot.waitUntil(lambda: control.hovered)
+            release = Event()
+            def finish():
+                release.wait(2)
+                user32.SetCursorPos(x + 300, y + 200)
+                up = Input(type=0, data=InputData(mi=MouseInput(dwFlags=0x0004)))
+                user32.SendInput(1, ctypes.byref(up), ctypes.sizeof(Input))
+            worker = Thread(target=finish, daemon=True)
+            worker.start()
+            try:
+                down = Input(type=0, data=InputData(mi=MouseInput(dwFlags=0x0002)))
+                assert user32.SendInput(1, ctypes.byref(down), ctypes.sizeof(Input)) == 1
+                qtbot.waitUntil(control.isDown, timeout=1000)
+                qtbot.wait(60)
+                screen = window.screen()
+                pixmap = screen.grabWindow(0)
+                dpr, origin = pixmap.devicePixelRatio(), screen.geometry().topLeft()
+                image = pixmap.toImage().copy(QRect(
+                    x + rect.left() - round(origin.x() * dpr),
+                    y - round(origin.y() * dpr), rect.width(), rect.height(),
+                ))
+                assert image.save(str(evidence / f"{theme_id}-{mode}-{action}-pressed.png"))
+                p = theme_palette(mode == "dark", theme_id)
+                color = p.caption_close_pressed if action == "close" else p.caption_pressed
+                assert image.pixelColor(4, image.height() // 2).name() == color
+            finally:
+                release.set()
+                worker.join(timeout=3)
+            qtbot.waitUntil(lambda: not control.isDown())
+            assert window.geometry() == normal and not window.isMinimized()
+
+    def assert_system_menu():
+        class GuiInfo(ctypes.Structure):
+            _fields_ = [("size", wintypes.DWORD), ("flags", wintypes.DWORD)] + [
+                (name, wintypes.HWND) for name in
+                ("active", "focus", "capture", "menu_owner", "move_size", "caret")
+            ] + [("caret_rect", wintypes.RECT)]
+        user32.GetGUIThreadInfo.argtypes = [wintypes.DWORD, ctypes.POINTER(GuiInfo)]
+        user32.GetGUIThreadInfo.restype = wintypes.BOOL
+        observed = []
+        def dismiss():
+            for _ in range(30):
+                sleep(.03)
+                info = GuiInfo()
+                info.size = ctypes.sizeof(info)
+                if user32.GetGUIThreadInfo(0, ctypes.byref(info)) and info.flags & 4 and info.menu_owner == hwnd.value:
+                    observed.append(True)
+                    break
+            escape = (Input * 2)(
+                Input(type=1, data=InputData(ki=KeyboardInput(wVk=0x1B))),
+                Input(type=1, data=InputData(ki=KeyboardInput(wVk=0x1B, dwFlags=2))),
+            )
+            user32.SendInput(2, escape, ctypes.sizeof(Input))
+        worker = Thread(target=dismiss, daemon=True)
+        worker.start()
+        keys = (Input * 4)(
+            Input(type=1, data=InputData(ki=KeyboardInput(wVk=0x12))),
+            Input(type=1, data=InputData(ki=KeyboardInput(wVk=0x20))),
+            Input(type=1, data=InputData(ki=KeyboardInput(wVk=0x20, dwFlags=2))),
+            Input(type=1, data=InputData(ki=KeyboardInput(wVk=0x12, dwFlags=2))),
+        )
+        assert user32.SendInput(4, keys, ctypes.sizeof(Input)) == 4
+        qtbot.wait(1200)
+        worker.join(timeout=2)
+        assert not worker.is_alive() and observed == [True]
 
     def drag_right_edge():
         ensure_foreground()
@@ -270,6 +342,9 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
         user32.SendMessageW(hwnd, 0x0086, 1, 0)
         assert_clear("activation")
         assert_hover("windowed")
+        assert_pressed()
+        ensure_foreground()
+        assert_system_menu()
         normal = window.geometry()
         click(*maximize_point())
         assert_clear("maximize-click")

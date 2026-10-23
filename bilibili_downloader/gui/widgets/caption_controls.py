@@ -83,6 +83,9 @@ class CaptionButton(QAbstractButton):
         if self.action == "minimize":
             painter.drawLine(QPointF(x, y + size / 2), QPointF(x + size - stroke, y + size / 2))
         elif self.action == "close":
+            # A one-pixel 45° antialiased stroke splits its coverage between
+            # two pixels. Keep the native-size cross crisp and fully opaque.
+            painter.setRenderHint(QPainter.Antialiasing, False)
             painter.drawLine(QPointF(x, y), QPointF(x + size - stroke, y + size - stroke))
             painter.drawLine(QPointF(x + size - stroke, y), QPointF(x, y + size - stroke))
         elif self.restore:

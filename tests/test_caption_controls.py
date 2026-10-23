@@ -97,10 +97,13 @@ def test_caption_base_hover_glyphs_and_animation_settle(qapp, qtbot, theme_id, d
         assert contrast_ratio(foreground, color) >= 3
         background = QColor(color)
         pixels = [(x, y) for x in range(8, image.width() - 8) for y in range(6, image.height() - 6)
-                  if image.pixelColor(x, y) != background]
+                  if contrast_ratio(image.pixelColor(x, y).name(), background.name()) >= 3]
         assert len(pixels) >= 8
         assert abs((min(x for x, _ in pixels) + max(x for x, _ in pixels)) / 2 - (image.width() - 1) / 2) <= 1
         assert abs((min(y for _, y in pixels) + max(y for _, y in pixels)) / 2 - (image.height() - 1) / 2) <= 1
+        button.setDown(True)
+        image = button.grab().toImage()
+        assert image.pixelColor(3, 12).name() == (p.caption_close_pressed if name == "close" else p.caption_pressed)
         button.reset()
         assert button._hover.value == 0
     manager.deleteLater()
