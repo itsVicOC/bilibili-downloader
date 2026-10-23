@@ -40,6 +40,7 @@ class WindowsFrame:
             "GetClientRect": ([wintypes.HWND, ctypes.POINTER(wintypes.RECT)], wintypes.BOOL),
             "ScreenToClient": ([wintypes.HWND, ctypes.POINTER(wintypes.POINT)], wintypes.BOOL),
             "ClientToScreen": ([wintypes.HWND, ctypes.POINTER(wintypes.POINT)], wintypes.BOOL),
+            "GetCursorPos": ([ctypes.POINTER(wintypes.POINT)], wintypes.BOOL),
             "GetDpiForWindow": ([wintypes.HWND], wintypes.UINT),
             "GetSystemMetricsForDpi": ([ctypes.c_int, wintypes.UINT], ctypes.c_int),
             "SetCapture": ([wintypes.HWND], wintypes.HWND),
@@ -88,6 +89,15 @@ class WindowsFrame:
     def geometry(self, lparam, *, client=False):
         point = wintypes.POINT(ctypes.c_short(lparam & 0xFFFF).value,
                                ctypes.c_short((lparam >> 16) & 0xFFFF).value)
+        return self._point_geometry(point, client=client)
+
+    def cursor_geometry(self):
+        point = wintypes.POINT()
+        if not self.user32.GetCursorPos(ctypes.byref(point)):
+            return None
+        return self._point_geometry(point)
+
+    def _point_geometry(self, point, *, client=False):
         rect = wintypes.RECT()
         if not self.user32.GetClientRect(self.hwnd, ctypes.byref(rect)):
             return None
@@ -177,7 +187,14 @@ class WindowsFrame:
             self.cancel_press()
             return None
         if message in (0x02A2, 0x02A3):
-            self.chrome.controls.leave_native()
+            # Qt may synthesize a leave while Windows still owns the caption
+            # hit target. Resolve the actual pointer only on that event; no
+            # cursor polling or timer is needed while the mouse is stationary.
+            action = self.action_at(self.cursor_geometry())
+            if action:
+                self.chrome.controls.hover(action, native=True)
+            else:
+                self.chrome.controls.leave_native()
             return None
         if self.window.isFullScreen():
             return None
@@ -185,18 +202,22 @@ class WindowsFrame:
             geometry = self.geometry(msg.lParam)
             if geometry is not None:
                 hit = frame_hit_test(*geometry)
+                action = self.action_at(geometry)
+                if action:
+                    self.chrome.controls.hover(action, native=True)
+                elif self.chrome.controls.native_tracking:
+                    self.chrome.controls.leave_native()
                 if hit is not None:
                     return hit
                 if self._draggable(geometry[0], geometry[1], geometry[4]):
                     return 2  # HTCAPTION: native move, double-click and context menu.
             return None
-        if message == 0x0200 and not self.pressed:
-            if self.chrome.controls.native_tracking:
-                self.chrome.controls.leave_native()
-            return None
-        if message == 0x00A0 or message == 0x0200 and self.pressed:
+        if message in (0x00A0, 0x0200):
             action = self.action_at(self.geometry(msg.lParam, client=message == 0x0200))
-            self.chrome.controls.hover(action, native=True)
+            if action or self.pressed:
+                self.chrome.controls.hover(action, native=True)
+            else:
+                self.chrome.controls.leave_native()
             if self.pressed:
                 self.chrome.controls.buttons[self.pressed].setDown(action == self.pressed)
             if message == 0x00A0:

@@ -190,6 +190,18 @@ def test_native_hover_is_not_cleared_by_qt_nonclient_leave(qapp, qtbot):
     assert not maximum.hovered and maximum._hover.target == 0
 
 
+def test_native_leave_checks_pointer_before_clearing_hover(qtbot):
+    window = ChromeWindow()
+    qtbot.addWidget(window)
+    frame = fake_frame(window)
+    frame.cursor_geometry = lambda: (831, 16, 900, 640, 1, 8)
+    frame.event(SimpleNamespace(message=0x02A2))
+    assert window.chrome.controls.buttons["maximize"].hovered
+    frame.cursor_geometry = lambda: (500, 200, 900, 640, 1, 8)
+    frame.event(SimpleNamespace(message=0x02A2))
+    assert not window.chrome.controls.buttons["maximize"].hovered
+
+
 @pytest.mark.parametrize("scale", [1, 1.25, 1.5, 2])
 def test_native_coordinates_on_negative_monitor(qtbot, scale):
     window = ChromeWindow()

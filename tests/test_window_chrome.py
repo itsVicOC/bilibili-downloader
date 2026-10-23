@@ -162,9 +162,13 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
     evidence = Path("build/ui-parity/chrome-regression") / f"scale-{os.environ.get('QT_SCALE_FACTOR', '1')}"
     evidence.mkdir(parents=True, exist_ok=True)
     checks = []
+    native_events = []
 
     def assert_clear(stage):
         ensure_foreground()
+        origin = wintypes.POINT()
+        assert user32.ClientToScreen(hwnd, ctypes.byref(origin))
+        assert user32.SetCursorPos(origin.x + 300, origin.y + 200)
         qtbot.wait(150)
         frame = window.frameGeometry()
         pixmap = window.screen().grabWindow(0, *frame.getRect())
@@ -213,6 +217,7 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
             (evidence / f"{theme_id}-{mode}-{stage}-{button}-hover.json").write_text(json.dumps({
                 "native_tracking": window._chrome.controls.native_tracking,
                 "active": window.isActiveWindow(),
+                "native_events": native_events,
                 "states": {key: {"hovered": item.hovered, "value": item._hover.value, "target": item._hover.target}
                            for key, item in window._chrome.controls.buttons.items()},
             }, indent=2))
@@ -243,6 +248,17 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
         style = user32.GetWindowLongPtrW(hwnd, -16)
         assert all(style & flag for flag in (0x00040000, 0x00080000, 0x00020000, 0x00010000))
         assert user32.GetSystemMenu(hwnd, False)
+        native = window._chrome._native
+        dispatch = native.event
+        def trace_native(msg):
+            message = msg.message
+            result = dispatch(msg)
+            if message in (0x0084, 0x00A0, 0x0200, 0x02A2, 0x02A3, 0x0215):
+                native_events.append({"message": hex(message), "result": result,
+                                      "tracking": window._chrome.controls.native_tracking})
+                del native_events[:-64]
+            return result
+        native.event = trace_native
         # The reported trigger: click empty download workspace, not the header.
         origin = wintypes.POINT()
         assert user32.ClientToScreen(hwnd, ctypes.byref(origin))
