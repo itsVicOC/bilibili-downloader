@@ -29,6 +29,7 @@ from bilibili_downloader.gui.resources.styles import UI_METRICS
 from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
     ActionBar,
+    CommandBar,
     ElidedLabel,
     EmptyState,
     MessageBox,
@@ -44,7 +45,6 @@ from bilibili_downloader.gui.widgets.download_list import (
     STATUS_TONE_ROLE,
     _StatusDelegate,
 )
-from bilibili_downloader.gui.widgets.glass_surface import GlassFrame
 from bilibili_downloader.gui.widgets.live_page import _duration, _size, live_tone
 
 CURRENT_STATES = {
@@ -109,12 +109,9 @@ class TaskPage(QWidget):
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
-        self._download_tools = GlassFrame()
-        self._download_tools.setObjectName("ToolSurface")
-        self._download_tools.setAttribute(Qt.WA_StyledBackground, True)
-        toolbar = QHBoxLayout(self._download_tools)
-        toolbar.setContentsMargins(12, 8, 12, 8)
-        toolbar.setSpacing(8)
+        self._download_tools = CommandBar()
+        toolbar = self._download_tools.filters
+        actions = self._download_tools.actions
         self.filter = ComboBox()
         for text, key in (
             ("全部任务", "all"),
@@ -143,20 +140,21 @@ class TaskPage(QWidget):
         for text, signal in (
             ("暂停", self.pause_all_requested),
             ("继续", self.resume_all_requested),
-            ("移除完成", self.clear_completed_requested),
         ):
             button = QPushButton(text)
             button.setObjectName("TableSubtleButton")
             button.clicked.connect(signal.emit)
             self._bulk_buttons.append(button)
-            toolbar.addWidget(button)
+            actions.addWidget(button)
         more = QPushButton("更多")
         more.setObjectName("TableSubtleButton")
         more.setProperty("menuButton", True)
         menu = PopupMenu(more)
+        self._clear_completed_action = menu.addAction("移除完成", self.clear_completed_requested.emit)
+        self._bulk_buttons.append(self._clear_completed_action)
         menu.addAction("清理下载缓存", self.clear_cache_requested.emit)
         more.setMenu(menu)
-        toolbar.addWidget(more)
+        actions.addWidget(more)
         layout.addWidget(self._download_tools)
         self._download_stack = QStackedWidget()
         self._download_stack.addWidget(self.downloads)
@@ -300,6 +298,8 @@ class TaskPage(QWidget):
                     self.current.setItem(index, column, item)
                 item.setText(value)
                 item.setToolTip(row["detail"] if column == 1 else value)
+                if column > 0:
+                    item.setTextAlignment(Qt.AlignCenter)
                 if column == 0:
                     item.setData(Qt.UserRole, row["room_id"])
                 if column == 1:
@@ -540,6 +540,7 @@ class TaskPage(QWidget):
             parent.setData(0, Qt.UserRole + 2, "\n".join(details))
             parent.setData(0, Qt.UserRole + 3, session.id)
             parent.setToolTip(0, "\n".join(details))
+            parent.setTextAlignment(2, Qt.AlignCenter)
             parent.setSizeHint(
                 0,
                 QSize(
@@ -562,6 +563,8 @@ class TaskPage(QWidget):
                 child = QTreeWidgetItem(
                     [name, _duration(segment.duration), _size(segment.size)]
                 )
+                child.setTextAlignment(1, Qt.AlignCenter)
+                child.setTextAlignment(2, Qt.AlignCenter)
                 child.setData(0, Qt.UserRole, segment.path)
                 child.setData(
                     0, Qt.UserRole + 1, f"segment:{session.id}:{segment.path}"

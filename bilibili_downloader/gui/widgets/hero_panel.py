@@ -18,12 +18,14 @@ class HeroPanel(QWidget):
         self.setProperty("glassSurface", True)
         self.setAttribute(Qt.WA_StyledBackground, True)
         self._compact = False
+        self._minimum_height = 190
         policy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         policy.setHeightForWidth(True)
         self.setSizePolicy(policy)
 
-    def set_compact(self, compact: bool) -> None:
+    def set_compact(self, compact: bool, *, minimum_height=None) -> None:
         self._compact = compact
+        self._minimum_height = minimum_height if minimum_height is not None else 120 if compact else 190
         self.setProperty("compact", compact)
         self.updateGeometry()
         self.update()
@@ -31,7 +33,7 @@ class HeroPanel(QWidget):
     def heightForWidth(self, width):
         layout = self.layout()
         content = layout.totalHeightForWidth(width) if layout and layout.hasHeightForWidth() else layout.sizeHint().height() if layout else 0
-        return max(120 if self._compact else 190, content)
+        return max(self._minimum_height, content)
 
     def sizeHint(self):
         hint = super().sizeHint()
@@ -39,7 +41,7 @@ class HeroPanel(QWidget):
 
     def minimumSizeHint(self):
         layout = self.layout()
-        return QSize(0, max(120 if self._compact else 190, layout.minimumSize().height() if layout else 0))
+        return QSize(0, max(self._minimum_height, layout.minimumSize().height() if layout else 0))
 
     def paintEvent(self, event):
         super().paintEvent(event)

@@ -19,7 +19,6 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
-    QBoxLayout,
     QCheckBox,
     QFrame,
     QHBoxLayout,
@@ -70,6 +69,7 @@ from bilibili_downloader.gui.dialogs.settings_dialog import SettingsDialog
 from bilibili_downloader.gui.dialogs.update_dialog import UpdateDialog
 from bilibili_downloader.gui.live_controller import LiveUiController
 from bilibili_downloader.gui.resources.paths import asset_path, background_path
+from bilibili_downloader.gui.resources.styles import UI_METRICS
 from bilibili_downloader.gui.resources.theme import ThemeManager
 from bilibili_downloader.gui.settings_sections import APPEARANCE_MODES, SettingsSection
 from bilibili_downloader.gui.threads.download_worker import (
@@ -98,6 +98,7 @@ from bilibili_downloader.gui.widgets.components import (
     PageHeader,
     PopupMenu,
     ResponsiveFields,
+    ResponsiveSplit,
     SectionCard,
     WindowDragSurface,
     repolish,
@@ -410,11 +411,11 @@ class MainWindow(QMainWindow):
         empty_layout.addWidget(import_collection)
         self._hero_layout.addWidget(self._empty_download)
         self._content_section = QWidget()
-        self._content_layout = QBoxLayout(QBoxLayout.LeftToRight, self._content_section)
+        self._content_layout = QVBoxLayout(self._content_section)
         self._content_layout.setContentsMargins(0, 0, 0, 0)
         self._content_layout.setSpacing(16)
         self._video_info = VideoInfoWidget()
-        self._content_layout.addWidget(self._video_info, 2, Qt.AlignTop)
+        self._content_layout.addWidget(self._video_info)
         self._build_output_card()
         self._workspace_layout.addWidget(self._content_section)
         self._content_section.hide()
@@ -446,11 +447,12 @@ class MainWindow(QMainWindow):
         controls = SectionCard("输出规格")
         controls.setObjectName("ControlPanel")
         self._output_card = controls
-        fields = ResponsiveFields()
+        fields = ResponsiveFields(column_width=UI_METRICS.download_field_column_width)
+        self._download_fields = fields
         controls.body.addWidget(fields)
         self._page_combo = ComboBox()
         self._page_combo.addItem("当前视频", "current")
-        fields.add_field(FieldRow("分 P 范围", self._page_combo))
+        fields.add_field(FieldRow("分 P 范围", self._page_combo, stacked=True))
         self._output_mode_combo = ComboBox()
         self._output_mode_combo.addItem("视频 / MP4", OutputMode.VIDEO)
         self._output_mode_combo.addItem("仅音频 / M4A 或 FLAC", OutputMode.AUDIO)
@@ -460,11 +462,11 @@ class MainWindow(QMainWindow):
         self._output_mode_combo.currentIndexChanged.connect(
             self._sync_output_mode_controls
         )
-        fields.add_field(FieldRow("输出类型", self._output_mode_combo))
+        fields.add_field(FieldRow("输出类型", self._output_mode_combo, stacked=True))
         self._quality_combo = ComboBox()
         self._populate_quality_combo()
         self._quality_combo.currentIndexChanged.connect(self._refresh_codec_options)
-        fields.add_field(FieldRow("画面质量", self._quality_combo))
+        fields.add_field(FieldRow("画面质量", self._quality_combo, stacked=True))
         self._codec_stack = QStackedWidget()
         self._codec_combo = ComboBox()
         self._populate_codec_combo()
@@ -472,7 +474,7 @@ class MainWindow(QMainWindow):
         self._populate_audio_combo()
         self._codec_stack.addWidget(self._codec_combo)
         self._codec_stack.addWidget(self._audio_combo)
-        codec_row = FieldRow("视频编码", self._codec_stack)
+        codec_row = FieldRow("视频编码", self._codec_stack, stacked=True)
         self._codec_label = codec_row.label
         fields.add_field(codec_row)
         self._danmaku_check = DownloadOptionCard("下载弹幕", "ASS", "star")
@@ -493,7 +495,8 @@ class MainWindow(QMainWindow):
                 checked and self._subtitle_check.isEnabled()
             )
         )
-        controls.body.addWidget(DownloadOptions(
+        self._extras_card = SectionCard("附加内容")
+        self._extras_card.body.addWidget(DownloadOptions(
             self._danmaku_check, self._subtitle_check, self._all_subtitles_check,
             self._cover_check, self._metadata_check,
         ))
@@ -510,8 +513,9 @@ class MainWindow(QMainWindow):
         self._download_actions.edit_requested.connect(self._show_output_options)
         self._download_actions.submit_requested.connect(self._on_download_clicked)
         controls.body.addStretch()
+        self._output_sections = ResponsiveSplit(controls, self._extras_card)
+        self._content_layout.addWidget(self._output_sections)
         self._sync_output_mode_controls()
-        self._content_layout.addWidget(controls, 3, Qt.AlignTop)
 
     def _show_output_options(self):
         self._download_tabs.setCurrentIndex(0)
@@ -699,6 +703,9 @@ class MainWindow(QMainWindow):
             self._codec_combo if video_mode else self._audio_combo
         )
         self._codec_stack.setFocusProxy(self._codec_stack.currentWidget())
+        if hasattr(self, "_output_summary"):
+            QWidget.setTabOrder(self._codec_stack.currentWidget(), self._output_summary)
+            QWidget.setTabOrder(self._output_summary, self._danmaku_check)
 
     def _populate_quality_combo(self):
         """Fill quality combo box with all available qualities."""
@@ -810,10 +817,6 @@ class MainWindow(QMainWindow):
                     self._account_text, Qt.ElideRight, 108
                 )
             )
-        content_width = width - (72 if compact else 208) - 48
-        self._content_layout.setDirection(
-            QBoxLayout.TopToBottom if content_width < 760 else QBoxLayout.LeftToRight
-        )
 
     def resizeEvent(self, event):
         self._update_responsive_layout(event.size().width())
@@ -1282,6 +1285,10 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage(f"已解析：{info.title}")
 
         self._current_video = info
+        self._resolve_btn.setText("重新解析")
+        self._hero_title.hide()
+        self._hero_layout.setContentsMargins(16, 12, 16, 12)
+        self._hero.set_compact(True, minimum_height=UI_METRICS.source_resolved_height)
         self._download_result_state = "已解析"
         self._content_section.show()
         self._empty_download.hide()

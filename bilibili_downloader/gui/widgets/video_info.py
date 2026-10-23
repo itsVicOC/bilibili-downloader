@@ -3,8 +3,8 @@
 import io
 
 from PIL import Image, UnidentifiedImageError
-from PySide6.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QObject, QRect, QRunnable, QSize, Qt, QThreadPool, Signal
+from PySide6.QtGui import QPainter, QPixmap, QTextLayout, QTextOption
 from PySide6.QtWidgets import (
     QBoxLayout,
     QHBoxLayout,
@@ -96,6 +96,49 @@ class _ElidedLabel(QLabel):
         super().resizeEvent(event)
 
 
+class _TwoLineTitle(QLabel):
+    """Keep the full plain-text title while bounding its painted preview."""
+
+    def __init__(self, text, parent=None):
+        super().__init__(text, parent)
+        self.setTextFormat(Qt.PlainText)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+
+    def sizeHint(self):
+        return QSize(280, self.fontMetrics().lineSpacing() * 2)
+
+    def minimumSizeHint(self):
+        return QSize(0, self.fontMetrics().lineSpacing() * 2)
+
+    def paintEvent(self, event):
+        text = " ".join(self.text().splitlines())
+        rect = self.contentsRect()
+        metrics = self.fontMetrics()
+        layout = QTextLayout(text, self.font())
+        option = QTextOption()
+        option.setWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
+        layout.setTextOption(option)
+        layout.beginLayout()
+        first = layout.createLine()
+        if not first.isValid():
+            layout.endLayout()
+            return
+        first.setLineWidth(max(1, rect.width()))
+        length = first.textLength()
+        layout.endLayout()
+        encoded = text.encode("utf-16-le")
+        lines = [encoded[:length * 2].decode("utf-16-le").rstrip()]
+        remaining = encoded[length * 2:].decode("utf-16-le").strip()
+        if remaining:
+            lines.append(metrics.elidedText(remaining, Qt.ElideRight, rect.width()))
+        painter = QPainter(self)
+        painter.setPen(self.palette().color(self.foregroundRole()))
+        for index, line in enumerate(lines):
+            painter.drawText(QRect(rect.left(), rect.top() + index * metrics.lineSpacing(),
+                                   rect.width(), metrics.lineSpacing()),
+                             Qt.AlignLeft | Qt.AlignVCenter, line)
+
+
 class _CoverLoadWorker(QObject):
     """Signals for async cover image loading."""
 
@@ -157,14 +200,7 @@ class VideoInfoWidget(GlassWidget):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
 
-        header_layout = QHBoxLayout()
-        title = QLabel("作品资料卡")
-        title.setObjectName("SectionTitle")
         self._state_label = StatusBadge("等待解析")
-        header_layout.addWidget(title)
-        header_layout.addStretch()
-        header_layout.addWidget(self._state_label)
-        layout.addLayout(header_layout)
 
         # Cover image
         self._cover_label = _AspectCoverLabel()
@@ -176,10 +212,9 @@ class VideoInfoWidget(GlassWidget):
         self._cover_label.setAlignment(Qt.AlignCenter)
 
         # Info labels
-        self._title_label = QLabel("等待新的次元旅程")
+        self._title_label = _TwoLineTitle("等待新的次元旅程")
         self._title_label.setObjectName("VideoTitle")
         self._title_label.setTextFormat(Qt.PlainText)
-        self._title_label.setWordWrap(True)
 
         self._author_label = _ElidedLabel("UP 主  --")
         self._duration_label = _ElidedLabel("时长  --")
@@ -195,10 +230,17 @@ class VideoInfoWidget(GlassWidget):
 
         info_layout = QVBoxLayout()
         info_layout.setSpacing(8)
-        info_layout.addWidget(self._title_label)
+        heading = QHBoxLayout()
+        heading.setSpacing(12)
+        heading.addWidget(self._title_label, 1)
+        heading.addWidget(self._state_label, 0, Qt.AlignTop)
+        info_layout.addLayout(heading)
         info_layout.addWidget(self._author_label)
-        info_layout.addWidget(self._duration_label)
-        info_layout.addWidget(self._bvid_label)
+        metadata = QHBoxLayout()
+        metadata.setSpacing(16)
+        metadata.addWidget(self._duration_label, 1)
+        metadata.addWidget(self._bvid_label, 2)
+        info_layout.addLayout(metadata)
         info_layout.addStretch()
         top_layout.addLayout(info_layout, 1)
 

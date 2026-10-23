@@ -228,7 +228,7 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
         window._show_settings_tab(SettingsSection.DOWNLOAD)
         flush()
         assert contained(window._settings_page._save_btn, window._settings_page)
-        assert window._settings_page._action_bar.height() == single_size.height()
+        assert window._settings_page._action_bar.height() == 56
         assert window._settings_page._save_btn.height() == window._download_btn.height()
         assert (
             window._settings_page.tabs.currentWidget().horizontalScrollBar().maximum()

@@ -29,7 +29,7 @@ from tests.test_workspaces import workspace as workspace
 @pytest.mark.parametrize("dark", [False, True])
 def test_reading_surfaces_keep_small_text_readable(theme_id, dark):
     p = theme_palette(dark, theme_id)
-    for surface in (p.surface, p.control_fill, p.popup, p.subtle_selection):
+    for surface in (p.surface, p.control_fill, p.popup, p.subtle_selection, p.table_header):
         for text in (p.text, p.muted, p.active_text):
             assert contrast_ratio(text, surface) >= 4.5
     for tone in ("success", "warning", "danger", "active"):

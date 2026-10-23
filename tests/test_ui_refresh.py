@@ -198,7 +198,7 @@ def test_download_cards_reflow_without_losing_values(qtbot):
     grid.setParent(None)
     qtbot.addWidget(grid)
     panel._danmaku_check.setChecked(True)
-    for width, columns in ((450, 2), (260, 1), (450, 2)):
+    for width, columns in ((680, 2), (320, 1), (680, 2)):
         grid.resize(width, 250)
         grid.show()
         QApplication.processEvents()

@@ -31,7 +31,12 @@ class UiMetrics:
     page_margin: int = 24
     section_gap: int = 16
     card_padding: int = 16
-    option_card_height: int = 64
+    option_card_height: int = 40
+    settings_bar_height: int = 56
+    output_split_width: int = 800
+    download_field_column_width: int = 220
+    toolbar_wrap_width: int = 720
+    source_resolved_height: int = 68
     short_field_width: int = 320
     number_field_width: int = 184
     item_gap: int = 8
@@ -86,7 +91,19 @@ class ThemePalette:
 
     @property
     def card_border(self):
-        return blend_color(self.surface, self.divider, .55)
+        return blend_color(self.surface, self.divider, .38)
+
+    @property
+    def popup_border(self):
+        return blend_color(self.surface, self.divider, .85)
+
+    @property
+    def confirmation_border(self):
+        return blend_color(self.surface, self.divider, .7)
+
+    @property
+    def table_header(self):
+        return blend_color(self.surface, self.surface_raised, .25)
 
     @property
     def control_fill(self):
@@ -102,7 +119,7 @@ class ThemePalette:
 
     @property
     def row_divider(self):
-        return blend_color(self.surface, self.divider, .4)
+        return blend_color(self.surface, self.divider, .28)
 
     @property
     def subtle_selection(self):
@@ -293,9 +310,11 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QLabel#BrandTitle {{ font-size: 15pt; font-weight: 600; }}
     QLabel#PageTitle {{ font-size: 18px; font-weight: 600; }}
     QLabel#DialogTitle {{ font-size: 18pt; font-weight: 600; }}
-    QLabel#SectionTitle, QLabel#VideoTitle {{ font-size: 12pt; font-weight: 600; }}
+    QLabel#SectionTitle {{ font-size: 12pt; font-weight: 600; }}
+    QLabel#VideoTitle {{ font-size: 18px; font-weight: 600; }}
+    QLabel#FieldLabel {{ color: {p.muted}; font-size: 10.5pt; }}
     QLabel#Caption, QLabel#DialogCaption, QLabel#MetaLabel, QLabel#MutedLabel,
-    QLabel#SidebarCaption, QLabel#FieldLabel, QLabel#InfoChip {{ color: {p.muted}; font-size: 9pt; }}
+    QLabel#SidebarCaption, QLabel#InfoChip {{ color: {p.muted}; font-size: 9pt; }}
     QLabel#NavSection {{ color: {p.muted}; font-size: 9pt; padding: 8px; }}
     QLabel#HeroEyebrow {{ color: {p.muted}; font-size: 9pt; }}
     QLabel#HeroTitle {{ font-size: 12pt; font-weight: 600; }}
@@ -390,7 +409,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QPushButton#DangerButton:disabled, QPushButton#TableDangerButton:disabled {{ color: {p.disabled}; background: {p.surface_raised}; }}
     QPushButton#TablePrimaryButton, QPushButton#TableSubtleButton, QPushButton#TableDangerButton, QPushButton#TableRemoveButton,
     QPushButton#ActivityButton {{ min-height: 30px; max-height: 30px; padding: 0 10px; font-size: 9pt; }}
-    QPushButton#TablePrimaryButton, QPushButton#TableSubtleButton {{ background: {p.surface_raised}; }}
+    QPushButton#TablePrimaryButton, QPushButton#TableSubtleButton {{ background: transparent; }}
     QPushButton#TablePrimaryButton:hover, QPushButton#TableSubtleButton:hover {{ background: {p.control_hover}; }}
     QPushButton#TableSubtleButton:pressed, QPushButton#TablePrimaryButton:pressed {{ border-color: {p.border}; }}
     QPushButton#TablePrimaryButton:disabled, QPushButton#TableSubtleButton:disabled {{ color: {p.disabled}; }}
@@ -460,7 +479,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QStackedWidget[customBackground="true"] QTreeWidget::item:hover {{ background: {p.surface_raised}; }}
     QStackedWidget[customBackground="true"] QTableWidget::item:selected,
     QStackedWidget[customBackground="true"] QTreeWidget::item:selected {{ background: {p.selection}; color: {p.text}; }}
-    QHeaderView::section {{ background: {p.control_fill}; color: {p.muted}; border: none; border-bottom: 1px solid {p.divider}; padding: 0 10px; min-height: 40px; font-size: 9pt; }}
+    QHeaderView::section {{ background: {p.table_header}; color: {p.muted}; border: none; border-bottom: 1px solid {p.card_border}; padding: 0 10px; min-height: 40px; font-size: 9pt; }}
     QTableCornerButton::section {{ background: {p.surface_raised}; border: none; }}
     QProgressBar {{ min-height: 16px; max-height: 16px; border: none; border-radius: 5px; background: {p.surface_raised}; color: {p.text}; font-size: 9pt; text-align: center; }}
     QProgressBar::chunk {{ background: {p.accent}; border-radius: 5px; }}
@@ -493,7 +512,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
     QStatusBar {{ background: {p.sidebar}; color: {p.muted}; border-top: 1px solid {p.divider}; }}
     QStatusBar::item {{ border: none; }}
-    QMenu {{ background: {p.popup}; color: {p.text}; border: 1px solid {p.card_border}; border-radius: {m.radius}px; padding: 6px; }}
+    QMenu {{ background: {p.popup}; color: {p.text}; border: 1px solid {p.popup_border}; border-radius: {m.radius}px; padding: 6px; }}
     QMenu::item {{ padding: 9px 18px; border: 1px solid transparent; border-radius: 6px; }}
     QMenu::item:selected {{ background: {p.subtle_selection}; color: {p.active_text}; }}
     QMenu::item:disabled {{ color: {p.disabled}; }}
@@ -510,15 +529,15 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QPushButton[disclosure="true"] {{ padding-right: 28px; }}
     QMessageBox {{ background: {p.background}; }}
     QMessageBox QLabel#qt_msgbox_informativelabel {{ min-width: 320px; }}
-    QToolTip {{ background: {p.popup}; color: {p.text}; border: 1px solid {p.card_border}; border-radius: 6px; padding: 8px; }}
+    QToolTip {{ background: {p.popup}; color: {p.text}; border: 1px solid {p.popup_border}; border-radius: 6px; padding: 8px; }}
     QFileDialog QListView, QFileDialog QTreeView {{
         background: {p.surface}; color: {p.text}; border: 1px solid {p.card_border};
         border-radius: {m.radius}px; outline: none;
         selection-background-color: {p.subtle_selection}; selection-color: {p.text};
     }}
     QPushButton#StepperButton {{ min-width: 32px; max-width: 32px; padding: 0; }}
-    #ActionBar, #OutputActionBar {{ background: {p.surface}; border: 1px solid {p.card_border}; border-radius: {m.card_radius}px; }}
-    #ToolSurface {{ background: {p.surface}; border: 1px solid {p.card_border}; border-radius: 10px; }}
+    #ActionBar, #OutputActionBar {{ background: {p.surface}; border: 1px solid {p.confirmation_border}; border-radius: {m.card_radius}px; }}
+    #ToolSurface {{ background: {p.surface}; border: none; border-radius: {m.radius}px; }}
     QLabel#OutputSelection {{ font-weight: 600; color: {p.text}; }}
     QPushButton#OutputSecondaryButton {{
         min-height: 30px; max-height: 30px; padding: 0 12px; border: 1px solid transparent;

@@ -245,7 +245,7 @@ class SettingsDialog(QDialog):
         )
         options.body.addWidget(DownloadOptions(
             self._danmaku_check, self._subtitle_check, self._all_subtitles_check,
-            self._cover_check, self._metadata_check,
+            self._cover_check, self._metadata_check, max_columns=2,
         ))
         download.addWidget(options)
         self._templates_section = CollapsibleSection("高级命名与目录模板")
@@ -488,7 +488,7 @@ class SettingsDialog(QDialog):
             column.addStretch()
         self._notice = Notice()
         layout.addWidget(self._notice)
-        self._action_bar = ActionBar()
+        self._action_bar = ActionBar(compact=True)
         self._action_bar.setAccessibleName("设置保存操作")
         footer = self._action_bar.row
         self._draft_label = ElidedLabel("所有修改已保存")
@@ -503,6 +503,7 @@ class SettingsDialog(QDialog):
         self._save_btn.setDefault(not self._embedded)
         self._save_btn.setObjectName("PrimaryButton")
         self._save_btn.setMinimumWidth(128)
+        self._save_btn.setFixedHeight(44)
         self._save_btn.clicked.connect(self._accept_if_valid)
         if not self._embedded:
             cancel = QPushButton("取消")

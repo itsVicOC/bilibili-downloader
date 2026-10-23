@@ -32,7 +32,7 @@ from bilibili_downloader.gui.widgets.background_readability import (
     paint_reading_surface,
     wallpaper_active,
 )
-from bilibili_downloader.gui.widgets.components import line_icon, palette
+from bilibili_downloader.gui.widgets.components import PopupMenu, line_icon, palette
 
 ACTION_BUTTON_MIN_WIDTH = 60
 ACTION_BUTTON_GAP = 6
@@ -209,8 +209,25 @@ def _create_delete_btn(download_id: int, handler):
     return button
 
 
-def _create_retry_btn(download_id: int, handler):
-    return _create_action_btn("继续", "PrimaryButton", download_id, handler)
+def _create_retry_btn(download_id: int, handler, *, text="继续"):
+    return _create_action_btn(text, "PrimaryButton", download_id, handler)
+
+
+def _create_more_btn(download_id: int, handler):
+    button = QPushButton("更多")
+    button.setObjectName("TableSubtleButton")
+    button.setProperty("menuButton", True)
+    button.setAccessibleName("任务更多操作")
+    menu = PopupMenu(button)
+    action = menu.addAction("移除记录")
+    action.setToolTip("仅移除任务记录，保留媒体文件和断点")
+    action.triggered.connect(lambda checked=False, task_id=download_id: handler(task_id))
+    button.setMenu(menu)
+    button.ensurePolished()
+    button.setMinimumWidth(max(ACTION_BUTTON_MIN_WIDTH, button.sizeHint().width()))
+    button.setFixedHeight(UI_METRICS.compact_button_height)
+    button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+    return button
 
 
 def _create_open_btn(download_id: int, handler):
@@ -660,13 +677,14 @@ class DownloadListWidget(QTableWidget):
         elif status == TaskStatus.COMPLETED:
             buttons = (
                 _create_open_btn(download_id, self.open_requested.emit),
-                _create_delete_btn(download_id, self._on_delete_clicked),
+                _create_more_btn(download_id, self._on_delete_clicked),
             )
             controls = _wrap_btns(*buttons)
         else:
             buttons = (
-                _create_retry_btn(download_id, self.retry_requested.emit),
-                _create_delete_btn(download_id, self._on_delete_clicked),
+                _create_retry_btn(download_id, self.retry_requested.emit,
+                                  text="继续" if status == TaskStatus.PAUSED else "重试"),
+                _create_more_btn(download_id, self._on_delete_clicked),
             )
             controls = _wrap_btns(*buttons)
         required_width = (

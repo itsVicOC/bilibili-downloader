@@ -5,6 +5,7 @@ from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication,
+    QBoxLayout,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -210,13 +211,13 @@ class ElidedLabel(QLabel):
 class ActionBar(GlassFrame):
     """A stable, readable surface for workspace confirmation actions."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, compact=False):
         super().__init__(parent)
         self.setObjectName("ActionBar")
         self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setFixedHeight(72)
+        self.setFixedHeight(UI_METRICS.settings_bar_height if compact else 72)
         self.row = QHBoxLayout(self)
-        self.row.setContentsMargins(16, 12, 16, 12)
+        self.row.setContentsMargins(16, 6 if compact else 12, 16, 6 if compact else 12)
         self.row.setSpacing(16)
 
 
@@ -387,6 +388,66 @@ class DisclosureButton(QPushButton):
         painter.drawLine(QPointF(-3, -1.5), QPointF(0, 1.5))
         painter.drawLine(QPointF(0, 1.5), QPointF(3, -1.5))
         painter.end()
+
+
+class CommandBar(GlassFrame):
+    """Keep filters before actions in visual and keyboard order when wrapped."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("ToolSurface")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self._grid = QGridLayout(self)
+        self._grid.setContentsMargins(12, 8, 12, 8)
+        self._grid.setSpacing(8)
+        self._filters = QWidget()
+        self._actions = QWidget()
+        self.filters = QHBoxLayout(self._filters)
+        self.actions = QHBoxLayout(self._actions)
+        for row in (self.filters, self.actions):
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(8)
+        self._grid.addWidget(self._filters, 0, 0)
+        self._grid.addWidget(self._actions, 0, 1)
+        self._grid.setColumnStretch(0, 1)
+        self.wrapped = False
+
+    def _reflow(self, width):
+        required = self._filters.sizeHint().width() + self._actions.sizeHint().width() + 32
+        wrapped = width < max(UI_METRICS.toolbar_wrap_width, required)
+        if self.wrapped != wrapped:
+            self.wrapped = wrapped
+            self._grid.removeWidget(self._actions)
+            self._grid.addWidget(self._actions, 1 if wrapped else 0, 0 if wrapped else 1,
+                                 1, 2 if wrapped else 1, Qt.AlignRight)
+
+    def event(self, event):
+        if event.type() == QEvent.LayoutRequest and hasattr(self, "wrapped"):
+            self._reflow(self.width())
+        return super().event(event)
+
+    def resizeEvent(self, event):
+        self._reflow(event.size().width())
+        super().resizeEvent(event)
+
+
+class ResponsiveSplit(QWidget):
+    """Reflow existing panes using their actual viewport allocation."""
+
+    def __init__(self, first, second, parent=None):
+        super().__init__(parent)
+        self.row = QBoxLayout(QBoxLayout.LeftToRight, self)
+        self.row.setContentsMargins(0, 0, 0, 0)
+        self.row.setSpacing(UI_METRICS.section_gap)
+        self.row.addWidget(first, 3, Qt.AlignTop)
+        self.row.addWidget(second, 2, Qt.AlignTop)
+
+    def resizeEvent(self, event):
+        wide = event.size().width() >= UI_METRICS.output_split_width
+        self.row.setDirection(QBoxLayout.LeftToRight if wide else QBoxLayout.TopToBottom)
+        self.row.setStretch(0, 3 if wide else 0)
+        self.row.setStretch(1, 2 if wide else 0)
+        super().resizeEvent(event)
 
 
 class ResponsiveFields(QWidget):
@@ -649,26 +710,27 @@ class EmptyState(QWidget):
 
 
 class FieldRow(QWidget):
-    def __init__(self, label, control, parent=None):
+    def __init__(self, label, control, parent=None, *, stacked=False):
         super().__init__(parent)
         self.control = control
         column = QVBoxLayout(self)
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(4)
-        row = QHBoxLayout()
-        row.setSpacing(12)
+        row = QVBoxLayout() if stacked else QHBoxLayout()
+        row.setSpacing(8 if stacked else 12)
         self.label = QLabel(label)
         self.label.setObjectName("FieldLabel")
         self.label.setBuddy(control)
         if not control.accessibleName():
             control.setAccessibleName(label)
-        self.label.setFixedWidth(92)
+        if not stacked:
+            self.label.setFixedWidth(92)
         row.addWidget(self.label)
         row.addWidget(control, 1)
         column.addLayout(row)
         self._error_row = QWidget()
         errors = QHBoxLayout(self._error_row)
-        errors.setContentsMargins(104, 0, 0, 0)
+        errors.setContentsMargins(0 if stacked else 104, 0, 0, 0)
         self.error = QLabel()
         self.error.setObjectName("FieldError")
         self.error.setWordWrap(True)

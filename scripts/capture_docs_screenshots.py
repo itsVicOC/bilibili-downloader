@@ -1045,6 +1045,62 @@ def _capture_lifecycle(app, theme, temp_root):
         window.deleteLater()
 
 
+def _capture_refinement(app, theme, window):
+    """Exercise the reorganized layout with content that a normal demo omits."""
+    _populate_main_window(window)
+    info = window._current_video.model_copy(deep=True)
+    directory = window._settings.output_dir
+    checks = []
+    for theme_id in ("star_trail", "bilibili_blue"):
+        window._settings.appearance.theme = theme_id
+        theme.set_color_theme(theme_id)
+        for dark in (False, True):
+            theme.apply_theme(dark)
+            mode = "dark" if dark else "light"
+            for width, height in ((900, 640), (1120, 760), (1320, 860)):
+                window.resize(width, height)
+                for state in ("audio", "long-content", "failed", "settings-draft", "task-filter"):
+                    window._settings.output_dir = directory
+                    window._output_summary.setText(directory)
+                    window._on_resolve_success(info, info.video_streams, info.audio_streams, True)
+                    window._output_mode_combo.setCurrentIndex(window._output_mode_combo.findData(OutputMode.VIDEO))
+                    window._show_workspace(0)
+                    window._workspace_scroll.verticalScrollBar().setValue(0)
+                    if state == "audio":
+                        window._output_mode_combo.setCurrentIndex(window._output_mode_combo.findData(OutputMode.AUDIO))
+                        assert not window._quality_combo.isEnabled()
+                    elif state == "long-content":
+                        long_info = info.model_copy(update={
+                            "title": "星轨旅记🌠：穿过漫长的夜色与城市街巷，记录沿途的每一束光。" * 8,
+                            "author": "一个非常长的离线演示 UP 主昵称" * 5,
+                        })
+                        window._video_info.set_video_info(long_info)
+                        long_path = "~/Downloads/" + "长目录与 Unicode 演示/" * 12 + "BiliFlow"
+                        window._settings.output_dir = long_path
+                        window._output_summary.setText(long_path)
+                        window._refresh_download_summary()
+                    elif state == "failed":
+                        window._on_resolve_error("网络连接暂时不可用，请检查连接后重新解析。")
+                        assert not window._download_btn.isEnabled()
+                    elif state == "settings-draft":
+                        panel = window._settings_page
+                        panel._path_template.setText("待保存/{author}/{title}{part_suffix}")
+                        window._show_settings_tab(SettingsSection.DOWNLOAD)
+                    else:
+                        page = window._task_page
+                        page.filter.setCurrentIndex(page.filter.findData("paused"))
+                        window._show_tasks(0)
+                    window._url_input.deselect()
+                    _save_widget(app, window, f"refine-{theme_id}-{state}-{mode}-{width}.png")
+                    checks.append({"theme": theme_id, "mode": mode, "state": state,
+                                   "requested_size": [width, height],
+                                   "actual_size": [window.width(), window.height()],
+                                   "horizontal_scroll": window._workspace_scroll.horizontalScrollBar().maximum()})
+                    window._settings_page.load_settings(window._settings_page._settings)
+                    window._task_page.filter.setCurrentIndex(0)
+    (OUTPUT_DIR / "refinement-checks.json").write_text(json.dumps(checks, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def _capture_builtin_backgrounds(app, theme, window, temp_root):
     from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
     from bilibili_downloader.gui.dialogs.background_gallery import BackgroundGallery
@@ -1250,7 +1306,7 @@ def _capture_ui_refresh(app, theme, window):
                 window._workspace_scroll.ensureWidgetVisible(window._metadata_check, 0, 12)
                 _save_widget(app, window, f"ui-{theme_id}-options-{mode}-{width}.png")
                 cards = (window._danmaku_check, window._subtitle_check, window._cover_check, window._metadata_check)
-                assert all(card.height() >= 36 + card.fontMetrics().height() + 4 for card in cards)
+                assert all(card.height() >= card.fontMetrics().height() + 16 for card in cards)
                 for section in SettingsSection:
                     window._show_settings_tab(section)
                     _save_widget(app, window, f"ui-{theme_id}-settings-{section.value}-{mode}-{width}.png")
@@ -1520,6 +1576,7 @@ def main(argv=None) -> int:
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
     parser.add_argument("--color-theme", choices=("star_trail", "bilibili_blue"), default="star_trail", help="Color theme for the complete workspace and dialog matrix")
     parser.add_argument("--ui-refresh-only", action="store_true", help="Capture navigation, download cards, modes and account states")
+    parser.add_argument("--refinement-only", action="store_true", help="Capture audio, long-content, failure, draft and filtered-task states")
     parser.add_argument("--chrome-only", action="store_true", help="Check native captions using desktop compositor captures")
     parser.add_argument("--glass-only", action="store_true", help="Capture glass wallpaper and complete download guidance in both modes")
     parser.add_argument("--appearance-controls-only", action="store_true", help="Capture centered account, five settings sections and blur controls")
@@ -1612,6 +1669,11 @@ def main(argv=None) -> int:
             return 0
         if args.mascot_only:
             _capture_mascot(app, theme, window)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
+        if args.refinement_only:
+            _capture_refinement(app, theme, window)
             window._live_controller.shutdown()
             window.request_quit(confirmed=True)
             return 0
