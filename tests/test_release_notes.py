@@ -128,7 +128,7 @@ def test_markdown_copy_uses_rendered_text(qapp, qtbot):
 
 @pytest.mark.parametrize("size", [(480, 360), (680, 520)])
 def test_long_release_body_and_actions_fit(qtbot, size):
-    body = Path('CHANGELOG.md').read_text().split('\n## v', 2)[1]
+    body = Path('CHANGELOG.md').read_text(encoding='utf-8').split('\n## v', 2)[1]
     body += '\n\n```\n' + 'long-path/' * 300 + '\n```\n'
     dialog = UpdateDialog(replace(RELEASE, notes=body))
     qtbot.addWidget(dialog)

@@ -204,7 +204,9 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
         for button, rect in caption_rects(right, window.devicePixelRatioF()).items():
             left, width, height = x + rect.left(), rect.width(), rect.height()
             assert user32.SetCursorPos(left + width // 2, y + height // 2)
-            qtbot.wait(100)
+            control = window._chrome.controls.buttons[button]
+            qtbot.waitUntil(lambda: control.hovered and control._hover.value == 1)
+            qtbot.wait(50)  # Allow DWM to present the completed 120 ms transition.
             screen = window.screen()
             pixmap = screen.grabWindow(0)
             dpr = pixmap.devicePixelRatio()
