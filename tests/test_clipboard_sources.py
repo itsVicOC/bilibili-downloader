@@ -33,7 +33,9 @@ def test_share_text_deduplicates_without_dropping_parts_or_list_parameters():
     'https://live.bilibili.com/123456', '/tmp/BV1GJ411x7h7.mp4',
     r'C:\Downloads\BV1GJ411x7h7.mp4', 'file:///tmp/BV1GJ411x7h7.mp4',
     'ordinary words', '123456', 'sleep123', '', 'x' * 65537,
-])
+], ids=['untrusted-host', 'lookalike-host', 'live-room', 'posix-file',
+        'windows-file', 'file-url', 'ordinary-text', 'number', 'word-boundary',
+        'empty', 'over-limit'])
 def test_unsupported_text_is_not_a_download_candidate(text):
     assert extract_clipboard_sources(text) is None
 
