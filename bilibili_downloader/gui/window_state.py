@@ -170,10 +170,12 @@ class WindowStateStore(QObject):
             if not self._maximized:
                 self._normal = QRect(window.geometry())
                 self._geometry = bytes(window.saveGeometry().toBase64()).decode("ascii")
-                screen = window.screen()
-                if screen:
-                    self._screen_name = screen.name()
-                    self._available = screen.availableGeometry()
+            screen = window.screen()
+            if screen:
+                # A maximized window can move to another monitor without
+                # entering normal state. Remember that monitor as well.
+                self._screen_name = screen.name()
+                self._available = screen.availableGeometry()
 
     def _native_state(self):
         chrome = getattr(self.window, "_chrome", None)

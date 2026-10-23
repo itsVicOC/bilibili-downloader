@@ -87,7 +87,7 @@ def test_failed_atomic_save_keeps_previous_record_and_does_not_raise(qtbot, tmp_
     assert store._warned and not store._timer.isActive()
 
 
-def test_native_resize_before_qt_flags_does_not_overwrite_normal_geometry(qtbot, tmp_path):
+def test_native_resize_before_qt_flags_does_not_overwrite_normal_geometry(qtbot, tmp_path, monkeypatch):
     window = QWidget()
     qtbot.addWidget(window)
     store = WindowStateStore(window, tmp_path / "ui-state.json")
@@ -97,10 +97,13 @@ def test_native_resize_before_qt_flags_does_not_overwrite_normal_geometry(qtbot,
     original = json.loads(store.path.read_text())["normal_rect"]
     # Win32 has already maximized/minimized, but Qt's state flag is stale.
     window._chrome = SimpleNamespace(placement_state=lambda: "maximized")
+    second = SimpleNamespace(name=lambda: "secondary", availableGeometry=lambda: QRect(1680, 0, 1680, 1002))
+    monkeypatch.setattr(window, "screen", lambda: second)
     window.setGeometry(0, 0, 1680, 1002)
     store.flush()
     assert json.loads(store.path.read_text())["normal_rect"] == original
     assert json.loads(store.path.read_text())["maximized"]
+    assert json.loads(store.path.read_text())["screen"] == "secondary"
     window._chrome.placement_state = lambda: "minimized"
     window.move(-32000, -32000)
     store.flush()
