@@ -181,6 +181,15 @@ python scripts/build_app_icons.py
 
 ## 发布流程
 
+### 0.8.9 beta 2 发布检查（2026-10-23）
+
+- 从 `codex/fluent-design-polish` 发布提交 `fddbcea3663292153c2a384b85d6afca9fdc7194`，版本与标签为 `0.8.9b2` / `v0.8.9b2`。包含第二轮 Fluent 精修、Windows 自绘窗口按钮、更新说明 Markdown，以及四张背景的手部修正；保留既有版本标签与附件。
+- 本地全量 1031 项测试通过、5 项跳过，Ruff、编译与 diff 检查通过；同一发布提交的 [CI 39894300075](https://github.com/itsVicOC/bilibili-downloader/actions/runs/39894300075) 全部 15 项检查通过，[Release 39894355027](https://github.com/itsVicOC/bilibili-downloader/actions/runs/39894355027) 全部 5 项任务成功。
+- [v0.8.9b2](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9b2) 已公开，非草稿、标记为预发布版；14 个附件齐全，公开 SHA-256 清单的 13 个载荷摘要均与 GitHub digest 一致，四份 SBOM 及两份原生安装验证报告通过复核。稳定版 Latest 仍为 `v0.8.8`。
+- macOS arm64 的实际 DMG 在本机只读挂载、临时复制、签名、526 个载荷文件与冻结 CLI 验证通过，结果与 CI 报告一致；full / lite ZIP 内的版本、构建元信息及各 24 个背景资源与发布源码一致。Windows CI 完成安装、覆盖安装、运行中拦截、更新后卸载及用户媒体保留验证。
+- 使用公开 GitHub 版本元信息回放应用的更新选择逻辑：`0.8.9b1` 的最新版本通道可发现 `v0.8.9b2`，`0.8.9b2` 不重复提示，`0.8.8` 稳定通道不发现 beta。此项未执行安装升级或镜像部署。
+- Windows 标题栏验证包含托管环境下 100% / 125% / 150% / 200% 的 Qt 缩放及桌面合成截图；Windows 11、100%、单屏的用户实机、实际 Snap 浮层、系统 DPI 与混合 DPI 多屏仍未标记通过，范围见[第二轮验证记录](FLUENT_V2_VALIDATION.md)。
+
 ### 0.8.8 发布检查（2026-10-21）
 
 - 版本与正式标签统一为 `0.8.8` / `v0.8.8`；更新日志、中英文 README 与文档中心同步。本版修复 Windows 11 激活时旧标题栏重现，以及最大化 / 还原按钮点击失效。
