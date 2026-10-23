@@ -72,9 +72,7 @@
 
 下载、直播与设置采用统一底部操作卡；页签和任务工具栏保留清晰底色，支持键盘焦点提示。主题卡分别标识选中与焦点，任务记录移除使用轻量操作。
 
-`v0.8.9b2`（0.8.9 beta 2）基于 `codex/fluent-design-polish` 分支继续 [Fluent Design 精修](docs/FLUENT_DESIGN.md)：统一中性材质与状态反馈，修复 Windows 窗口按钮的底色、悬停和最大化／还原行为，支持 Markdown 更新说明，并修正四张背景的手部。保留粉紫／青蓝、小流、粉底白字、现有导航及下载／录制流程。试用请查看 [beta 2 预发布版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9b2)；自动更新需选择包含预发布版的通道。稳定版仍为 `v0.8.8`。[更新日志](CHANGELOG.md#v089b2---2026-10-23) · [第二轮验收](docs/FLUENT_V2_VALIDATION.md) · [背景手部对比](docs/BACKGROUND_HAND_REVIEW.md)。
-
-当前分支继续进行 Fluent 精修：支持矮窗口紧凑布局，统一目录、反馈与背景预览，并自动记住主窗口大小、位置和最大化状态。分支改动尚未纳入上述 beta 2 安装包，效果对照与验证范围见[第四轮验收](docs/FLUENT_V4_VALIDATION.md)。
+`v0.8.9b3`（0.8.9 beta 3）基于 `codex/fluent-design-polish` 分支完成新一轮 [Fluent Design 精修](docs/FLUENT_DESIGN.md)：横向作品摘要、响应式规格和附加内容、矮窗口紧凑布局、统一设置与任务操作，并自动记住主窗口大小、位置和最大化状态。保留粉紫／青蓝、小流、粉底白字、Markdown 更新说明及 Windows 自绘窗口按钮。试用请查看 [beta 3 预发布版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9b3)；自动更新需选择包含预发布版的通道。稳定版仍为 `v0.8.8`。[更新日志](CHANGELOG.md#v089b3---2026-10-23) · [第三轮验收](docs/FLUENT_V3_VALIDATION.md) · [第四轮验收与窗口记忆](docs/FLUENT_V4_VALIDATION.md)。
 
 ## 下载与安装
 
