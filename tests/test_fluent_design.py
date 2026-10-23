@@ -62,29 +62,38 @@ def test_text_selection_remains_visible_with_and_without_keyboard_focus(qapp, qt
     layout.addWidget(button)
     host.resize(680, 320)
     host.show()
+    host.raise_()
     host.activateWindow()
     qtbot.waitExposed(host)
+    qtbot.waitUntil(host.isActiveWindow)
     p = theme_palette(dark, theme_id)
     for group in (QPalette.Active, QPalette.Inactive, QPalette.Disabled):
         assert qapp.palette().color(group, QPalette.Highlight) == QColor(p.text_selection)
         assert qapp.palette().color(group, QPalette.HighlightedText) == QColor(p.text_selection_text)
     for index, field in enumerate(fields):
         field.setFocus()
+        qtbot.waitUntil(field.hasFocus)
         field.selectAll()
         qtbot.wait(30)
         for focused in (True, False):
             if not focused:
                 button.setFocus()
+                qtbot.waitUntil(button.hasFocus)
+                qapp.processEvents()
                 # QLineEdit normally deselects on Tab/mouse focus loss. A
                 # programmatic selection in an unfocused field must still use
                 # the same readable inactive palette.
                 field.selectAll()
                 qtbot.wait(30)
+            selection = field.selectedText() if isinstance(field, QLineEdit) else field.textCursor().selectedText()
+            assert selection, (index, focused, field.hasFocus(), host.isActiveWindow())
             image = field.grab().toImage()
             colors = [image.pixelColor(x, y).name()
                       for x in range(image.width()) for y in range(image.height())]
-            assert colors.count(p.text_selection) > 200, (index, focused)
-            assert colors.count(p.text_selection_text) > 20, (index, focused)
+            selected_pixels = colors.count(p.text_selection)
+            selected_text_pixels = colors.count(p.text_selection_text)
+            assert selected_pixels > 200, (index, focused, selected_pixels)
+            assert selected_text_pixels > 20, (index, focused, selected_text_pixels)
     evidence = Path("build/ui-parity/selection")
     evidence.mkdir(parents=True, exist_ok=True)
     assert host.grab().save(str(evidence / f"{theme_id}-{'dark' if dark else 'light'}.png"))
