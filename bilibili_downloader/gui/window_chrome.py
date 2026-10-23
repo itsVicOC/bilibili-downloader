@@ -110,5 +110,5 @@ class WindowChrome(QObject):
             from bilibili_downloader.gui.windows_frame import WindowsFrame
 
             self._native = WindowsFrame(self)
-        self._native.hwnd = msg.hwnd
+        self._native.hwnd = msg.hWnd
         return self._native.event(msg)

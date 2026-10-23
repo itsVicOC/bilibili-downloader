@@ -117,6 +117,24 @@ def fake_frame(window):
     return frame
 
 
+def test_native_message_uses_the_windows_handle_field(qtbot, monkeypatch):
+    """Decode a real ctypes MSG even when the desktop backend is offscreen."""
+    import bilibili_downloader.gui.window_chrome as module
+
+    window = ChromeWindow()
+    qtbot.addWidget(window)
+    seen = []
+    adapter = SimpleNamespace(hwnd=None, event=lambda msg: seen.append(msg.message) or 12)
+    window.chrome._native = adapter
+    monkeypatch.setattr(module, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(module.QApplication, "platformName", lambda: "windows")
+    msg = wintypes.MSG(hWnd=1234, message=0x0084)
+    assert window.chrome.native_event(ctypes.addressof(msg)) == 12
+    assert adapter.hwnd == 1234 and seen == [0x0084]
+    # Restore before QObject teardown can send native/visibility events.
+    window.chrome._native = None
+
+
 @pytest.mark.parametrize("action,x", [("minimize", 785), ("maximize", 831), ("close", 877)])
 def test_native_release_fires_once_and_drag_out_cancels(qtbot, monkeypatch, action, x):
     window = ChromeWindow()

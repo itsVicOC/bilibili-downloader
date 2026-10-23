@@ -179,6 +179,27 @@ def test_deterministic_previews_can_disable_motion(qapp, qtbot):
         qapp.setProperty("uiAnimationsEnabled", previous)
 
 
+def test_tabs_keep_keyboard_focus_without_mouse_focus_ring(qapp, qtbot):
+    from PySide6.QtWidgets import QTabBar
+
+    manager = ThemeManager(qapp)
+    tabs = QTabBar()
+    tabs.addTab("下载队列")
+    tabs.addTab("录制历史")
+    qtbot.addWidget(tabs)
+    tabs.show()
+    tabs.activateWindow()
+    qtbot.mouseClick(tabs, Qt.LeftButton, pos=tabs.tabRect(1).center())
+    assert tabs.property("keyboardFocus") is False
+    before = tabs.sizeHint()
+    tabs.clearFocus()
+    tabs.setFocus(Qt.TabFocusReason)
+    qapp.processEvents()
+    assert tabs.property("keyboardFocus") is True
+    assert tabs.sizeHint() == before
+    manager.deleteLater()
+
+
 @pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])
 @pytest.mark.parametrize("dark", [False, True])
 def test_wallpaper_tabs_keep_a_readable_surface(workspace, qapp, dark, theme_id):
