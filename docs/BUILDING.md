@@ -181,6 +181,17 @@ python scripts/build_app_icons.py
 
 ## 发布流程
 
+### 0.8.9 beta 4 发布检查（2026-10-23）
+
+- 从 `codex/fluent-design-polish` 发布提交 `087b56308aea5affaf702a13635323d3f964f5ad`，版本与标签为 `0.8.9b4` / `v0.8.9b4`。包含目录按钮邻近布局、任务整行悬停、录制历史整场移除与撤销、需确认的前台剪贴板识别；保留已有配置、媒体文件、任务数据库结构及旧版标签。
+- 版本更新后本地全量 1124 项测试通过、6 项平台相关跳过，Ruff、编译与 diff 检查通过；实际 beta 4 更新说明在两套配色 × 深浅模式下通过 Cocoa 原生 Markdown 检查，无水平滚动。功能及截图范围见[第五轮验收](FLUENT_V5_VALIDATION.md)。
+- 同一发布提交的 [CI 39975312944](https://github.com/itsVicOC/bilibili-downloader/actions/runs/39975312944) 全部 15 项检查一次通过，包括三平台完整回归、原生更新器与录制引擎、依赖审计和四档 Windows 窗口按钮检查。Windows Python 3.11／3.12 全量均 1115 通过、15 跳过；macOS 与 Linux 全量 1116 通过、14 跳过；Windows／macOS 原生专项各 128 通过、1 跳过。
+- macOS arm64 DMG 已在本机只读挂载、临时复制，并通过签名结构、526 个载荷文件与冻结 CLI 验证；包内版本与构建元信息为 `0.8.9b4`，未安装到 Applications 或启动用户业务服务。full／lite ZIP 各 24 个背景资源与发布源码一致。
+- [Release 39975344666](https://github.com/itsVicOC/bilibili-downloader/actions/runs/39975344666) 全部 5 项任务成功；[v0.8.9b4](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9b4) 于 2026-10-23 23:34（北京时间）公开，非草稿、标记为预发布版，14 个附件齐全。Latest 稳定版仍为 `v0.8.8`，旧版标签和附件未覆盖。
+- 下载的构建载荷与公开附件逐项核对：13 项 SHA-256 清单全部匹配，14 项本地摘要均与 GitHub digest 一致。完整 bundle 验证通过，包含 4 个 ZIP（2956 个文件）、4 份 SBOM（733 个组件）、2 个原生安装器及 8563 个 FFmpeg 源码文件；公开更新说明与发布提交的更新日志一致。两份原生报告绑定的安装器和 ZIP 摘要一致，Windows CI 验证 958 个载荷文件、安装／覆盖安装、运行中拦截、更新后卸载及媒体保留。四个 ZIP 各 24 个背景资源与发布源码一致。
+- 使用公开 GitHub 元信息回放更新选择逻辑：`0.8.9b1`、`0.8.9b2`、`0.8.9b3` 在最新版本通道发现 `v0.8.9b4`，`0.8.9b4` 不重复提示，`0.8.8` 稳定通道不发现 beta；此项未对用户数据执行安装升级，也未部署镜像。
+- Windows 原生测试及 100%／125%／150%／200% Qt 缩放来自 CI 托管桌面。Windows 11、100%、单屏用户实机，实际 Snap、系统 DPI、混合 DPI 多屏、跨应用剪贴板切换及系统托盘点击仍未计为人工验证通过；平台边界保留在[第五轮验收](FLUENT_V5_VALIDATION.md)。
+
 ### 0.8.9 beta 3 发布检查（2026-10-23）
 
 - 从 `codex/fluent-design-polish` 发布提交 `84190f411da0e90ced2c833ae46d9d91c01f11d2`，版本与标签为 `0.8.9b3` / `v0.8.9b3`。包含第三、四轮 Fluent 精修、矮窗口紧凑布局、反馈与背景预览统一，以及主窗口大小、位置和最大化状态记忆；已有账号、配置、任务数据库及发布标签保留。

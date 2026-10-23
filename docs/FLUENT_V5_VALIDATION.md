@@ -47,6 +47,10 @@
 | Windows 100%／125%／150%／200% Qt 缩放 | 原生窗口按钮、鼠标输入与几何检查通过，336 张截图 |
 | 完整 CI | [39966881345](https://github.com/itsVicOC/bilibili-downloader/actions/runs/39966881345)，最终 15／15 项通过，代码 `4ff35c7` |
 
+`v0.8.9b4` 已公开为预发布版，[Release 39975344666](https://github.com/itsVicOC/bilibili-downloader/actions/runs/39975344666) 的 5 项任务全部通过，14 个附件及完整性校验齐全；稳定版 Latest 保持 `v0.8.8`。macOS DMG 另在本机完成只读挂载、载荷与冻结 CLI 复核。
+
+版本更新后的发布提交 `087b563` 通过 [CI 39975312944](https://github.com/itsVicOC/bilibili-downloader/actions/runs/39975312944) 全部 15 项检查，无重试；本地全量仍为 1124 通过、6 跳过。实际 beta 4 更新说明的四种主题组合也已完成 Cocoa 原生检查。安装包与公开附件验收见[发布记录](BUILDING.md#089-beta-4-发布检查2026-10-23)。
+
 最终运行中 Linux 录制器的 FFmpeg 依赖安装遇到下载停滞，保留其他 14 项结果后单独换 runner 重跑该作业；第二次通过。原生录制器、更新器及依赖审计均通过，此处为功能代码 CI，beta 4 安装包另由标签发布流水线构建与验证。
 
 原生剪贴板检查使用真实平台剪贴板，保存并恢复全部原 MIME 格式，验证启动前文本、主窗口激活、隐藏后复制并恢复、确认仅启动一次。注入测试另外断言后台零读取、确认前零解析、输入不变、忽略去重、短链路由、设置草稿与空闲后不持续读取。原生菜单通过 `aboutToShow/aboutToHide` 暂停和恢复，覆盖 Cocoa 没有 `activePopupWidget` 的情况，并有独立信号检查。尚未将原生跨应用切换、系统级托盘点击、Windows 11 用户实机、实际 Snap、系统 DPI 和混合 DPI 多屏标记通过。
