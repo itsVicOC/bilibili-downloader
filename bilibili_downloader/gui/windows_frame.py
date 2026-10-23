@@ -44,6 +44,7 @@ class WindowsFrame:
             "GetCursorPos": ([ctypes.POINTER(wintypes.POINT)], wintypes.BOOL),
             "GetDpiForWindow": ([wintypes.HWND], wintypes.UINT),
             "IsZoomed": ([wintypes.HWND], wintypes.BOOL),
+            "IsIconic": ([wintypes.HWND], wintypes.BOOL),
             "GetSystemMetricsForDpi": ([ctypes.c_int, wintypes.UINT], ctypes.c_int),
             "SetCapture": ([wintypes.HWND], wintypes.HWND),
             "ReleaseCapture": ([], wintypes.BOOL),
@@ -63,6 +64,11 @@ class WindowsFrame:
         # native state normal. WM_SIZE from ShowWindow keeps both in sync and
         # lets Windows own the normal placement and restore geometry.
         self.user32.ShowWindow(self.hwnd, command)
+
+    def placement_state(self):
+        if self.user32.IsIconic(self.hwnd):
+            return "minimized"
+        return "maximized" if self.user32.IsZoomed(self.hwnd) else "normal"
 
     def configure(self):
         if self.window.isFullScreen():

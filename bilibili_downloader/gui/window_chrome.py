@@ -122,3 +122,6 @@ class WindowChrome(QObject):
         self._sync_native()
         self._native.show_window(command)
         return True
+
+    def placement_state(self):
+        return self._native.placement_state() if self._native and self._native.hwnd else None

@@ -144,7 +144,8 @@ class WindowStateStore(QObject):
         screen = choose_screen(QGuiApplication.screens(), self._screen_name, self._normal)
         if not screen:
             return
-        if self.window.isMaximized() or self.window.isFullScreen() or self.window.isMinimized():
+        if (self.window.isMaximized() or self.window.isFullScreen() or self.window.isMinimized()
+                or self._native_state() in ("maximized", "minimized")):
             return
         self._set_minimum(screen)
         frame = self.window.frameGeometry()
@@ -161,8 +162,11 @@ class WindowStateStore(QObject):
         window = self.window
         if not self._ready or self._restoring:
             return
-        if window.isVisible() and not window.isMinimized() and not window.isFullScreen():
-            self._maximized = window.isMaximized()
+        native_state = self._native_state()
+        if window.isVisible() and not window.isMinimized() and not window.isFullScreen() and native_state != "minimized":
+            # ShowWindow resizes the Win32 client before Qt updates its flags.
+            # Either backend reporting maximization protects the normal rect.
+            self._maximized = window.isMaximized() or native_state == "maximized"
             if not self._maximized:
                 self._normal = QRect(window.geometry())
                 self._geometry = bytes(window.saveGeometry().toBase64()).decode("ascii")
@@ -170,6 +174,10 @@ class WindowStateStore(QObject):
                 if screen:
                     self._screen_name = screen.name()
                     self._available = screen.availableGeometry()
+
+    def _native_state(self):
+        chrome = getattr(self.window, "_chrome", None)
+        return chrome.placement_state() if chrome else None
 
     def eventFilter(self, target, event):
         if target is self.window and self._ready and not self._restoring:

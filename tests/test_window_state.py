@@ -87,6 +87,26 @@ def test_failed_atomic_save_keeps_previous_record_and_does_not_raise(qtbot, tmp_
     assert store._warned and not store._timer.isActive()
 
 
+def test_native_resize_before_qt_flags_does_not_overwrite_normal_geometry(qtbot, tmp_path):
+    window = QWidget()
+    qtbot.addWidget(window)
+    store = WindowStateStore(window, tmp_path / "ui-state.json")
+    store.show_initial()
+    flush()
+    store.flush()
+    original = json.loads(store.path.read_text())["normal_rect"]
+    # Win32 has already maximized/minimized, but Qt's state flag is stale.
+    window._chrome = SimpleNamespace(placement_state=lambda: "maximized")
+    window.setGeometry(0, 0, 1680, 1002)
+    store.flush()
+    assert json.loads(store.path.read_text())["normal_rect"] == original
+    assert json.loads(store.path.read_text())["maximized"]
+    window._chrome.placement_state = lambda: "minimized"
+    window.move(-32000, -32000)
+    store.flush()
+    assert json.loads(store.path.read_text())["normal_rect"] == original
+
+
 @pytest.mark.parametrize("maximized", [False, True])
 def test_cold_process_restart_restores_placement(tmp_path, maximized):
     # A new QApplication and interpreter ensure this is disk persistence,
