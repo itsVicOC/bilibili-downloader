@@ -4,7 +4,7 @@
 
 项目入口：[官方网站 · 1008.si](https://1008.si/) · [中文 README](../README.md) · [English README](../README.en.md)。详细指南目前以简体中文为主。
 
-`codex/fluent-design-polish` 分支在 beta 3 之后增加目录按钮邻近布局、任务整行悬停、录制历史整场移除与撤销、前台剪贴板识别。本轮保留版本号，尚未发布安装包；功能说明与截图见[第五轮验收](FLUENT_V5_VALIDATION.md)，不能将其视为现有 beta 3 安装包的功能。
+`v0.8.9b4`（0.8.9 beta 4）增加目录按钮邻近布局、任务整行悬停、录制历史整场移除与撤销、前台剪贴板识别。功能说明与截图见[第五轮验收](FLUENT_V5_VALIDATION.md)，安装包见 [beta 4 预发布版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9b4)。
 
 `v0.8.9b3`（0.8.9 beta 3）基于 `codex/fluent-design-polish` 分支，包含第三、四轮 Fluent 精修、矮窗口紧凑布局和主窗口大小／位置／最大化状态记忆。截图、前后对比及验证范围见[第三轮验收](FLUENT_V3_VALIDATION.md)和[第四轮验收](FLUENT_V4_VALIDATION.md)，安装包见 [beta 3 预发布版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9b3)。
 
@@ -12,7 +12,7 @@
 
 `v0.8.9b1`（0.8.9 beta1）的界面规范见 [Fluent Design 精修](FLUENT_DESIGN.md)，包含设计参数、动效规则与视觉验证方法；粉底白字、文本选区及 Windows 标题栏悬停的结果见[可读性验收记录](UI_READABILITY_VALIDATION.md)。
 
-本次文档对应 `v0.8.9b3` 预发布版，稳定版仍为 `v0.8.8`。窗口激活、最大化与还原及双平台界面检查见[视觉规范与验证](UI_DESIGN.md)，小流的十二套动画与时段规则见[小流设计与预览](MASCOT_DESIGN.md)，五类设置、模式与背景玻璃模糊见[用户指南](USER_GUIDE.md)，版本变化和验证范围见[更新日志](../CHANGELOG.md#v089b3---2026-10-23)。
+本次文档对应 `v0.8.9b4` 预发布版，稳定版仍为 `v0.8.8`。窗口激活、最大化与还原及双平台界面检查见[视觉规范与验证](UI_DESIGN.md)，小流的十二套动画与时段规则见[小流设计与预览](MASCOT_DESIGN.md)，五类设置、模式与背景玻璃模糊见[用户指南](USER_GUIDE.md)，版本变化和验证范围见[更新日志](../CHANGELOG.md#v089b4---2026-10-23)。
 
 ## 推荐阅读路线
 
