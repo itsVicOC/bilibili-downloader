@@ -25,7 +25,7 @@ def test_window_state_methods_share_the_platform_adapter(workspace, monkeypatch)
 @pytest.mark.skipif(sys.platform != "win32", reason="Requires native Windows")
 @pytest.mark.parametrize("mode", ["light", "dark"])
 @pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])
-def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspace, mode, theme_id):
+def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspace, monkeypatch, mode, theme_id):
     """Exercise real Win32 input; QTest.mouseClick bypasses WM_NCHITTEST."""
     import json
     import os
@@ -33,7 +33,6 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
     from pathlib import Path
     from threading import Event, Thread
     from time import sleep
-    from types import SimpleNamespace
 
     from PySide6.QtCore import QPoint, QRect
     from PySide6.QtGui import QColor, QFont, QPalette
@@ -384,18 +383,15 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
         qtbot.waitUntil(window.isActiveWindow)
         assert_clear("reshown")
         closed = []
-        previous_lifecycle = window._lifecycle
         def close_to_tray():
             closed.append(True)
             window.hide()
-        window._lifecycle = SimpleNamespace(platform="win32", close_window=close_to_tray)
-        try:
+        with monkeypatch.context() as close_patch:
+            close_patch.setattr(window._lifecycle, "close_window", close_to_tray)
             x, y, right, height, width = caption_bounds()
             click(x + right - width // 2, y + height // 2)
             qtbot.waitUntil(window.isHidden)
             assert closed == [True] and not window._quit_requested
-        finally:
-            window._lifecycle = previous_lifecycle
     finally:
         if hasattr(qapp.styleHints(), "unsetColorScheme"):
             qapp.styleHints().unsetColorScheme()
