@@ -210,6 +210,12 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
                 left - round(origin.x() * dpr), y - round(origin.y() * dpr), width, height,
             ))
             assert image.save(str(evidence / f"{theme_id}-{mode}-{stage}-{button}-hover.png"))
+            (evidence / f"{theme_id}-{mode}-{stage}-{button}-hover.json").write_text(json.dumps({
+                "native_tracking": window._chrome.controls.native_tracking,
+                "active": window.isActiveWindow(),
+                "states": {key: {"hovered": item.hovered, "value": item._hover.value, "target": item._hover.target}
+                           for key, item in window._chrome.controls.buttons.items()},
+            }, indent=2))
             # The button interior must be a neutral material plus a contrasting
             # glyph. Straight-alpha white hover pixels used to saturate this
             # entire area, leaving the white glyph invisible.
@@ -218,7 +224,7 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
             background = sorted(colors, key=lambda c: c.lightness())[len(colors) // 2]
             palette = theme_palette(mode == "dark", theme_id)
             expected = palette.caption_close_hover if button == "close" else palette.caption_hover
-            assert max(abs(a - b) for a, b in zip(background.getRgb()[:3], QColor(expected).getRgb()[:3])) <= 2
+            assert max(abs(a - b) for a, b in zip(background.getRgb()[:3], QColor(expected).getRgb()[:3])) <= 2, (stage, button, background.name(), expected)
             foreground = [c for c in colors if contrast_ratio(c.name(), background.name()) >= 3.0]
             assert len(foreground) >= 8, (stage, button, len(foreground))
             assert contrast_ratio(foreground[0].name(), background.name()) >= 3.0

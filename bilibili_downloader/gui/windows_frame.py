@@ -177,7 +177,7 @@ class WindowsFrame:
             self.cancel_press()
             return None
         if message in (0x02A2, 0x02A3):
-            self.chrome.controls.hover(None)
+            self.chrome.controls.leave_native()
             return None
         if self.window.isFullScreen():
             return None
@@ -190,9 +190,13 @@ class WindowsFrame:
                 if self._draggable(geometry[0], geometry[1], geometry[4]):
                     return 2  # HTCAPTION: native move, double-click and context menu.
             return None
+        if message == 0x0200 and not self.pressed:
+            if self.chrome.controls.native_tracking:
+                self.chrome.controls.leave_native()
+            return None
         if message == 0x00A0 or message == 0x0200 and self.pressed:
             action = self.action_at(self.geometry(msg.lParam, client=message == 0x0200))
-            self.chrome.controls.hover(action)
+            self.chrome.controls.hover(action, native=True)
             if self.pressed:
                 self.chrome.controls.buttons[self.pressed].setDown(action == self.pressed)
             if message == 0x00A0:
@@ -203,7 +207,7 @@ class WindowsFrame:
             action = self.action_at(self.geometry(msg.lParam))
             if action and self.window.isEnabled():
                 self.pressed = action
-                self.chrome.controls.hover(action)
+                self.chrome.controls.hover(action, native=True)
                 self.chrome.controls.buttons[action].setDown(True)
                 self.user32.SetCapture(self.hwnd)
                 return 0

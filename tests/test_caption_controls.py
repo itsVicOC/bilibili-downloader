@@ -177,6 +177,19 @@ def test_caption_keyboard_actions_and_deactivation(qtbot, monkeypatch):
     assert maximum._hover.value == 0 and not maximum.isDown()
 
 
+def test_native_hover_is_not_cleared_by_qt_nonclient_leave(qapp, qtbot):
+    window = ChromeWindow()
+    qtbot.addWidget(window)
+    window.show()
+    controls = window.chrome.controls
+    maximum = controls.buttons["maximize"]
+    controls.hover("maximize", native=True)
+    qapp.sendEvent(maximum, QEvent(QEvent.Leave))
+    assert maximum.hovered and maximum._hover.target == 1
+    controls.leave_native()
+    assert not maximum.hovered and maximum._hover.target == 0
+
+
 @pytest.mark.parametrize("scale", [1, 1.25, 1.5, 2])
 def test_native_coordinates_on_negative_monitor(qtbot, scale):
     window = ChromeWindow()

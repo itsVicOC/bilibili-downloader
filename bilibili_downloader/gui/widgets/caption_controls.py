@@ -44,9 +44,10 @@ class CaptionButton(QAbstractButton):
         self._hover.settle()
 
     def event(self, event):
-        if event.type() == QEvent.Enter:
+        native_tracking = getattr(self.parentWidget(), "native_tracking", False)
+        if event.type() == QEvent.Enter and not native_tracking:
             self.set_hovered(True)
-        elif event.type() == QEvent.Leave:
+        elif event.type() == QEvent.Leave and not native_tracking:
             self.set_hovered(False)
         elif event.type() in (QEvent.Hide, QEvent.EnabledChange):
             self.reset()
@@ -102,6 +103,7 @@ class CaptionControls(QWidget):
     def __init__(self, window):
         super().__init__(window)
         self.setObjectName("CaptionControls")
+        self.native_tracking = False
         self.buttons = {}
         for index, name in enumerate(CAPTION_ACTIONS):
             button = CaptionButton(name, self)
@@ -125,12 +127,19 @@ class CaptionControls(QWidget):
             button.update()
 
     def reset(self):
+        self.native_tracking = False
         for button in self.buttons.values():
             button.reset()
 
-    def hover(self, action):
+    def hover(self, action, *, native=False):
+        if native:
+            self.native_tracking = True
         for name, button in self.buttons.items():
             button.set_hovered(name == action)
+
+    def leave_native(self):
+        self.native_tracking = False
+        self.hover(None)
 
     def invoke(self, action):
         window = self.window()
