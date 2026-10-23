@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QPushButton,
     QVBoxLayout,
 )
@@ -72,6 +73,11 @@ class ClipboardController(QObject):
         self._handled = None
         self._disposed = False
         self._refreshing = False
+        self._menu_depth = 0
+        self._menus = window.menuBar().findChildren(QMenu)
+        for menu in self._menus:
+            menu.aboutToShow.connect(self._menu_opened)
+            menu.aboutToHide.connect(self._menu_closed)
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)
         self.timer.setInterval(150)
@@ -95,7 +101,17 @@ class ClipboardController(QObject):
         return (not self._disposed and isValid(w) and w._settings.clipboard_monitor_enabled
                 and not w._startup_paused and not w._quit_requested and not w._update_in_progress
                 and getattr(w, "_shell_enabled", True) and w.isVisible() and not w.isMinimized() and self.foreground()
+                and not self._menu_depth
                 and QApplication.activeModalWidget() is None and QApplication.activePopupWidget() is None)
+
+    def _menu_opened(self):
+        # Cocoa's native menu bar does not create an activePopupWidget.
+        self._menu_depth += 1
+        self.schedule()
+
+    def _menu_closed(self):
+        self._menu_depth = max(0, self._menu_depth - 1)
+        QTimer.singleShot(0, self, self.schedule)
 
     def schedule(self, *_args):
         if self._disposed:
@@ -196,6 +212,11 @@ class ClipboardController(QObject):
         self.clipboard.dataChanged.disconnect(self.schedule)
         self.window._url_input.textChanged.disconnect(self.refresh_prompt)
         self.window._batch_page._url_text.textChanged.disconnect(self.refresh_prompt)
+        for menu in self._menus:
+            if isValid(menu):
+                menu.aboutToShow.disconnect(self._menu_opened)
+                menu.aboutToHide.disconnect(self._menu_closed)
+        self._menus.clear()
         app = QApplication.instance()
         app.applicationStateChanged.disconnect(self.schedule)
         app.focusWindowChanged.disconnect(self.schedule)

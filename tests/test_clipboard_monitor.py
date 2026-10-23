@@ -124,6 +124,20 @@ def test_idle_prompt_settles_without_clipboard_polling(monitor, qtbot):
     assert not manager.timer.isActive()
 
 
+def test_native_menu_signals_suspend_reads_without_a_popup_widget(monitor, qtbot):
+    manager, clipboard, _, calls = monitor
+    manager.check()
+    menu = manager._menus[0]
+    reads = clipboard.reads
+    menu.aboutToShow.emit()
+    manager.check()
+    assert clipboard.reads == reads
+    assert not manager.prompt.isVisible() and not calls
+    menu.aboutToHide.emit()
+    qtbot.waitUntil(manager.prompt.isVisible)
+    assert not calls
+
+
 def test_multiple_inputs_go_directly_to_batch_after_confirmation(monitor, workspace, monkeypatch):
     manager, clipboard, _, calls = monitor
     batch = workspace._batch_page
