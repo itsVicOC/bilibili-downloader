@@ -2,6 +2,7 @@
 
 import ctypes
 import sys
+from types import SimpleNamespace
 
 import pytest
 from PySide6.QtCore import Qt
@@ -20,6 +21,19 @@ def test_window_state_methods_share_the_platform_adapter(workspace, monkeypatch)
     workspace.setWindowState(Qt.WindowMinimized | Qt.WindowMaximized)
     workspace.setWindowState(Qt.WindowNoState)
     assert commands == [3, 1, 6, 3, 6, 1]
+
+
+def test_close_delegates_without_interrupting_activity_refresh(workspace, monkeypatch):
+    closed = []
+    def close_to_tray():
+        closed.append(True)
+        workspace.hide()
+    lifecycle = SimpleNamespace(platform="win32", close_window=close_to_tray, refresh_activity=lambda: None)
+    monkeypatch.setattr(workspace, "_lifecycle", lifecycle)
+    workspace.show()
+    workspace.close()
+    workspace._refresh_activity()
+    assert workspace.isHidden() and closed == [True] and not workspace._quit_requested
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Requires native Windows")
@@ -387,7 +401,9 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
             closed.append(True)
             window.hide()
         with monkeypatch.context() as close_patch:
-            close_patch.setattr(window._lifecycle, "close_window", close_to_tray)
+            close_patch.setattr(window, "_lifecycle", SimpleNamespace(
+                platform="win32", close_window=close_to_tray, refresh_activity=lambda: None,
+            ))
             x, y, right, height, width = caption_bounds()
             click(x + right - width // 2, y + height // 2)
             qtbot.waitUntil(window.isHidden)
