@@ -189,6 +189,7 @@ def test_tabs_keep_keyboard_focus_without_mouse_focus_ring(qapp, qtbot):
     qtbot.addWidget(tabs)
     tabs.show()
     tabs.activateWindow()
+    qtbot.waitUntil(tabs.isActiveWindow)
     qtbot.mouseClick(tabs, Qt.LeftButton, pos=tabs.tabRect(1).center())
     assert tabs.property("keyboardFocus") is False
     before = tabs.sizeHint()
