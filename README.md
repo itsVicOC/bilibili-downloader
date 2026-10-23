@@ -74,6 +74,8 @@
 
 `v0.8.9b2`（0.8.9 beta 2）基于 `codex/fluent-design-polish` 分支继续 [Fluent Design 精修](docs/FLUENT_DESIGN.md)：统一中性材质与状态反馈，修复 Windows 窗口按钮的底色、悬停和最大化／还原行为，支持 Markdown 更新说明，并修正四张背景的手部。保留粉紫／青蓝、小流、粉底白字、现有导航及下载／录制流程。试用请查看 [beta 2 预发布版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9b2)；自动更新需选择包含预发布版的通道。稳定版仍为 `v0.8.8`。[更新日志](CHANGELOG.md#v089b2---2026-10-23) · [第二轮验收](docs/FLUENT_V2_VALIDATION.md) · [背景手部对比](docs/BACKGROUND_HAND_REVIEW.md)。
 
+当前分支的截图展示第三轮 Fluent 精修：横向作品摘要、紧凑附加内容与设置保存栏、任务更多菜单。该轮改动尚未纳入上述 beta 2 安装包，效果对照与验证范围见[第三轮验收](docs/FLUENT_V3_VALIDATION.md)。
+
 ## 下载与安装
 
 访问 **[BiliFlow 官网 · 1008.si](https://1008.si/)** 了解项目，或直接从 **[GitHub Releases 下载最新正式版](https://github.com/itsVicOC/bilibili-downloader/releases/latest)**。想体验 beta 功能，可查看[全部版本](https://github.com/itsVicOC/bilibili-downloader/releases)；预发布版会带有 `Pre-release` 标记。

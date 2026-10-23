@@ -4,6 +4,8 @@
 
 项目入口：[官方网站 · 1008.si](https://1008.si/) · [中文 README](../README.md) · [English README](../README.en.md)。详细指南目前以简体中文为主。
 
+当前 `codex/fluent-design-polish` 开发分支进一步完成第三轮界面精修，截图和验证见[第三轮验收](FLUENT_V3_VALIDATION.md)。本分支的新布局尚未随新版本发布，下方 beta 2 链接保留其既有发布内容。
+
 `v0.8.9b2`（0.8.9 beta 2）基于 `codex/fluent-design-polish` 分支提供第二轮 Fluent 精修。Windows 自绘按钮、Markdown 更新说明、背景手部与截图记录见[第二轮验收](FLUENT_V2_VALIDATION.md)和[背景手部复核](BACKGROUND_HAND_REVIEW.md)。
 
 `v0.8.9b1`（0.8.9 beta1）的界面规范见 [Fluent Design 精修](FLUENT_DESIGN.md)，包含设计参数、动效规则与视觉验证方法；粉底白字、文本选区及 Windows 标题栏悬停的结果见[可读性验收记录](UI_READABILITY_VALIDATION.md)。
