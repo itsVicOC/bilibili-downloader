@@ -46,7 +46,7 @@ This README is available in English and Simplified Chinese. The current desktop 
   </picture>
 </p>
 
-**Quick navigation:** [Features](#features) · [Download and install](#download-and-install) · [Quick start](#quick-start) · [Screenshots](#screenshots) · [Supported sources](#supported-sources) · [Run from source](#run-from-source) · [FAQ](#faq) · [Documentation](#documentation) · [Contribute and support](#contribute-and-support)
+**Quick navigation:** [Features](#features) · [Download and install](#download-and-install) · [Quick start](#quick-start) · [Screenshots](#screenshots) · [Supported sources](#supported-sources) · [Run from source](#run-from-source) · [FAQ](#faq) · [Documentation](#documentation) · [Contribute and support](#contribute-and-support) · [Friend links](#friend-links)
 
 > BiliFlow does not bypass membership, payment, regional restrictions, DRM, or account permissions. Permission to watch does not automatically grant permission to keep, redistribute, or commercially use a copy. Read the [copyright and usage policy](docs/COPYRIGHT.md) before downloading.
 
@@ -338,6 +338,10 @@ If BiliFlow helps you, give it a Star on [GitHub](https://github.com/itsVicOC/bi
 - **Report vulnerabilities:** follow the private reporting channel in the [security policy](SECURITY.md).
 
 Thanks to the contributors behind [PySide6 / Qt](https://doc.qt.io/qtforpython-6/), [FFmpeg](https://ffmpeg.org/), [Mesio / rust-srec](https://github.com/hua0512/rust-srec), and the other open-source dependencies. See [third-party notices](THIRD_PARTY_NOTICES.md) for artwork and licenses.
+
+## Friend links
+
+- [linux.do](https://linux.do/)
 
 ## Privacy and disclaimer
 
