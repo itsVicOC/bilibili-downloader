@@ -68,13 +68,9 @@
 
 `v0.8.3` 为软件更新接入[官方镜像](https://1008.si/download/)，优先加速查询和下载，网络失败时自动尝试 GitHub。v0.8.2 及更早版本可从官网加速下载本版后手动安装；后续更新走镜像。
 
-`v0.8.8` 正式版修复 Windows 11 点击下载页空白后偶发出现旧原生标题栏，以及最大化 / 还原失效的问题；新增真实 Windows 鼠标输入、窗口激活与状态检查。`v0.8.7` 用户可在「设置 → 关于与更新」检查升级。此前的小流时段动画、背景玻璃及设置优化继续保留。[查看更新日志](CHANGELOG.md#v088---2026-10-21) · [小流动画预览](docs/MASCOT_DESIGN.md)。
+`v0.8.9` 正式版汇总全界面 [Fluent Design 精修](docs/FLUENT_DESIGN.md)：横向作品摘要、响应式规格和附加内容、矮窗口紧凑布局、统一设置与任务操作，并记住主窗口大小、位置和最大化状态。保留粉紫／青蓝、小流、粉底白字、Markdown 更新说明及 Windows 自绘窗口按钮。用户已完成 Windows 和 macOS 实机验证。[下载 0.8.9 正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9) · [更新日志](CHANGELOG.md#v089---2026-10-24)。
 
-下载、直播与设置采用统一底部操作卡；页签和任务工具栏保留清晰底色，支持键盘焦点提示。主题卡分别标识选中与焦点，任务记录移除使用轻量操作。
-
-`v0.8.9b4`（0.8.9 beta 4）基于 `codex/fluent-design-polish` 分支完成新一轮 [Fluent Design 精修](docs/FLUENT_DESIGN.md)：横向作品摘要、响应式规格和附加内容、矮窗口紧凑布局、统一设置与任务操作，并自动记住主窗口大小、位置和最大化状态。保留粉紫／青蓝、小流、粉底白字、Markdown 更新说明及 Windows 自绘窗口按钮。试用请查看 [beta 4 预发布版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9b4)；自动更新需选择包含预发布版的通道。稳定版仍为 `v0.8.8`。[更新日志](CHANGELOG.md#v089b4---2026-10-23) · [第三轮验收](docs/FLUENT_V3_VALIDATION.md) · [第四轮验收与窗口记忆](docs/FLUENT_V4_VALIDATION.md)。
-
-beta 4 新增目录按钮邻近布局、任务整行悬停、录制历史整场移除与撤销，以及默认开启、需确认的前台剪贴板识别。详见[第五轮交互验收](docs/FLUENT_V5_VALIDATION.md)。
+下载目录按钮紧随路径，任务中心采用整行悬停，录制历史支持整场移除与撤销；默认开启的前台剪贴板识别需确认后才解析，不自动加入队列。账号、配置、背景选择、任务和媒体文件保持兼容。操作说明与截图见[用户指南](docs/USER_GUIDE.md)、[窗口记忆验收](docs/FLUENT_V4_VALIDATION.md)和[交互验收](docs/FLUENT_V5_VALIDATION.md)。
 
 ## 下载与安装
 
