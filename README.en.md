@@ -70,11 +70,9 @@ This README is available in English and Simplified Chinese. The current desktop 
 
 Automatic updates are available starting with `v0.8.1b1` and are currently a beta feature. First install a version that includes the updater manually. Check [Releases](https://github.com/itsVicOC/bilibili-downloader/releases) for stable and prerelease status.
 
-Stable `v0.8.8` fixes the legacy caption that could reappear after clicking a blank area on Windows 11, along with unresponsive maximize and restore buttons. Native Windows checks now exercise real mouse input, activation, and window state. Users on `v0.8.7` can check for an update in Settings → About & Updates. Xiao Liu's time-based animations, wallpaper glass, and settings improvements remain available. See the [changelog](CHANGELOG.md#v088---2026-10-21) and [animation previews](docs/MASCOT_DESIGN.md) (Chinese).
+Stable `v0.8.9` brings the full [Fluent Design polish](docs/FLUENT_DESIGN.md): horizontal media summaries, responsive specifications and extras, compact layouts for shorter windows, consistent settings and task actions, and restoration of the main window's size, position, and maximized state. The pink/purple and blue themes, Xiao Liu, pink buttons with white labels, Markdown release notes, and custom Windows caption controls remain available. The user has completed testing on physical Windows and macOS machines. [Download stable 0.8.9](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9) · [Changelog](CHANGELOG.md#v089---2026-10-24) (Chinese).
 
-Downloads, live recording, and settings share consistent footer cards. Tabs and task tools retain readable surfaces over custom backgrounds, theme cards distinguish selection from keyboard focus, and record removal uses a quieter action style.
-
-Available quality, codecs, audio tracks, and subtitles depend on the source, your account permissions, and Bilibili's API response.
+Path actions now sit beside the download directory, task views highlight whole rows, and recording-history sessions can be removed with undo while keeping all media files. Foreground clipboard recognition is enabled by default and requires confirmation before parsing; it does not queue downloads automatically. Accounts, settings, wallpapers, tasks, and media remain compatible. See the [user guide](docs/USER_GUIDE.md), [window restoration validation](docs/FLUENT_V4_VALIDATION.md), and [interaction validation](docs/FLUENT_V5_VALIDATION.md) (Chinese).
 
 ## Download and install
 

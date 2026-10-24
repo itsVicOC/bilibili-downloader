@@ -11,6 +11,7 @@ from bilibili_downloader.core.models import AppSettings
 from bilibili_downloader.gui.dialogs.login_dialog import LoginDialog
 from bilibili_downloader.gui.dialogs.settings_dialog import SettingsDialog
 from bilibili_downloader.gui.main_window import MainWindow
+from bilibili_downloader.gui.resources.styles import UI_METRICS
 from bilibili_downloader.gui.resources.theme import ThemeManager
 from bilibili_downloader.gui.settings_sections import SettingsSection
 from bilibili_downloader.gui.widgets.download_options import (
@@ -179,9 +180,9 @@ def test_windows_has_no_menu_row_but_keeps_actions(tmp_path, qtbot):
 def test_card_whole_surface_and_keyboard_toggle(qtbot):
     card = DownloadOptionCard("下载弹幕", "ASS", "star")
     qtbot.addWidget(card)
-    card.resize(180, 76)
+    card.resize(180, UI_METRICS.option_card_height)
     card.show()
-    qtbot.mouseClick(card, Qt.LeftButton, pos=QPoint(170, 67))
+    qtbot.mouseClick(card, Qt.LeftButton, pos=QPoint(card.width() - 10, card.height() - 9))
     assert card.isChecked()
     qtbot.keyClick(card, Qt.Key_Space)
     assert not card.isChecked()
@@ -197,7 +198,7 @@ def test_download_cards_reflow_without_losing_values(qtbot):
     grid.setParent(None)
     qtbot.addWidget(grid)
     panel._danmaku_check.setChecked(True)
-    for width, columns in ((450, 2), (260, 1), (450, 2)):
+    for width, columns in ((680, 2), (320, 1), (680, 2)):
         grid.resize(width, 250)
         grid.show()
         QApplication.processEvents()

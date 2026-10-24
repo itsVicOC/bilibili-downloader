@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, codex/fluent-design-polish]
   pull_request:
     branches: [main, master]
 
@@ -46,15 +46,19 @@ jobs:
           pip install -c constraints.txt -e ".[dev]"
 
       - name: Check native desktop UI and capture parity evidence
-        timeout-minutes: 10
+        timeout-minutes: 20
         if: runner.os != 'Linux' && matrix.python-version == '3.12'
         shell: bash
         env:
           QT_QPA_PLATFORM: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
         run: |
-          python -m pytest -q tests/test_window_chrome.py tests/test_theme.py::test_theme_applies_same_font_to_body_and_native_bold_labels tests/test_ui_refresh.py::test_initial_focus_is_the_source_field
-          for scene in chrome ui-refresh appearance-controls glass; do
+          python -m scripts.configure_ui_test_display
+          python -X faulthandler -m pytest -vv -s --maxfail=1 tests/test_caption_controls.py tests/test_release_notes.py tests/test_theme.py::test_theme_applies_same_font_to_body_and_native_bold_labels tests/test_ui_refresh.py::test_initial_focus_is_the_source_field tests/test_fluent_design.py tests/test_fluent_refinement.py tests/test_window_state.py tests/test_fluent_window_polish.py tests/test_task_interactions.py tests/test_live_history_removal.py tests/test_clipboard_monitor.py tests/test_clipboard_native.py
+          for scene in chrome ui-refresh appearance-controls glass refinement interactions; do
             python -m scripts.capture_docs_screenshots --native --physical-pixels "--${scene}-only" --output-dir "build/ui-parity/$scene"
+          done
+          for color in star_trail bilibili_blue; do
+            python -m scripts.capture_docs_screenshots --native --physical-pixels --color-theme "$color" --output-dir "build/ui-parity/full/$color"
           done
 
       - name: Upload native desktop UI evidence
@@ -66,13 +70,51 @@ jobs:
           retention-days: 7
 
       - name: Run tests
+        id: pytest
         run: pytest -v
+
+      - name: Diagnose a Linux native crash
+        if: failure() && steps.pytest.outcome == 'failure' && runner.os == 'Linux' && matrix.python-version == '3.11'
+        run: |
+          sudo apt-get install --yes gdb
+          gdb --batch -ex 'set disable-randomization off' -ex run -ex 'thread apply all bt 30' --args python -X faulthandler -m pytest -v
 
       - name: Compile source
         run: python -m compileall -q bilibili_downloader tests scripts
 
       - name: Run static checks
         run: ruff check bilibili_downloader tests packaging_hooks scripts
+
+  caption:
+    name: Windows caption (${{ matrix.scale }}x)
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scale: ['1', '1.25', '1.5', '2']
+    env:
+      QT_QPA_PLATFORM: windows
+      QT_SCALE_FACTOR: ${{ matrix.scale }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install -c constraints.txt -e ".[dev]"
+      - name: Check native caption geometry and input
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          python -m scripts.configure_ui_test_display
+          python -X faulthandler -m pytest -vv -s --maxfail=1 tests/test_caption_controls.py tests/test_window_chrome.py
+      - name: Upload caption compositor evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: windows-caption-${{ matrix.scale }}x
+          path: build/ui-parity/chrome-regression
+          retention-days: 14
 
   updater:
     name: Native updater (${{ matrix.platform }})

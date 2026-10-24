@@ -154,6 +154,19 @@ def test_snapshot_can_be_restored_without_waiting_for_garbage_collection(transac
             gc.enable()
 
 
+def test_window_placement_survives_update_snapshot_and_rollback(transaction):
+    path, _ = transaction
+    data = path.parent.parent.parent
+    placement = data / "ui-state.json"
+    placement.write_text('{"version":1,"maximized":false}')
+    snapshot = path.parent / "snapshot"
+    helper._snapshot(data, snapshot)
+    placement.write_text('{"version":1,"maximized":true}')
+    helper._restore_snapshot(data, snapshot)
+    assert json.loads(placement.read_text())["maximized"]
+    assert not (snapshot / "ui-state.json").exists()
+
+
 @pytest.mark.parametrize("had_backgrounds", [True, False])
 def test_background_assets_are_restored_with_config(transaction, had_backgrounds):
     path, _ = transaction

@@ -27,13 +27,13 @@ from bilibili_downloader.core.models import (
 )
 from bilibili_downloader.gui.resources.styles import (
     UI_METRICS,
-    readable_fill_text,
 )
 from bilibili_downloader.gui.widgets.background_readability import (
     paint_reading_surface,
     wallpaper_active,
 )
-from bilibili_downloader.gui.widgets.components import line_icon, palette
+from bilibili_downloader.gui.widgets.components import PopupMenu, line_icon, palette
+from bilibili_downloader.gui.widgets.row_hover import RowHoverTable, row_option
 
 ACTION_BUTTON_MIN_WIDTH = 60
 ACTION_BUTTON_GAP = 6
@@ -56,40 +56,45 @@ class _SpecificationDelegate(QStyledItemDelegate):
         self.initStyleOption(opt, index)
         text, opt.text = opt.text, ""
         style = opt.widget.style() if opt.widget else QApplication.style()
-        style.drawControl(QStyle.CE_ItemViewItem, opt, painter, opt.widget)
+        style.drawControl(QStyle.CE_ItemViewItem, row_option(opt, index), painter, opt.widget)
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing)
         p = palette()
-        rect = opt.rect.adjusted(5, 8, -5, -8)
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(p.surface_raised))
-        painter.drawRoundedRect(rect, 6, 6)
-        painter.setPen(QColor(p.muted))
         font = QFont(opt.font)
         font.setPointSizeF(font.pointSizeF() * 0.86)
         painter.setFont(font)
-        lines = text.splitlines()
+        lines = text.splitlines()[:2]
+        metrics = painter.fontMetrics()
+        width = min(opt.rect.width() - 10, max((metrics.horizontalAdvance(line) for line in lines), default=0) + 20)
+        height = min(opt.rect.height() - 16, metrics.height() * max(1, len(lines)) + 8)
+        rect = QRect(0, 0, width, height)
+        rect.moveCenter(opt.rect.center())
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(p.control_fill))
+        painter.drawRoundedRect(rect, 6, 6)
+        painter.setPen(QColor(p.muted))
         label = "\n".join(painter.fontMetrics().elidedText(line, Qt.ElideRight, max(1, rect.width() - 6)) for line in lines[:2])
         painter.drawText(rect, Qt.AlignCenter, label)
         painter.restore()
 
 
 class _ReadableProgressBar(QProgressBar):
-    """Paint text with separate contrast on the filled and empty tracks."""
+    """Separate percentage text from the thin semantic progress track."""
 
     def __init__(self):
         super().__init__()
         self.setTextVisible(False)
+        self.setProperty("captioned", True)
 
     def paintEvent(self, event):
-        super().paintEvent(event)
         p = palette()
         painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
         text = f"{self.value()}%"
         painter.setPen(QColor(p.text))
-        painter.drawText(self.rect(), Qt.AlignCenter, text)
+        painter.setFont(self.font())
+        painter.drawText(self.rect().adjusted(0, 0, 0, -10), Qt.AlignRight | Qt.AlignVCenter, text)
         width = round(self.width() * self.value() / max(1, self.maximum()))
-        painter.setClipRect(QRect(0, 0, width, self.height()))
         fill = {
             "CompletedProgress": p.success,
             "WarningProgress": p.warning,
@@ -97,8 +102,13 @@ class _ReadableProgressBar(QProgressBar):
             "PausedProgress": p.border,
             "CancelledProgress": p.border,
         }.get(self.objectName(), p.accent)
-        painter.setPen(QColor(readable_fill_text(fill, p.accent_text)))
-        painter.drawText(self.rect(), Qt.AlignCenter, text)
+        track = self.rect().adjusted(0, self.height() - 6, 0, 0)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(p.surface_raised))
+        painter.drawRoundedRect(track, 3, 3)
+        if width > 0:
+            painter.setBrush(QColor(fill))
+            painter.drawRoundedRect(QRect(track.left(), track.top(), width, track.height()), 3, 3)
         painter.end()
 
 
@@ -123,7 +133,7 @@ class _StatusDelegate(QStyledItemDelegate):
         style = opt.widget.style() if opt.widget else QApplication.style()
         content = style.subElementRect(QStyle.SE_ItemViewItemText, opt, opt.widget)
         text, opt.text = opt.text, ""
-        style.drawControl(QStyle.CE_ItemViewItem, opt, painter, opt.widget)
+        style.drawControl(QStyle.CE_ItemViewItem, row_option(opt, index), painter, opt.widget)
         p = palette()
         color = {"active": p.active_text, "success": p.success, "warning": p.warning,
                  "danger": p.danger, "muted": p.muted}.get(tone, p.text)
@@ -200,8 +210,25 @@ def _create_delete_btn(download_id: int, handler):
     return button
 
 
-def _create_retry_btn(download_id: int, handler):
-    return _create_action_btn("继续", "PrimaryButton", download_id, handler)
+def _create_retry_btn(download_id: int, handler, *, text="继续"):
+    return _create_action_btn(text, "PrimaryButton", download_id, handler)
+
+
+def _create_more_btn(download_id: int, handler):
+    button = QPushButton("更多")
+    button.setObjectName("TableSubtleButton")
+    button.setProperty("menuButton", True)
+    button.setAccessibleName("任务更多操作")
+    menu = PopupMenu(button)
+    action = menu.addAction("移除记录")
+    action.setToolTip("仅移除任务记录，保留媒体文件和断点")
+    action.triggered.connect(lambda checked=False, task_id=download_id: handler(task_id))
+    button.setMenu(menu)
+    button.ensurePolished()
+    button.setMinimumWidth(max(ACTION_BUTTON_MIN_WIDTH, button.sizeHint().width()))
+    button.setFixedHeight(UI_METRICS.compact_button_height)
+    button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+    return button
 
 
 def _create_open_btn(download_id: int, handler):
@@ -228,7 +255,7 @@ def _wrap_btns(*widgets):
     return container
 
 
-class DownloadListWidget(QTableWidget):
+class DownloadListWidget(RowHoverTable):
     """Table showing download queue with progress bars and cancel buttons.
 
     Uses stable download IDs internally so row deletions do not corrupt
@@ -651,13 +678,14 @@ class DownloadListWidget(QTableWidget):
         elif status == TaskStatus.COMPLETED:
             buttons = (
                 _create_open_btn(download_id, self.open_requested.emit),
-                _create_delete_btn(download_id, self._on_delete_clicked),
+                _create_more_btn(download_id, self._on_delete_clicked),
             )
             controls = _wrap_btns(*buttons)
         else:
             buttons = (
-                _create_retry_btn(download_id, self.retry_requested.emit),
-                _create_delete_btn(download_id, self._on_delete_clicked),
+                _create_retry_btn(download_id, self.retry_requested.emit,
+                                  text="继续" if status == TaskStatus.PAUSED else "重试"),
+                _create_more_btn(download_id, self._on_delete_clicked),
             )
             controls = _wrap_btns(*buttons)
         required_width = (

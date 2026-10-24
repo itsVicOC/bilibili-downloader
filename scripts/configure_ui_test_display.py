@@ -32,17 +32,20 @@ def _configure_windows_display():
     user32.ChangeDisplaySettingsW.argtypes = [ctypes.POINTER(DevMode), wintypes.DWORD]
     user32.ChangeDisplaySettingsW.restype = wintypes.LONG
     candidates = []
+    # DPI jobs only inspect the caption. A 200% 900px-wide window needs a
+    # wider desktop; full-page captures remain at the standard CI scale.
+    minimum_width = max(1600, round(920 * float(os.environ.get("QT_SCALE_FACTOR", "1"))))
     index = 0
     while True:
         mode = DevMode()
         mode.dmSize = ctypes.sizeof(mode)
         if not user32.EnumDisplaySettingsW(None, index, ctypes.byref(mode)):
             break
-        if mode.dmPelsWidth >= 1600 and mode.dmPelsHeight >= 1000 and mode.dmBitsPerPel == 32:
+        if mode.dmPelsWidth >= minimum_width and mode.dmPelsHeight >= 1000 and mode.dmBitsPerPel == 32:
             candidates.append(mode)
         index += 1
     if not candidates:
-        raise RuntimeError("The CI desktop needs a display mode of at least 1600x1000")
+        raise RuntimeError(f"The CI desktop needs a display mode of at least {minimum_width}x1000")
     mode = min(candidates, key=lambda m: m.dmPelsWidth * m.dmPelsHeight)
     # Flags=0 changes only this ephemeral desktop session, not the registry.
     result = user32.ChangeDisplaySettingsW(ctypes.byref(mode), 0)

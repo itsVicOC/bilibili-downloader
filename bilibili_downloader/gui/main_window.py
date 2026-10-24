@@ -19,7 +19,6 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
-    QBoxLayout,
     QCheckBox,
     QFrame,
     QHBoxLayout,
@@ -31,7 +30,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QStackedWidget,
-    QStatusBar,
     QTabWidget,
     QTextEdit,
     QToolBar,
@@ -64,12 +62,17 @@ from bilibili_downloader.core.models import (
 from bilibili_downloader.core.task_repository import TaskRepository
 from bilibili_downloader.core.update_protocol import UpdateError, atomic_json
 from bilibili_downloader.core.updater import RELEASES_PAGE
+from bilibili_downloader.gui.clipboard_controller import (
+    ClipboardController,
+    clipboard_access_allowed,
+)
 from bilibili_downloader.gui.dialogs.batch_dialog import BatchDialog
 from bilibili_downloader.gui.dialogs.login_dialog import LoginDialog
 from bilibili_downloader.gui.dialogs.settings_dialog import SettingsDialog
 from bilibili_downloader.gui.dialogs.update_dialog import UpdateDialog
 from bilibili_downloader.gui.live_controller import LiveUiController
 from bilibili_downloader.gui.resources.paths import asset_path, background_path
+from bilibili_downloader.gui.resources.styles import UI_METRICS
 from bilibili_downloader.gui.resources.theme import ThemeManager
 from bilibili_downloader.gui.settings_sections import APPEARANCE_MODES, SettingsSection
 from bilibili_downloader.gui.threads.download_worker import (
@@ -98,6 +101,7 @@ from bilibili_downloader.gui.widgets.components import (
     PageHeader,
     PopupMenu,
     ResponsiveFields,
+    ResponsiveSplit,
     SectionCard,
     WindowDragSurface,
     repolish,
@@ -115,6 +119,10 @@ from bilibili_downloader.gui.widgets.task_page import TaskPage
 from bilibili_downloader.gui.widgets.video_info import VideoInfoWidget
 from bilibili_downloader.gui.widgets.workspace_background import WorkspaceStack
 from bilibili_downloader.gui.window_chrome import WindowChrome
+from bilibili_downloader.utils.clipboard_sources import (
+    ClipboardCandidate,
+    extract_clipboard_sources,
+)
 from bilibili_downloader.utils.config import ConfigManager
 from bilibili_downloader.utils.validators import is_bilibili_url
 
@@ -124,7 +132,7 @@ logger = logging.getLogger(__name__)
 class MainWindow(QMainWindow):
     """Main application window."""
 
-    def __init__(self, config_manager=None, task_repository=None, live_controller=None, *, update_service=None, startup_paused=False, theme_manager=None, desktop_platform=None):
+    def __init__(self, config_manager=None, task_repository=None, live_controller=None, *, update_service=None, startup_paused=False, theme_manager=None, desktop_platform=None, remember_window=False, monitor_clipboard=False):
         super().__init__()
         self.setWindowTitle("BiliFlow · 星轨收藏站")
         self.setMinimumSize(900, 640)
@@ -181,9 +189,23 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._setup_menu()
         self._setup_status_bar()
+        self._live_controller.history_feedback.connect(self._history_feedback)
+        self._live_controller.message_changed.disconnect(self._live_page._notice.set_message)
+        self._live_controller.message_changed.disconnect(self._task_page.notice.set_message)
+        self._live_controller.message_changed.connect(self._present_live_message)
+        self._present_live_message(self._live_controller.message, self._live_controller.message_tone)
         self._setup_updates(update_service)
+        from bilibili_downloader.gui.dialogs.placement import DialogPlacement
+        self._dialog_placement = DialogPlacement(self)
+        # Desktop startup enables persistence; embedded hosts and captures
+        # remain independent of the user's placement record.
+        self._window_state = None
+        if remember_window:
+            from bilibili_downloader.gui.window_state import WindowStateStore
+            self._window_state = WindowStateStore(self, self._config.data_dir / "ui-state.json")
         self._set_shell_enabled(not startup_paused)
         self._restore_tasks()
+        self._clipboard = ClipboardController(self) if monitor_clipboard else None
         if not startup_paused:
             # Native styles choose different first focusable controls. Start
             # both desktops at the source field so paste works immediately.
@@ -345,7 +367,7 @@ class MainWindow(QMainWindow):
         self._live_controller.snapshot_changed.connect(self._settings_page.set_live_rooms)
         self._settings_page.set_live_rooms(self._live_controller.rows)
         self._live_controller.settings_applied.connect(
-            lambda ok, message: self._settings_page._notice.set_message(message, "success" if ok else "danger")
+            self._settings_applied
         )
         settings_layout.addWidget(self._settings_page, 1)
         self._workspace_pages.addWidget(settings_page)
@@ -410,11 +432,11 @@ class MainWindow(QMainWindow):
         empty_layout.addWidget(import_collection)
         self._hero_layout.addWidget(self._empty_download)
         self._content_section = QWidget()
-        self._content_layout = QBoxLayout(QBoxLayout.LeftToRight, self._content_section)
+        self._content_layout = QVBoxLayout(self._content_section)
         self._content_layout.setContentsMargins(0, 0, 0, 0)
         self._content_layout.setSpacing(16)
         self._video_info = VideoInfoWidget()
-        self._content_layout.addWidget(self._video_info, 2, Qt.AlignTop)
+        self._content_layout.addWidget(self._video_info)
         self._build_output_card()
         self._workspace_layout.addWidget(self._content_section)
         self._content_section.hide()
@@ -428,12 +450,10 @@ class MainWindow(QMainWindow):
         )
         self._batch_page.enqueue_requested.connect(self._enqueue_batch_from_page)
         self._batch_page._action_bar.edit_requested.connect(self._show_output_options)
+        self._batch_page._action_bar.directory_requested.connect(lambda: self._show_settings_tab(SettingsSection.DOWNLOAD))
         self._download_tabs.addTab(self._batch_page, "批量导入")
-        self._enqueue_notice = Notice(
-            action="查看任务", callback=lambda: self._show_tasks(0)
-        )
-        layout.addWidget(self._enqueue_notice)
         layout.addWidget(self._download_actions)
+        self._sync_output_mode_controls()
         self._download_tabs.currentChanged.connect(
             lambda index: self._download_actions.setVisible(index == 0)
         )
@@ -446,11 +466,12 @@ class MainWindow(QMainWindow):
         controls = SectionCard("输出规格")
         controls.setObjectName("ControlPanel")
         self._output_card = controls
-        fields = ResponsiveFields()
+        fields = ResponsiveFields(column_width=UI_METRICS.download_field_column_width)
+        self._download_fields = fields
         controls.body.addWidget(fields)
         self._page_combo = ComboBox()
         self._page_combo.addItem("当前视频", "current")
-        fields.add_field(FieldRow("分 P 范围", self._page_combo))
+        fields.add_field(FieldRow("分 P 范围", self._page_combo, stacked=True))
         self._output_mode_combo = ComboBox()
         self._output_mode_combo.addItem("视频 / MP4", OutputMode.VIDEO)
         self._output_mode_combo.addItem("仅音频 / M4A 或 FLAC", OutputMode.AUDIO)
@@ -460,11 +481,11 @@ class MainWindow(QMainWindow):
         self._output_mode_combo.currentIndexChanged.connect(
             self._sync_output_mode_controls
         )
-        fields.add_field(FieldRow("输出类型", self._output_mode_combo))
+        fields.add_field(FieldRow("输出类型", self._output_mode_combo, stacked=True))
         self._quality_combo = ComboBox()
         self._populate_quality_combo()
         self._quality_combo.currentIndexChanged.connect(self._refresh_codec_options)
-        fields.add_field(FieldRow("画面质量", self._quality_combo))
+        fields.add_field(FieldRow("画面质量", self._quality_combo, stacked=True))
         self._codec_stack = QStackedWidget()
         self._codec_combo = ComboBox()
         self._populate_codec_combo()
@@ -472,7 +493,7 @@ class MainWindow(QMainWindow):
         self._populate_audio_combo()
         self._codec_stack.addWidget(self._codec_combo)
         self._codec_stack.addWidget(self._audio_combo)
-        codec_row = FieldRow("视频编码", self._codec_stack)
+        codec_row = FieldRow("视频编码", self._codec_stack, stacked=True)
         self._codec_label = codec_row.label
         fields.add_field(codec_row)
         self._danmaku_check = DownloadOptionCard("下载弹幕", "ASS", "star")
@@ -493,16 +514,14 @@ class MainWindow(QMainWindow):
                 checked and self._subtitle_check.isEnabled()
             )
         )
-        controls.body.addWidget(DownloadOptions(
+        self._extras_card = SectionCard("附加内容")
+        self._extras_card.body.addWidget(DownloadOptions(
             self._danmaku_check, self._subtitle_check, self._all_subtitles_check,
             self._cover_check, self._metadata_check,
         ))
-        self._output_summary = QLineEdit(self._settings.output_dir)
-        self._output_summary.setReadOnly(True)
-        self._output_summary.setToolTip(self._settings.output_dir)
-        self._output_summary.setCursorPosition(0)
-        controls.body.addWidget(FieldRow("保存目录", self._output_summary))
         self._download_actions = OutputActionBar()
+        self._output_summary = self._download_actions.directory
+        self._download_actions.directory_requested.connect(lambda: self._show_settings_tab(SettingsSection.DOWNLOAD))
         self._download_hint = self._download_actions.specs
         self._download_path_hint = self._download_actions.directory
         self._edit_output_btn = self._download_actions.edit_button
@@ -510,8 +529,9 @@ class MainWindow(QMainWindow):
         self._download_actions.edit_requested.connect(self._show_output_options)
         self._download_actions.submit_requested.connect(self._on_download_clicked)
         controls.body.addStretch()
+        self._output_sections = ResponsiveSplit(controls, self._extras_card)
+        self._content_layout.addWidget(self._output_sections)
         self._sync_output_mode_controls()
-        self._content_layout.addWidget(controls, 3, Qt.AlignTop)
 
     def _show_output_options(self):
         self._download_tabs.setCurrentIndex(0)
@@ -611,6 +631,35 @@ class MainWindow(QMainWindow):
             return True, result
         return super().nativeEvent(event_type, message)
 
+    def showMaximized(self):
+        if not self._chrome.show_native(3):
+            super().showMaximized()
+
+    def show_initial(self):
+        if self._window_state:
+            self._window_state.show_initial()
+        else:
+            self.show()
+
+    def flush_window_state(self):
+        if self._window_state:
+            self._window_state.flush()
+
+    def showNormal(self):
+        if not self._chrome.show_native(1):
+            super().showNormal()
+
+    def showMinimized(self):
+        if not self._chrome.show_native(6):
+            super().showMinimized()
+
+    def setWindowState(self, state):
+        if self.isVisible() and not state & Qt.WindowFullScreen:
+            command = 6 if state & Qt.WindowMinimized else 3 if state & Qt.WindowMaximized else 1
+            if self._chrome.show_native(command):
+                return
+        super().setWindowState(state)
+
     def _focus_download_input(self):
         if self._show_workspace(0):
             self._download_tabs.setCurrentIndex(0)
@@ -680,6 +729,12 @@ class MainWindow(QMainWindow):
             self._codec_combo if video_mode else self._audio_combo
         )
         self._codec_stack.setFocusProxy(self._codec_stack.currentWidget())
+        if hasattr(self, "_output_summary") and self._output_summary.window() is self._metadata_check.window():
+            QWidget.setTabOrder(self._codec_stack.currentWidget(), self._danmaku_check)
+            QWidget.setTabOrder(self._metadata_check, self._output_summary)
+            QWidget.setTabOrder(self._output_summary, self._download_actions.directory_button)
+            QWidget.setTabOrder(self._download_actions.directory_button, self._edit_output_btn)
+            QWidget.setTabOrder(self._edit_output_btn, self._download_btn)
 
     def _populate_quality_combo(self):
         """Fill quality combo box with all available qualities."""
@@ -791,14 +846,36 @@ class MainWindow(QMainWindow):
                     self._account_text, Qt.ElideRight, 108
                 )
             )
-        content_width = width - (72 if compact else 208) - 48
-        self._content_layout.setDirection(
-            QBoxLayout.TopToBottom if content_width < 760 else QBoxLayout.LeftToRight
-        )
 
     def resizeEvent(self, event):
         self._update_responsive_layout(event.size().width())
+        self._update_density(event.size().height())
         super().resizeEvent(event)
+
+    def _update_density(self, height):
+        if not hasattr(self, "_settings_page"):
+            return
+        from bilibili_downloader.gui.layout_policy import density_for_height
+        density = density_for_height(height, getattr(self, "_density", None))
+        if density == getattr(self, "_density", None):
+            return
+        self._density = density
+        padding, gap = density.card_padding, density.section_gap
+        for index in range(self._workspace_pages.count()):
+            layout = self._workspace_pages.widget(index).layout()
+            layout.setContentsMargins(*([density.page_margin] * 4))
+            layout.setSpacing(gap)
+        for card in self._workspace_pages.findChildren(SectionCard):
+            card.layout().setContentsMargins(padding, padding, padding, padding)
+        for layout in (self._workspace_layout, self._content_layout, self._output_sections.row,
+                       self._live_page._content_layout):
+            layout.setSpacing(gap)
+        self._hero_layout.setContentsMargins(padding, padding, padding, padding)
+        for index in range(self._settings_page.tabs.count()):
+            self._settings_page.tabs.widget(index).widget().layout().setSpacing(gap)
+        for field in self._download_fields._rows:
+            field.set_stacked(not density.compact)
+        self._video_info.set_density(density)
 
     def _setup_menu(self):
         """Share actions between system menus, navigation and keyboard access."""
@@ -885,7 +962,7 @@ class MainWindow(QMainWindow):
             "redo": writable and history.isRedoAvailable(),
             "cut": writable and selected,
             "copy": selected,
-            "paste": writable and bool(QApplication.clipboard().text()),
+            "paste": writable and clipboard_access_allowed(self) and bool(QApplication.clipboard().text()),
             "selectAll": editable and bool(editor.text() if line else editor.toPlainText()),
         }
         for name, enabled in states.items():
@@ -923,6 +1000,8 @@ class MainWindow(QMainWindow):
     def resume_startup(self):
         self._startup_paused = False
         self._set_shell_enabled(True)
+        if self._clipboard:
+            self._clipboard.schedule()
         self._live_controller.start_background()
         for item, task_id in self._startup_downloads:
             self._start_download(item, task_id)
@@ -1001,6 +1080,7 @@ class MainWindow(QMainWindow):
             self._on_update_failed(str(exc), True)
             return
         self._update_in_progress = True
+        self.flush_window_state()
         self._set_shell_enabled(False)
         self._update_deadline = time.monotonic() + 120
         self._download_list.pause_all_workers()
@@ -1063,7 +1143,8 @@ class MainWindow(QMainWindow):
         self._on_update_failed(message, True)
 
     def _setup_status_bar(self):
-        self._status_bar = QStatusBar()
+        from bilibili_downloader.gui.widgets.feedback import FeedbackBar
+        self._status_bar = FeedbackBar()
         self.setStatusBar(self._status_bar)
         self._status_bar.showMessage("就绪")
         self._login_status_label = QLabel("未登录")
@@ -1078,6 +1159,20 @@ class MainWindow(QMainWindow):
         self._status_bar.addPermanentWidget(self._download_activity)
         self._status_bar.addPermanentWidget(self._record_activity)
         self._refresh_activity()
+
+    def _present_live_message(self, message, tone="info"):
+        inline = tone in ("warning", "danger")
+        self._live_page._notice.set_message(message if inline else "", tone)
+        self._task_page.notice.set_message(message if inline else "", tone)
+        if message and not inline:
+            self._status_bar.showMessage(message)
+
+    def _history_feedback(self, message, undo):
+        self._task_page.notice.set_message("")
+        if undo:
+            self._status_bar.show_feedback(message, "撤销", self._live_controller.undo_remove_history)
+        else:
+            self._status_bar.showMessage(message)
 
     def _refresh_activity(self, *_args):
         if not hasattr(self, "_status_bar"):
@@ -1165,7 +1260,43 @@ class MainWindow(QMainWindow):
         elif recovered:
             self._status_bar.showMessage(f"已恢复 {recovered} 个中断任务，可继续下载")
 
-    def _on_resolve_clicked(self):
+    def _clipboard_resolution_busy(self):
+        return not self._resolve_btn.isEnabled() or self._batch_page._busy
+
+    def _clipboard_target_occupied(self, target):
+        single = bool(self._url_input.text().strip() or self._current_video)
+        batch = bool(self._batch_page._url_text.toPlainText().strip() or self._batch_page._resolved_items)
+        if target == "batch":
+            return batch
+        if target == "auto":
+            return single or batch
+        return single
+
+    def _clipboard_source_is_current(self, candidate):
+        single = extract_clipboard_sources(self._url_input.text())
+        if (candidate.target != "batch" and single and single.fingerprint == candidate.fingerprint
+                and (not self._resolve_btn.isEnabled() or self._current_video is not None)):
+            return True
+        batch = self._batch_page
+        existing = extract_clipboard_sources(batch._url_text.toPlainText())
+        return bool(candidate.target == "batch" and existing and existing.fingerprint == candidate.fingerprint
+                    and (batch._busy or (batch._resolved_source == batch._url_text.toPlainText() and batch._resolved_items)))
+
+    def _accept_clipboard_source(self, candidate):
+        if self._clipboard_resolution_busy() or not self._show_workspace(0):
+            return False
+        if candidate.target == "batch":
+            self._download_tabs.setCurrentIndex(1)
+            self._batch_page._url_text.setPlainText("\n".join(candidate.sources))
+            self._batch_page._collapse_btn.setChecked(False)
+            self._batch_page._start_resolve()
+        else:
+            self._download_tabs.setCurrentIndex(0)
+            self._url_input.setText(candidate.sources[0])
+            self._on_resolve_clicked(from_clipboard=True)
+        return True
+
+    def _on_resolve_clicked(self, _checked=False, *, from_clipboard=False):
         """Resolve URL and show video info."""
         if not self._resolve_btn.isEnabled():
             return
@@ -1195,6 +1326,7 @@ class MainWindow(QMainWindow):
             return
 
         self._resolve_request_url = url
+        self._clipboard_resolve_source = url if from_clipboard else None
         self._current_video = None
         self._download_btn.setEnabled(False)
         self._refresh_download_summary()
@@ -1215,11 +1347,19 @@ class MainWindow(QMainWindow):
         self._service_pool.start(self._resolve_runner)
 
     def _on_resolve_route(self, target, source):
+        clipboard_route = getattr(self, "_clipboard_resolve_source", None) == self._resolve_request_url
+        self._clipboard_resolve_source = None
         self._resolve_btn.setEnabled(True)
         self._resolve_btn.setText("开始解析")
         self._video_info._state_label.setText("等待解析")
         if self._resolve_request_url != self._url_input.text().strip():
             self._resolve_notice.set_message("来源已修改，请重新解析。", "warning")
+            return
+        if clipboard_route:
+            if target == "batch":
+                self._accept_clipboard_source(ClipboardCandidate((source,), "batch"))
+            else:
+                self._resolve_notice.set_message("此短链指向直播间，请使用直播录制页面。", "warning")
             return
         self._status_bar.showMessage("已识别来源，请选择对应工作区。")
         self._suggest_source_route(target, "短链已识别为批量来源。" if target == "batch" else "短链已识别为直播间。", source)
@@ -1247,6 +1387,7 @@ class MainWindow(QMainWindow):
     def _on_resolve_success(self, info, video_streams, audio_streams, playurl_ok):
         """Handle successful URL resolution."""
         self._resolve_btn.setEnabled(True)
+        self._clipboard_resolve_source = None
         self._resolve_btn.setText("开始解析")
         if (
             getattr(self, "_resolve_request_url", self._url_input.text().strip())
@@ -1263,6 +1404,10 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage(f"已解析：{info.title}")
 
         self._current_video = info
+        self._resolve_btn.setText("重新解析")
+        self._hero_title.hide()
+        self._hero_layout.setContentsMargins(16, 12, 16, 12)
+        self._hero.set_compact(True, minimum_height=UI_METRICS.source_resolved_height)
         self._download_result_state = "已解析"
         self._content_section.show()
         self._empty_download.hide()
@@ -1318,6 +1463,7 @@ class MainWindow(QMainWindow):
     def _on_resolve_error(self, error: str):
         """Handle resolution error."""
         self._resolve_btn.setEnabled(True)
+        self._clipboard_resolve_source = None
         self._resolve_btn.setText("开始解析")
         self._status_bar.showMessage("解析失败")
         self._download_btn.setEnabled(False)
@@ -1376,8 +1522,7 @@ class MainWindow(QMainWindow):
         message = f"已加入 {added} 个下载任务" + (
             f"，跳过 {skipped} 个重复项" if skipped else ""
         )
-        self._status_bar.showMessage(message)
-        self._enqueue_notice.set_message(message, "success" if added else "info")
+        self._status_bar.show_feedback(message, "查看任务", lambda: self._show_tasks(0))
         self._refresh_activity()
 
     def _make_download_item(self, video_info: VideoInfo) -> DownloadItem:
@@ -1551,8 +1696,9 @@ class MainWindow(QMainWindow):
             self._download_list.remove_item(task_id)
         self._removed_task_records = records
         if task_ids:
-            self._task_page.undo_notice.set_message(f"已移除 {len(task_ids)} 条记录，媒体文件和断点仍保留。", "info")
-            self._task_page.undo_notice.action.setVisible(bool(records))
+            self._task_page.undo_notice.set_message("")
+            self._task_page.undo_action.setEnabled(bool(records))
+            self._status_bar.show_feedback(f"已移除 {len(task_ids)} 条记录，媒体文件和断点仍保留。", "撤销", self._undo_removed_tasks)
         self._task_page.refresh_downloads()
 
     def _undo_removed_tasks(self):
@@ -1571,6 +1717,7 @@ class MainWindow(QMainWindow):
             restored += 1
         skipped = len(self._removed_task_records) - restored
         self._removed_task_records = []
+        self._task_page.undo_action.setEnabled(False)
         self._task_page.undo_notice.set_message("")
         self._status_bar.showMessage(f"已恢复 {restored} 条记录" + (f"，{skipped} 条已有相同任务" if skipped else ""), 5000)
         self._task_page.refresh_downloads()
@@ -1629,6 +1776,13 @@ class MainWindow(QMainWindow):
     def _on_settings_triggered(self):
         self._show_workspace(3)
 
+    def _settings_applied(self, ok, message):
+        if ok:
+            self._settings_page._notice.set_message("")
+            self._status_bar.showMessage(message)
+        else:
+            self._settings_page._notice.set_message(message, "danger")
+
     def _save_settings(self):
         if not self._settings_page.validate():
             return False
@@ -1657,7 +1811,10 @@ class MainWindow(QMainWindow):
         self._live_controller.apply_live_settings(new_settings.live, modes)
         self._live_page.check_engine()
         self._settings_page.load_settings(new_settings, keep_directory_choices=bool(modes))
-        self._settings_page._notice.set_message("设置已保存，正在应用房间目录规则…" if modes else "设置已保存", "info" if modes else "success")
+        if self._clipboard:
+            self._clipboard.settings_changed()
+        self._settings_page._notice.set_message("")
+        self._status_bar.showMessage("设置已保存，正在应用房间目录规则…" if modes else "设置已保存")
         return True
 
     def _apply_settings_to_controls(self):
@@ -1873,8 +2030,7 @@ class MainWindow(QMainWindow):
         message = f"已加入 {added} 个任务" + (
             f"，跳过 {skipped} 个重复项" if skipped else ""
         )
-        self._status_bar.showMessage(message)
-        self._enqueue_notice.set_message(message, "success" if added else "info")
+        self._status_bar.show_feedback(message, "查看任务", lambda: self._show_tasks(0))
         self._batch_page._existing_content_identities = (
             self._task_repository.known_content_identities()
         )
@@ -2011,6 +2167,7 @@ class MainWindow(QMainWindow):
     def _begin_shutdown(self):
         if self._shutdown_started:
             return
+        self.flush_window_state()
         self._shutdown_started = True
         self._set_shell_enabled(False)
         self._status_bar.showMessage("正在停止后台任务并完成录制收尾…")

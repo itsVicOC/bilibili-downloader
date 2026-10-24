@@ -64,7 +64,7 @@ class _OptionDelegate(QStyledItemDelegate):
             painter.setPen(
                 QPen(QColor(p.focus), 1) if highlighted and not current else Qt.NoPen
             )
-            painter.setBrush(QColor(p.selection if current else p.surface_raised))
+            painter.setBrush(QColor(p.subtle_selection if current else p.control_hover))
             painter.drawRoundedRect(rect, 6, 6)
         color = p.disabled if not enabled else p.active_text if current else p.text
         painter.setPen(QColor(color))

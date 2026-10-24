@@ -77,6 +77,23 @@ from bilibili_downloader.gui.widgets.pixel_mascot import PixelMascot
 from bilibili_downloader.utils.config import ConfigManager
 
 OUTPUT_DIR = PROJECT_ROOT / "docs" / "images"
+DEMO_RELEASE_NOTES = """## Fluent 界面精修
+
+- **统一材质与交互**：保留粉紫／青蓝品牌，让内容更清晰。
+- 修复 Windows 窗口按钮的色差、悬停与图标对齐。
+- 更新说明支持标题、列表、表格与 `行内代码`。
+
+### 兼容与验证
+
+| 项目 | 说明 |
+| --- | --- |
+| 用户数据 | 保留账号、任务、录制历史和外观设置 |
+| 窗口行为 | 保留拖动、缩放和关闭流程 |
+
+> 此处为离线演示数据，不会执行更新。
+
+[查看发布说明](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9b1)
+"""
 
 
 def _flush_events(app: QApplication) -> None:
@@ -200,7 +217,7 @@ def _make_main_window(workdir: Path, *, desktop_platform=None) -> MainWindow:
     controller = LiveUiController(config, service_factory=DemoLiveService)
     window = MainWindow(
         config_manager=config, task_repository=repository, live_controller=controller,
-        desktop_platform=desktop_platform,
+        desktop_platform=desktop_platform, remember_window=False,
     )
     controller.timer.stop()
     window.resize(1320, 860)
@@ -1028,6 +1045,62 @@ def _capture_lifecycle(app, theme, temp_root):
         window.deleteLater()
 
 
+def _capture_refinement(app, theme, window):
+    """Exercise the reorganized layout with content that a normal demo omits."""
+    _populate_main_window(window)
+    info = window._current_video.model_copy(deep=True)
+    directory = window._settings.output_dir
+    checks = []
+    for theme_id in ("star_trail", "bilibili_blue"):
+        window._settings.appearance.theme = theme_id
+        theme.set_color_theme(theme_id)
+        for dark in (False, True):
+            theme.apply_theme(dark)
+            mode = "dark" if dark else "light"
+            for width, height in ((900, 640), (1120, 760), (1320, 860)):
+                window.resize(width, height)
+                for state in ("audio", "long-content", "failed", "settings-draft", "task-filter"):
+                    window._settings.output_dir = directory
+                    window._output_summary.setText(directory)
+                    window._on_resolve_success(info, info.video_streams, info.audio_streams, True)
+                    window._output_mode_combo.setCurrentIndex(window._output_mode_combo.findData(OutputMode.VIDEO))
+                    window._show_workspace(0)
+                    window._workspace_scroll.verticalScrollBar().setValue(0)
+                    if state == "audio":
+                        window._output_mode_combo.setCurrentIndex(window._output_mode_combo.findData(OutputMode.AUDIO))
+                        assert not window._quality_combo.isEnabled()
+                    elif state == "long-content":
+                        long_info = info.model_copy(update={
+                            "title": "星轨旅记🌠：穿过漫长的夜色与城市街巷，记录沿途的每一束光。" * 8,
+                            "author": "一个非常长的离线演示 UP 主昵称" * 5,
+                        })
+                        window._video_info.set_video_info(long_info)
+                        long_path = "~/Downloads/" + "长目录与 Unicode 演示/" * 12 + "BiliFlow"
+                        window._settings.output_dir = long_path
+                        window._output_summary.setText(long_path)
+                        window._refresh_download_summary()
+                    elif state == "failed":
+                        window._on_resolve_error("网络连接暂时不可用，请检查连接后重新解析。")
+                        assert not window._download_btn.isEnabled()
+                    elif state == "settings-draft":
+                        panel = window._settings_page
+                        panel._path_template.setText("待保存/{author}/{title}{part_suffix}")
+                        window._show_settings_tab(SettingsSection.DOWNLOAD)
+                    else:
+                        page = window._task_page
+                        page.filter.setCurrentIndex(page.filter.findData("paused"))
+                        window._show_tasks(0)
+                    window._url_input.deselect()
+                    _save_widget(app, window, f"refine-{theme_id}-{state}-{mode}-{width}.png")
+                    checks.append({"theme": theme_id, "mode": mode, "state": state,
+                                   "requested_size": [width, height],
+                                   "actual_size": [window.width(), window.height()],
+                                   "horizontal_scroll": window._workspace_scroll.horizontalScrollBar().maximum()})
+                    window._settings_page.load_settings(window._settings_page._settings)
+                    window._task_page.filter.setCurrentIndex(0)
+    (OUTPUT_DIR / "refinement-checks.json").write_text(json.dumps(checks, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def _capture_builtin_backgrounds(app, theme, window, temp_root):
     from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
     from bilibili_downloader.gui.dialogs.background_gallery import BackgroundGallery
@@ -1233,7 +1306,7 @@ def _capture_ui_refresh(app, theme, window):
                 window._workspace_scroll.ensureWidgetVisible(window._metadata_check, 0, 12)
                 _save_widget(app, window, f"ui-{theme_id}-options-{mode}-{width}.png")
                 cards = (window._danmaku_check, window._subtitle_check, window._cover_check, window._metadata_check)
-                assert all(card.height() >= 36 + card.fontMetrics().height() + 4 for card in cards)
+                assert all(card.height() >= card.fontMetrics().height() + 16 for card in cards)
                 for section in SettingsSection:
                     window._show_settings_tab(section)
                     _save_widget(app, window, f"ui-{theme_id}-settings-{section.value}-{mode}-{width}.png")
@@ -1283,7 +1356,7 @@ def _capture_ui_refresh(app, theme, window):
                     _save_widget(app, dialog, f"ui-{theme_id}-switch-cookie-{mode}.png")
                 dialog.deleteLater()
             update = UpdateDialog(UpdateRelease(
-                "0.9.0", "v0.9.0", "2026-10-21T00:00:00Z", "离线演示更新说明", (),
+                "0.9.0", "v0.9.0", "2026-10-21T00:00:00Z", DEMO_RELEASE_NOTES, (),
             ), window)
             _save_widget(app, update, f"ui-{theme_id}-update-{mode}.png")
             update.deleteLater()
@@ -1304,10 +1377,146 @@ def _capture_ui_refresh(app, theme, window):
     _refresh_document_previews("ui-refresh")
 
 
-def _capture_native_chrome(app, theme, window):
-    """Capture the compositor, including Qt's separate Windows caption layer.
+def _capture_interactions(app, theme, window):
+    """Actual row feedback, history menus and injected clipboard offers, offline."""
+    from PySide6.QtCore import QMimeData, QObject, Signal
+    from PySide6.QtTest import QTest
 
-    QWidget.grab() omits that layer and cannot catch duplicate caption icons.
+    from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
+    from bilibili_downloader.gui.clipboard_controller import ClipboardController
+
+    class DemoClipboard(QObject):
+        dataChanged = Signal()
+
+        def __init__(self):
+            super().__init__()
+            self.mime = QMimeData()
+
+        def set(self, value):
+            self.mime.setText(value)
+            self.dataChanged.emit()
+
+        def mimeData(self):
+            return self.mime
+
+    _populate_main_window(window)
+    root = Path(app.property("docsTempRoot"))
+    _populate_live_page(window, root / "interaction-live")
+    clipboard = DemoClipboard()
+    controller = ClipboardController(window, clipboard=clipboard, foreground=lambda: True)
+    source = root / "interaction-contrast.png"
+    image = QImage(480, 320, QImage.Format_RGB32)
+    for y in range(320):
+        for x in range(480):
+            image.setPixelColor(x, y, QColor("#ffffff" if (x // 12 + y // 12) % 2 else "#080825"))
+    image.save(str(source))
+    custom = prepare_background(source)
+    window._background_store.install(custom)
+    checks = []
+
+    def capture(filename, popup=None):
+        _save_widget(app, window, filename, popup=popup)
+        window.show()
+        window.raise_()
+        window.activateWindow()
+        _flush_events(app)
+
+    def hover(view, index):
+        view.clearSelection()
+        _flush_events(app)
+        rect = view.visualRect(index)
+        QTest.mouseMove(view.viewport(), QPoint(30, rect.center().y()))
+        QTest.qWait(60)
+        _flush_events(app)
+        if not view._row_hover.matches(index):
+            raise AssertionError(f"Row hover did not follow actual mouse input: visible={view.isVisible()}, rect={rect}")
+
+    try:
+        for theme_id in ("star_trail", "bilibili_blue"):
+            theme.set_color_theme(theme_id)
+            window._settings.appearance.theme = theme_id
+            for dark in (False, True):
+                theme.apply_theme(dark)
+                mode = "dark" if dark else "light"
+                for width, height in ((900, 640), (1120, 760), (1320, 860)):
+                    clipboard.set("")
+                    controller.check()
+                    window.resize(width, height)
+                    window.show()
+                    _flush_events(app)
+                    for tab, name, view in ((0, "downloads", window._download_list),
+                                            (1, "recording", window._task_page.current),
+                                            (2, "history", window._task_page.history)):
+                        window._show_tasks(tab)
+                        view.clearSelection()
+                        QTest.mouseMove(window, QPoint(12, 80))
+                        capture(f"interaction-{theme_id}-{name}-default-{mode}-{width}.png")
+                        index = view.model().index(0, 0)
+                        hover(view, index)
+                        capture(f"interaction-{theme_id}-{name}-hover-{mode}-{width}.png")
+                        view.setCurrentIndex(index)
+                        capture(f"interaction-{theme_id}-{name}-selected-hover-{mode}-{width}.png")
+                    history = window._task_page.history
+                    history.expandAll()
+                    child = history.topLevelItem(0).child(0)
+                    hover(history, history.indexFromItem(child))
+                    capture(f"interaction-{theme_id}-history-child-hover-{mode}-{width}.png")
+                    history.setCurrentItem(child)
+                    menu = window._task_page.history_menu
+                    owner = window._task_page.history_more
+                    menu.popup(owner.mapToGlobal(QPoint(0, -menu.sizeHint().height())))
+                    capture(f"interaction-{theme_id}-history-menu-{mode}-{width}.png", popup=menu)
+                    menu.hide()
+                    window._show_workspace(0)
+                    window._download_tabs.setCurrentIndex(0)
+                    _flush_events(app)
+                    before = window._workspace_scroll.geometry()
+                    focus = QApplication.focusWidget()
+                    clipboard.set("【分享】BV1GJ411x7h7")
+                    controller.check()
+                    assert QApplication.focusWidget() is focus
+                    capture(f"interaction-{theme_id}-clipboard-{mode}-{width}.png")
+                    assert window._workspace_scroll.geometry() == before
+                    assert controller.prompt.geometry().right() < window._workspace_pages.width() - 14
+                    window._resolve_btn.setEnabled(False)
+                    controller.refresh_prompt()
+                    capture(f"interaction-{theme_id}-clipboard-busy-{mode}-{width}.png")
+                    window._resolve_btn.setEnabled(True)
+                    clipboard.set("ep123\nss456")
+                    controller.check()
+                    capture(f"interaction-{theme_id}-clipboard-batch-{mode}-{width}.png")
+                    clipboard.set("")
+                    controller.check()
+                    checks.append({"theme": theme_id, "dark": dark, "size": [width, height], "hover": True, "clipboard_layout_stable": True})
+                window._show_tasks(2)
+                assert window._live_controller.remove_history("demo-recording")
+                capture(f"interaction-{theme_id}-history-removed-{mode}.png")
+                assert window._live_controller.undo_remove_history()
+                capture(f"interaction-{theme_id}-history-restored-{mode}.png")
+                for kind, reference in (("builtin", BUILTIN_BACKGROUNDS[0].reference), ("contrast", custom.reference)):
+                    window.resize(1120, 760)
+                    window._settings.appearance.backgrounds.tasks = reference
+                    window._settings.appearance.backgrounds.download = reference
+                    window._show_tasks(0)
+                    hover(window._download_list, window._download_list.model().index(0, 0))
+                    capture(f"interaction-{theme_id}-hover-{kind}-{mode}.png")
+                    window._show_workspace(0)
+                    clipboard.set("av170001")
+                    controller.check()
+                    capture(f"interaction-{theme_id}-clipboard-{kind}-{mode}.png")
+                    clipboard.set("")
+                    controller.check()
+                window._settings.appearance.backgrounds.tasks = ""
+                window._settings.appearance.backgrounds.download = ""
+        (OUTPUT_DIR / "interaction-checks.json").write_text(json.dumps(checks, ensure_ascii=False, indent=2), encoding="utf-8")
+    finally:
+        controller.dispose()
+
+
+def _capture_native_chrome(app, theme, window):
+    """Capture the desktop compositor, including the native frame boundaries.
+
+    QWidget.grab() alone cannot catch a reappearing system titlebar or frame.
     Use only offline fixtures, and record the actual desktop/backend/DPI.
     """
     from PySide6.QtTest import QTest
@@ -1345,7 +1554,8 @@ def _capture_native_chrome(app, theme, window):
             filename = f"chrome-{mode}-{name}.png"
             pixmap.save(str(OUTPUT_DIR / filename))
             if sys.platform == "win32":
-                assert not handle.flags() & Qt.WindowTitleHint
+                assert handle.flags() & Qt.FramelessWindowHint
+                assert not handle.flags() & Qt.ExpandedClientAreaHint
                 assert not handle.icon().isNull()
                 # The sidebar starts its brand below y=24. This previously
                 # empty strip contained the duplicate 16px caption icon.
@@ -1380,7 +1590,7 @@ def _capture_native_chrome(app, theme, window):
     (OUTPUT_DIR / "rendering-profile.json").write_text(json.dumps({
         "platform": sys.platform, "backend": app.platformName(), "qt": qVersion(),
         "logical_dpi": screen.logicalDotsPerInchY(), "dpr": screen.devicePixelRatio(),
-        "capture": "desktop compositor including native caption layer",
+        "capture": "desktop compositor with client-painted Fluent caption controls",
         "enum_inverted_title_hint": int(~Qt.WindowTitleHint), "checks": checks,
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -1500,7 +1710,10 @@ def main(argv=None) -> int:
         help="Capture font and long-dropdown checks at all three sizes",
     )
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
+    parser.add_argument("--color-theme", choices=("star_trail", "bilibili_blue"), default="star_trail", help="Color theme for the complete workspace and dialog matrix")
     parser.add_argument("--ui-refresh-only", action="store_true", help="Capture navigation, download cards, modes and account states")
+    parser.add_argument("--interactions-only", action="store_true", help="Capture row hover, history removal and isolated clipboard prompts")
+    parser.add_argument("--refinement-only", action="store_true", help="Capture audio, long-content, failure, draft and filtered-task states")
     parser.add_argument("--chrome-only", action="store_true", help="Check native captions using desktop compositor captures")
     parser.add_argument("--glass-only", action="store_true", help="Capture glass wallpaper and complete download guidance in both modes")
     parser.add_argument("--appearance-controls-only", action="store_true", help="Capture centered account, five settings sections and blur controls")
@@ -1552,6 +1765,7 @@ def main(argv=None) -> int:
             )
             os.environ["QT_QPA_PLATFORM"] = f"offscreen:configfile={screen_config}"
         app = QApplication.instance() or QApplication(sys.argv)
+        app.setProperty("uiAnimationsEnabled", False)
         app.setApplicationName("BiliFlow Docs")
         app.setWindowIcon(QIcon(asset_path("app_icon.png")))
         theme = ThemeManager(app)
@@ -1562,6 +1776,8 @@ def main(argv=None) -> int:
             _capture_lifecycle(app, theme, temp_root)
             return 0
         window = _make_main_window(temp_root / "workspace")
+        window._settings.appearance.theme = args.color_theme
+        theme.set_color_theme(args.color_theme)
         cleanup.callback(window._live_controller.shutdown)
         if args.chrome_only:
             _capture_native_chrome(app, theme, window)
@@ -1578,6 +1794,11 @@ def main(argv=None) -> int:
             window._live_controller.shutdown()
             window.request_quit(confirmed=True)
             return 0
+        if args.interactions_only:
+            _capture_interactions(app, theme, window)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
         if args.ui_refresh_only:
             _capture_ui_refresh(app, theme, window)
             window._live_controller.shutdown()
@@ -1590,6 +1811,11 @@ def main(argv=None) -> int:
             return 0
         if args.mascot_only:
             _capture_mascot(app, theme, window)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
+        if args.refinement_only:
+            _capture_refinement(app, theme, window)
             window._live_controller.shutdown()
             window.request_quit(confirmed=True)
             return 0
@@ -1666,7 +1892,7 @@ def main(argv=None) -> int:
             theme.apply_theme(dark)
             dialog = UpdateDialog(UpdateRelease(
                 "0.9.0b1", "v0.9.0b1", "2026-10-14T00:00:00Z",
-                "更新说明（离线演示）\n\n新增启动自动检查与手动检查更新。\n支持正式版和包含 beta、rc 的最新版通道。\n立即更新将下载、校验、安装并重启。\n跳过版本只影响自动提醒，手动检查仍可更新。", (),
+                DEMO_RELEASE_NOTES, (),
             ), window)
             _save_widget(app, dialog, f"biliflow-dialog-update{'-light' if not dark else ''}.png")
             dialog.hide()

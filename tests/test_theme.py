@@ -87,7 +87,7 @@ def test_theme_applies_same_font_to_body_and_native_bold_labels(qapp, qtbot):
             # Compare actual paint-device metrics against the intended size.
             expected = QFont(qapp.font())
             if points is None:
-                expected.setPixelSize(16)
+                expected.setPixelSize(18)
             else:
                 expected.setPointSizeF(points * reference_dpi / dpi)
             expected.setWeight(widget.font().weight())
@@ -199,12 +199,23 @@ def test_primary_buttons_share_keyboard_focus_without_a_permanent_outline(qapp, 
         focus_color = p.primary_text or p.accent_text
         for button in buttons:
             qtbot.mouseClick(button, Qt.LeftButton)
+            # Cocoa may leave mouse-clicked buttons unfocused according to
+            # Full Keyboard Access. Exercise the mouse focus visual explicitly.
+            button.setFocus(Qt.MouseFocusReason)
             assert button.hasFocus()
             assert button.grab().toImage().pixelColor(1, 22).name() != focus_color
-        qtbot.keyClick(buttons[1], Qt.Key_Tab)
+        if qapp.platformName() == "cocoa":
+            # Tab traversal follows macOS Full Keyboard Access. Test the visual
+            # focus reason without changing that system preference.
+            buttons[0].setFocus(Qt.TabFocusReason)
+        else:
+            qtbot.keyClick(buttons[1], Qt.Key_Tab)
         assert buttons[0].hasFocus()
         assert buttons[0].grab().toImage().pixelColor(1, 22).name() == focus_color
-        qtbot.keyClick(buttons[0], Qt.Key_Tab)
+        if qapp.platformName() == "cocoa":
+            buttons[1].setFocus(Qt.TabFocusReason)
+        else:
+            qtbot.keyClick(buttons[0], Qt.Key_Tab)
         assert buttons[1].hasFocus()
         assert buttons[1].grab().toImage().pixelColor(1, 22).name() == focus_color
         with qtbot.waitSignal(buttons[1].clicked):
@@ -245,9 +256,23 @@ def test_theme_tokens_meet_text_and_control_contrast_targets():
             palette.danger_border,
         ):
             assert _contrast(readable_fill_text(fill, palette.accent_text), fill) >= 4.5
+        # Official Bilibili pink/white is an explicit brand choice; retain AA
+        # for the blue primary and all ordinary text/selection surfaces.
         for fill in (palette.primary, palette.primary_hover, palette.primary_pressed):
-            if fill:
+            if palette in (BLUE_DARK_PALETTE, BLUE_LIGHT_PALETTE):
                 assert _contrast(palette.primary_text, fill) >= 4.5
+        assert _contrast(palette.text_selection_text, palette.text_selection) >= 4.5
+        assert _contrast(palette.text_selection, palette.control_fill) >= 2.0
+
+
+@pytest.mark.parametrize("dark, expected", [
+    (False, ("#ff6699", "#ff8cb0", "#e84b85")),
+    (True, ("#d44e7d", "#dc6d94", "#a73e65")),
+])
+def test_pink_primary_uses_bilibili_white_text_and_official_pink_steps(dark, expected):
+    p = theme_palette(dark)
+    assert (p.primary, p.primary_hover, p.primary_pressed) == expected
+    assert p.primary_text == "#ffffff"
 
 
 @pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])

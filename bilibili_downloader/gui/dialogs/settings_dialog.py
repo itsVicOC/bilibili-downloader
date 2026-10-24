@@ -49,6 +49,7 @@ from bilibili_downloader.gui.widgets.components import (
     ElidedLabel,
     FieldRow,
     Notice,
+    ResponsiveFields,
     SectionCard,
     help_text,
     scroll_area,
@@ -181,6 +182,12 @@ class SettingsDialog(QDialog):
             "output_dir", paths, "保存目录", self._path_row(self._output_dir, True)
         )
         download.addWidget(paths)
+        recognition = SectionCard("来源识别")
+        self._clipboard_check = QCheckBox("前台识别剪贴板中的 B 站内容")
+        self._controls["clipboard_monitor_enabled"] = self._clipboard_check
+        recognition.body.addWidget(self._clipboard_check)
+        recognition.body.addWidget(help_text("启动和切回前台时也会检查已复制的内容；确认后才联网解析。"))
+        download.addWidget(recognition)
         formats = SectionCard("默认媒体规格")
         self._output_mode_combo = self._combo(
             "default_output_mode",
@@ -214,6 +221,14 @@ class SettingsDialog(QDialog):
         )
         self._concurrency_down.setToolTip("减少并发数")
         self._concurrency_up.setToolTip("增加并发数")
+        format_fields = ResponsiveFields(column_width=430)
+        for key in ("default_output_mode", "default_quality", "default_video_codec",
+                    "default_audio_quality", "max_concurrent_downloads"):
+            row = self._field_rows[key]
+            row.setMinimumWidth(row.maximumWidth())
+            formats.body.removeWidget(row)
+            format_fields.add_field(row)
+        formats.body.addWidget(format_fields)
         download.addWidget(formats)
         options = SectionCard("归档附加内容")
         for key, label, description, icon, attr in (
@@ -236,7 +251,7 @@ class SettingsDialog(QDialog):
         )
         options.body.addWidget(DownloadOptions(
             self._danmaku_check, self._subtitle_check, self._all_subtitles_check,
-            self._cover_check, self._metadata_check,
+            self._cover_check, self._metadata_check, max_columns=2,
         ))
         download.addWidget(options)
         self._templates_section = CollapsibleSection("高级命名与目录模板")
@@ -312,24 +327,25 @@ class SettingsDialog(QDialog):
         self._controls["live.recorder_path"] = self._recorder_path
         self._recorder_path.setPlaceholderText("full 包自动检测；lite 包选择配套引擎")
         self._probe_notices = {}
+        engines = SectionCard("工具路径")
+        tools.addWidget(engines)
         for kind, text in (("ffmpeg", "检查 FFmpeg"), ("recorder", "检查录制引擎")):
             key = "ffmpeg_path" if kind == "ffmpeg" else "live.recorder_path"
             entry = self._controls[key]
-            engines = SectionCard("FFmpeg" if kind == "ffmpeg" else "录制引擎")
-            self._field(key, engines, "可执行文件", self._path_row(entry, False))
+            path_row = self._path_row(entry, False)
+            self._field(key, engines, "FFmpeg" if kind == "ffmpeg" else "录制引擎", path_row)
             button = QPushButton("检测")
             button.setAccessibleName(text)
             button.setObjectName("TextButton")
             button.clicked.connect(
                 lambda _checked=False, k=kind, b=button: self._probe(k, b)
             )
-            engines.header.addWidget(button)
-            engines.body.addWidget(help_text(f"{entry.placeholderText()}。检测使用当前路径，不会保存设置。"))
+            path_row.layout().addWidget(button)
             notice = Notice()
             self._probe_notices[kind] = notice
             entry.textChanged.connect(lambda _text, n=notice: n.set_message(""))
             engines.body.addWidget(notice)
-            tools.addWidget(engines)
+        engines.body.addWidget(help_text("检测使用当前草稿路径，不会自动保存设置。"))
         self._probe_notice = self._probe_notices["ffmpeg"]
         storage = SectionCard("断点缓存")
         storage.body.addWidget(
@@ -479,7 +495,7 @@ class SettingsDialog(QDialog):
             column.addStretch()
         self._notice = Notice()
         layout.addWidget(self._notice)
-        self._action_bar = ActionBar()
+        self._action_bar = ActionBar(compact=True)
         self._action_bar.setAccessibleName("设置保存操作")
         footer = self._action_bar.row
         self._draft_label = ElidedLabel("所有修改已保存")
@@ -494,6 +510,7 @@ class SettingsDialog(QDialog):
         self._save_btn.setDefault(not self._embedded)
         self._save_btn.setObjectName("PrimaryButton")
         self._save_btn.setMinimumWidth(128)
+        self._save_btn.setFixedHeight(44)
         self._save_btn.clicked.connect(self._accept_if_valid)
         if not self._embedded:
             cancel = QPushButton("取消")

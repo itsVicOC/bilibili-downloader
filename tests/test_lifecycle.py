@@ -450,7 +450,7 @@ def test_update_offer_during_exit_confirmation_is_deferred(desktop, monkeypatch)
 
 @pytest.mark.parametrize("platform", ["darwin", "win32"])
 @pytest.mark.parametrize("reason", ["user", "update"])
-def test_real_event_loop_process_exits_after_hiding(qapp, tmp_path, platform, reason):
+def test_real_event_loop_process_exits_after_hiding(qapp, qtbot, tmp_path, platform, reason):
     source = '''
 import sys
 from pathlib import Path
@@ -487,10 +487,18 @@ assert code == 0 and window._shutdown_complete
 assert not lifecycle.tray or not lifecycle.tray.visible
 print("shutdown-complete")
 '''
-    result = subprocess.run(
+    process = subprocess.Popen(
         [sys.executable, "-c", source, str(tmp_path), platform, reason],
         env={**os.environ, "QT_QPA_PLATFORM": qapp.platformName()},
-        capture_output=True, text=True, timeout=10,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
     )
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "shutdown-complete" in result.stdout
+    try:
+        # Cocoa activation can require the launching GUI to service events.
+        # Blocking the parent with subprocess.run() deadlocks that handshake.
+        qtbot.waitUntil(lambda: process.poll() is not None, timeout=10000)
+    finally:
+        if process.poll() is None:
+            process.kill()
+        stdout, stderr = process.communicate(timeout=2)
+    assert process.returncode == 0, stdout + stderr
+    assert "shutdown-complete" in stdout

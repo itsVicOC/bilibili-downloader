@@ -208,6 +208,10 @@ class LivePage(QWidget):
         self._room_id_label = QLabel()
         self._room_id_label.setObjectName("MetaLabel")
         details.addWidget(self._room_id_label)
+        self._recording_metrics = QLabel()
+        self._recording_metrics.setObjectName("DetailValue")
+        self._recording_metrics.setTextFormat(Qt.PlainText)
+        details.addWidget(self._recording_metrics)
         self._detail = QLabel()
         self._detail.setTextFormat(Qt.PlainText)
         self._detail.setWordWrap(True)
@@ -321,7 +325,8 @@ class LivePage(QWidget):
         if previous != narrow:
             self._detail_toggle.setChecked(not narrow)
         self._room_stack.setMinimumHeight(160 if narrow else 200)
-        for index, width in ((1, 108), (2, 80), (3, 92)):
+        duration_width = max(80, self.rooms.fontMetrics().horizontalAdvance("000:00:00") + 24)
+        for index, width in ((1, 108), (2, duration_width), (3, 92)):
             self.rooms.horizontalHeader().resizeSection(index, width)
         self._sync_detail_visibility()
         self._update_table_height()
@@ -414,14 +419,17 @@ class LivePage(QWidget):
         self._detail_badge.setText(row["state_label"])
         self._detail_badge.set_tone(live_tone(row["state"]))
         self._detail.setText(row["detail"] or "等待直播状态更新")
+        self._detail.setVisible(bool(row["detail"] and row["detail"] != row["state_label"]))
+        self._recording_metrics.setText(f"{_duration(row['duration'])} · {_size(row['size'])} · {_size(row['speed'])}/s")
         actual = row.get("active_output_dir") or row["output_dir"]
         self._directory.setText(actual)
         self._directory.setToolTip(actual)
         mode = {"default": "跟随全局", "custom": "独立目录", None: "旧目录待核对"}.get(row.get("output_dir_mode"), "独立目录")
         self._directory_hint.setText(
-            f"{mode} · 下一场保存位置：{row['output_dir']}" if row.get("active_output_dir")
+            f"{mode} · 下一场将使用新目录" if row.get("active_output_dir")
             else f"{mode} · 按主播和场次建立子目录"
         )
+        self._directory_hint.setToolTip(f"下一场保存位置：{row['output_dir']}")
         self._directory.setCursorPosition(0)
         self._segment.setText(
             f"分段时长 {row['segment_seconds'] // 60} 分钟 · 画质修改在下次拉流生效"
@@ -613,6 +621,8 @@ class LivePage(QWidget):
                     item = QTableWidgetItem()
                     self.rooms.setItem(index, column, item)
                 item.setText(value.replace("\\n", "\n"))
+                if column == 2:
+                    item.setTextAlignment(Qt.AlignCenter)
                 item.setToolTip(
                     value.replace("\\n", "\n")
                     + ("\n" + row["detail"] if column == 1 else "")

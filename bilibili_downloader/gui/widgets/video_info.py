@@ -3,8 +3,8 @@
 import io
 
 from PIL import Image, UnidentifiedImageError
-from PySide6.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QObject, QRect, QRunnable, QSize, Qt, QThreadPool, Signal
+from PySide6.QtGui import QPainter, QPixmap, QTextLayout, QTextOption
 from PySide6.QtWidgets import (
     QBoxLayout,
     QHBoxLayout,
@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from bilibili_downloader.gui.layout_policy import COMFORTABLE
 from bilibili_downloader.gui.widgets.components import StatusBadge, line_icon
 from bilibili_downloader.gui.widgets.glass_surface import GlassWidget
 from bilibili_downloader.utils.network import BILIBILI_RESOURCE_HOSTS, trusted_https_url
@@ -28,6 +29,7 @@ class _AspectCoverLabel(QLabel):
         super().__init__(parent)
         self._source = QPixmap()
         self._expand = False
+        self._density = COMFORTABLE
         self.setMinimumSize(160, 90)
         self.setMaximumSize(176, 99)
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
@@ -36,13 +38,23 @@ class _AspectCoverLabel(QLabel):
         return True
 
     def heightForWidth(self, width: int) -> int:
+        if self._density.compact:
+            return self._density.cover_height
         return max(90, min(99, round(width * 9 / 16)))
 
     def sizeHint(self) -> QSize:
-        return QSize(176, 99)
+        return QSize(self._density.cover_width, self._density.cover_height)
 
     def minimumSizeHint(self) -> QSize:
+        if self._density.compact:
+            return self.sizeHint()
         return QSize(160, 90)
+
+    def set_density(self, density):
+        self._density = density
+        self.setMinimumSize(density.cover_width if density.compact else 160, density.cover_height if density.compact else 90)
+        self.setMaximumSize(density.cover_width, density.cover_height)
+        self.updateGeometry()
 
     def set_source_pixmap(self, pixmap: QPixmap, *, expand: bool = False) -> None:
         self._source = pixmap
@@ -94,6 +106,62 @@ class _ElidedLabel(QLabel):
     def resizeEvent(self, event):
         self._sync_text()
         super().resizeEvent(event)
+
+
+class _TwoLineTitle(QLabel):
+    """Keep the full plain-text title while bounding its painted preview."""
+
+    def __init__(self, text, parent=None):
+        super().__init__(text, parent)
+        self.setTextFormat(Qt.PlainText)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        self.compact = False
+
+    def sizeHint(self):
+        return QSize(280, self.heightForWidth(self.width()))
+
+    def minimumSizeHint(self):
+        return QSize(0, self.fontMetrics().lineSpacing() * (1 if self.compact else 2))
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, width):
+        lines = 1 if self.compact and self.fontMetrics().horizontalAdvance(self.text()) <= width else 2
+        return self.fontMetrics().lineSpacing() * lines
+
+    def resizeEvent(self, event):
+        if self.compact:
+            self.updateGeometry()
+        super().resizeEvent(event)
+
+    def paintEvent(self, event):
+        text = " ".join(self.text().splitlines())
+        rect = self.contentsRect()
+        metrics = self.fontMetrics()
+        layout = QTextLayout(text, self.font())
+        option = QTextOption()
+        option.setWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
+        layout.setTextOption(option)
+        layout.beginLayout()
+        first = layout.createLine()
+        if not first.isValid():
+            layout.endLayout()
+            return
+        first.setLineWidth(max(1, rect.width()))
+        length = first.textLength()
+        layout.endLayout()
+        encoded = text.encode("utf-16-le")
+        lines = [encoded[:length * 2].decode("utf-16-le").rstrip()]
+        remaining = encoded[length * 2:].decode("utf-16-le").strip()
+        if remaining:
+            lines.append(metrics.elidedText(remaining, Qt.ElideRight, rect.width()))
+        painter = QPainter(self)
+        painter.setPen(self.palette().color(self.foregroundRole()))
+        for index, line in enumerate(lines):
+            painter.drawText(QRect(rect.left(), rect.top() + index * metrics.lineSpacing(),
+                                   rect.width(), metrics.lineSpacing()),
+                             Qt.AlignLeft | Qt.AlignVCenter, line)
 
 
 class _CoverLoadWorker(QObject):
@@ -157,14 +225,7 @@ class VideoInfoWidget(GlassWidget):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
 
-        header_layout = QHBoxLayout()
-        title = QLabel("作品资料卡")
-        title.setObjectName("SectionTitle")
         self._state_label = StatusBadge("等待解析")
-        header_layout.addWidget(title)
-        header_layout.addStretch()
-        header_layout.addWidget(self._state_label)
-        layout.addLayout(header_layout)
 
         # Cover image
         self._cover_label = _AspectCoverLabel()
@@ -176,10 +237,9 @@ class VideoInfoWidget(GlassWidget):
         self._cover_label.setAlignment(Qt.AlignCenter)
 
         # Info labels
-        self._title_label = QLabel("等待新的次元旅程")
+        self._title_label = _TwoLineTitle("等待新的次元旅程")
         self._title_label.setObjectName("VideoTitle")
         self._title_label.setTextFormat(Qt.PlainText)
-        self._title_label.setWordWrap(True)
 
         self._author_label = _ElidedLabel("UP 主  --")
         self._duration_label = _ElidedLabel("时长  --")
@@ -195,10 +255,17 @@ class VideoInfoWidget(GlassWidget):
 
         info_layout = QVBoxLayout()
         info_layout.setSpacing(8)
-        info_layout.addWidget(self._title_label)
+        heading = QHBoxLayout()
+        heading.setSpacing(12)
+        heading.addWidget(self._title_label, 1)
+        heading.addWidget(self._state_label, 0, Qt.AlignTop)
+        info_layout.addLayout(heading)
         info_layout.addWidget(self._author_label)
-        info_layout.addWidget(self._duration_label)
-        info_layout.addWidget(self._bvid_label)
+        metadata = QHBoxLayout()
+        metadata.setSpacing(16)
+        metadata.addWidget(self._duration_label, 1)
+        metadata.addWidget(self._bvid_label, 2)
+        info_layout.addLayout(metadata)
         info_layout.addStretch()
         top_layout.addLayout(info_layout, 1)
 
@@ -210,6 +277,14 @@ class VideoInfoWidget(GlassWidget):
             QBoxLayout.TopToBottom if event.size().width() < 380 else QBoxLayout.LeftToRight
         )
         super().resizeEvent(event)
+
+    def set_density(self, density):
+        padding = density.card_padding
+        self.layout().setContentsMargins(padding, padding, padding, padding)
+        self._identity_layout.setSpacing(12 if density.compact else 16)
+        self._cover_label.set_density(density)
+        self._title_label.compact = density.compact
+        self._title_label.updateGeometry()
 
     def set_video_info(self, info):
         """Update display with video info."""

@@ -1,4 +1,4 @@
-"""Expanded native window chrome, keeping platform window controls intact."""
+"""Platform window identity with a shared, client-painted Windows caption."""
 
 import ctypes
 import logging
@@ -8,32 +8,36 @@ from PySide6.QtCore import QEvent, QObject, Qt, QTimer
 from PySide6.QtWidgets import QApplication
 from shiboken6 import isValid
 
+from bilibili_downloader.gui.resources.styles import UI_METRICS
+from bilibili_downloader.gui.widgets.caption_controls import CaptionControls
+
 logger = logging.getLogger(__name__)
 
 
 class WindowChrome(QObject):
     def __init__(self, window, platform):
         super().__init__(window)
-        self.window = window
-        self.platform = platform
-        self.expanded = platform in ("darwin", "win32") and hasattr(
-            Qt, "ExpandedClientAreaHint"
+        self.window, self.platform = window, platform
+        self.controls, self._native = None, None
+        self._sync_pending = False
+        self.expanded = platform == "win32" or (
+            platform == "darwin" and hasattr(Qt, "ExpandedClientAreaHint")
         )
-        if self.expanded:
-            flags = (
-                window.windowFlags()
-                | Qt.ExpandedClientAreaHint
-                | Qt.NoTitleBarBackgroundHint
+        if platform == "win32":
+            flags = int(window.windowFlags()) | int(
+                Qt.FramelessWindowHint | Qt.WindowSystemMenuHint
+                | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint
             )
-            if platform == "win32":
-                flags |= (
-                    Qt.CustomizeWindowHint
-                    | Qt.WindowSystemMenuHint
-                    | Qt.WindowMinimizeButtonHint
-                    | Qt.WindowMaximizeButtonHint
-                    | Qt.WindowCloseButtonHint
-                )
-            window.setWindowFlags(flags)
+            # QWidget normalizes CustomizeWindowHint + caption-button hints by
+            # removing FramelessWindowHint. Native styles are managed below.
+            flags &= ~int(Qt.CustomizeWindowHint)
+            for name in ("ExpandedClientAreaHint", "NoTitleBarBackgroundHint"):
+                flags &= ~int(getattr(Qt, name, 0))
+            window.setWindowFlags(Qt.WindowType(flags))
+            self.controls = CaptionControls(window)
+        elif self.expanded:
+            window.setWindowFlags(window.windowFlags() | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint)
+        if self.expanded and hasattr(Qt, "WA_ContentsMarginsRespectsSafeArea"):
             window.setAttribute(Qt.WA_ContentsMarginsRespectsSafeArea, False)
         window.installEventFilter(self)
 
@@ -43,130 +47,81 @@ class WindowChrome(QObject):
             return (24, 12, 24, 12)
         if self.platform == "darwin":
             return (88, 12, 24, 12)
-        return (24, 12, 164, 12)
+        return (24, 12, 24 + 3 * UI_METRICS.caption_width, 12)
+
+    def schedule_sync(self):
+        if not self._sync_pending:
+            self._sync_pending = True
+            QTimer.singleShot(0, self, self._sync_native)
 
     def eventFilter(self, target, event):
-        sync_events = (
-            QEvent.Show,
-            QEvent.WinIdChange,
-            QEvent.WindowStateChange,
-        )
-        if self.platform == "win32":
-            sync_events += (QEvent.PaletteChange, QEvent.ApplicationPaletteChange, QEvent.StyleChange)
-        if self.expanded and event.type() in sync_events:
-            # Clear the Windows caption before the first exposed frame.
-            if self.platform == "win32" and event.type() == QEvent.Show:
+        kind = event.type()
+        if self.controls and kind in (QEvent.WindowDeactivate, QEvent.Hide):
+            self.controls.reset()
+            if self._native:
+                self._native.cancel_press()
+        if self.expanded and kind in (
+            QEvent.Show, QEvent.WinIdChange, QEvent.WindowStateChange, QEvent.Resize,
+            QEvent.PaletteChange, QEvent.ApplicationPaletteChange, QEvent.StyleChange,
+            QEvent.ActivationChange, QEvent.DevicePixelRatioChange,
+        ):
+            if self.controls:
+                self.controls.sync()
+            if kind == QEvent.Show:
                 self._sync_native()
-            QTimer.singleShot(0, self, self._sync_native)
+            self.schedule_sync()
         return False
 
     def _sync_native(self):
+        self._sync_pending = False
         if not isValid(self.window):
             return
-        if self.expanded and self.platform == "win32":
-            self._sync_windows_caption()
+        if self.controls:
+            self.controls.sync()
+            if sys.platform == "win32" and QApplication.platformName() == "windows":
+                from bilibili_downloader.gui.windows_frame import WindowsFrame
+
+                if self._native is None:
+                    self._native = WindowsFrame(self)
+                self._native.configure()
             return
-        if (
-            sys.platform != "darwin"
-            or self.platform != "darwin"
-            or QApplication.platformName() != "cocoa"
-        ):
+        if not self.expanded or sys.platform != "darwin" or self.platform != "darwin" or QApplication.platformName() != "cocoa":
             return
         try:
-            # QWidget.winId() is an NSView on Cocoa. Keep the real window title
-            # for accessibility/Dock while hiding its duplicate visual caption.
             objc = ctypes.CDLL("/usr/lib/libobjc.A.dylib")
             objc.sel_registerName.restype = ctypes.c_void_p
             objc.sel_registerName.argtypes = [ctypes.c_char_p]
             address = ctypes.cast(objc.objc_msgSend, ctypes.c_void_p).value
-            get_window = ctypes.CFUNCTYPE(
-                ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p
-            )(address)
-            native = get_window(
-                int(self.window.winId()), objc.sel_registerName(b"window")
-            )
+            get_window = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)(address)
+            native = get_window(int(self.window.winId()), objc.sel_registerName(b"window"))
             if native:
-                set_visibility = ctypes.CFUNCTYPE(
-                    None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long
-                )(address)
+                set_visibility = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long)(address)
                 set_visibility(native, objc.sel_registerName(b"setTitleVisibility:"), 1)
         except (OSError, AttributeError):
             logger.debug("Native caption visibility unavailable", exc_info=True)
 
-    def _sync_windows_caption(self):
-        handle = self.window.windowHandle()
-        if handle is not None:
-            # QWidget.adjustFlags() adds WindowTitleHint back whenever caption
-            # buttons are requested. Set the QWindow flag instead: Qt's Windows
-            # expanded-titlebar renderer then omits BOTH the icon and caption,
-            # while keeping the real title, icon, system menu and buttons.
-            # Use integer masking: Python's enum inversion can omit high flags
-            # such as CustomizeWindowHint/WindowCloseButtonHint on Windows.
-            flags = Qt.WindowType((int(handle.flags()) | int(
-                Qt.CustomizeWindowHint | Qt.WindowSystemMenuHint
-                | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint
-                | Qt.WindowCloseButtonHint
-            )) & ~int(Qt.WindowTitleHint))
-            if handle.flags() != flags:
-                handle.setFlags(flags)
-            if sys.platform == "win32" and QApplication.platformName() == "windows" and self.window.isVisible():
-                from ctypes import wintypes
-
-                # Qt 6.11's separate expanded-titlebar layer repaints on native
-                # WM_PAINT/hit testing, but a widget palette change only updates
-                # the backing store. Invalidate the native window so the caption
-                # glyphs immediately follow light/dark mode too.
-                invalidate = ctypes.windll.user32.InvalidateRect
-                invalidate.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT), wintypes.BOOL]
-                invalidate.restype = wintypes.BOOL
-                invalidate(wintypes.HWND(int(handle.winId())), None, False)
-
     def native_event(self, message):
-        """Keep legacy caption painting out of the expanded client area."""
-        if not self.expanded or sys.platform != "win32" or self.platform != "win32":
+        if self.platform != "win32" or sys.platform != "win32" or QApplication.platformName() != "windows":
             return None
         from ctypes import wintypes
 
         msg = wintypes.MSG.from_address(int(message))
-        if msg.message == 0x0086:  # WM_NCACTIVATE
-            # Qt 6.11 suppresses this default caption paint for frameless
-            # windows, but not expanded windows without WindowTitleHint.
-            # Let WM_ACTIVATE continue to manage focus; only suppress the
-            # legacy non-client paint over Qt's separate titlebar layer.
-            return 1
-        if msg.message != 0x0084 or self.window.isFullScreen():  # WM_NCHITTEST
-            return None
-        user32 = ctypes.windll.user32
-        user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
-        user32.GetAsyncKeyState.restype = ctypes.c_short
-        if any(user32.GetAsyncKeyState(button) & 0x8000 for button in (0x01, 0x02)):
-            # Qt's expanded-titlebar hit test performs maximize/restore on
-            # press. Returning HTMAXBUTTON here bypasses that action. Only
-            # supply the idle hover target needed by Windows 11 Snap.
-            return None
-        user32.GetDpiForWindow.argtypes = [wintypes.HWND]
-        user32.GetDpiForWindow.restype = wintypes.UINT
-        user32.GetClientRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
-        user32.GetClientRect.restype = wintypes.BOOL
-        user32.ClientToScreen.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.POINT)]
-        user32.ClientToScreen.restype = wintypes.BOOL
-        user32.GetSystemMetricsForDpi.argtypes = [ctypes.c_int, wintypes.UINT]
-        user32.GetSystemMetricsForDpi.restype = ctypes.c_int
-        rect = wintypes.RECT()
-        origin = wintypes.POINT()
-        hwnd = wintypes.HWND(int(self.window.winId()))
-        if not user32.GetClientRect(hwnd, ctypes.byref(rect)) or not user32.ClientToScreen(hwnd, ctypes.byref(origin)):
-            return None
-        dpi = user32.GetDpiForWindow(hwnd) or 96
-        # Match Qt's expanded-titlebar metrics in physical client pixels,
-        # including the per-monitor frame and padded border at this DPI.
-        height = sum(user32.GetSystemMetricsForDpi(metric, dpi) for metric in (32, 92, 4))
-        width = int(height * 1.5)
-        x = ctypes.c_short(msg.lParam & 0xFFFF).value
-        y = ctypes.c_short((msg.lParam >> 16) & 0xFFFF).value
-        if (
-            origin.x + rect.right - 2 * width <= x < origin.x + rect.right - width
-            and origin.y <= y < origin.y + height
-        ):
-            return 9  # HTMAXBUTTON; hover only, for the Windows Snap flyout.
-        return None
+        if self._native is None:
+            from bilibili_downloader.gui.windows_frame import WindowsFrame
+
+            self._native = WindowsFrame(self)
+        self._native.hwnd = msg.hWnd
+        return self._native.event(msg)
+
+    def show_native(self, command):
+        if self.platform != "win32" or sys.platform != "win32" or QApplication.platformName() != "windows" or self.window.isFullScreen():
+            return False
+        # QWidget still owns visibility, lifecycle and focus. Only the native
+        # state transition bypasses Qt's frameless MoveWindow emulation.
+        self.window.show()
+        self._sync_native()
+        self._native.show_window(command)
+        return True
+
+    def placement_state(self):
+        return self._native.placement_state() if self._native and self._native.hwnd else None

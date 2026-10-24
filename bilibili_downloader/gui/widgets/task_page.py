@@ -1,5 +1,6 @@
 """Task center: durable downloads, current recordings and finalized segments."""
 
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 
@@ -18,7 +19,6 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
-    QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -29,6 +29,7 @@ from bilibili_downloader.gui.resources.styles import UI_METRICS
 from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
     ActionBar,
+    CommandBar,
     ElidedLabel,
     EmptyState,
     MessageBox,
@@ -44,8 +45,8 @@ from bilibili_downloader.gui.widgets.download_list import (
     STATUS_TONE_ROLE,
     _StatusDelegate,
 )
-from bilibili_downloader.gui.widgets.glass_surface import GlassFrame
 from bilibili_downloader.gui.widgets.live_page import _duration, _size, live_tone
+from bilibili_downloader.gui.widgets.row_hover import RowHoverTable, RowHoverTree
 
 CURRENT_STATES = {
     "preparing",
@@ -99,6 +100,8 @@ class TaskPage(QWidget):
         controller.history_changed.connect(self.update_history)
         controller.message_changed.connect(self.notice.set_message)
         controller.export_changed.connect(self._export_changed)
+        controller.history_undo_changed.connect(self.undo_history_action.setEnabled)
+        controller.history_focus_requested.connect(self._focus_history)
         self.refresh_downloads()
         self.update_recordings(controller.rows)
         self.update_history(controller.sessions)
@@ -109,12 +112,9 @@ class TaskPage(QWidget):
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
-        self._download_tools = GlassFrame()
-        self._download_tools.setObjectName("ToolSurface")
-        self._download_tools.setAttribute(Qt.WA_StyledBackground, True)
-        toolbar = QHBoxLayout(self._download_tools)
-        toolbar.setContentsMargins(10, 8, 10, 8)
-        toolbar.setSpacing(8)
+        self._download_tools = CommandBar()
+        toolbar = self._download_tools.filters
+        actions = self._download_tools.actions
         self.filter = ComboBox()
         for text, key in (
             ("全部任务", "all"),
@@ -143,20 +143,23 @@ class TaskPage(QWidget):
         for text, signal in (
             ("暂停", self.pause_all_requested),
             ("继续", self.resume_all_requested),
-            ("移除完成", self.clear_completed_requested),
         ):
             button = QPushButton(text)
             button.setObjectName("TableSubtleButton")
             button.clicked.connect(signal.emit)
             self._bulk_buttons.append(button)
-            toolbar.addWidget(button)
+            actions.addWidget(button)
         more = QPushButton("更多")
         more.setObjectName("TableSubtleButton")
         more.setProperty("menuButton", True)
         menu = PopupMenu(more)
+        self._clear_completed_action = menu.addAction("移除完成", self.clear_completed_requested.emit)
+        self._bulk_buttons.append(self._clear_completed_action)
         menu.addAction("清理下载缓存", self.clear_cache_requested.emit)
+        self.undo_action = menu.addAction("撤销移除", self.undo_remove_requested.emit)
+        self.undo_action.setEnabled(False)
         more.setMenu(menu)
-        toolbar.addWidget(more)
+        actions.addWidget(more)
         layout.addWidget(self._download_tools)
         self._download_stack = QStackedWidget()
         self._download_stack.addWidget(self.downloads)
@@ -248,7 +251,7 @@ class TaskPage(QWidget):
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
-        self.current = QTableWidget(0, 5)
+        self.current = RowHoverTable(0, 5)
         self.current.setHorizontalHeaderLabels(
             ["直播间", "状态", "时长", "大小 / 速度", "操作"]
         )
@@ -300,6 +303,8 @@ class TaskPage(QWidget):
                     self.current.setItem(index, column, item)
                 item.setText(value)
                 item.setToolTip(row["detail"] if column == 1 else value)
+                if column > 0:
+                    item.setTextAlignment(Qt.AlignCenter)
                 if column == 0:
                     item.setData(Qt.UserRole, row["room_id"])
                 if column == 1:
@@ -395,25 +400,29 @@ class TaskPage(QWidget):
         )
         self.current_detail.setVisible(row is not None)
         if row:
+            quality = next((q["label"] for q in row["qualities"] if q["qn"] == row["quality"]), "当前最高画质")
             self.current_detail.set_details(
                 f"{row['author']} · 房间 {row['room_id']}", row["state_label"],
-                f"已录 {_duration(row['duration'])} · {_size(row['size'])} · {_size(row['speed'])}/s",
-                row["output_dir"], row["detail"], live_tone(row["state"]),
+                f"{quality} · 分段 {row['segment_seconds'] // 60} 分钟 · {'自动监控' if row['enabled'] else '监控关闭'}",
+                row["output_dir"], row["detail"] if row["detail"] != row["state_label"] else "", live_tone(row["state"]),
             )
+            self.current_detail._full_text += f"\n已录 {_duration(row['duration'])} · {_size(row['size'])} · {_size(row['speed'])}/s"
 
     def _history_tab(self):
         tab = QWidget()
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
-        self.history = QTreeWidget()
+        self.history = RowHoverTree()
         self.history.setHeaderLabels(["场次 / 文件", "状态 / 时长", "大小"])
         self.history.header().setSectionResizeMode(0, QHeaderView.Stretch)
         self.history.header().setSectionResizeMode(1, QHeaderView.Fixed)
         self.history.header().resizeSection(1, 150)
         self.history.header().setSectionResizeMode(2, QHeaderView.Fixed)
         self.history.header().resizeSection(2, 108)
-        self.history.setSelectionMode(QTreeWidget.SingleSelection)
+        self.history.setSelectionMode(QTableWidget.SingleSelection)
+        self.history.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.history.customContextMenuRequested.connect(self._history_context_menu)
         self.history.itemSelectionChanged.connect(self._history_selection)
         self._history_stack = QStackedWidget()
         self._history_stack.setMinimumHeight(120)
@@ -479,6 +488,21 @@ class TaskPage(QWidget):
         self.copy_path_button = QPushButton("复制路径")
         self.copy_path_button.clicked.connect(lambda: QApplication.clipboard().setText(str(self._selected_path() or "")))
         footer.addWidget(self.copy_path_button)
+        self.history_more = QPushButton("更多")
+        self.history_more.setObjectName("TableSubtleButton")
+        self.history_more.setProperty("menuButton", True)
+        self.history_more.setAccessibleName("录制历史更多操作")
+        self.history_menu = PopupMenu(self.history_more)
+        self.history_menu.setToolTipsVisible(True)
+        self.remove_history_action = self.history_menu.addAction("移除场次记录")
+        self.remove_history_action.triggered.connect(
+            lambda: self.controller.remove_history(self.remove_history_action.data())
+        )
+        self.undo_history_action = self.history_menu.addAction("撤销移除", self.controller.undo_remove_history)
+        self.undo_history_action.setEnabled(False)
+        self.history_menu.aboutToShow.connect(self._prepare_history_menu)
+        self.history_more.setMenu(self.history_menu)
+        footer.addWidget(self.history_more)
         footer.addStretch()
         self.export_button = QPushButton("合并导出 MP4")
         self.export_button.setObjectName("PrimaryButton")
@@ -499,6 +523,8 @@ class TaskPage(QWidget):
     def update_history(self, sessions):
         self._history_sessions = {s.id: s for s in sessions}
         selected = self.history.currentItem()
+        selected_parent = selected.parent() if selected and selected.parent() else selected
+        previous_row = self.history.indexOfTopLevelItem(selected_parent) if selected_parent else -1
         key = selected.data(0, Qt.UserRole + 1) if selected else None
         expanded = {
             self.history.topLevelItem(i).data(0, Qt.UserRole + 1)
@@ -540,6 +566,7 @@ class TaskPage(QWidget):
             parent.setData(0, Qt.UserRole + 2, "\n".join(details))
             parent.setData(0, Qt.UserRole + 3, session.id)
             parent.setToolTip(0, "\n".join(details))
+            parent.setTextAlignment(2, Qt.AlignCenter)
             parent.setSizeHint(
                 0,
                 QSize(
@@ -562,6 +589,8 @@ class TaskPage(QWidget):
                 child = QTreeWidgetItem(
                     [name, _duration(segment.duration), _size(segment.size)]
                 )
+                child.setTextAlignment(1, Qt.AlignCenter)
+                child.setTextAlignment(2, Qt.AlignCenter)
                 child.setData(0, Qt.UserRole, segment.path)
                 child.setData(
                     0, Qt.UserRole + 1, f"segment:{session.id}:{segment.path}"
@@ -575,6 +604,8 @@ class TaskPage(QWidget):
                 if child.data(0, Qt.UserRole + 1) == key:
                     self.history.setCurrentItem(child)
         self.history.blockSignals(False)
+        if key is not None and self.history.currentItem() is None and self.history.topLevelItemCount():
+            self.history.setCurrentItem(self.history.topLevelItem(min(max(0, previous_row), self.history.topLevelItemCount() - 1)))
         self.history.verticalScrollBar().setValue(scroll)
         self._history_stack.setCurrentIndex(0 if sessions else 1)
         self._history_selection()
@@ -590,6 +621,8 @@ class TaskPage(QWidget):
         self.open_button.setText("打开文件" if segment else "打开目录")
         self.open_button.setEnabled(path is not None and path.exists())
         session = self._selected_session()
+        if not self.history_menu.isVisible():
+            self._prepare_history_menu()
         export = session.mp4_export if session else None
         busy = bool(export and export.status in {"queued", "running"})
         eligible = bool(session and session.status != "recording" and session.segments)
@@ -638,6 +671,53 @@ class TaskPage(QWidget):
         exported = self._selected_export_path()
         self.export_play.setVisible(bool(exported and exported.is_file()))
         self.export_location.setVisible(bool(exported and exported.is_file()))
+
+    def _history_remove_state(self, session):
+        if session is None:
+            return "请选择一场录制历史。"
+        try:
+            return self.controller.history_removal_reason(session.id)
+        except (OSError, ValueError, sqlite3.Error):
+            return "暂时无法读取录制历史，请稍后重试。"
+
+    def _prepare_history_menu(self):
+        session = self._selected_session()
+        child = self.history.currentItem() is not None and self.history.currentItem().parent() is not None
+        self.remove_history_action.setText("移除所属场次记录" if child else "移除场次记录")
+        reason = self._history_remove_state(session)
+        self.remove_history_action.setData(session.id if session else None)
+        self.remove_history_action.setEnabled(not reason)
+        self.remove_history_action.setToolTip(reason or f"移除此场次及 {len(session.segments)} 条片段记录，保留录制文件、MP4 和 manifest。")
+        self.history_more.setToolTip(self.remove_history_action.toolTip())
+
+    def _history_context_menu(self, point):
+        item = self.history.itemAt(point)
+        if item is None:
+            return
+        self.history.setCurrentItem(item)
+        session = self._selected_session()
+        if session is None:
+            return
+        menu = PopupMenu(self.history)
+        menu.setToolTipsVisible(True)
+        label = "移除所属场次记录" if item.parent() else "移除场次记录"
+        action = menu.addAction(label, lambda: self.controller.remove_history(session.id))
+        reason = self._history_remove_state(session)
+        action.setEnabled(not reason)
+        action.setToolTip(reason or f"移除此场次及 {len(session.segments)} 条片段记录，所有文件保留。")
+        undo = menu.addAction("撤销移除", self.controller.undo_remove_history)
+        undo.setEnabled(self.undo_history_action.isEnabled())
+        self.history._row_hover.pin(menu, self.history.indexFromItem(item))
+        menu.exec(self.history.viewport().mapToGlobal(point))
+        menu.deleteLater()
+
+    def _focus_history(self, session_id):
+        for index in range(self.history.topLevelItemCount()):
+            item = self.history.topLevelItem(index)
+            if item.data(0, Qt.UserRole + 3) == session_id:
+                self.history.setCurrentItem(item)
+                self.history.scrollToItem(item)
+                break
 
     def _selected_session(self):
         item = self.history.currentItem()

@@ -128,7 +128,9 @@ def test_skipped_version_hidden_automatically_but_shown_manually(
     assert shown == []
     window._updates.check("latest")
     wait_idle(qtbot, window)
-    assert shown == [RELEASE.notes]
+    assert len(shown) == 1
+    assert shown[0].count("plain release notes") == 100
+    assert "<b>" not in shown[0]
 
 
 def test_skip_persists_and_settings_draft_does_not_overwrite_it(

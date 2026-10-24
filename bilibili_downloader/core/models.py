@@ -442,6 +442,7 @@ class AppSettings(BaseModel):
     last_login_at: Optional[str] = None
     copyright_notice_version: int = Field(default=0, ge=0)
     auto_check_updates: bool = True
+    clipboard_monitor_enabled: bool = True
     update_channel: UpdateChannel = UpdateChannel.STABLE
     skipped_update_versions: list[str] = Field(default_factory=list)
     windows_close_action: WindowCloseAction = WindowCloseAction.ASK

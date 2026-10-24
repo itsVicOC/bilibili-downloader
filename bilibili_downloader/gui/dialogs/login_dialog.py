@@ -225,8 +225,8 @@ class LoginDialog(QDialog):
         # -- Manual Cookie Tab --
         cookie_tab = QWidget()
         cookie_layout = QVBoxLayout(cookie_tab)
-        cookie_layout.setContentsMargins(14, 14, 14, 14)
-        cookie_layout.setSpacing(10)
+        cookie_layout.setContentsMargins(16, 16, 16, 16)
+        cookie_layout.setSpacing(12)
 
         # Instructions
         steps_label = QLabel("获取 SESSDATA 的步骤")
@@ -314,11 +314,11 @@ class LoginDialog(QDialog):
         self._refresh_btn.hide()
         qr_layout.addWidget(self._refresh_btn, alignment=Qt.AlignCenter)
 
-        qr_layout.addStretch()
+        qr_layout.setAlignment(Qt.AlignTop)
         self._tabs.addTab(qr_tab, "扫码登录")
         self._tabs.setCurrentIndex(1)
 
-        layout.addWidget(self._tabs, 1)
+        layout.addWidget(self._tabs, 0)
 
         self._overview_stretch = layout.count()
         layout.addStretch(1 if self._management else 0)
