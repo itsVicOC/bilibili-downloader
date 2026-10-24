@@ -6,6 +6,8 @@
 
 用户于 2026-10-24 确认 `v0.8.9b4` 已完成 Windows 和 macOS 实机验证，并授权合并 `main`、发布 `v0.8.9` 正式版和清理开发分支。正式版业务代码沿用已验证的 beta 4，仅更新版本与发布文档。
 
+`v0.8.9` 已从 `main` 合并提交 `838810e` 正式发布并成为 Latest；同一提交的 [CI](https://github.com/itsVicOC/bilibili-downloader/actions/runs/40055265407) 15 项、[Release](https://github.com/itsVicOC/bilibili-downloader/actions/runs/40055279262) 5 项均通过，14 个公开附件校验通过。开发分支已清理，完整记录见[正式版发布检查](BUILDING.md#089-正式版发布检查2026-10-24)。
+
 此处记录用户提供的双平台实机结论；下文保留 2026-10-23 beta 阶段自动化结果及当时的边界。实际 Snap、系统 DPI、混合 DPI 多屏、跨应用剪贴板及托盘专项未分别提供结果，不据此扩展为逐项实测通过。
 
 ## 实现结果
