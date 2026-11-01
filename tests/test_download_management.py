@@ -10,7 +10,7 @@ import pytest
 from PySide6.QtWidgets import QMessageBox
 
 from bilibili_downloader.core.download_service import DownloadService
-from bilibili_downloader.core.library import LibraryRepository
+from bilibili_downloader.core.library import LibraryRepository, absolute_path
 from bilibili_downloader.core.models import (
     AppSettings,
     DownloadItem,
@@ -201,7 +201,7 @@ def test_recycle_is_per_file_skips_shared_changed_and_links(tmp_path):
         return True, path + ".trash"
 
     result = library.recycle(entries, trash)
-    assert moved == [outcome.video_path]
+    assert moved == [absolute_path(outcome.video_path)]
     assert result[0][1] == "" and "变化" in result[1][1]
     library.check_files([asset_id])
     assert library.files_for([asset_id])[0]["state"] == "recycled"
@@ -340,7 +340,9 @@ def test_saved_media_is_indexed_before_cancelled_companion_work(tmp_path, monkey
     with pytest.raises(RuntimeError, match="cancelled"):
         service.download(item, progress)
     assert (
-        snapshots and library.list_assets()[0]["files"][0]["path"] == outcome.video_path
+        snapshots
+        and library.list_assets()[0]["files"][0]["path"]
+        == absolute_path(outcome.video_path)
     )
     assert Path(outcome.video_path).read_bytes() == b"media"
 
@@ -669,12 +671,15 @@ def test_refresh_preserves_attachment_and_main_actions_target_media(
     )
     page.open_action.click()
     page.files.itemDoubleClicked.emit(attachment, 0)
-    assert opened == [outcome.video_path, outcome.subtitle_paths[0]]
+    assert [absolute_path(path) for path in opened] == [
+        absolute_path(outcome.video_path),
+        absolute_path(outcome.subtitle_paths[0]),
+    ]
     page.refresh()
     assert page.attachments_toggle.isChecked()
     assert page.files.currentItem().data(0, Qt.UserRole)["id"] == attachment_id
     page.open_action.click()
-    assert opened[-1] == outcome.video_path
+    assert absolute_path(opened[-1]) == absolute_path(outcome.video_path)
 
 
 def test_check_can_cancel_while_open_and_search_remain_available(
@@ -744,7 +749,7 @@ def test_recycle_summary_stays_short_with_long_errors_and_lists(
     qtbot.waitUntil(lambda: not page._jobs)
     assert "共 2 个文件" in prompts[0][0] and "1 个附件" in prompts[0][0]
     assert "系统回收站恢复" in prompts[0][0]
-    assert outcome.video_path in prompts[0][1]
+    assert absolute_path(outcome.video_path) in prompts[0][1]
     assert page.notice.label.text() == "已回收 1 个文件，1 个未处理。"
     assert "PermissionError" not in page.notice.label.text()
     assert "PermissionError" in page._details
@@ -835,7 +840,7 @@ def test_file_select_all_shortcut_respects_filter(workspace, tmp_path, qtbot):
     page.table.setFocus()
     qtbot.keySequence(page.table, QKeySequence(QKeySequence.SelectAll))
     assert len(page.selected_ids()) == 1
-    assert page._file()["path"] == str(other)
+    assert page._file()["path"] == absolute_path(other)
 
 
 def test_single_preview_copy_value_is_absolute_and_has_no_count_suffix(workspace):
