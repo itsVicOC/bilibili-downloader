@@ -887,14 +887,14 @@ def test_bulk_actions_respect_scope_and_explain_affected_count(workspace, monkey
         table.add_item(DownloadItem(video_info=VideoInfo(bvid="BV1GJ411x7h7", cid=task_id)), download_id=task_id, status=state)
     page.filter.setCurrentIndex(page.filter.findData("paused"))
     assert page.bulk_ids("resume") == [1]
-    assert page._bulk_buttons[1].text() == "继续 1"
+    assert page._bulk_buttons[1].text() == "继续列表（1）"
     submitted = []
     monkeypatch.setattr(window, "_on_retry_download", submitted.append)
     page._bulk_buttons[1].click()
     assert submitted == [1]
-    page.scope.setCurrentIndex(page.scope.findData("all"))
-    assert page.bulk_ids("resume") == [1, 2]
-    assert "2 项" in page._bulk_buttons[1].toolTip()
+    assert page.bulk_ids("resume", scope="all") == [1, 2]
+    page._resume_entire_action.trigger()
+    assert submitted == [1, 1, 2]
 
 
 def test_remove_filtered_completed_records_and_undo_preserve_files(workspace, tmp_path):
@@ -914,7 +914,7 @@ def test_remove_filtered_completed_records_and_undo_preserve_files(workspace, tm
     window._on_clear_completed()
     assert repo.get(ids[0]) is None
     assert repo.get(ids[1]) is not None
-    assert "文件和断点仍保留" in window._status_bar.currentMessage()
+    assert "文件保留" in window._status_bar.currentMessage()
     assert page.undo_notice.isHidden() and page.undo_action.isEnabled()
     window._status_bar.clearMessage()
     page.undo_action.trigger()
@@ -1001,7 +1001,7 @@ def test_batch_progress_keeps_compact_input_and_disables_stale_selection(workspa
     flush()
     assert panel._count_label.height() < 40
     assert panel._preview_card.isHidden()
-    assert panel._selected_label.text() == "已选 0 项"
+    assert panel._selected_label.text() == "已选 0 个作品 · 0 个任务"
     assert not panel._add_btn.isEnabled()
     assert contained(panel._progress_area, panel)
     assert contained(panel._cancel_btn, panel)

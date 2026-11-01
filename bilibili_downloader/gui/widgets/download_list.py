@@ -1,7 +1,16 @@
 """Download list table widget with cancel and retry support."""
 
-from PySide6.QtCore import QRect, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QTextLayout, QTextOption
+from pathlib import Path
+
+from PySide6.QtCore import QItemSelectionModel, QRect, QSize, Qt, Signal
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QKeySequence,
+    QPainter,
+    QTextLayout,
+    QTextOption,
+)
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -277,6 +286,7 @@ class DownloadListWidget(RowHoverTable):
         self._id_to_row = {}  # download_id -> current row index
         self._states = {}  # download_id -> TaskStatus
         self._output_paths = {}  # download_id -> completed media path
+        self.removing_ids = set()
         self._placeholder_active = False
         self._setup_ui()
 
@@ -302,7 +312,7 @@ class DownloadListWidget(RowHoverTable):
         self.verticalHeader().setMinimumSectionSize(UI_METRICS.row_height)
         self.setAlternatingRowColors(True)
         self.setSelectionBehavior(QTableWidget.SelectRows)
-        self.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.setShowGrid(False)
         self.setIconSize(QSize(20, 20))
@@ -335,8 +345,8 @@ class DownloadListWidget(RowHoverTable):
         if output_path:
             self._output_paths[download_id] = output_path
 
-        title_item = QTableWidgetItem(item.video_info.title)
-        title_item.setToolTip(item.video_info.title)
+        title_item = QTableWidgetItem(item.display_title)
+        title_item.setToolTip(item.display_title + f"\n{'仅音频' if item.output_mode == OutputMode.AUDIO else '视频'}\n" + str(Path(item.output_dir or "") / item.relative_output_path))
         title_item.setData(Qt.UserRole, download_id)
         self.setItem(row, 0, title_item)
 
@@ -662,6 +672,7 @@ class DownloadListWidget(RowHoverTable):
         self._workers.pop(download_id, None)
         self._states.pop(download_id, None)
         self._output_paths.pop(download_id, None)
+        self.removing_ids.discard(download_id)
         if row is not None:
             self.removeRow(row)
             self._rebuild_row_mapping()
@@ -671,6 +682,10 @@ class DownloadListWidget(RowHoverTable):
     def _set_actions(self, download_id: int, status: TaskStatus):
         row = self._row_for(download_id)
         if row is None:
+            return
+        if download_id in self.removing_ids:
+            self.setCellWidget(row, 4, _wrap_btn(QPushButton("移除中…")))
+            self.cellWidget(row, 4).setEnabled(False)
             return
         if status in (TaskStatus.QUEUED, TaskStatus.DOWNLOADING, TaskStatus.MERGING):
             buttons = (_create_pause_btn(download_id, self._on_pause_clicked),)
@@ -736,6 +751,29 @@ class DownloadListWidget(RowHoverTable):
         self.horizontalHeader().resizeSection(2, progress_width)
         self.horizontalHeader().resizeSection(3, 156 if narrow else 220)
         super().resizeEvent(event)
+
+    def selected_ids(self):
+        return [self.item(index.row(), 0).data(Qt.UserRole)
+                for index in self.selectionModel().selectedRows()
+                if not self.isRowHidden(index.row()) and self.item(index.row(), 0).data(Qt.UserRole) in self._states]
+
+    def select_visible(self):
+        was_blocked = self.blockSignals(True)
+        self.clearSelection()
+        for task_id in self._states:
+            row = self._row_for(task_id)
+            if row is not None and not self.isRowHidden(row):
+                self.selectionModel().select(self.model().index(row, 0), QItemSelectionModel.Select | QItemSelectionModel.Rows)
+        self.blockSignals(was_blocked)
+        if not was_blocked:
+            self.itemSelectionChanged.emit()
+
+    def keyPressEvent(self, event):
+        if event.matches(QKeySequence.SelectAll):
+            self.select_visible()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
 
 def _set_progress_state(progress_bar: QProgressBar, object_name: str):

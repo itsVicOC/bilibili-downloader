@@ -11,9 +11,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from bilibili_downloader.core.models import DownloadItem, TaskStatus
+from bilibili_downloader.core.models import DownloadItem, DownloadOutcome, TaskStatus
 
-TASK_SCHEMA_VERSION = 2
+TASK_SCHEMA_VERSION = 3
 
 
 class TaskDatabaseVersionError(RuntimeError):
@@ -36,6 +36,7 @@ class TaskRecord:
     updated_at: str
     completed_at: Optional[str]
     warnings: list[str]
+    outcome: Optional[DownloadOutcome] = None
 
 
 class TaskRepository:
@@ -53,6 +54,7 @@ class TaskRepository:
         "payload_json",
         "fingerprint",
         "warnings",
+        "outcome",
     }
 
     def __init__(self, database_path: Path):
@@ -121,6 +123,8 @@ class TaskRepository:
                             _migrate_v0_to_v1(connection)
                         elif current_version == 1:
                             _migrate_v1_to_v2(connection)
+                        elif current_version == 2:
+                            connection.execute("ALTER TABLE tasks ADD COLUMN outcome_json TEXT")
                         current_version += 1
                         connection.execute(
                             f"PRAGMA user_version = {current_version}"
@@ -247,6 +251,9 @@ class TaskRepository:
             elif key == "warnings":
                 key = "warnings_json"
                 value = json.dumps(list(value or []), ensure_ascii=False)
+            elif key == "outcome":
+                key = "outcome_json"
+                value = value.model_dump_json() if value else None
             normalized[key] = value
         normalized["updated_at"] = _utc_now()
         assignments = ", ".join(f"{column} = ?" for column in normalized)
@@ -285,6 +292,18 @@ class TaskRepository:
                 ),
             )
             return cursor.rowcount
+
+    def bind_output_directories(self, fallback: str) -> None:
+        """Freeze legacy tasks before resuming or comparing fingerprints."""
+        for record in self.list_tasks():
+            if record.item.output_dir:
+                continue
+            root = Path(record.item.output_path or fallback).expanduser().resolve()
+            if record.output_path:
+                root = Path(record.output_path).expanduser().absolute()
+                for _ in record.item.relative_output_path.parts:
+                    root = root.parent
+            self.update_item(record.id, record.item.model_copy(update={"output_dir": str(root)}))
 
     def find_duplicate(self, item: DownloadItem) -> Optional[TaskRecord]:
         statuses = (
@@ -331,13 +350,14 @@ class TaskRepository:
                     """INSERT INTO tasks (
                         id, fingerprint, payload_json, status, progress, status_text, error,
                         output_path, speed_bytes_per_second, eta_seconds, created_at,
-                        updated_at, completed_at, warnings_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        updated_at, completed_at, warnings_json, outcome_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (record.id, record.fingerprint, _sanitized_item(record.item).model_dump_json(),
                      record.status.value, record.progress, record.status_text, record.error,
                      record.output_path, record.speed_bytes_per_second, record.eta_seconds,
                      record.created_at, record.updated_at, record.completed_at,
-                     json.dumps(record.warnings, ensure_ascii=False)),
+                     json.dumps(record.warnings, ensure_ascii=False),
+                     record.outcome.model_dump_json() if record.outcome else None),
                 )
                 restored.append(record)
         return restored
@@ -389,11 +409,19 @@ def _record_from_row(row: sqlite3.Row) -> TaskRecord:
         updated_at=row["updated_at"],
         completed_at=row["completed_at"],
         warnings=[str(warning) for warning in warnings],
+        outcome=_parse_outcome(row["outcome_json"]),
     )
 
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _parse_outcome(raw):
+    try:
+        return DownloadOutcome.model_validate_json(raw) if raw else None
+    except ValueError:
+        return None
 
 
 def _sanitized_item(item: DownloadItem) -> DownloadItem:
@@ -482,6 +510,7 @@ def _validate_schema(connection: sqlite3.Connection) -> None:
         "updated_at",
         "completed_at",
         "warnings_json",
+        "outcome_json",
     }
     if not _table_exists(connection, "tasks"):
         raise TaskDatabaseVersionError("任务数据库缺少 tasks 表")

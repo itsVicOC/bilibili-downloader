@@ -190,8 +190,9 @@ class AccountButton(IconButton):
 class ElidedLabel(QLabel):
     """Single-line text with its full value available to hover and assistive tools."""
 
-    def __init__(self, text="", parent=None):
+    def __init__(self, text="", parent=None, *, elide_mode=Qt.ElideRight):
         super().__init__(parent)
+        self._elide_mode = elide_mode
         self._full_text = text
         self.setTextFormat(Qt.PlainText)
         self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
@@ -204,7 +205,7 @@ class ElidedLabel(QLabel):
         self._sync_text()
 
     def _sync_text(self):
-        super().setText(self.fontMetrics().elidedText(self._full_text, Qt.ElideRight, max(1, self.width())))
+        super().setText(self.fontMetrics().elidedText(self._full_text, self._elide_mode, max(1, self.width())))
 
     def resizeEvent(self, event):
         self._sync_text()
@@ -236,13 +237,15 @@ class ReadOnlyPath(QLineEdit):
         self.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
         self.setAccessibleName("完整保存目录")
         self._full_text = ""
+        self._copy_value = ""
 
-    def set_full_text(self, text):
+    def set_full_text(self, text, *, copy_value=None):
+        self._copy_value = copy_value if copy_value is not None else text.removeprefix("保存至 ")
+        self.setToolTip(copy_value if copy_value is not None else text)
         if text == self.text():
             return
         self._full_text = text
         self.setText(text)
-        self.setToolTip(text)
         self.setCursorPosition(0)
         self.updateGeometry()
 
@@ -255,7 +258,7 @@ class ReadOnlyPath(QLineEdit):
     def contextMenuEvent(self, event):
         menu = self.createStandardContextMenu()
         menu.addSeparator()
-        menu.addAction("复制完整路径", lambda: QApplication.clipboard().setText(self.text().removeprefix("保存至 ")))
+        menu.addAction("复制完整路径", lambda: QApplication.clipboard().setText(self._copy_value))
         menu.exec(event.globalPos())
         menu.deleteLater()
 

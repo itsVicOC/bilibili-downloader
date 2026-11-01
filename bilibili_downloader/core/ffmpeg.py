@@ -315,6 +315,9 @@ class FFmpegManager:
             "-y",  # Overwrite output without asking
             "-i", str(video_path.resolve()),
             "-i", str(audio_path.resolve()),
+            # Require both tracks rather than accepting audio-only fallback.
+            "-map", "0:v:0",
+            "-map", "1:a:0",
             "-c", "copy",
             "-movflags", "+faststart",
         ]

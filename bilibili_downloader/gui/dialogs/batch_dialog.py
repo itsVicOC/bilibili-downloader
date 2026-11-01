@@ -183,6 +183,9 @@ class BatchDialog(QDialog):
         self._preview.setShowGrid(False)
         self._preview.setMinimumHeight(100)
         self._preview_card.body.addWidget(self._preview, 1)
+        self._path_preview = ElidedLabel(elide_mode=Qt.ElideMiddle)
+        self._path_preview.setObjectName("MetaLabel")
+        self._preview_card.body.addWidget(self._path_preview)
         self._result_label = QLabel("解析后可在此筛选要加入的作品")
         self._result_label.setObjectName("MetaLabel")
         self._result_label.setTextFormat(Qt.PlainText)
@@ -204,7 +207,7 @@ class BatchDialog(QDialog):
         self._notice = Notice(action="查看详情", callback=self._show_errors)
         self._notice.action.hide()
         layout.addWidget(self._notice)
-        self._action_bar = OutputActionBar("已选 0 项")
+        self._action_bar = OutputActionBar("已选 0 个作品 · 0 个任务")
         self._selected_label = self._action_bar.status
         self._output_specs = self._action_bar.specs
         self._output_directory = self._action_bar.directory
@@ -221,6 +224,29 @@ class BatchDialog(QDialog):
     def set_output_summary(self, specs, directory):
         self._output_specs.set_full_text(specs)
         self._output_directory.set_full_text(directory)
+        self.update_path_previews()
+
+    def update_path_previews(self):
+        factory = getattr(self, "output_item_factory", None)
+        if factory is None:
+            return
+        from pathlib import Path
+        count, first, full = 0, "", ""
+        chosen = self.get_video_infos()
+        for row, info in enumerate(self._resolved_items):
+            pages = [info.for_page(p) for p in info.pages] if info.is_multi_part else [info]
+            items = [factory(page) for page in pages]
+            paths = [str(Path(item.output_dir) / item.relative_output_path) for item in items]
+            if info in chosen:
+                count += len(items)
+                first = first or items[0].relative_output_path.as_posix()
+                full = full or paths[0]
+            cell = self._preview.item(row, 1)
+            if cell is not None:
+                cell.setToolTip(info.title + f"\n展开为 {len(items)} 个任务\n" + "\n".join(paths[:5]) + ("\n…" if len(paths) > 5 else ""))
+        self._path_preview.set_full_text(f"路径示例：{first}" if count else "选择作品后预览保存路径")
+        self._path_preview.setToolTip(full)
+        self._selected_label.setText(f"已选 {len(chosen)} 个作品 · {count} 个任务")
 
     def _toggle_input(self, collapsed):
         self._url_text.setVisible(not collapsed)
@@ -249,8 +275,9 @@ class BatchDialog(QDialog):
     def _selection_updated(self):
         count = len(self.get_video_infos())
         valid = self._resolved_source == self._url_text.toPlainText()
-        self._selected_label.setText(f"已选 {count} 项")
+        self._selected_label.setText(f"已选 {count} 个作品 · {sum(len(info.pages) if info.is_multi_part else 1 for info in self.get_video_infos())} 个任务")
         self._add_btn.setEnabled(count > 0 and valid and not self._busy)
+        self.update_path_previews()
 
     def _refresh_input_count(self):
         if self._resolved_source is not None:

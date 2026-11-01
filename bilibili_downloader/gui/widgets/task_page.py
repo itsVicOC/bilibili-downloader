@@ -73,12 +73,17 @@ class TaskPage(QWidget):
     clear_completed_requested = Signal()
     clear_cache_requested = Signal()
     undo_remove_requested = Signal()
+    remove_selected_requested = Signal()
+    remove_all_requested = Signal()
+    pause_entire_requested = Signal()
+    resume_entire_requested = Signal()
 
     def __init__(self, downloads, controller, parent=None):
         super().__init__(parent)
         self.downloads = downloads
         self.controller = controller
         self._live_rows = []
+        self.removing_busy = False
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
@@ -96,6 +101,7 @@ class TaskPage(QWidget):
         downloads.content_state_changed.connect(self.refresh_downloads)
         downloads.itemChanged.connect(self.refresh_downloads)
         downloads.itemSelectionChanged.connect(self._download_selection)
+        downloads.itemSelectionChanged.connect(self._selection_actions)
         controller.snapshot_changed.connect(self.update_recordings)
         controller.history_changed.connect(self.update_history)
         controller.message_changed.connect(self.notice.set_message)
@@ -127,14 +133,6 @@ class TaskPage(QWidget):
         self.filter.setFixedWidth(132)
         self.filter.currentIndexChanged.connect(self.refresh_downloads)
         toolbar.addWidget(self.filter)
-        self.scope = ComboBox()
-        self.scope.addItem("当前筛选", "visible")
-        self.scope.addItem("所有任务", "all")
-        self.scope.setFixedWidth(112)
-        self.scope.setAccessibleName("批量操作范围")
-        self.scope.setToolTip("批量操作仅作用于所选范围；当前筛选不会修改隐藏任务")
-        self.scope.currentIndexChanged.connect(self.refresh_downloads)
-        toolbar.addWidget(self.scope)
         self._download_count = QLabel("0 项")
         self._download_count.setObjectName("MetaLabel")
         toolbar.addWidget(self._download_count)
@@ -153,8 +151,16 @@ class TaskPage(QWidget):
         more.setObjectName("TableSubtleButton")
         more.setProperty("menuButton", True)
         menu = PopupMenu(more)
+        self._select_all_action = menu.addAction("全选当前列表", self.downloads.select_visible)
+        self._deselect_action = menu.addAction("取消选择", self.downloads.clearSelection)
+        self._remove_selected_action = menu.addAction("移除所选", self.remove_selected_requested.emit)
         self._clear_completed_action = menu.addAction("移除完成", self.clear_completed_requested.emit)
         self._bulk_buttons.append(self._clear_completed_action)
+        menu.addSeparator()
+        self._pause_entire_action = menu.addAction("暂停全部任务", self.pause_entire_requested.emit)
+        self._resume_entire_action = menu.addAction("继续全部任务", self.resume_entire_requested.emit)
+        self._remove_all_action = menu.addAction("移除全部任务…", self.remove_all_requested.emit)
+        menu.addSeparator()
         menu.addAction("清理下载缓存", self.clear_cache_requested.emit)
         self.undo_action = menu.addAction("撤销移除", self.undo_remove_requested.emit)
         self.undo_action.setEnabled(False)
@@ -201,29 +207,59 @@ class TaskPage(QWidget):
                 or (key == "attention" and (state == TaskStatus.FAILED or warning))
             )
             self.downloads.setRowHidden(row, not visible)
+            if not visible:
+                for column in range(self.downloads.columnCount()):
+                    if cell := self.downloads.item(row, column):
+                        cell.setSelected(False)
             count += bool(visible)
         total = len(self.downloads._states)
-        for button, action, title in zip(self._bulk_buttons, ("pause", "resume", "clear"), ("暂停", "继续", "移除完成")):
-            count_action = len(self.bulk_ids(action))
-            button.setEnabled(count_action > 0)
-            button.setText(f"{title} {count_action}")
-            button.setToolTip(f"{title}{self.scope.currentText()}中的 {count_action} 项任务" + ("，保留媒体文件" if action == "clear" else ""))
-        self._download_count.setText(f"{count} / {total} 项")
         self._download_stack.setCurrentIndex(1 if not total else 0 if count else 2)
         self._download_selection()
+        self._selection_actions()
 
-    def bulk_ids(self, action):
+    def _selection_actions(self):
+        selected = self.downloads.selected_ids()
+        visible = sum(not self.downloads.isRowHidden(self.downloads._row_for(i)) for i in self.downloads._states)
+        total = len(self.downloads._states)
+        self._download_count.setText(f"已选 {len(selected)} 项" if selected else f"显示 {visible} / {total} 项")
+        self._select_all_action.setEnabled(visible > 0)
+        self._deselect_action.setEnabled(bool(selected))
+        self._remove_selected_action.setText(f"移除所选（{len(selected)}）")
+        self._remove_selected_action.setEnabled(bool(selected) and not self.removing_busy)
+        self._remove_all_action.setText(f"移除全部任务（{total}）…")
+        self._remove_all_action.setToolTip("包含当前列表隐藏的任务")
+        self._remove_all_action.setEnabled(total > 0 and not self.removing_busy)
+        target = "所选" if selected else "列表"
+        for button, action, title in zip(self._bulk_buttons, ("pause", "resume", "clear"), ("暂停", "继续", "移除")):
+            count = len(self.bulk_ids(action))
+            button.setEnabled(count > 0 and not self.removing_busy)
+            button.setText(f"{title}{target}（{count}）" if action != "clear" else f"移除{target}已完成（{count}）")
+            button.setToolTip(f"仅处理{'所选任务' if selected else '当前列表'}中的 {count} 项" + ("，保留文件" if action == "clear" else ""))
+        for button, action, title in ((self._pause_entire_action, "pause", "暂停"), (self._resume_entire_action, "resume", "继续")):
+            count = len(self.bulk_ids(action, scope="all"))
+            button.setText(f"{title}全部任务（{count}）")
+            button.setToolTip("包含当前列表隐藏的任务")
+            button.setEnabled(count > 0 and not self.removing_busy)
+        self.undo_action.setEnabled(self.undo_action.isEnabled() and not self.removing_busy)
+
+    def bulk_ids(self, action, *, scope="auto"):
         states = {
             "pause": {TaskStatus.QUEUED, TaskStatus.DOWNLOADING, TaskStatus.MERGING},
             "resume": {TaskStatus.PAUSED, TaskStatus.FAILED, TaskStatus.CANCELLED},
             "clear": {TaskStatus.COMPLETED},
         }[action]
+        selected = set(self.downloads.selected_ids())
         return [task_id for task_id, state in self.downloads._states.items()
-                if state in states and (self.scope.currentData() == "all" or
-                not self.downloads.isRowHidden(self.downloads._row_for(task_id)))]
+                if state in states and task_id not in self.downloads.removing_ids
+                and (scope == "all" or (task_id in selected if selected else
+                     not self.downloads.isRowHidden(self.downloads._row_for(task_id))))]
 
     def _download_selection(self):
-        row = self.downloads.currentRow()
+        selected = self.downloads.selected_ids()
+        if len(selected) != 1:
+            self.download_detail.hide()
+            return
+        row = self.downloads._row_for(selected[0])
         item = self.downloads.item(row, 0)
         if (
             item is None

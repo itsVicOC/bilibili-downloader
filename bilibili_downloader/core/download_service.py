@@ -30,14 +30,20 @@ class DownloadService:
         api_client: BilibiliAPIClient,
         output_dir: str,
         ffmpeg_path: Optional[str] = None,
+        library_repository=None,
+        outcome_callback=None,
     ):
         self._api_client = api_client
+        self._ffmpeg_path = ffmpeg_path
+        self._output_dir = Path(output_dir).expanduser().resolve()
         self._downloader = StreamDownloader(
             api_client,
             output_dir,
             ffmpeg_path=ffmpeg_path,
         )
         self._cancelled = False
+        self._library = library_repository
+        self._outcome_callback = outcome_callback
 
     def cancel(self) -> None:
         self._cancelled = True
@@ -53,27 +59,18 @@ class DownloadService:
         progress_callback: Callable[[float, str], None],
     ) -> DownloadOutcome:
         self._cancelled = False
+        if item.output_dir and Path(item.output_dir).expanduser().resolve() != self._output_dir:
+            self._output_dir = Path(item.output_dir).expanduser().resolve()
+            self._downloader = StreamDownloader(self._api_client, str(self._output_dir), ffmpeg_path=self._ffmpeg_path)
 
         def video_progress(progress: float, text: str) -> None:
             self._raise_if_cancelled()
             progress_callback(progress * 0.88, text)
 
+        self._downloader.media_ready_callback = lambda path: self._record_outcome(item, self._media_outcome(path))
         video_path = self._downloader.download(item, video_progress)
-        outcome = DownloadOutcome(
-            video_path=video_path,
-            actual_quality=(
-                self._downloader.last_video_stream.id
-                if self._downloader.last_video_stream else None
-            ),
-            actual_video_codec=(
-                self._downloader.last_video_stream.codecid
-                if self._downloader.last_video_stream else None
-            ),
-            actual_audio_quality=(
-                self._downloader.last_audio_stream.id
-                if self._downloader.last_audio_stream else None
-            ),
-        )
+        outcome = self._media_outcome(video_path)
+        self._record_outcome(item, outcome)
 
         if (
             item.output_mode == OutputMode.VIDEO
@@ -105,6 +102,7 @@ class DownloadService:
             try:
                 report = DanmakuDownloader.download_and_convert(item.video_info.cid, danmaku_path)
                 outcome.danmaku_path = str(danmaku_path)
+                self._record_outcome(item, outcome)
                 if isinstance(report, ConversionReport):
                     outcome.warnings.extend(report.warnings("弹幕"))
             except Exception as exc:  # noqa: BLE001
@@ -132,6 +130,7 @@ class DownloadService:
                 try:
                     report = SubtitleDownloader.download_and_convert(subtitle.url, subtitle_path)
                     outcome.subtitle_paths.append(str(subtitle_path))
+                    self._record_outcome(item, outcome)
                     if isinstance(report, ConversionReport):
                         label = subtitle.lan_doc or subtitle.lan or str(index + 1)
                         outcome.warnings.extend(report.warnings(f"字幕 {label}"))
@@ -152,6 +151,7 @@ class DownloadService:
                 outcome.cover_path = str(
                     download_cover(item.video_info.cover_url, media_path)
                 )
+                self._record_outcome(item, outcome)
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
                     "Cover download failed for %s: %s",
@@ -165,6 +165,7 @@ class DownloadService:
             progress_callback(0.99, "正在写入元数据...")
             try:
                 outcome.metadata_path = str(write_metadata(item, outcome, media_path))
+                self._record_outcome(item, outcome)
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
                     "Metadata write failed for %s: %s",
@@ -173,10 +174,29 @@ class DownloadService:
                 )
                 outcome.warnings.append(f"元数据保存失败：{exc}")
 
+        self._record_outcome(item, outcome)
         self._raise_if_cancelled()
         status = "下载完成（有警告）" if outcome.is_partial else "下载完成"
         progress_callback(1.0, status)
         return outcome
+
+    def _media_outcome(self, path):
+        video, audio = self._downloader.last_video_stream, self._downloader.last_audio_stream
+        return DownloadOutcome(video_path=path, actual_quality=video.id if video else None,
+                               actual_video_codec=video.codecid if video else None,
+                               actual_audio_quality=audio.id if audio else None)
+
+    def _record_outcome(self, item, outcome):
+        if self._library is not None:
+            try:
+                self._library.record_download(item, outcome)
+            except Exception as exc:  # noqa: BLE001
+                warning = "文件已保存，文件记录暂未更新，可稍后恢复。"
+                if warning not in outcome.warnings:
+                    outcome.warnings.append(warning)
+                logger.warning("Library registration failed: %s", redact_sensitive_text(exc))
+        if self._outcome_callback is not None:
+            self._outcome_callback(outcome.model_copy(deep=True))
 
     def _select_subtitles(
         self,

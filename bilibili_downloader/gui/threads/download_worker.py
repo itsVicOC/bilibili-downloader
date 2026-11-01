@@ -29,6 +29,8 @@ class DownloadWorker(QObject):
     cancelled = Signal(int)
     paused = Signal(int)
     metrics = Signal(int, float, object)
+    outcome_saved = Signal(int, object)
+    settled = Signal(int)
 
     def __init__(
         self,
@@ -37,6 +39,7 @@ class DownloadWorker(QObject):
         output_dir: str,
         download_id: int = 0,
         ffmpeg_path: Optional[str] = None,
+        library_repository=None,
     ):
         super().__init__()
         self._api_client = api_client
@@ -48,6 +51,7 @@ class DownloadWorker(QObject):
         self._pause_requested = False
         self._service: Optional[DownloadService] = None
         self._running = False
+        self._library_repository = library_repository
 
     @property
     def is_running(self) -> bool:
@@ -64,6 +68,8 @@ class DownloadWorker(QObject):
 
             self._service = DownloadService(
                 self._api_client, self._output_dir, ffmpeg_path=self._ffmpeg_path,
+                library_repository=self._library_repository,
+                outcome_callback=lambda outcome: self.outcome_saved.emit(self._download_id, outcome),
             )
 
             def progress_cb(pct: float, text: str):
@@ -106,6 +112,7 @@ class DownloadWorker(QObject):
                 self.error.emit(self._download_id, user_error_message(e))
         finally:
             self._running = False
+            self.settled.emit(self._download_id)
 
     def cancel(self):
         """Cancel the download."""

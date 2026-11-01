@@ -2,7 +2,7 @@
 
 import pytest
 from PySide6.QtCore import QPoint, QRect, Qt
-from PySide6.QtWidgets import QApplication, QBoxLayout, QPushButton
+from PySide6.QtWidgets import QApplication, QBoxLayout, QMessageBox, QPushButton
 
 from bilibili_downloader.core.models import (
     DownloadItem,
@@ -130,7 +130,8 @@ def test_row_menu_retains_task_identity_after_row_removal(qtbot):
     assert retried == deleted == [20]
 
 
-def test_bulk_more_action_keeps_current_filter_scope_and_toolbar_can_wrap(workspace):
+def test_bulk_more_action_keeps_current_filter_scope_and_toolbar_can_wrap(workspace, monkeypatch):
+    monkeypatch.setattr(QMessageBox, "exec", lambda _: QMessageBox.Yes)
     page = workspace._task_page
     for task_id, state in ((1, TaskStatus.COMPLETED), (2, TaskStatus.PAUSED)):
         workspace._download_list.add_item(DownloadItem(video_info=VideoInfo(bvid=f"BV{task_id}")),
@@ -138,7 +139,7 @@ def test_bulk_more_action_keeps_current_filter_scope_and_toolbar_can_wrap(worksp
     page.filter.setCurrentIndex(page.filter.findData("paused"))
     page.refresh_downloads()
     assert not page._clear_completed_action.isEnabled()
-    page.scope.setCurrentIndex(page.scope.findData("all"))
+    page.filter.setCurrentIndex(page.filter.findData("all"))
     assert page._clear_completed_action.isEnabled()
     called = []
     page.clear_completed_requested.connect(lambda: called.append(True))

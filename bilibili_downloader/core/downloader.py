@@ -80,6 +80,7 @@ class StreamDownloader:
         self._cancelled = False
         self.last_video_stream: Optional[StreamInfo] = None
         self.last_audio_stream: Optional[StreamInfo] = None
+        self.media_ready_callback: Optional[Callable[[str], None]] = None
         self._transfer_metrics = TransferMetrics()
 
     @property
@@ -164,8 +165,8 @@ class StreamDownloader:
         self._ensure_disk_space(info.duration, video_stream, audio_stream)
 
         relative_output_path = item.relative_output_path
-        if item.output_mode == OutputMode.AUDIO and audio_stream.id == 30251:
-            relative_output_path = relative_output_path.with_suffix(".flac")
+        if item.output_mode == OutputMode.AUDIO:
+            relative_output_path = relative_output_path.with_suffix(".flac" if audio_stream.id == 30251 else ".m4a")
 
         with _reserved_download_cache(self._output_dir, item) as tmp, _reserved_output_path(
             self._output_dir / relative_output_path
@@ -235,6 +236,9 @@ class StreamDownloader:
                 raise RuntimeError(f"FFmpeg processing failed: {msg}")
 
             merged_path.replace(output_path)
+            # Register the committed file before a cancellable progress callback.
+            if self.media_ready_callback is not None:
+                self.media_ready_callback(str(output_path))
             shutil.rmtree(tmp, ignore_errors=True)
             _remove_empty_cache_root(tmp.parent)
 

@@ -53,6 +53,7 @@ from bilibili_downloader.core.models import (
     AppSettings,
     ContentKind,
     DownloadItem,
+    DownloadOutcome,
     OutputMode,
     StreamInfo,
     TaskStatus,
@@ -1698,6 +1699,102 @@ def _capture_appearance_controls(app, theme, window):
 
 
 
+def _capture_download_management(app, theme, window, temp_root):
+    """Offline inventory and multi-selection evidence on both native platforms."""
+    window._settings.output_dir = str(temp_root / "downloads")
+    window._settings.multipart_path_template = "{title}/{page_padded} - {part}"
+    info = VideoInfo(bvid="BVmanagement", title="系统设计与项目管理完整课程", author="课程作者",
+                     collection_title="项目管理课程", cid=1,
+                     pages=[VideoPage(cid=i, page=i, part=f"第{i}课：从需求到实现") for i in range(1, 111)])
+    ids = []
+    for index, state in enumerate((TaskStatus.COMPLETED, TaskStatus.COMPLETED, TaskStatus.PAUSED,
+                                   TaskStatus.FAILED, TaskStatus.QUEUED, TaskStatus.PAUSED), 1):
+        item = DownloadItem(video_info=info.for_page(info.pages[index - 1]), output_dir=window._settings.output_dir,
+                            path_template=window._settings.multipart_path_template,
+                            output_mode=OutputMode.AUDIO if index == 2 else OutputMode.VIDEO)
+        task_id = window._task_repository.add(item, state)
+        ids.append(task_id)
+        output = Path(item.output_dir) / item.relative_output_path
+        warnings = ["字幕下载失败，主媒体已保存"] if index == 1 else []
+        if state == TaskStatus.COMPLETED:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_bytes(b"offline demonstration media")
+            outcome = DownloadOutcome(video_path=str(output), actual_quality=80 if index == 1 else None,
+                                      actual_video_codec=12 if index == 1 else None,
+                                      actual_audio_quality=30280, warnings=warnings)
+            if index == 2:
+                subtitle = output.with_suffix(".zh.srt")
+                subtitle.write_text("1\n00:00:00,000 --> 00:00:02,000\n离线演示字幕", encoding="utf-8")
+                outcome.subtitle_paths = [str(subtitle)]
+            window._library.record_download(item, outcome)
+            window._task_repository.update(task_id, output_path=str(output), outcome=outcome)
+        window._download_list.add_item(item, download_id=task_id, status=state,
+                                       progress=1 if state == TaskStatus.COMPLETED else .35,
+                                       output_path=str(output) if state == TaskStatus.COMPLETED else None,
+                                       warnings=warnings)
+    window._library_page.refresh()
+    for theme_id in ("star_trail", "bilibili_blue"):
+        window._settings.appearance.theme = theme_id
+        theme.set_color_theme(theme_id)
+        for mode in ("light", "dark"):
+            theme.set_mode(mode)
+            for width, height in ((900, 640), (1120, 760), (1320, 860)):
+                window.resize(width, height)
+                window._show_tasks(0)
+                window._download_list.select_visible()
+                window._task_page.refresh_downloads()
+                _save_widget(app, window, f"management-tasks-{theme_id}-{mode}-{width}.png")
+                window._show_tasks(3)
+                window._library_page.table.selectRow(0)
+                _save_widget(app, window, f"management-files-{theme_id}-{mode}-{width}.png")
+                page = window._library_page
+                assert page.tools.geometry().right() <= page.width()
+                assert page.table.viewport().height() >= 60
+                assert window._task_page.tabs.count() == 4
+            # Inspect concise feedback, attachments and large destructive-action lists.
+            window.resize(900, 640)
+            page.table.clearSelection()
+            page.table.selectRow(0)
+            page._selection()
+            page.attachments_toggle.setChecked(True)
+            window.show()
+            _flush_events(app)
+            if app.platformName() != "offscreen":
+                from PySide6.QtTest import QTest
+                window.raise_()
+                window.activateWindow()
+                QTest.qWaitForWindowExposed(window, 2000)
+                QTest.qWait(80)
+            # _save_widget hides its target after capture, so inspect visibility first.
+            visible_rect = page.files.viewport().visibleRegion().boundingRect()
+            row_rect = page.files.visualItemRect(page.files.topLevelItem(0))
+            assert visible_rect.top() <= row_rect.top() and row_rect.bottom() <= visible_rect.bottom(), f"Attachment row is clipped: {row_rect} / {visible_rect}"
+            _save_widget(app, window, f"management-attachments-{theme_id}-{mode}-900.png")
+            page.search.setText("无匹配的演示文件")
+            _save_widget(app, window, f"management-no-match-{theme_id}-{mode}-900.png")
+            page.clear_filters()
+            page.attachments_toggle.setChecked(False)
+            page._feedback("已回收 8 个文件，2 个未处理。", "warning", details="示例文件.srt：暂时无法访问，请检查磁盘连接。")
+            _save_widget(app, window, f"management-result-{theme_id}-{mode}-900.png")
+            page._feedback("")
+            from bilibili_downloader.gui.widgets.library_page import OperationDialog
+            dialog = OperationDialog("移入回收站？", "共 110 个文件，包含 55 个附件。\n可从系统回收站恢复。",
+                                     "\n".join(f"示例课程/{i:03d} - 第{i}课" + (".mp4" if i % 2 else ".zh.srt") for i in range(1, 111)), window, confirm="移入回收站")
+            _save_widget(app, dialog, f"management-confirm-{theme_id}-{mode}.png")
+            dialog.reject()
+            dialog.deleteLater()
+            window._show_settings_tab(SettingsSection.DOWNLOAD)
+            panel = window._settings_page
+            panel._templates_section.set_expanded(True)
+            for width, height in ((900, 640), (1320, 860)):
+                window.resize(width, height)
+                _flush_events(app)
+                panel.tabs.currentWidget().ensureWidgetVisible(panel._templates_section)
+                _save_widget(app, window, f"management-naming-{theme_id}-{mode}-{width}.png")
+            panel._templates_section.set_expanded(False)
+            panel.load_settings(window._settings)
+
+
 def main(argv=None) -> int:
     global OUTPUT_DIR
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1713,6 +1810,7 @@ def main(argv=None) -> int:
     parser.add_argument("--color-theme", choices=("star_trail", "bilibili_blue"), default="star_trail", help="Color theme for the complete workspace and dialog matrix")
     parser.add_argument("--ui-refresh-only", action="store_true", help="Capture navigation, download cards, modes and account states")
     parser.add_argument("--interactions-only", action="store_true", help="Capture row hover, history removal and isolated clipboard prompts")
+    parser.add_argument("--download-management-only", action="store_true", help="Capture multipart queue and independent downloads library")
     parser.add_argument("--refinement-only", action="store_true", help="Capture audio, long-content, failure, draft and filtered-task states")
     parser.add_argument("--chrome-only", action="store_true", help="Check native captions using desktop compositor captures")
     parser.add_argument("--glass-only", action="store_true", help="Capture glass wallpaper and complete download guidance in both modes")
@@ -1779,6 +1877,11 @@ def main(argv=None) -> int:
         window._settings.appearance.theme = args.color_theme
         theme.set_color_theme(args.color_theme)
         cleanup.callback(window._live_controller.shutdown)
+        if args.download_management_only:
+            _capture_download_management(app, theme, window, temp_root)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
         if args.chrome_only:
             _capture_native_chrome(app, theme, window)
             window._live_controller.shutdown()

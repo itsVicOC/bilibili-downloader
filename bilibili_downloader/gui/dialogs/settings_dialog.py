@@ -5,6 +5,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal
 from PySide6.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QCheckBox,
     QComboBox,
@@ -29,8 +30,11 @@ from bilibili_downloader.core.models import (
     AUDIO_CODEC_MAP,
     WORKSPACE_NAMES,
     AppSettings,
+    DownloadItem,
     OutputMode,
     UpdateChannel,
+    VideoInfo,
+    VideoPage,
     VideoQuality,
     WindowCloseAction,
 )
@@ -256,20 +260,36 @@ class SettingsDialog(QDialog):
         download.addWidget(options)
         self._templates_section = CollapsibleSection("高级命名与目录模板")
         self._template_previews = {}
+        self._template_paths = {}
+        self._template_copy_buttons = {}
         for key, label, attr in (
-            ("path_template", "目录模板", "_path_template"),
-            ("bangumi_path_template", "番剧模板", "_bangumi_path_template"),
+            ("path_template", "单视频命名", "_path_template"),
+            ("multipart_path_template", "多分 P 命名", "_multipart_path_template"),
+            ("bangumi_path_template", "番剧命名", "_bangumi_path_template"),
         ):
             entry = self._entry(key, self._templates_section, label)
             setattr(self, attr, entry)
-            preview = help_text("")
+            preview = ElidedLabel(elide_mode=Qt.ElideMiddle)
             self._template_previews[key] = preview
-            self._templates_section.body.addWidget(preview)
+            preview_row = QHBoxLayout()
+            preview_row.addWidget(preview, 1)
+            copy_path = QPushButton("复制完整预计路径")
+            copy_path.setObjectName("TextButton")
+            copy_path.clicked.connect(lambda _checked=False, field=key: QApplication.clipboard().setText(self._template_paths.get(field, "")))
+            self._template_copy_buttons[key] = copy_path
+            preview_row.addWidget(copy_path)
+            self._templates_section.body.addLayout(preview_row)
             entry.textChanged.connect(self._update_template_previews)
         self._path_template.setPlaceholderText("{author}/{title}{part_suffix}")
-        self._templates_section.body.addWidget(help_text(
-            "支持 title、author、bvid、part_suffix、collection 和番剧章节字段；扩展名由输出格式决定。"
-        ))
+        self._output_dir.textChanged.connect(self._update_template_previews)
+        self._output_mode_combo.currentIndexChanged.connect(self._update_template_previews)
+        self._audio_combo.currentIndexChanged.connect(self._update_template_previews)
+        self._quality_combo.currentIndexChanged.connect(self._update_template_previews)
+        self._codec_combo.currentIndexChanged.connect(self._update_template_previews)
+        self._templates_section.body.addWidget(help_text("仅对新任务生效；已有任务继续使用原保存位置。"))
+        self._template_fields = CollapsibleSection("查看命名字段")
+        self._template_fields.body.addWidget(help_text("目录用 / 分隔。支持 title、author、bvid、part、page、page_padded、part_suffix、collection 和番剧章节字段；扩展名自动添加。"))
+        self._templates_section.body.addWidget(self._template_fields)
         download.addWidget(self._templates_section)
         defaults = SectionCard("默认录制位置与分段")
         self._review_directories_button = QPushButton("核对旧房间目录")
@@ -535,16 +555,27 @@ class SettingsDialog(QDialog):
             picker.set_glass_blur(value)
 
     def _update_template_previews(self, *_args):
-        values = dict(title="星轨旅记", author="示例UP主", bvid="BV1DEMO", page="1",
-                      part="正片", part_suffix="_P1", collection="城市漫游", quality="1080P",
-                      codec="HEVC", series="示例番剧", season="第一季", section="正片",
-                      episode="出发", episode_number="01")
+        info = VideoInfo(title="星轨旅记", author="示例UP主", bvid="BV1DEMO", cid=1,
+                         collection_title="城市漫游", series_title="示例番剧", season_title="第一季",
+                         section_title="正片", episode_title="出发", episode_number="01")
         for key, preview in self._template_previews.items():
             try:
-                path = render_path_template(self._controls[key].text(), values)
-                preview.setText(f"示例路径：{path}")
+                sample = info.model_copy(update={"pages": [VideoPage(cid=1, page=1, part="出发"), VideoPage(cid=2, page=2, part="抵达")]} if key == "multipart_path_template" else {})
+                item = DownloadItem(video_info=sample, path_template=self._controls[key].text(),
+                                    output_mode=self._output_mode_combo.currentData() or OutputMode.VIDEO,
+                                    selected_audio_quality=self._audio_combo.currentData() or 30280,
+                                    selected_quality=self._quality_combo.currentData() or VideoQuality.Q1080P,
+                                    selected_video_codec=self._codec_combo.currentData() or 12)
+                path = Path(self._output_dir.text() or ".").expanduser().absolute() / item.relative_output_path
+                preview.set_full_text(f"示例：{item.relative_output_path}")
+                preview.setToolTip(str(path))
+                self._template_paths[key] = str(path)
+                self._template_copy_buttons[key].setEnabled(True)
+                preview.setAccessibleDescription(f"完整预计路径：{path}")
             except ValueError as exc:
-                preview.setText(f"示例暂不可用：{exc}")
+                preview.set_full_text(f"请检查命名规则：{exc}")
+                self._template_paths.pop(key, None)
+                self._template_copy_buttons[key].setEnabled(False)
 
     def _layout_background_cards(self):
         columns = 2 if self.width() >= 960 else 1
@@ -873,6 +904,7 @@ class SettingsDialog(QDialog):
                 "author",
                 "bvid",
                 "page",
+                "page_padded",
                 "part",
                 "part_suffix",
                 "collection",
@@ -885,7 +917,7 @@ class SettingsDialog(QDialog):
                 "codec",
             )
         }
-        for entry in (self._path_template, self._bangumi_path_template):
+        for entry in (self._path_template, self._multipart_path_template, self._bangumi_path_template):
             try:
                 render_path_template(entry.text(), values)
             except ValueError as exc:
@@ -906,7 +938,7 @@ class SettingsDialog(QDialog):
             SettingsSection.DOWNLOAD
         )
         self.show_section(section)
-        if entry in (self._path_template, self._bangumi_path_template):
+        if entry in (self._path_template, self._multipart_path_template, self._bangumi_path_template):
             self._templates_section.set_expanded(True)
         self._notice.set_message(message, "danger")
         for key, control in self._controls.items():

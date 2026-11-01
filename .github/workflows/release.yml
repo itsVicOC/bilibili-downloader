@@ -172,6 +172,24 @@ jobs:
         if: runner.os == 'Windows'
         run: choco install ffmpeg --yes --no-progress
 
+      - name: Verify download regressions and native file management
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
+        run: |
+          python -m scripts.configure_ui_test_display
+          python -X faulthandler -m pytest -q tests/test_download_management.py tests/test_issue_regressions.py
+          python -m scripts.capture_docs_screenshots --native --physical-pixels --download-management-only --output-dir "build/release-management-ui"
+
+      - name: Upload download management native evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: BiliFlow-${{ matrix.label }}-management-ui-${{ env.RELEASE_ID }}
+          path: build/release-management-ui
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Verify recorder fixtures and bundled MP4 export
         shell: bash
         run: |

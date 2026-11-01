@@ -5,7 +5,7 @@ from enum import Enum, IntEnum
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from bilibili_downloader.core.builtin_backgrounds import builtin_background
 from bilibili_downloader.core.live_models import LiveSettings
@@ -226,6 +226,7 @@ class DownloadItem(BaseModel):
     selected_video_codec: int = 12  # HEVC default
     selected_audio_quality: int = 30280  # AAC 192kbps
     output_path: str = ""
+    output_dir: Optional[str] = None
     output_mode: OutputMode = OutputMode.VIDEO
     path_template: str = "{title}{part_suffix}"
     download_danmaku: bool = False
@@ -253,7 +254,8 @@ class DownloadItem(BaseModel):
         page = next((page for page in info.pages if page.cid == info.cid), None)
         part = page.part if page else ""
         page_number = page.page if page else 1
-        suffix = ".m4a" if self.output_mode == OutputMode.AUDIO else ".mp4"
+        part = part or f"P{page_number}"
+        suffix = (".flac" if self.selected_audio_quality == 30251 else ".m4a") if self.output_mode == OutputMode.AUDIO else ".mp4"
         stem = render_path_template(
             self.path_template,
             {
@@ -261,6 +263,7 @@ class DownloadItem(BaseModel):
                 "author": info.author or info.owner_name,
                 "bvid": info.bvid,
                 "page": str(page_number),
+                "page_padded": str(page_number).zfill(max(3, len(str(max((p.page for p in info.pages), default=1))))),
                 "part": part,
                 "part_suffix": f"_{part}" if info.is_multi_part and part else "",
                 "collection": info.collection_title,
@@ -285,7 +288,7 @@ class DownloadItem(BaseModel):
             if self.video_info.content_kind == ContentKind.BANGUMI_EPISODE
             else [self.video_info.bvid, str(self.video_info.cid)]
         )
-        return ":".join(
+        fingerprint = ":".join(
             [
                 *identity,
                 str(self.selected_quality.value),
@@ -301,6 +304,14 @@ class DownloadItem(BaseModel):
                 self.selected_subtitle_lan,
             ]
         )
+        return f"{fingerprint}:dir={Path(self.output_dir).expanduser().resolve()}" if self.output_dir else fingerprint
+
+    @property
+    def display_title(self) -> str:
+        page = next((p for p in self.video_info.pages if p.cid == self.video_info.cid), None)
+        if self.video_info.is_multi_part and page:
+            return f"{page.page:03d} - {page.part or f'P{page.page}'} · {self.video_info.title}"
+        return self.video_info.title
 
 
 class DownloadOutcome(BaseModel):
@@ -428,6 +439,7 @@ class AppSettings(BaseModel):
     default_audio_quality: int = 30280  # AAC 192kbps
     default_output_mode: OutputMode = OutputMode.VIDEO
     path_template: str = "{title}{part_suffix}"
+    multipart_path_template: str = "{title}/{page_padded} - {part}"
     bangumi_path_template: str = (
         "{series}/{season}/{section}/{episode_number} - {episode}"
     )
@@ -477,7 +489,21 @@ class AppSettings(BaseModel):
             raise ValueError("unsupported default_audio_quality")
         return value
 
-    @field_validator("path_template", "bangumi_path_template")
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_multipart_template(cls, value):
+        if isinstance(value, dict) and "multipart_path_template" not in value:
+            legacy = value.get("path_template", "{title}{part_suffix}")
+            if legacy != "{title}{part_suffix}":
+                value = {**value, "multipart_path_template": legacy}
+        return value
+
+    def template_for(self, info: VideoInfo) -> str:
+        if info.episode_id:
+            return self.bangumi_path_template
+        return self.multipart_path_template if info.is_multi_part else self.path_template
+
+    @field_validator("path_template", "multipart_path_template", "bangumi_path_template")
     @classmethod
     def validate_path_template(cls, value: str) -> str:
         from bilibili_downloader.utils.validators import render_path_template
@@ -492,6 +518,7 @@ class AppSettings(BaseModel):
                 "author": "author",
                 "bvid": "BV1xx",
                 "page": "1",
+                "page_padded": "001",
                 "part": "part",
                 "part_suffix": "_part",
                 "collection": "collection",

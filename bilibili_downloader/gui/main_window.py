@@ -5,6 +5,7 @@ import logging
 import sqlite3
 import sys
 import time
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -113,6 +114,7 @@ from bilibili_downloader.gui.widgets.download_options import (
     DownloadOptions,
 )
 from bilibili_downloader.gui.widgets.hero_panel import HeroPanel
+from bilibili_downloader.gui.widgets.library_page import LibraryPage
 from bilibili_downloader.gui.widgets.live_page import LivePage
 from bilibili_downloader.gui.widgets.pixel_mascot import MascotCard
 from bilibili_downloader.gui.widgets.task_page import TaskPage
@@ -177,6 +179,12 @@ class MainWindow(QMainWindow):
         self._account_state = "unknown"
         self._account_dialog = None
         self._removed_task_records = []
+        self._download_attempts = {}
+        self._pending_removal = None
+        self._bulk_pause_ids = set()
+        self._bulk_pause_targets = set()
+        self._bulk_starting = False
+        self._library = None
         self._close_confirmed = False
         self._startup_paused = startup_paused
         self._startup_downloads = []
@@ -204,6 +212,8 @@ class MainWindow(QMainWindow):
             from bilibili_downloader.gui.window_state import WindowStateStore
             self._window_state = WindowStateStore(self, self._config.data_dir / "ui-state.json")
         self._set_shell_enabled(not startup_paused)
+        if not startup_paused:
+            self._initialize_library()
         self._restore_tasks()
         self._clipboard = ClipboardController(self) if monitor_clipboard else None
         if not startup_paused:
@@ -346,9 +356,17 @@ class MainWindow(QMainWindow):
         self._task_page.room_requested.connect(self._show_room)
         self._task_page.pause_all_requested.connect(self._on_pause_all)
         self._task_page.resume_all_requested.connect(self._on_resume_all)
-        self._task_page.clear_completed_requested.connect(self._on_clear_completed)
+        self._task_page.pause_entire_requested.connect(lambda: self._on_pause_all(scope="all"))
+        self._task_page.resume_entire_requested.connect(lambda: self._on_resume_all(scope="all"))
+        self._task_page.clear_completed_requested.connect(lambda: self._request_remove_tasks(self._task_page.bulk_ids("clear")))
         self._task_page.clear_cache_requested.connect(self._on_clear_cache)
         self._task_page.undo_remove_requested.connect(self._undo_removed_tasks)
+        self._task_page.remove_selected_requested.connect(lambda: self._request_remove_tasks(self._download_list.selected_ids()))
+        self._task_page.remove_all_requested.connect(lambda: self._request_remove_tasks(list(self._download_list._states), all_tasks=True))
+        self._library_page = LibraryPage(pool=self._service_pool)
+        self._library_page.record_provider = self._task_repository.list_tasks
+        self._task_page.tabs.addTab(self._library_page, "下载文件")
+        self._library_page.download_requested.connect(lambda: self._show_workspace(0))
         self._workspace_pages.addWidget(self._task_page)
         settings_page = QWidget()
         settings_layout = QVBoxLayout(settings_page)
@@ -553,7 +571,7 @@ class MainWindow(QMainWindow):
             "解析后选择分 P" if self._current_video is None else
             f"全部 {count}P" if selection == "all" else self._page_combo.currentText()
         )
-        specs = f"{self._audio_combo.currentText()} · 仅音频 · {pages}" if audio else f"{quality} · {codec} · {pages}"
+        specs = f"{self._audio_combo.currentText()} · 仅音频 · {pages}" if audio else f"视频 · {quality} · {codec} · {pages}"
         state = "已选 1 项" if self._current_video else getattr(self, "_download_result_state", "待解析")
         self._download_actions.status.setText(state)
         if not self._current_video and state != "待解析":
@@ -561,10 +579,21 @@ class MainWindow(QMainWindow):
         self._download_btn.setToolTip("加入下载队列" if self._current_video else "请先成功解析当前来源")
         self._download_hint.set_full_text(specs)
         directory = f"保存至 {self._settings.output_dir}"
-        self._download_path_hint.set_full_text(directory)
+        full_path = self._settings.output_dir
+        if self._current_video:
+            info = self._current_video
+            if hasattr(selection, "cid"):
+                info = info.for_page(selection)
+            elif selection == "all" and info.pages:
+                info = info.for_page(info.pages[0])
+            item = self._make_download_item(info)
+            directory = f"预计：{item.relative_output_path}" + (f" · 共 {count} 个任务" if count > 1 else "")
+            full_path = str(Path(item.output_dir) / item.relative_output_path)
+        self._download_path_hint.set_full_text(directory, copy_value=full_path)
         if hasattr(self, "_batch_page"):
-            batch_specs = f"{self._audio_combo.currentText()} · 仅音频" if audio else f"{quality} · {codec}"
-            self._batch_page.set_output_summary(f"{batch_specs} · 各作品全部分 P", directory)
+            self._batch_page.output_item_factory = self._make_download_item
+            batch_specs = f"{self._audio_combo.currentText()} · 仅音频" if audio else f"视频 · {quality} · {codec}"
+            self._batch_page.set_output_summary(f"{batch_specs} · 各作品全部分 P", f"保存至 {self._settings.output_dir}")
 
     def _show_workspace(self, index):
         if not getattr(self, "_shell_enabled", True):
@@ -998,6 +1027,7 @@ class MainWindow(QMainWindow):
             self._updates.check(self._settings.update_channel, manual=False)
 
     def resume_startup(self):
+        self._initialize_library()
         self._startup_paused = False
         self._set_shell_enabled(True)
         if self._clipboard:
@@ -1230,6 +1260,7 @@ class MainWindow(QMainWindow):
     # -- Event Handlers --
 
     def _restore_tasks(self):
+        self._task_repository.bind_output_directories(self._settings.output_dir)
         recovered = self._task_repository.recover_interrupted()
         queued = []
         for record in self._task_repository.list_tasks():
@@ -1262,6 +1293,21 @@ class MainWindow(QMainWindow):
 
     def _clipboard_resolution_busy(self):
         return not self._resolve_btn.isEnabled() or self._batch_page._busy
+
+    def _initialize_library(self):
+        """Do not create/migrate inventory during an old installer's probation."""
+        from bilibili_downloader.core.library import LibraryRepository
+        try:
+            self._library = LibraryRepository(self._config.library_database_path)
+            failures = self._library.replay_pending()
+            self._library.import_tasks(self._task_repository.list_tasks())
+            self._library_page.set_repository(self._library)
+            if failures:
+                self._library_page._feedback(f"有 {len(failures)} 项文件记录尚未恢复。", "warning", action="恢复记录", callback=self._library_page.replay)
+        except (OSError, ValueError, sqlite3.Error) as exc:
+            self._library = LibraryRepository(self._config.library_database_path, initialize=False)
+            self._library_page.set_repository(self._library)
+            self._library_page._feedback("文件列表暂不可用，本地文件仍保留。", "danger", details=str(exc))
 
     def _clipboard_target_occupied(self, target):
         single = bool(self._url_input.text().strip() or self._current_video)
@@ -1476,6 +1522,8 @@ class MainWindow(QMainWindow):
 
     def _on_retry_download(self, download_id: int):
         """Retry a failed download."""
+        if download_id in self._download_attempts or download_id in self._download_list.removing_ids:
+            return
         item = self._download_list.get_item(download_id)
         if item:
             self._download_list.mark_failed_retry_reset(download_id)
@@ -1489,7 +1537,8 @@ class MainWindow(QMainWindow):
                 eta_seconds=None,
             )
             self._start_download(item, download_id)
-            self._status_bar.showMessage(f"重试下载：{item.video_info.title}")
+            if not self._bulk_starting:
+                self._status_bar.showMessage(f"已加入队列：{item.display_title}")
 
     def _on_download_clicked(self):
         """Start downloading the resolved video."""
@@ -1531,6 +1580,7 @@ class MainWindow(QMainWindow):
         )
         return DownloadItem(
             video_info=video_info,
+            output_dir=str(Path(self._settings.output_dir).expanduser().resolve()),
             selected_quality=(
                 self._quality_combo.currentData() or self._settings.default_quality
             ),
@@ -1543,11 +1593,7 @@ class MainWindow(QMainWindow):
                 else self._settings.default_audio_quality
             ),
             output_mode=self._output_mode_combo.currentData(),
-            path_template=(
-                self._settings.bangumi_path_template
-                if video_info.episode_id
-                else self._settings.path_template
-            ),
+            path_template=self._settings.template_for(video_info),
             download_danmaku=self._danmaku_check.isChecked(),
             download_subtitle=self._subtitle_check.isChecked(),
             download_all_subtitles=all_subtitles,
@@ -1556,6 +1602,7 @@ class MainWindow(QMainWindow):
         )
 
     def _enqueue_download(self, item: DownloadItem) -> bool:
+        item = item.model_copy(update={"output_dir": str(Path(item.output_dir or self._settings.output_dir).expanduser().resolve())}, deep=True)
         duplicate = self._task_repository.find_duplicate(item)
         if duplicate is not None:
             self._status_bar.showMessage(f"已跳过重复任务：{item.video_info.title}")
@@ -1567,22 +1614,34 @@ class MainWindow(QMainWindow):
 
     def _start_download(self, item, download_id: int):
         """Start a download in a background thread via thread pool."""
+        if download_id in self._download_attempts or download_id in self._download_list.removing_ids:
+            return
         worker = DownloadWorker(
             api_client=self._api_client,
             item=item,
-            output_dir=self._settings.output_dir,
+            output_dir=item.output_dir or self._settings.output_dir,
             download_id=download_id,
             ffmpeg_path=self._settings.ffmpeg_path or None,
+            library_repository=self._library,
         )
         runner = DownloadRunner(worker)
 
         # Connect signals
-        worker.progress.connect(self._on_download_progress)
-        worker.finished.connect(self._on_download_finished)
-        worker.error.connect(self._on_download_error)
-        worker.cancelled.connect(self._on_download_cancelled)
-        worker.paused.connect(self._on_download_paused)
-        worker.metrics.connect(self._on_download_metrics)
+        self._download_attempts[download_id] = worker
+        for signal, handler in (
+            (worker.progress, self._on_download_progress),
+            (worker.finished, self._on_download_finished),
+            (worker.error, self._on_download_error),
+            (worker.cancelled, self._on_download_cancelled),
+            (worker.paused, self._on_download_paused),
+            (worker.metrics, self._on_download_metrics),
+            (worker.outcome_saved, self._on_outcome_saved),
+        ):
+            def receive(*args, callback=handler):
+                if self._download_attempts.get(download_id) is worker:
+                    callback(*args)
+            signal.connect(receive)
+        worker.settled.connect(lambda task_id: self._on_worker_settled(task_id, worker))
 
         self._download_list.register_worker(download_id, worker)
         self._download_list.mark_downloading(download_id)
@@ -1594,8 +1653,14 @@ class MainWindow(QMainWindow):
         )
         self._download_pool.start(runner)
 
+    def _download_feedback(self, download_id, text):
+        if self._pending_removal is None and download_id not in self._bulk_pause_ids and not self._shutdown_started:
+            self._status_bar.showMessage(text)
+
     def _on_download_finished(self, download_id: int, outcome):
         """Handle download completion."""
+        if self._download_list.get_item(download_id) is None:
+            return
         self._download_list.mark_done(download_id, outcome)
         self._task_repository.update(
             download_id,
@@ -1608,16 +1673,20 @@ class MainWindow(QMainWindow):
             eta_seconds=None,
             completed_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
             warnings=outcome.warnings,
+            outcome=outcome,
         )
         if outcome.warnings:
-            self._status_bar.showMessage(
-                f"视频已保存，但有 {len(outcome.warnings)} 项警告"
+            self._download_feedback(download_id,
+                f"文件已保存，有 {len(outcome.warnings)} 条提示。"
             )
         else:
-            self._status_bar.showMessage(f"下载完成：{outcome.video_path}")
+            self._download_feedback(download_id, f"下载完成：{outcome.video_path}")
+        self._library_page.schedule_refresh()
 
     def _on_download_error(self, download_id: int, error: str):
         """Handle download error."""
+        if self._download_list.get_item(download_id) is None:
+            return
         self._download_list.mark_failed(download_id, error)
         self._task_repository.update(
             download_id,
@@ -1627,10 +1696,12 @@ class MainWindow(QMainWindow):
             speed_bytes_per_second=0,
             eta_seconds=None,
         )
-        self._status_bar.showMessage(f"下载失败：{error}")
+        self._download_feedback(download_id, f"下载失败：{error}")
 
     def _on_download_cancelled(self, download_id: int):
         """Handle a task cancelled by the user."""
+        if self._download_list.get_item(download_id) is None:
+            return
         self._download_list.mark_cancelled(download_id)
         self._task_repository.update(
             download_id,
@@ -1639,9 +1710,11 @@ class MainWindow(QMainWindow):
             speed_bytes_per_second=0,
             eta_seconds=None,
         )
-        self._status_bar.showMessage("下载已取消")
+        self._download_feedback(download_id, "下载已取消")
 
     def _on_download_progress(self, download_id: int, progress: float, text: str):
+        if self._download_list.get_item(download_id) is None or download_id in self._download_list.removing_ids:
+            return
         state = (
             TaskStatus.MERGING
             if "合并" in text or "封装" in text
@@ -1656,6 +1729,8 @@ class MainWindow(QMainWindow):
         )
 
     def _on_download_metrics(self, download_id: int, speed: float, eta):
+        if self._download_list.get_item(download_id) is None or download_id in self._download_list.removing_ids:
+            return
         self._task_repository.update(
             download_id,
             speed_bytes_per_second=max(0.0, speed),
@@ -1672,6 +1747,8 @@ class MainWindow(QMainWindow):
         )
 
     def _on_download_paused(self, download_id: int):
+        if self._download_list.get_item(download_id) is None:
+            return
         self._download_list.mark_paused(download_id)
         self._task_repository.update(
             download_id,
@@ -1680,25 +1757,109 @@ class MainWindow(QMainWindow):
             speed_bytes_per_second=0,
             eta_seconds=None,
         )
-        self._status_bar.showMessage("任务已暂停，断点数据已保留")
+        self._download_feedback(download_id, "任务已暂停，断点数据已保留")
 
     def _on_delete_download(self, download_id: int):
         self._remove_task_records([download_id])
 
     def _remove_task_records(self, task_ids):
+        if self._pending_removal is not None:
+            self._status_bar.showMessage("正在等待上一批任务停止，请稍后重试。")
+            return
+        task_ids = list(dict.fromkeys(i for i in task_ids if self._download_list.get_item(i) is not None))
+        if not task_ids:
+            return
+        waiting = {i for i in task_ids if i in self._download_attempts}
+        self._pending_removal = (task_ids, waiting)
+        self._removal_wait_total = len(waiting)
+        self._task_page.removing_busy = True
+        self._download_list.removing_ids.update(task_ids)
+        for task_id in task_ids:
+            self._download_list._set_actions(task_id, self._download_list._states[task_id])
+        self._task_page.refresh_downloads()
+        for task_id in waiting:
+            self._download_attempts[task_id].pause()
+        if waiting:
+            self._status_bar.showMessage(f"正在停止下载（0/{len(waiting)}）…")
+        else:
+            self._complete_task_removal()
+
+    def _request_remove_tasks(self, task_ids, *, all_tasks=False):
+        if self._pending_removal is not None:
+            return
+        task_ids = list(dict.fromkeys(task_ids))
+        if not task_ids:
+            return
+        running = sum(i in self._download_attempts or self._download_list._states.get(i) in {
+            TaskStatus.QUEUED, TaskStatus.DOWNLOADING, TaskStatus.MERGING} for i in task_ids)
+        if not running:
+            self._remove_task_records(task_ids)
+            return
+        box = MessageBox(f"移除{'全部 ' if all_tasks else ''}{len(task_ids)} 项任务？",
+                         f"先停止 {running} 项下载，已下载文件保留。",
+                         self, buttons=QMessageBox.Yes | QMessageBox.Cancel, default=QMessageBox.Cancel)
+        box.button(QMessageBox.Yes).setText("停止并移除")
+        if box.exec() == QMessageBox.Yes:
+            self._remove_task_records(task_ids)
+
+    def _on_outcome_saved(self, download_id, outcome):
+        if self._download_list.get_item(download_id) is not None:
+            try:
+                self._task_repository.update(download_id, output_path=outcome.video_path, outcome=outcome)
+            except (OSError, sqlite3.Error) as exc:
+                logger.warning("Cannot save task outcome: %s", exc)
+                self._status_bar.showMessage("文件已保存，记录暂未更新，可稍后重试。")
+            self._library_page.schedule_refresh()
+
+    def _on_worker_settled(self, task_id, worker):
+        if self._download_attempts.get(task_id) is not worker:
+            return
+        was_removing = task_id in self._download_list.removing_ids
+        self._download_attempts.pop(task_id, None)
+        self._download_list.unregister_worker(task_id)
+        if isinstance(worker, DownloadWorker):
+            worker.deleteLater()
+        if self._pending_removal is not None:
+            self._pending_removal[1].discard(task_id)
+            if not self._pending_removal[1]:
+                self._complete_task_removal()
+            else:
+                stopped = self._removal_wait_total - len(self._pending_removal[1])
+                self._status_bar.showMessage(f"正在停止下载（{stopped}/{self._removal_wait_total}）…")
+        if task_id in self._bulk_pause_ids:
+            self._bulk_pause_ids.discard(task_id)
+            if not self._bulk_pause_ids and not was_removing and not self._shutdown_started:
+                count = sum(self._download_list._states.get(i) == TaskStatus.PAUSED for i in self._bulk_pause_targets)
+                self._status_bar.showMessage(f"已暂停 {count} 项。")
+        self._task_page._selection_actions()
+
+    def _complete_task_removal(self):
+        task_ids, _ = self._pending_removal
         try:
             records = [record for task_id in task_ids if (record := self._task_repository.get(task_id)) is not None]
             self._task_repository.delete_many(task_ids)
         except (OSError, sqlite3.Error) as exc:
+            self._pending_removal = None
+            self._task_page.removing_busy = False
+            self._task_page.undo_action.setEnabled(bool(self._removed_task_records))
+            self._download_list.removing_ids.difference_update(task_ids)
+            for task_id in task_ids:
+                self._download_list._set_actions(task_id, self._download_list._states[task_id])
+            self._task_page.refresh_downloads()
             self._show_error(f"移除记录失败：{exc}")
             return
+        self._pending_removal = None
+        self._task_page.removing_busy = False
+        records = [replace(r, status=TaskStatus.PAUSED, status_text="已暂停，可继续")
+                   if r.status in {TaskStatus.QUEUED, TaskStatus.DOWNLOADING, TaskStatus.MERGING} else r for r in records]
+        self._startup_downloads = [(item, i) for item, i in self._startup_downloads if i not in task_ids]
         for task_id in task_ids:
             self._download_list.remove_item(task_id)
         self._removed_task_records = records
         if task_ids:
             self._task_page.undo_notice.set_message("")
             self._task_page.undo_action.setEnabled(bool(records))
-            self._status_bar.show_feedback(f"已移除 {len(task_ids)} 条记录，媒体文件和断点仍保留。", "撤销", self._undo_removed_tasks)
+            self._status_bar.show_feedback(f"已移除 {len(task_ids)} 项，文件保留。", "撤销", self._undo_removed_tasks)
         self._task_page.refresh_downloads()
 
     def _undo_removed_tasks(self):
@@ -1733,33 +1894,50 @@ class MainWindow(QMainWindow):
             return
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.parent)))
 
-    def _on_pause_all(self):
-        task_ids = self._task_page.bulk_ids("pause")
+    def _on_pause_all(self, *, scope="auto"):
+        task_ids = self._task_page.bulk_ids("pause", scope=scope)
+        if not task_ids or self._pending_removal is not None:
+            return
+        if not self._bulk_pause_ids:
+            self._bulk_pause_targets.clear()
+        self._bulk_pause_ids.update(task_ids)
+        self._bulk_pause_targets.update(task_ids)
         for task_id in task_ids:
             self._download_list._on_pause_clicked(task_id)
-        self._status_bar.showMessage(f"正在暂停 {len(task_ids)} 项任务…")
+            if task_id not in self._download_attempts:
+                self._bulk_pause_ids.discard(task_id)
+        self._status_bar.showMessage(f"正在暂停 {len(task_ids)} 项…")
 
-    def _on_resume_all(self):
-        task_ids = self._task_page.bulk_ids("resume")
-        for task_id in task_ids:
-            self._on_retry_download(task_id)
-        self._status_bar.showMessage(f"已继续 {len(task_ids)} 个任务")
+    def _on_resume_all(self, *, scope="auto"):
+        task_ids = self._task_page.bulk_ids("resume", scope=scope)
+        if not task_ids or self._pending_removal is not None:
+            return
+        self._bulk_starting = True
+        try:
+            for task_id in task_ids:
+                self._on_retry_download(task_id)
+        finally:
+            self._bulk_starting = False
+        self._status_bar.showMessage(f"已继续 {len(task_ids)} 项。")
 
     def _on_clear_completed(self):
         self._remove_task_records(self._task_page.bulk_ids("clear"))
 
     def _on_clear_cache(self):
-        if self._download_list.has_active_workers:
+        if self._download_attempts or self._download_list.has_active_workers:
             self._show_error("请先暂停全部任务，再清理断点缓存")
             return
-        summary = inspect_download_cache(self._settings.output_dir)
-        if summary.file_count == 0:
+        roots = {self._settings.output_dir, *(r.item.output_dir for r in self._task_repository.list_tasks() if r.item.output_dir)}
+        roots.update(r.item.output_dir for r in self._removed_task_records if r.item.output_dir)
+        summaries = [inspect_download_cache(root) for root in roots]
+        file_count = sum(s.file_count for s in summaries)
+        if file_count == 0:
             self._show_info("当前没有断点缓存")
             return
-        size = _format_bytes(summary.size_bytes)
+        size = _format_bytes(sum(s.size_bytes for s in summaries))
         box = MessageBox(
             "清理断点缓存",
-            f"将删除 {summary.file_count} 个断点文件（{size}）。\n"
+            f"将删除 {file_count} 个断点文件（{size}）。\n"
             "删除后未完成任务需要重新下载，确认继续吗？",
             self,
             tone="warning",
@@ -1770,8 +1948,8 @@ class MainWindow(QMainWindow):
         box.button(QMessageBox.Yes).setObjectName("DangerButton")
         if box.exec() != QMessageBox.Yes:
             return
-        cleared = clear_download_cache(self._settings.output_dir)
-        self._status_bar.showMessage(f"已清理 {cleared.file_count} 个断点文件")
+        cleared = sum(clear_download_cache(root).file_count for root in roots)
+        self._status_bar.showMessage(f"已清理 {cleared} 个断点文件")
 
     def _on_settings_triggered(self):
         self._show_workspace(3)
@@ -2107,6 +2285,8 @@ class MainWindow(QMainWindow):
         rows = controller.service.snapshot() if controller.service else controller.rows
         return (
             self._download_list.has_active_workers
+            or bool(self._download_attempts)
+            or bool(self._library_page._jobs)
             or controller.exporting
             or (not controller._closed and (
                 (controller.service is not None and controller.service.active)
@@ -2172,6 +2352,7 @@ class MainWindow(QMainWindow):
         self._set_shell_enabled(False)
         self._status_bar.showMessage("正在停止后台任务并完成录制收尾…")
         self._batch_page.cancel_resolution()
+        self._library_page.cancel_work()
         self._updates.shutdown()
         if not self._live_controller._closed:
             self._live_page.shutdown()
