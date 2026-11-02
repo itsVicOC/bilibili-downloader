@@ -11,6 +11,7 @@ import platform
 import sqlite3
 import tempfile
 import time
+from contextlib import closing
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -47,7 +48,7 @@ def main():
         repository = LibraryRepository(root / "library.sqlite3")
         tasks = TaskRepository(root / "tasks.sqlite3")
         task_items = []
-        with sqlite3.connect(repository.database_path) as db:
+        with closing(sqlite3.connect(repository.database_path)) as db, db:
             for n in range(10_000):
                 path = root / f"fixture-{n:05d}.mp4"
                 path.write_bytes(b"x")
@@ -114,9 +115,9 @@ def main():
         window.request_quit(confirmed=True)
         page.close()
         table.close()
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        print(json.dumps(report, ensure_ascii=False, indent=2))
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0
 
 
