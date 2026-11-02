@@ -96,6 +96,7 @@ from bilibili_downloader.gui.widgets.components import (
     AccountButton,
     FieldRow,
     IconButton,
+    InlineNotice,
     MessageBox,
     Notice,
     OutputActionBar,
@@ -105,6 +106,7 @@ from bilibili_downloader.gui.widgets.components import (
     ResponsiveSplit,
     SectionCard,
     WindowDragSurface,
+    help_text,
     repolish,
     scroll_area,
 )
@@ -479,6 +481,7 @@ class MainWindow(QMainWindow):
             embedded=True,
         )
         self._batch_page.enqueue_requested.connect(self._enqueue_batch_from_page)
+        self._batch_page._action_bar.review_requested.connect(lambda: self._show_download_configuration(batch=True))
         self._batch_page._action_bar.edit_requested.connect(self._show_output_options)
         self._batch_page._action_bar.directory_requested.connect(lambda: self._show_settings_tab(SettingsSection.DOWNLOAD))
         self._download_tabs.addTab(self._batch_page, "批量导入")
@@ -498,17 +501,19 @@ class MainWindow(QMainWindow):
         controls = SectionCard("输出规格")
         controls.setObjectName("ControlPanel")
         self._output_card = controls
+        controls.body.setSpacing(8)
         fields = ResponsiveFields(column_width=UI_METRICS.download_field_column_width)
         self._download_fields = fields
         controls.body.addWidget(fields)
         self._page_combo = ComboBox()
         self._page_combo.addItem("当前视频", "current")
-        fields.add_field(FieldRow("分 P 范围", self._page_combo, stacked=True))
+        self._page_combo.hide()
         self._choose_pages_btn = QPushButton("选择分 P…")
-        self._choose_pages_btn.setObjectName("TextButton")
+        self._choose_pages_btn.setObjectName("SubtleButton")
         self._choose_pages_btn.clicked.connect(self._choose_pages)
-        self._choose_pages_btn.hide()
-        controls.header.addWidget(self._choose_pages_btn)
+        self._choose_pages_btn.setText("解析后选择分 P")
+        self._choose_pages_btn.setEnabled(False)
+        fields.add_field(FieldRow("分 P 范围", self._choose_pages_btn, stacked=True))
         self._page_combo.currentIndexChanged.connect(self._on_page_changed)
         self._output_mode_combo = ComboBox()
         self._output_mode_combo.addItem("视频 / MP4", OutputMode.VIDEO)
@@ -537,7 +542,15 @@ class MainWindow(QMainWindow):
         self._strict_match_check = QCheckBox("严格匹配规格")
         self._strict_match_check.setChecked(self._settings.strict_match)
         self._strict_match_check.setToolTip("画质、编码或音质不满足目标时停止该项，不自动回退")
-        controls.body.addWidget(self._strict_match_check)
+        self._strict_match_check.hide()
+        self._match_policy = ComboBox()
+        self._match_policy.addItem("允许回退并提示", False)
+        self._match_policy.addItem("停止该项", True)
+        self._match_policy.setCurrentIndex(int(self._settings.strict_match))
+        self._match_policy.currentIndexChanged.connect(lambda _: self._strict_match_check.setChecked(self._match_policy.currentData()))
+        self._strict_match_check.toggled.connect(lambda checked: self._match_policy.setCurrentIndex(int(checked)))
+        controls.body.addWidget(FieldRow("规格不满足时", self._match_policy))
+        controls.body.addWidget(help_text("画质、编码或音质无法满足目标时，按此规则处理。"))
         self._danmaku_check = DownloadOptionCard("下载弹幕", "ASS", "star")
         self._danmaku_check.setChecked(self._settings.download_danmaku)
         self._subtitle_check = DownloadOptionCard("下载字幕", "SRT", "info")
@@ -570,6 +583,17 @@ class MainWindow(QMainWindow):
         self._download_btn = self._download_actions.primary_button
         self._download_actions.edit_requested.connect(self._show_output_options)
         self._download_actions.submit_requested.connect(self._on_download_clicked)
+        self._download_actions.review_requested.connect(self._show_download_configuration)
+        self._download_inventory_job = None
+        self._download_inventory_target = None
+        self._download_inventory_results = []
+        self._download_inventory_items = []
+        self._download_inventory_timer = QTimer(self)
+        self._download_inventory_timer.setSingleShot(True)
+        self._download_inventory_timer.timeout.connect(self._check_download_inventory)
+        self._inventory_notice = InlineNotice(action="打开", callback=self._open_preview_media)
+        self._inventory_notice.action.hide()
+        self._video_info._author_row.addWidget(self._inventory_notice, 2)
         controls.body.addStretch()
         self._output_sections = ResponsiveSplit(controls, self._extras_card)
         self._content_layout.addWidget(self._output_sections)
@@ -602,11 +626,14 @@ class MainWindow(QMainWindow):
         extras = [name for name, check in (("弹幕", self._danmaku_check), ("字幕", self._subtitle_check),
                                            ("封面", self._cover_check), ("元数据", self._metadata_check)) if check.isChecked()]
         if extras:
-            specs += " · " + "/".join(extras)
-        state = "已选 1 项" if self._current_video else getattr(self, "_download_result_state", "待解析")
+            specs += f" · 附加 {len(extras)} 项"
+        state = f"已选 {count} 个任务" if self._current_video else getattr(self, "_download_result_state", "待解析")
         self._download_actions.status.setText(state)
         if not self._current_video and state != "待解析":
             specs = f"{state}，请重新解析后加入队列"
+        self._choose_pages_btn.setText(pages + " · 选择…" if self._current_video and self._current_video.is_multi_part else pages if self._current_video else "解析后选择分 P")
+        self._choose_pages_btn.setEnabled(bool(self._current_video and self._current_video.is_multi_part))
+        self._download_btn.setText(f"加入 {count} 个任务" if self._current_video else "加入下载队列")
         self._download_btn.setToolTip("加入下载队列" if self._current_video else "请先成功解析当前来源")
         self._download_hint.set_full_text(specs)
         directory = f"保存至 {self._settings.output_dir}"
@@ -623,10 +650,104 @@ class MainWindow(QMainWindow):
             directory = f"预计：{item.relative_output_path}" + (f" · 共 {count} 个任务" if count > 1 else "")
             full_path = str(Path(item.output_dir) / item.relative_output_path)
         self._download_path_hint.set_full_text(directory, copy_value=full_path)
+        if self._current_video:
+            self._schedule_download_inventory([self._make_download_item(info) for info in self._selected_video_infos()])
+        else:
+            if self._download_inventory_job is not None:
+                self._download_inventory_job.cancel()
+            self._download_inventory_target = None
+            self._download_inventory_results = []
+            self._inventory_notice.set_message("")
         if hasattr(self, "_batch_page"):
             self._batch_page.output_item_factory = self._make_download_item
             batch_specs = f"{self._audio_combo.currentText()} · 仅音频" if audio else f"视频 · {quality} · {codec}"
             self._batch_page.set_output_summary(f"{batch_specs} · 各作品全部分 P；实际规格逐项确认", f"保存至 {self._settings.output_dir}")
+
+    def _selected_video_infos(self):
+        if self._current_video is None:
+            return []
+        selection = self._page_combo.currentData()
+        if selection == "all":
+            return [self._current_video.for_page(page) for page in self._current_video.pages] or [self._current_video]
+        if selection == "selected":
+            return [self._current_video.for_page(page) for page in self._selected_pages]
+        return [self._current_video.for_page(selection)] if hasattr(selection, "cid") else [self._current_video]
+
+    def _schedule_download_inventory(self, items):
+        if getattr(self, "_shutdown_started", False):
+            return
+        key = tuple(item.fingerprint for item in items)
+        if key == self._download_inventory_target:
+            return
+        if self._download_inventory_job is not None:
+            self._download_inventory_job.cancel()
+        self._download_inventory_target = key
+        self._download_inventory_items = items
+        self._download_inventory_results = []
+        self._inventory_notice.action.hide()
+        self._inventory_notice.set_message(f"本地：{len(items)} 项待核对")
+        self._download_inventory_timer.start(150)
+
+    def _check_download_inventory(self):
+        if not self._download_inventory_target or getattr(self, "_shutdown_started", False):
+            return
+        if self._download_inventory_job is not None:
+            self._download_inventory_timer.start(150)
+            return
+        from bilibili_downloader.gui.threads.inventory_worker import (
+            InventoryMatchRunner,
+            inventory_summary,
+        )
+        key = self._download_inventory_target
+        job = InventoryMatchRunner(self._library, [self._download_inventory_items])
+        self._download_inventory_job = job
+        def finished(result):
+            self._download_inventory_job = None
+            from shiboken6 import isValid
+            if not isValid(self) or getattr(self, "_shutdown_started", False):
+                return
+            if key != self._download_inventory_target:
+                return
+            if isinstance(result, Exception):
+                self._inventory_notice.set_message("已有文件暂未确认，下载时会再次核对。", "warning")
+                return
+            self._download_inventory_results = result
+            self._inventory_notice.set_message("本地：" + inventory_summary(result))
+            self._inventory_notice.action.setVisible(len(result[0].matches) == 1 and result[0].matches[0].outcome is not None)
+        job.signals.finished.connect(finished)
+        self._service_pool.start(job)
+
+    def _open_preview_media(self):
+        if self._download_inventory_results:
+            outcome = self._download_inventory_results[0].matches[0].outcome
+            if outcome:
+                QDesktopServices.openUrl(QUrl.fromLocalFile(outcome.video_path))
+
+    def _show_download_configuration(self, _checked=False, *, batch=False):
+        from bilibili_downloader.gui.dialogs.workflow import WorkflowDialog
+        from bilibili_downloader.gui.widgets.components import ReadOnlyPath
+        infos = self._batch_page.get_video_infos() if batch else self._selected_video_infos()
+        dialog = WorkflowDialog("本次下载配置", "核对保存内容及位置；返回后可以继续修改。", self, confirm="返回")
+        dialog.cancel_button.hide()
+        dialog.body.addWidget(help_text(self._batch_page._selected_label.text() if batch else self._download_actions.status.text()))
+        group = SectionCard("输出规格")
+        group.body.addWidget(help_text(self._batch_page._action_bar.specs._full_text if batch else self._download_hint._full_text))
+        group.body.addWidget(help_text("规格不满足时：" + self._match_policy.currentText()))
+        dialog.body.addWidget(group)
+        extras = [name for name, check in (("弹幕 ASS", self._danmaku_check), ("字幕 SRT", self._subtitle_check), ("封面图片", self._cover_check), ("元数据 JSON", self._metadata_check)) if check.isChecked()]
+        dialog.body.addWidget(help_text("附加内容：" + ("、".join(extras) or "无")))
+        if self._all_subtitles_check.isChecked():
+            dialog.body.addWidget(help_text("字幕语言：全部可用语言"))
+        if infos:
+            path = ReadOnlyPath()
+            item = self._make_download_item(infos[0])
+            path.set_full_text(str(Path(item.output_dir) / item.relative_output_path))
+            dialog.body.addWidget(help_text("预计首项保存位置"))
+            dialog.body.addWidget(path)
+        dialog.body.addWidget(help_text(self._inventory_notice.message if not batch else self._batch_page._result_label.text()))
+        dialog.body.addStretch()
+        dialog.resize(660, 480)
+        dialog.exec()
 
     def _show_workspace(self, index):
         if not getattr(self, "_shell_enabled", True):
@@ -792,10 +913,12 @@ class MainWindow(QMainWindow):
         )
         self._codec_stack.setFocusProxy(self._codec_stack.currentWidget())
         if hasattr(self, "_output_summary") and self._output_summary.window() is self._metadata_check.window():
-            QWidget.setTabOrder(self._codec_stack.currentWidget(), self._danmaku_check)
+            QWidget.setTabOrder(self._codec_stack.currentWidget(), self._match_policy)
+            QWidget.setTabOrder(self._match_policy, self._danmaku_check)
             QWidget.setTabOrder(self._metadata_check, self._output_summary)
             QWidget.setTabOrder(self._output_summary, self._download_actions.directory_button)
-            QWidget.setTabOrder(self._download_actions.directory_button, self._edit_output_btn)
+            QWidget.setTabOrder(self._download_actions.directory_button, self._download_actions.review_button)
+            QWidget.setTabOrder(self._download_actions.review_button, self._edit_output_btn)
             QWidget.setTabOrder(self._edit_output_btn, self._download_btn)
 
     def _populate_quality_combo(self):
@@ -877,7 +1000,7 @@ class MainWindow(QMainWindow):
         self._page_combo.blockSignals(True)
         self._page_combo.clear()
         self._selected_pages = []
-        self._choose_pages_btn.setVisible(info.is_multi_part)
+        self._choose_pages_btn.setEnabled(info.is_multi_part)
         if info.is_multi_part:
             self._page_combo.addItem(f"全部 {len(info.pages)} P", "all")
             for page in info.pages:
@@ -891,9 +1014,19 @@ class MainWindow(QMainWindow):
         from bilibili_downloader.gui.dialogs.page_selection import PageSelectionDialog
         if self._current_video is None:
             return
-        dialog = PageSelectionDialog(self._current_video.pages, {p.cid for p in self._selected_pages}, self)
+        selection = self._page_combo.currentData()
+        selected = self._current_video.pages if selection == "all" else [selection] if hasattr(selection, "cid") else self._selected_pages
+        dialog = PageSelectionDialog(self._current_video.pages, {p.cid for p in selected}, self, title=self._current_video.title)
         if dialog.exec():
             self._selected_pages = dialog.selected_pages()
+            if len(self._selected_pages) == 1:
+                self._page_combo.setCurrentIndex(self._page_combo.findData(self._selected_pages[0]))
+                self._refresh_download_summary()
+                return
+            if len(self._selected_pages) == len(self._current_video.pages):
+                self._page_combo.setCurrentIndex(self._page_combo.findData("all"))
+                self._refresh_download_summary()
+                return
             index = self._page_combo.findData("selected")
             if index < 0:
                 self._page_combo.addItem("自选分 P", "selected")
@@ -1736,7 +1869,11 @@ class MainWindow(QMainWindow):
             return
         item = record.item.model_copy(deep=True)
         if not force_new:
-            item = choose_attachments(item, self)
+            item = choose_attachments(item, self, outcome=record.outcome)
+        if item is not None and force_new:
+            from bilibili_downloader.gui.dialogs.attachments import confirm_media_copy
+            if not confirm_media_copy(item, self):
+                return
         if item is not None:
             item.force_new = force_new
             item.reuse_media_path = None if force_new else record.outcome.video_path
@@ -1774,6 +1911,7 @@ class MainWindow(QMainWindow):
                 if self._download_attempts.get(download_id) is worker:
                     callback(*args)
             signal.connect(receive)
+        worker.phase.connect(lambda task_id, phase: self._download_list.update_phase(task_id, phase) if self._download_attempts.get(task_id) is worker else None)
         worker.settled.connect(lambda task_id: self._on_worker_settled(task_id, worker))
 
         self._download_list.register_worker(download_id, worker)
@@ -1821,7 +1959,8 @@ class MainWindow(QMainWindow):
 
     def _recover_download(self, task_id, category):
         if category in {"authentication", "permission"}:
-            self._on_login_triggered()
+            if self._on_login_triggered():
+                self._on_retry_download(task_id)
         elif category == "storage":
             record = self._task_repository.get(task_id)
             if record is None:
@@ -1833,7 +1972,8 @@ class MainWindow(QMainWindow):
                     return
                 item.output_dir = directory
                 self._task_repository.update_item(task_id, item)
-                self._status_bar.showMessage("已更新该任务的保存目录，可点击重试。原目录中的断点保留。")
+                self._status_bar.showMessage("已更新该任务的保存目录，正在重试；原目录中的断点保留。")
+                self._on_retry_download(task_id)
             file_picker(self).directory("更换该任务的保存目录", record.item.output_dir or self._settings.output_dir, selected)
         elif category == "rate_limit":
             self._task_page.notice.set_message("请求受到风控或限流。请降低并发并等待冷却，确认恢复后手动重试；不会自动重试此类错误。", "warning")
@@ -2284,6 +2424,8 @@ class MainWindow(QMainWindow):
                 )
             # Fetch and display user info
             self._update_login_status()
+            return True
+        return False
 
     def _update_login_status(self):
         """Fetch user info without blocking the GUI event loop."""
@@ -2557,6 +2699,11 @@ class MainWindow(QMainWindow):
         self._status_bar.showMessage("正在停止后台任务并完成录制收尾…")
         self._batch_page.cancel_resolution()
         self._library_page.cancel_work()
+        self._download_inventory_timer.stop()
+        self._batch_page._inventory_timer.stop()
+        for job in (self._download_inventory_job, self._batch_page._inventory_job):
+            if job is not None:
+                job.cancel()
         self._updates.shutdown()
         if not self._live_controller._closed:
             self._live_page.shutdown()

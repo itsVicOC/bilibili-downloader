@@ -35,6 +35,7 @@ class DownloadWorker(QObject):
     paused = Signal(int)
     metrics = Signal(int, float, object)
     outcome_saved = Signal(int, object)
+    phase = Signal(int, object)
     settled = Signal(int)
 
     def __init__(
@@ -78,6 +79,8 @@ class DownloadWorker(QObject):
                 library_repository=self._library_repository,
                 outcome_callback=lambda outcome: self.outcome_saved.emit(self._download_id, outcome),
             )
+
+            self._service.phase_callback = lambda phase: self.phase.emit(self._download_id, phase)
 
             def progress_cb(pct: float, text: str):
                 if self._cancelled:

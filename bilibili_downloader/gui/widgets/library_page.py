@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
     QHeaderView,
-    QInputDialog,
     QLabel,
     QLineEdit,
     QPlainTextEdit,
@@ -38,17 +37,18 @@ from bilibili_downloader.core.models import (
     VideoQuality,
 )
 from bilibili_downloader.gui.dialogs.file_picker import file_picker
+from bilibili_downloader.gui.dialogs.workflow import WorkflowDialog
 from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
     CommandBar,
-    ElidedLabel,
     EmptyState,
     Notice,
     PopupMenu,
-    ReadOnlyPath,
+    TaskDetailPanel,
     palette,
 )
 from bilibili_downloader.gui.widgets.row_hover import RowHoverTable, row_option
+from bilibili_downloader.gui.widgets.selection import SelectionBar, TableSelection
 
 
 class _FileLabelDelegate(QStyledItemDelegate):
@@ -57,6 +57,7 @@ class _FileLabelDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index):
         opt = QStyleOptionViewItem(option)
         self.initStyleOption(opt, index)
+        opt.features &= ~QStyleOptionViewItem.HasCheckIndicator
         lines, opt.text = opt.text.splitlines()[:2], ""
         style = opt.widget.style() if opt.widget else QApplication.style()
         style.drawControl(
@@ -79,54 +80,33 @@ class _FileLabelDelegate(QStyledItemDelegate):
         painter.restore()
 
 
-class OperationDialog(QDialog):
-    """Keep the consequence visible even when the file list is very long."""
+class OperationDialog(WorkflowDialog):
+    """Summaries and optional detailed lists use the same workflow surface."""
 
     def __init__(self, title, summary, details, parent=None, *, confirm=""):
-        super().__init__(parent)
-        self.setWindowTitle(title)
-        self.setMinimumWidth(420)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 24, 24, 24)
-        heading = QLabel(title)
-        heading.setObjectName("DialogTitle")
-        layout.addWidget(heading)
+        super().__init__(title, parent=parent, confirm=confirm or "关闭")
         self.summary = QLabel(summary)
         self.summary.setTextFormat(Qt.PlainText)
         self.summary.setWordWrap(True)
-        layout.addWidget(self.summary)
+        self.body.addWidget(self.summary)
         self.reader = QPlainTextEdit(details)
         self.reader.setReadOnly(True)
-        self.reader.setMinimumHeight(180)
         self.reader.setAccessibleName("文件清单及处理详情")
+        self.reader.setMinimumHeight(180)
         if confirm:
             toggle = QPushButton("查看文件清单")
             toggle.setObjectName("TextButton")
             toggle.setCheckable(True)
             self.reader.hide()
-
-            def expand(checked):
-                self.reader.setVisible(checked)
-                toggle.setText("收起文件清单" if checked else "查看文件清单")
-                self.adjustSize()
-
-            toggle.toggled.connect(expand)
-            layout.addWidget(toggle, alignment=Qt.AlignLeft)
-        layout.addWidget(self.reader)
-        footer = QHBoxLayout()
-        footer.addStretch()
-        close = QPushButton("取消" if confirm else "关闭")
-        close.clicked.connect(self.reject if confirm else self.accept)
-        close.setDefault(True)
-        footer.addWidget(close)
-        if confirm:
-            accept = QPushButton(confirm)
-            accept.setObjectName("DangerButton")
-            accept.setAutoDefault(False)
-            accept.clicked.connect(self.accept)
-            footer.addWidget(accept)
-        layout.addLayout(footer)
-        self.resize(600, 220 if confirm else 360)
+            toggle.toggled.connect(self.reader.setVisible)
+            self.body.addWidget(toggle, alignment=Qt.AlignLeft)
+            self.cancel_button.setDefault(True)
+            if "回收" in confirm:
+                self.confirm_button.setObjectName("DangerButton")
+        else:
+            self.cancel_button.hide()
+        self.body.addWidget(self.reader)
+        self.resize(640, 360 if confirm else 480)
 
 
 class _JobSignals(QObject):
@@ -168,6 +148,11 @@ def _size(value):
 class _FileTable(RowHoverTable):
     select_all_requested = Signal()
 
+    def selectRow(self, row):
+        super().selectRow(row)
+        if hasattr(self, "_selection_binding"):
+            self._selection_binding.select_only_row(row)
+
     def keyPressEvent(self, event):
         if event.matches(QKeySequence.SelectAll):
             self.select_all_requested.emit()
@@ -186,6 +171,8 @@ class LibraryPage(QWidget):
         self.record_provider = lambda: []
         self._pool = pool or QThreadPool.globalInstance()
         self._jobs = set()
+        self._read_jobs = set()
+        self._read_generation = 0
         self._cancel = threading.Event()
         self._assets = []
         self._removed_ids = []
@@ -197,7 +184,7 @@ class LibraryPage(QWidget):
         self.ffmpeg_path = None
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setSingleShot(True)
-        self._refresh_timer.timeout.connect(self.refresh)
+        self._refresh_timer.timeout.connect(self.refresh_async)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.tools = CommandBar()
@@ -232,8 +219,10 @@ class LibraryPage(QWidget):
             button.setObjectName("TableSubtleButton")
             button.clicked.connect(callback)
             self.tools.actions.addWidget(button)
+        self.open_action.hide()
+        self.folder_action.hide()
         self.cancel_button = QPushButton("取消检查")
-        self.cancel_button.clicked.connect(self._cancel.set)
+        self.cancel_button.clicked.connect(self._request_cancel)
         self.cancel_button.hide()
         self.tools.actions.addWidget(self.cancel_button)
         more = QPushButton("更多")
@@ -259,12 +248,14 @@ class LibraryPage(QWidget):
         more.setMenu(menu)
         self.tools.actions.addWidget(more)
         layout.addWidget(self.tools)
+        self.selection_bar = SelectionBar()
+        layout.addWidget(self.selection_bar)
         summary = QHBoxLayout()
         self.count_label = QLabel()
         self.count_label.setObjectName("MetaLabel")
         self.progress_label = QLabel()
         self.progress_label.setObjectName("MetaLabel")
-        summary.addWidget(self.count_label)
+        self.count_label.hide()
         summary.addStretch()
         summary.addWidget(self.progress_label)
         layout.addLayout(summary)
@@ -290,6 +281,12 @@ class LibraryPage(QWidget):
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.selection = TableSelection(self.table, _FileLabelDelegate(self.table))
+        self.selection.changed.connect(self._checked_changed)
+        self.selection.focus_changed.connect(self._selection)
+        self.selection_bar.select_visible.connect(self.select_visible)
+        self.selection_bar.clear_requested.connect(self._clear_selection)
+        self.selection_bar.review_requested.connect(self._toggle_selection_review)
         self.table.itemSelectionChanged.connect(self._selection)
         self.table.itemDoubleClicked.connect(lambda *_: self.open_file(False))
         self.table.select_all_requested.connect(self.select_visible)
@@ -325,50 +322,27 @@ class LibraryPage(QWidget):
         )
         self.stack.setCurrentIndex(3)
         layout.addWidget(self.stack, 1)
-        self.detail = QWidget()
-        detail_layout = QVBoxLayout(self.detail)
-        detail_layout.setContentsMargins(0, 0, 0, 0)
-        detail_layout.setSpacing(6)
-        self.detail_title = ElidedLabel()
-        detail_layout.addWidget(self.detail_title)
-        path_row = QHBoxLayout()
-        self.detail_path = ReadOnlyPath()
-        path_row.addWidget(self.detail_path, 1)
-        copy = QPushButton("复制路径")
-        copy.setObjectName("TextButton")
-        copy.clicked.connect(self.copy_path)
-        path_row.addWidget(copy)
-        self.detail_relocate = QPushButton("重新选择文件…")
-        self.detail_relocate.setObjectName("TextButton")
-        self.detail_relocate.clicked.connect(self.relocate)
-        path_row.addWidget(self.detail_relocate)
-        detail_layout.addLayout(path_row)
-        self.detail_hint = QLabel()
-        self.detail_hint.setObjectName("MetaLabel")
-        self.detail_hint.setWordWrap(True)
-        detail_layout.addWidget(self.detail_hint)
+        self.detail = TaskDetailPanel()
+        self.detail_title = self.detail.title
+        self.detail_path = self.detail.path
+        self.detail_hint = self.detail.diagnostics
+        self.detail_relocate = self.detail.primary_action
         self.attachments_toggle = QPushButton()
         self.attachments_toggle.setObjectName("TextButton")
         self.attachments_toggle.setCheckable(True)
-        self.attachments_toggle.toggled.connect(
-            lambda expanded: self.files.setVisible(
-                expanded and self.files.topLevelItemCount() > 0
-            )
-        )
-        detail_layout.addWidget(self.attachments_toggle, alignment=Qt.AlignLeft)
+        self.attachments_toggle.toggled.connect(lambda expanded: self.files.setVisible(expanded and self.files.topLevelItemCount() > 0))
+        self.detail.result_row.layout().insertWidget(3, self.attachments_toggle)
         self.files = QTreeWidget()
         self.files.setHeaderLabels(["附件", "状态", "大小"])
         self.files.header().setSectionResizeMode(0, QHeaderView.Stretch)
-        self.files.setMaximumHeight(180)
+        self.files.setMaximumHeight(120)
         self.files.setRootIsDecorated(False)
         self.files.setUniformRowHeights(True)
-        self.files.itemDoubleClicked.connect(
-            lambda item, _: self.open_file(False, entry=item.data(0, Qt.UserRole))
-        )
+        self.files.itemDoubleClicked.connect(lambda item, _: self.open_file(False, entry=item.data(0, Qt.UserRole)))
         self.files.setContextMenuPolicy(Qt.CustomContextMenu)
         self.files.customContextMenuRequested.connect(self._attachment_menu)
         self.files.hide()
-        detail_layout.addWidget(self.files)
+        self.detail.body.addWidget(self.files)
         self.detail.hide()
         layout.addWidget(self.detail)
         self.notice = Notice(callback=self._activate_notice)
@@ -398,13 +372,45 @@ class LibraryPage(QWidget):
 
     def set_repository(self, repository):
         self.repository = repository
-        self.refresh()
+        self._read_generation += 1
+        if repository is None:
+            self.stack.setCurrentIndex(3)
+            self.detail.hide()
+            self._actions()
+        else:
+            self.refresh_async()
 
     def schedule_refresh(self):
         if not self._refresh_timer.isActive():
             self._refresh_timer.start(120)
 
-    def refresh(self):
+    def refresh_async(self):
+        if self.repository is None:
+            return
+        self._read_generation += 1
+        generation, repository = self._read_generation, self.repository
+        job = _LibraryJob(lambda _: repository.list_assets())
+        self._read_jobs.add(job)
+        def finished(result):
+            self._read_jobs.discard(job)
+            from shiboken6 import isValid
+            if not isValid(self) or not isValid(self.table):
+                return
+            if generation != self._read_generation or self.repository is not repository:
+                return
+            if isinstance(result, Exception):
+                self._load_error = True
+                self.stack.setCurrentIndex(4)
+                self._feedback("文件列表暂不可用，请重试。", "danger", details=str(result))
+                self._actions()
+            else:
+                self.refresh(assets=result)
+        job.signals.finished.connect(finished)
+        self._pool.start(job)
+
+    def refresh(self, *, assets=None):
+        refresh_started = time.perf_counter()
+        self._read_generation += 1
         if self.repository is None:
             self.stack.setCurrentIndex(3)
             self._actions()
@@ -417,7 +423,7 @@ class LibraryPage(QWidget):
         attachment = self.files.currentItem()
         attachment_id = attachment.data(0, Qt.UserRole)["id"] if attachment else None
         try:
-            assets = self.repository.list_assets()
+            assets = self.repository.list_assets() if assets is None else assets
         except (OSError, ValueError, sqlite3.Error) as exc:
             self._load_error = True
             self.stack.setCurrentIndex(4)
@@ -429,6 +435,9 @@ class LibraryPage(QWidget):
         self._assets = assets
         self.table.setUpdatesEnabled(False)
         self.table.blockSignals(True)
+        same_order = len(assets) == self.table.rowCount() and all(
+            self.table.item(row, 0) is not None and self.table.item(row, 0).data(Qt.UserRole) == asset["id"]
+            for row, asset in enumerate(assets))
         self.table.setRowCount(len(assets))
         for row, asset in enumerate(assets):
             item, outcome = asset["item"], asset["outcome"]
@@ -461,63 +470,78 @@ class LibraryPage(QWidget):
                 str(Path(media["path"] if media else asset["path"]).parent),
             ]
             for col, value in enumerate(values):
-                cell = QTableWidgetItem(value)
-                cell.setToolTip(value + ("\n" + item.display_title if col == 0 else ""))
+                cell = self.table.item(row, col) if same_order else None
+                if cell is None:
+                    cell = QTableWidgetItem(value)
+                    self.table.setItem(row, col, cell)
+                elif cell.text() != value:
+                    cell.setText(value)
+                tooltip = value + ("\n" + item.display_title if col == 0 else "")
+                if cell.toolTip() != tooltip:
+                    cell.setToolTip(tooltip)
                 if col == 0:
                     cell.setData(Qt.UserRole, asset["id"])
-                self.table.setItem(row, col, cell)
             if asset["id"] in selected:
                 for col in range(6):
                     self.table.item(row, col).setSelected(True)
         self.table.blockSignals(False)
         self.table.setUpdatesEnabled(True)
+        self.selection.reset([a["id"] for a in assets])
         self._filter()
         self._selection(attachment_id=attachment_id)
         self.table.verticalScrollBar().setValue(scroll[0])
         self.table.horizontalScrollBar().setValue(scroll[1])
         self._resize_columns()
+        self._last_refresh_ms = (time.perf_counter() - refresh_started) * 1000
 
     @staticmethod
     def _media(asset):
         return next((f for f in asset["files"] if f["kind"] == "media"), None)
 
     def selected_ids(self):
-        # Responsive column visibility must not turn a selected row into a
-        # partial selection that QItemSelectionModel.selectedRows() omits.
-        return [
-            self.table.item(index.row(), 0).data(Qt.UserRole)
-            for index in self.table.selectionModel().selectedIndexes()
-            if index.column() == 0 and not self.table.isRowHidden(index.row())
-        ]
+        return self.selection.state.ids()
 
     def visible_ids(self):
-        return [
-            asset["id"]
-            for row, asset in enumerate(self._assets)
-            if not self.table.isRowHidden(row)
-        ]
+        return [a["id"] for row, a in enumerate(self._assets) if not self.table.isRowHidden(row)]
 
     def select_visible(self):
-        self.table.blockSignals(True)
-        self.table.clearSelection()
-        for row in range(self.table.rowCount()):
-            if not self.table.isRowHidden(row):
-                for col in range(6):
-                    self.table.item(row, col).setSelected(True)
-        self.table.blockSignals(False)
-        self._selection()
+        self.selection.select_visible()
 
     def _clear_selection(self):
+        self.selection.clear()
         self.table.clearSelection()
 
+    def _focused_ids(self):
+        focused = self.selection.state.focused
+        if focused in self.visible_ids():
+            return [focused]
+        selected = self.selected_ids()
+        return selected if len(selected) == 1 and selected[0] in self.visible_ids() else []
+
     def clear_filters(self):
+        self.selection.state.reviewing = False
         self.search.clear()
         self.type_filter.setCurrentIndex(0)
         self.state_filter.setCurrentIndex(0)
+        self._filter()
+
+    def _toggle_selection_review(self):
+        self.selection.state.reviewing = not self.selection.state.reviewing
+        self._filter()
+
+    def _checked_changed(self):
+        if self.selection.state.reviewing:
+            self._filter()
+        else:
+            self.selection_bar.update_state(self.selection.state)
+            self._selection()
 
     def _filter(self, *_):
         query = self.search.text().strip().casefold()
         mode, state = self.type_filter.currentData(), self.state_filter.currentData()
+        reviewing = self.selection.state.reviewing
+        for control in (self.search, self.type_filter, self.state_filter):
+            control.setEnabled(not reviewing)
         self.table.blockSignals(True)
         for row, asset in enumerate(self._assets):
             media = self._media(asset) or {}
@@ -537,19 +561,20 @@ class LibraryPage(QWidget):
                 and (state == "all" or media.get("state", "unchecked") == state)
                 and query in searchable.casefold()
             )
+            if reviewing:
+                visible = asset["id"] in self.selection.state.selected
             self.table.setRowHidden(row, not visible)
-            if not visible:
-                for col in range(6):
-                    self.table.item(row, col).setSelected(False)
         self.table.blockSignals(False)
         if not self._load_error and self.repository is not None:
             self.stack.setCurrentIndex(
                 1 if not self._assets else 0 if self.visible_ids() else 2
             )
+        self.selection.set_visible(self.visible_ids())
+        self.selection_bar.update_state(self.selection.state)
         self._selection()
 
     def _selection(self, *_args, attachment_id=None):
-        ids = self.selected_ids()
+        ids = self._focused_ids()
         self.files.blockSignals(True)
         self.files.clear()
         if len(ids) == 1 and not self._load_error:
@@ -574,7 +599,7 @@ class LibraryPage(QWidget):
                     + "\n"
                     + "\n".join(asset["outcome"].warnings)
                 )
-            outcome = asset["outcome"]
+            outcome = self._presented_outcome(asset)
             from bilibili_downloader.core.media_policy import (
                 ARTIFACT_LABELS,
                 specification_warnings,
@@ -592,9 +617,11 @@ class LibraryPage(QWidget):
             hint = " · ".join([hint, *states] if hint else states)
             self.detail_hint.setText(hint)
             self.detail_hint.setVisible(bool(hint))
-            self.detail_relocate.setVisible(
-                bool(media and media["state"] in {"missing", "inaccessible"})
-            )
+            self.detail.set_result(asset["item"], outcome, media_state=FILE_STATES.get(media["state"], "待检查") if media else "待检查")
+            missing = media and media["state"] in {"missing", "inaccessible"}
+            primary = ("重新选择位置…", self.relocate) if missing else ("打开文件", lambda: self.open_file(False))
+            secondary = ("补全附件…", self.request_supplement) if outcome.missing_artifacts and not missing else ("打开文件夹", lambda: self.open_file(True))
+            self.detail.set_actions(primary, secondary)
             labels = {
                 "subtitle": "字幕",
                 "danmaku": "弹幕",
@@ -617,7 +644,7 @@ class LibraryPage(QWidget):
                 if entry["id"] == attachment_id:
                     self.files.setCurrentItem(row)
             count = self.files.topLevelItemCount()
-            self.attachments_toggle.setText(f"附件（{count}）")
+            self.attachments_toggle.setText(f"附件文件（{count}）")
             self.attachments_toggle.setVisible(count > 0)
             self.files.setVisible(count > 0 and self.attachments_toggle.isChecked())
             header_height = max(
@@ -650,20 +677,21 @@ class LibraryPage(QWidget):
             + (f" · 已选 {len(ids)} 项" if ids else "")
         )
         for button in (self.open_action, self.folder_action):
-            button.setEnabled(ready and len(ids) == 1)
+            button.setEnabled(ready and bool(self._focused_ids()))
             button.setToolTip("请选择一个文件" if len(ids) != 1 else button.text())
         self.copy_action.setEnabled(ready and bool(ids))
-        self.locate_action.setEnabled(ready and len(ids) == 1 and not self._jobs)
+        self.locate_action.setEnabled(ready and bool(self._focused_ids()) and not self._jobs)
         self.relocate_directory_action.setEnabled(ready and not self._jobs)
         self.verify_action.setEnabled(ready and bool(ids or visible) and not self._jobs)
         for action in (self.supplement_action, self.copy_media_action):
-            action.setEnabled(ready and len(ids) == 1 and not self._jobs)
+            action.setEnabled(ready and bool(self._focused_ids()) and not self._jobs)
         self.detail_relocate.setEnabled(not self._jobs)
         self.hide_action.setEnabled(ready and bool(ids) and not self._jobs)
+        selected_set = set(ids)
         candidates = [
             f
             for a in self._assets
-            if a["id"] in ids
+            if a["id"] in selected_set
             for f in a["files"]
             if f["state"] != "recycled"
         ]
@@ -694,22 +722,34 @@ class LibraryPage(QWidget):
         self.details_action.setEnabled(bool(self._details))
 
     def _file(self):
-        ids = self.selected_ids()
+        ids = self._focused_ids()
         if len(ids) != 1:
             return None
         return self._media(next(a for a in self._assets if a["id"] == ids[0]))
 
+    @staticmethod
+    def _presented_outcome(asset):
+        outcome = asset["outcome"].model_copy(deep=True)
+        missing = set(outcome.missing_artifacts)
+        missing.update(entry["kind"] for entry in asset["files"] if entry["kind"] != "media" and entry["state"] in {"missing", "inaccessible", "recycled"})
+        outcome.missing_artifacts = sorted(missing)
+        return outcome
+
     def request_supplement(self, *, force_new=False):
         from bilibili_downloader.core.models import TaskStatus
         from bilibili_downloader.gui.dialogs.attachments import choose_attachments
-        ids = self.selected_ids()
+        ids = self._focused_ids()
         if len(ids) != 1:
             return
         asset = next(a for a in self._assets if a["id"] == ids[0])
         media = self._media(asset)
         item = asset["item"]
         if not force_new:
-            item = choose_attachments(item, self)
+            item = choose_attachments(item, self, outcome=self._presented_outcome(asset))
+        if item is not None and force_new:
+            from bilibili_downloader.gui.dialogs.attachments import confirm_media_copy
+            if not confirm_media_copy(item, self):
+                return
         if item is not None and media:
             self.reuse_requested.emit(item.model_copy(update={
                 "force_new": force_new, "reuse_media_path": None if force_new else media["path"],
@@ -725,12 +765,16 @@ class LibraryPage(QWidget):
     def relocate_directory(self):
         if self.repository is None or self._jobs:
             return
+        from bilibili_downloader.gui.dialogs.relocate_directory import (
+            RelocateDirectoryDialog,
+        )
         media = self._file()
-        old, accepted = QInputDialog.getText(self, "原来的根目录", "输入原目录（目录可以已被移动）：", text=str(Path(media["path"]).parent) if media else "")
-        if accepted and old.strip():
-            def new_selected(new):
-                self._run(lambda _progress: {"old": old, "new": new, "changes": self.repository.relocate_directory(old, new)}, kind="relocate_preview")
-            file_picker(self).directory("选择新的根目录（保留相对目录结构）", old, new_selected)
+        dialog = RelocateDirectoryDialog(self.repository, str(Path(media["path"]).parent) if media else "", self, pool=self._pool)
+        def completed(count):
+            self.refresh()
+            self._feedback(f"已更新 {count} 个文件的位置。")
+        dialog.completed.connect(completed)
+        dialog.exec()
 
     def open_file(self, directory, *, entry=None):
         entry = entry or self._file()
@@ -855,7 +899,12 @@ class LibraryPage(QWidget):
         if self._jobs:
             return
         self._cancel.clear()
-        job = _LibraryJob(action)
+        self.cancel_button.setEnabled(True)
+        self.cancel_button.setText("取消检查")
+        def perform(progress):
+            result = action(progress)
+            return result, self.repository.list_assets()
+        job = _LibraryJob(perform)
         self._jobs.add(job)
         self._job_kind = kind
         self.progress_label.setText(
@@ -874,9 +923,15 @@ class LibraryPage(QWidget):
 
         def finished(result):
             self._jobs.discard(job)
+            from shiboken6 import isValid
+            if not isValid(self) or not isValid(self.table):
+                return
             self.cancel_button.hide()
             self.progress_label.clear()
-            self.refresh()
+            if not isinstance(result, Exception):
+                result, assets = result
+                self._last_operation_report = result
+                self.refresh(assets=assets)
             if isinstance(result, Exception):
                 self._feedback("操作未完成，请重试。", "danger", details=str(result))
             elif kind == "relocate_preview":
@@ -918,6 +973,8 @@ class LibraryPage(QWidget):
                     text += f"，{result['missing']} 个未找到"
                 if result["inaccessible"]:
                     text += f"，{result['inaccessible']} 个无法访问"
+                if result.get("skipped_changed"):
+                    text += f"，{result['skipped_changed']} 个记录已变化，保留新记录"
                 if result.get("invalid"):
                     text += f"，{result['invalid']} 个媒体异常"
                 if kind == "verify":
@@ -931,8 +988,16 @@ class LibraryPage(QWidget):
         job.signals.finished.connect(finished)
         self._pool.start(job)
 
+    def _request_cancel(self):
+        self._cancel.set()
+        self.cancel_button.setEnabled(False)
+        self.cancel_button.setText("正在取消…")
+        self.progress_label.setText("正在结束当前文件检查，已完成结果会保留…")
+
     def _progress(self, done, total):
-        title = "检查文件" if self._job_kind == "check" else "移入回收站"
+        if self._cancel.is_set():
+            return
+        title = {"check": "快速检查", "verify": "核验轨道与时长", "recycle": "移入回收站"}.get(self._job_kind, "处理中")
         self.progress_label.setText(f"{title}（{done}/{total}）")
 
     def check(self):
@@ -999,3 +1064,5 @@ class LibraryPage(QWidget):
 
     def cancel_work(self):
         self._cancel.set()
+        self._read_generation += 1
+        self._refresh_timer.stop()

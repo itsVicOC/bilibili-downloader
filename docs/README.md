@@ -4,7 +4,7 @@
 
 项目入口：[官方网站 · 1008.si](https://1008.si/) · [中文 README](../README.md) · [English README](../README.en.md)。详细指南目前以简体中文为主。
 
-`v0.8.10b1` 已提供独立下载文件列表。工作区的未发布增量包括媒体复用、附件补全、搜索与分 P 选择、自动重试和归档核验；新增用法见[用户指南](USER_GUIDE.md#开发版下载与归档优化未发布)，测试与未完成的平台验收见[归档流程验收](ARCHIVE_WORKFLOW_VALIDATION.md)。
+`v0.8.10b1` 已提供独立下载文件列表。工作区的未发布增量包括媒体复用、附件补全、搜索与分 P 选择、自动重试和归档核验；新增用法见[用户指南](USER_GUIDE.md#开发版下载与归档优化未发布)，测试与未完成的平台验收见[归档流程验收](ARCHIVE_WORKFLOW_VALIDATION.md)。后续体验精修统一了选择、弹窗、详情与中文命名字段，并优化万条文件检查；当前测试与双平台交付状态见[流程精修验收](WORKFLOW_POLISH_VALIDATION.md)。
 
 `v0.8.9` 正式版汇总四个 beta 阶段的 Fluent 精修、窗口记忆、目录邻近操作、任务整行悬停、录制历史移除与撤销和前台剪贴板识别。用户已确认 Windows／macOS 实机验证完成；功能说明与截图见[第五轮验收](FLUENT_V5_VALIDATION.md)，安装包见 [0.8.9 正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9)。
 

@@ -277,12 +277,13 @@ def test_invalid_ranges_are_not_silently_accepted(text):
         parse_page_range(text, 8)
 
 
-def test_page_search_never_submits_hidden_parts(qtbot):
+def test_page_search_preserves_explicit_hidden_selection(qtbot):
     pages = [VideoPage(cid=1, part="第一课"), VideoPage(cid=2, part="第二课")]
     dialog = PageSelectionDialog(pages, {1, 2})
     qtbot.addWidget(dialog)
     dialog.search.setText("第二")
-    assert [p.cid for p in dialog.selected_pages()] == [2]
+    assert [p.cid for p in dialog.selected_pages()] == [1, 2]
+    assert "筛选外 1 项" in dialog.selection_bar.summary.text()
     dialog.range.setText("1-2")
     dialog.apply_range()
     assert len(dialog.selected_pages()) == 2
@@ -310,12 +311,17 @@ def test_restoring_completed_tasks_displays_actual_specs(workspace):
     assert "规格回退" in workspace._download_list.item(row, 3).text()
 
 
-def test_batch_search_clears_hidden_selection(workspace):
+def test_batch_search_keeps_hidden_selection_and_reports_scope(workspace):
     batch = workspace._batch_page
     batch._on_report(ImportReport(items=[VideoInfo(bvid="BV1", title="猫", author="甲"), VideoInfo(bvid="BV2", title="狗", author="乙")]))
     batch.search.setText("乙")
     batch._set_all_checked(True)
-    assert [i.bvid for i in batch.get_video_infos()] == ["BV2"]
+    assert [i.bvid for i in batch.get_video_infos()] == ["BV1", "BV2"]
+    assert "筛选外 1 项" in batch.selection_bar.summary.text()
+    batch.selection_bar.review_button.click()
+    assert not any(batch._preview.isRowHidden(row) for row in range(2))
+    batch.selection_bar.review_button.click()
+    assert batch.search.text() == "乙" and batch._preview.isRowHidden(0)
 
 
 def test_network_retry_is_durable_cancellable_and_bounded(workspace, monkeypatch):

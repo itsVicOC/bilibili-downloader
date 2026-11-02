@@ -66,6 +66,9 @@ def _local_time(value):
         return value
 
 
+from bilibili_downloader.gui.widgets.selection import SelectionBar
+
+
 class TaskPage(QWidget):
     room_requested = Signal(int)
     download_requested = Signal()
@@ -144,6 +147,7 @@ class TaskPage(QWidget):
         self._download_count = QLabel("0 项")
         self._download_count.setObjectName("MetaLabel")
         toolbar.addWidget(self._download_count)
+        self._download_count.hide()
         toolbar.addStretch()
         self._bulk_buttons = []
         for text, signal in (
@@ -160,7 +164,7 @@ class TaskPage(QWidget):
         more.setProperty("menuButton", True)
         menu = PopupMenu(more)
         self._select_all_action = menu.addAction("全选当前列表", self.downloads.select_visible)
-        self._deselect_action = menu.addAction("取消选择", self.downloads.clearSelection)
+        self._deselect_action = menu.addAction("取消选择", self.downloads.clear_checked)
         self._remove_selected_action = menu.addAction("移除所选", self.remove_selected_requested.emit)
         self._clear_completed_action = menu.addAction("移除完成", self.clear_completed_requested.emit)
         self._bulk_buttons.append(self._clear_completed_action)
@@ -175,6 +179,13 @@ class TaskPage(QWidget):
         more.setMenu(menu)
         actions.addWidget(more)
         layout.addWidget(self._download_tools)
+        self.selection_bar = SelectionBar()
+        self.selection_bar.select_visible.connect(self.downloads.select_visible)
+        self.selection_bar.clear_requested.connect(self.downloads.clear_checked)
+        self.selection_bar.review_requested.connect(self.downloads.selection.toggle_review)
+        self.downloads.selection.changed.connect(self.refresh_downloads)
+        self.downloads.selection.focus_changed.connect(self._download_selection)
+        layout.addWidget(self.selection_bar)
         self._download_stack = QStackedWidget()
         self._download_stack.addWidget(self.downloads)
         self._download_stack.addWidget(
@@ -186,7 +197,7 @@ class TaskPage(QWidget):
             )
         )
         self._download_stack.addWidget(
-            EmptyState("没有匹配的任务", "切换筛选条件，查看其他任务。")
+            EmptyState("没有匹配的任务", "已勾选的任务仍会保留。", "清除筛选", self.clear_download_filters)
         )
         layout.addWidget(self._download_stack, 1)
         self.download_detail = TaskDetailPanel()
@@ -199,10 +210,20 @@ class TaskPage(QWidget):
         layout.addWidget(self.recovery_action, alignment=Qt.AlignLeft)
         self.tabs.addTab(tab, "下载队列")
 
+    def clear_download_filters(self):
+        self.downloads.selection.state.reviewing = False
+        self.search.clear()
+        self.filter.setCurrentIndex(0)
+        self.refresh_downloads()
+
     def refresh_downloads(self, *_args):
         key = self.filter.currentData()
         query = self.search.text().strip().casefold()
         count = 0
+        visible_ids = []
+        selection = self.downloads.selection.state
+        self.search.setEnabled(not selection.reviewing)
+        self.filter.setEnabled(not selection.reviewing)
         for task_id, state in self.downloads._states.items():
             row = self.downloads._row_for(task_id)
             if row is None:
@@ -227,14 +248,16 @@ class TaskPage(QWidget):
                                      info.collection_title, item.filename,
                                      self.downloads._output_paths.get(task_id, ""))).casefold()
                 visible = visible and query in haystack
+            if selection.reviewing:
+                visible = task_id in selection.selected
             self.downloads.setRowHidden(row, not visible)
-            if not visible:
-                for column in range(self.downloads.columnCount()):
-                    if cell := self.downloads.item(row, column):
-                        cell.setSelected(False)
+            if visible:
+                visible_ids.append(task_id)
             count += bool(visible)
         total = len(self.downloads._states)
         self._download_stack.setCurrentIndex(1 if not total else 0 if count else 2)
+        self.downloads.selection.set_visible(visible_ids)
+        self.selection_bar.update_state(selection)
         self._download_selection()
         self._selection_actions()
 
@@ -277,7 +300,8 @@ class TaskPage(QWidget):
 
     def _download_selection(self):
         self.recovery_action.hide()
-        selected = self.downloads.selected_ids()
+        focused = self.downloads.selection.state.focused
+        selected = [focused] if focused in self.downloads._states else self.downloads.selected_ids()
         if len(selected) != 1:
             self.download_detail.hide()
             return
@@ -296,21 +320,31 @@ class TaskPage(QWidget):
         progress = self.downloads._progress_at(row)
         state = status.text() if status else ""
         self.download_detail.set_details(
-            item.text(), f"{state} · {progress.value()}%" if progress else state,
+            item.text(), (progress.property("stageCaption") or state) if progress else state,
             specification.toolTip() if specification else "",
             self.downloads._output_paths.get(task_id, ""),
-            status.toolTip() if status and status.toolTip() != state else "",
+            state if progress and progress.property("stageCaption") else status.toolTip() if status and status.toolTip() != state else "",
             status.data(STATUS_TONE_ROLE) if status else "muted",
         )
-        self.download_detail.show()
+        outcome = self.downloads._outcomes.get(task_id)
         task = self.downloads.get_item(task_id)
-        label = {"authentication": "重新登录…", "permission": "检查账号权限…", "storage": "更换保存目录…", "rate_limit": "查看冷却说明"}.get(task.error_category if task else "")
+        if outcome:
+            self.download_detail.set_result(task, outcome)
+            self.download_detail.status.setText("保存结果")
+            secondary = ("补全附件…", lambda: self.downloads.supplement_requested.emit(task_id)) if outcome.missing_artifacts else None
+            self.download_detail.set_actions(("打开文件夹", lambda: self.downloads.open_requested.emit(task_id)), secondary)
+        elif task and task.retry_at:
+            self.download_detail.set_actions(("立即重试", lambda: self.downloads.retry_requested.emit(task_id)),
+                                            ("停止等待", lambda: self.downloads._on_pause_clicked(task_id)))
+        self.download_detail.show()
+        label = {"authentication": "登录后重试…", "permission": "核对权限后重试…", "storage": "更换目录并重试…", "rate_limit": "查看冷却说明"}.get(task.error_category if task else "")
         if label and self.downloads._states.get(task_id) == TaskStatus.FAILED:
             self.recovery_action.setText(label)
-            self.recovery_action.show()
+            self.download_detail.set_actions((label, self._request_recovery))
 
     def _request_recovery(self):
-        selected = self.downloads.selected_ids()
+        focused = self.downloads.selection.state.focused
+        selected = [focused] if focused in self.downloads._states else self.downloads.selected_ids()
         if len(selected) == 1:
             item = self.downloads.get_item(selected[0])
             if item:

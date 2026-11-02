@@ -269,6 +269,7 @@ class OutputActionBar(ActionBar):
     edit_requested = Signal()
     submit_requested = Signal()
     directory_requested = Signal()
+    review_requested = Signal()
 
     def __init__(self, status="待解析", parent=None):
         super().__init__(parent)
@@ -300,6 +301,11 @@ class OutputActionBar(ActionBar):
         self.directory_button.setCursor(Qt.PointingHandCursor)
         self.directory_button.clicked.connect(self.directory_requested.emit)
         path_row.addWidget(self.directory_button)
+        self.review_button = QPushButton("完整配置")
+        self.review_button.setObjectName("TextButton")
+        self.review_button.setFixedHeight(32)
+        self.review_button.clicked.connect(self.review_requested.emit)
+        path_row.addWidget(self.review_button)
         path_row.addStretch(1)
         copy.addLayout(path_row)
         row.addLayout(copy, 1)
@@ -567,6 +573,7 @@ class TaskDetailPanel(SectionCard):
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self._full_text = ""
+        self._result_item = self._result_outcome = None
         self.body.setSpacing(8)
         heading = QHBoxLayout()
         self.title = ElidedLabel()
@@ -575,6 +582,16 @@ class TaskDetailPanel(SectionCard):
         heading.addWidget(self.title, 1)
         heading.addWidget(self.status)
         self.body.addLayout(heading)
+        self.result_row = QWidget()
+        result_layout = QHBoxLayout(self.result_row)
+        result_layout.setContentsMargins(0, 0, 0, 0)
+        result_layout.setSpacing(8)
+        self.result_badges = [StatusBadge() for _ in range(3)]
+        for badge in self.result_badges:
+            result_layout.addWidget(badge)
+        result_layout.addStretch()
+        self.result_row.hide()
+        self.body.addWidget(self.result_row)
         self.specs = ElidedLabel()
         self.specs.setObjectName("DetailValue")
         self.path = ReadOnlyPath()
@@ -585,12 +602,55 @@ class TaskDetailPanel(SectionCard):
         footer.addWidget(self.path, 1)
         self.details_button = QPushButton("完整详情")
         self.details_button.setObjectName("TextButton")
-        self.details_button.clicked.connect(lambda: MessageBox("任务详情", self._full_text, self).exec())
+        self.details_button.clicked.connect(self.show_details)
+        self.primary_action = QPushButton()
+        self.primary_action.setObjectName("TableSubtleButton")
+        self.secondary_action = QPushButton()
+        self.secondary_action.setObjectName("TableSubtleButton")
+        for button in (self.primary_action, self.secondary_action):
+            button.hide()
+            footer.addWidget(button)
         footer.addWidget(self.details_button)
         self.body.addLayout(footer)
         self.body.addWidget(self.diagnostics)
 
+    def show_details(self):
+        from bilibili_downloader.gui.dialogs.result_details import ResultDetailsDialog
+        ResultDetailsDialog("保存与处理详情", self._full_text, self,
+                            item=self._result_item, outcome=self._result_outcome).exec()
+
+    def set_actions(self, primary=None, secondary=None):
+        for button, action in ((self.primary_action, primary), (self.secondary_action, secondary)):
+            if button.property("hasCallback"):
+                button.clicked.disconnect()
+            button.setProperty("hasCallback", bool(action))
+            button.setVisible(bool(action))
+            if action:
+                button.setText(action[0])
+                button.clicked.connect(action[1])
+
+    def set_result(self, item, outcome, *, media_state=""):
+        from bilibili_downloader.gui.dialogs.result_details import result_summary
+        self._result_item, self._result_outcome = item, outcome
+        summaries = list(result_summary(item, outcome))
+        if media_state:
+            summaries[0] = media_state
+        self.result_row.show()
+        self.status.hide()
+        for badge, text in zip(self.result_badges, summaries):
+            badge.setText(text)
+            badge.set_tone("danger" if "媒体异常" in text else "warning" if any(word in text for word in ("回退", "补全", "缺失", "无法")) else "muted" if "待" in text or "未选择" in text else "success")
+        self.specs.hide()
+        self.diagnostics.hide()
+        if outcome:
+            self._full_text = "\n".join(filter(None, (item.display_title, *summaries, *outcome.spec_warnings,
+                                                      *outcome.warnings, outcome.media_verification.get("message", ""))))
+
     def set_details(self, title, status, specs, path, diagnostics="", tone="muted"):
+        self._result_item = self._result_outcome = None
+        self.result_row.hide()
+        self.status.show()
+        self.set_actions()
         self.title.set_full_text(title)
         self.status.setText(status.replace("\n", " · "))
         self.status.set_tone(tone)
@@ -763,6 +823,34 @@ class StarArt(QWidget):
         painter.drawEllipse(28, 5, 56, 58)
         painter.drawPixmap(40, 20, line_icon("star", p.accent, 32).pixmap(32, 32))
         painter.end()
+
+
+class InlineNotice(QWidget):
+    """A local status within a summary row, without another full-width card."""
+
+    def __init__(self, *, action="", callback=None, parent=None):
+        super().__init__(parent)
+        self.message = ""
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+        self.label = ElidedLabel()
+        self.label.setObjectName("MetaLabel")
+        row.addWidget(self.label, 1)
+        self.action = QPushButton(action)
+        self.action.setObjectName("TextButton")
+        self.action.setFixedHeight(24)
+        if callback:
+            self.action.clicked.connect(callback)
+        row.addWidget(self.action)
+        self.hide()
+
+    def set_message(self, text, tone="info"):
+        self.message = text
+        self.label.set_full_text(text)
+        self.label.setProperty("tone", tone)
+        repolish(self.label)
+        self.setVisible(bool(text))
 
 
 class EmptyState(QWidget):

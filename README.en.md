@@ -59,7 +59,7 @@ This README is available in English and Simplified Chinese. The current desktop 
 | Local archives | Save MP4, M4A, or Hi-Res FLAC, plus ASS danmaku, SRT subtitles, covers, and JSON metadata |
 | Persistent task center | Manage downloads, active recordings, and history; apply bulk actions to filtered or all tasks, undo record removal, and resume interrupted downloads after restarting |
 | Live recording | Monitor rooms, record automatically or manually, reconnect, merge a session into one MP4 automatically or on demand, and use global or per-room directories; see the [live recording guide](docs/LIVE_RECORDING.md) |
-| Batch and multi-part downloads | Select individual or all parts, preview/filter batches, track or cancel metadata imports, retry failed entries, read paginated sources, deduplicate tasks, and run 1–8 concurrent downloads |
+| Batch and multi-part downloads | Search and check parts, add ranges, retain selections across filters, preview batches, track or cancel metadata imports, retry failed entries, read paginated sources, deduplicate tasks, and run 1–8 concurrent downloads |
 | Account login | Start with QR login or use the Cookie fallback; manage your account from the sidebar with username and avatar, retaining only allowed Cookie fields and preferring the system credential store |
 | Cross-platform desktop UI | A PySide6 interface with a responsive layout down to 900×640, manual light/dark modes, and automatic system theme switching |
 | Themes and backgrounds | Xinghe and Qinghai themes; twelve Xiao Liu wallpapers or custom images, with large previews, filters, drag-and-drop imports, and independent light/dark visibility per workspace |
@@ -76,9 +76,9 @@ Path actions now sit beside the download directory, task views highlight whole r
 
 ## Download and install
 
-**In development, not released:** The working tree builds on `0.8.10b1` with durable media reuse, independent attachment repair, strict media matching, queue and batch search, custom part ranges, automatic network retries, media inspection, and directory relinking. Existing settings and queued output snapshots remain compatible. See the [workflow validation](docs/ARCHIVE_WORKFLOW_VALIDATION.md) for automated results and remaining device and long-duration live-recording checks.
+**In development, not released:** The working tree builds on `0.8.10b1` with durable media reuse, independent attachment repair, strict media matching, queue and batch search, custom part ranges, automatic network retries, media inspection, and directory relinking. Existing settings and queued output snapshots remain compatible. The refined workflows retain checked items across filters, show hidden selection counts, unify part and attachment dialogs, separate media/specification/attachment results, and offer searchable Chinese naming fields. See the [polish validation](docs/WORKFLOW_POLISH_VALIDATION.md) for native before/after images, paired performance results, and remaining device and long-duration live-recording checks.
 
-![Development batch search](docs/images/archive/archive-batch-dark-1120.png)
+![Development batch search and selection counts](docs/images/workflow-polish/after/archive-batch-dark-900.png)
 
 Visit the **[BiliFlow website · 1008.si](https://1008.si/)** or **[download the latest stable release from GitHub](https://github.com/itsVicOC/bilibili-downloader/releases/latest)**. To try beta features, browse [all releases](https://github.com/itsVicOC/bilibili-downloader/releases) and look for the `Pre-release` label.
 

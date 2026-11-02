@@ -8,6 +8,7 @@ import os
 import sqlite3
 import stat
 import threading
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -432,14 +433,15 @@ class LibraryRepository:
         return restored
 
     def files_for(self, asset_ids):
+        asset_ids = list(dict.fromkeys(asset_ids))
+        grouped = {}
         with self._connection() as db:
-            return [
-                dict(row)
-                for asset_id in asset_ids
-                for row in db.execute(
-                    "SELECT * FROM files WHERE asset_id=? ORDER BY id", (asset_id,)
-                )
-            ]
+            for offset in range(0, len(asset_ids), 500):
+                batch = asset_ids[offset:offset + 500]
+                marks = ",".join("?" for _ in batch)
+                for row in db.execute(f"SELECT * FROM files WHERE asset_id IN ({marks}) ORDER BY id", batch):
+                    grouped.setdefault(row["asset_id"], []).append(dict(row))
+        return [entry for asset_id in asset_ids for entry in grouped.get(asset_id, ())]
 
     @staticmethod
     def _signature(value):
@@ -454,7 +456,27 @@ class LibraryRepository:
             "inaccessible": 0,
             "cancelled": False,
             "issues": [],
+            "skipped_changed": 0,
         }
+        pending = []
+        last_flush = time.monotonic()
+
+        def flush():
+            nonlocal last_flush
+            if not pending:
+                return
+            with self._connection() as db:
+                for entry, state, size, signature in pending:
+                    cursor = db.execute(
+                        "UPDATE files SET state=?,size=?,signature=?,checked_at=? "
+                        "WHERE id=? AND path=? AND state=? AND checked_at IS ? AND signature IS ?",
+                        (state, size, signature, _now(), entry["id"], entry["path"], entry["state"], entry["checked_at"], entry["signature"]),
+                    )
+                    if not cursor.rowcount:
+                        report["skipped_changed"] += 1
+            pending.clear()
+            last_flush = time.monotonic()
+
         for entry in entries:
             if cancel is not None and cancel.is_set():
                 report["cancelled"] = True
@@ -481,11 +503,9 @@ class LibraryRepository:
                 state = "recycled" if entry["state"] == "recycled" else "missing"
             except OSError:
                 state = "inaccessible"
-            with self._connection() as db:
-                db.execute(
-                    "UPDATE files SET state=?,size=?,signature=?,checked_at=? WHERE id=? AND path=?",
-                    (state, size, signature, _now(), entry["id"], entry["path"]),
-                )
+            pending.append((entry, state, size, signature))
+            if len(pending) >= 100 or time.monotonic() - last_flush >= 0.25:
+                flush()
             report["checked"] += 1
             if state in ("missing", "inaccessible"):
                 report[state] += 1
@@ -499,6 +519,7 @@ class LibraryRepository:
                 )
             if progress:
                 progress(report["checked"], len(entries))
+        flush()
         return report
 
     def relocate(self, file_id, destination):

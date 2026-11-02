@@ -6,6 +6,7 @@ files. Results describe UI/database overhead, not real media disk throughput.
 
 import argparse
 import json
+import math
 import os
 import platform
 import sqlite3
@@ -36,6 +37,11 @@ def timed(call):
     start = time.perf_counter()
     result = call()
     return result, round((time.perf_counter() - start) * 1000, 1)
+
+
+def percentile(values, fraction=.95):
+    ordered = sorted(values)
+    return round(ordered[max(0, math.ceil(len(ordered) * fraction) - 1)], 1) if ordered else 0.0
 
 
 def main():
@@ -73,17 +79,24 @@ def main():
         _, queue_load = timed(load_tasks)
         page = LibraryPage()
         page.repository = repository
-        _, file_load = timed(page.refresh)
+        page.resize(1120, 760)
+        page.show()
+        app.processEvents()
+        _, file_load = timed(lambda: (page.refresh(), app.processEvents()))
         _, file_search = timed(lambda: page.search.setText("09999"))
         match, lookup = timed(lambda: repository.match_media(task_items[500]))
         assert match.state == "saved"
         page.search.clear()
         heartbeat_gaps = []
+        steady_gaps = []
         last = time.perf_counter()
         def heartbeat():
             nonlocal last
             now = time.perf_counter()
-            heartbeat_gaps.append((now - last) * 1000)
+            gap = (now - last) * 1000
+            heartbeat_gaps.append(gap)
+            if page._jobs:
+                steady_gaps.append(gap)
             last = now
         timer = QTimer()
         timer.setInterval(20)
@@ -96,6 +109,29 @@ def main():
             time.sleep(0.001)
         check_ms = (time.perf_counter() - started) * 1000
         timer.stop()
+        final_refresh = page._last_refresh_ms
+        search_samples, selection_samples = [], []
+        for n in range(30):
+            _, elapsed = timed(lambda n=n: (page.search.setText(f"{9999 - n:05d}"), app.processEvents()))
+            search_samples.append(elapsed)
+        page.search.clear()
+        for _ in range(10):
+            _, elapsed = timed(lambda: (page.select_visible(), app.processEvents()))
+            selection_samples.append(elapsed)
+            _, elapsed = timed(lambda: (page._clear_selection(), app.processEvents()))
+            selection_samples.append(elapsed)
+        cancel = {}
+        def cancel_check():
+            cancel["started"] = time.perf_counter()
+            page.cancel_button.click()
+            cancel["feedback_ms"] = (time.perf_counter() - cancel["started"]) * 1000
+        page.check()
+        QTimer.singleShot(30, cancel_check)
+        while page._jobs:
+            app.processEvents()
+            time.sleep(.001)
+        cancel_finish_ms = (time.perf_counter() - cancel["started"]) * 1000 if "started" in cancel else 0
+        assert page._last_operation_report["cancelled"], "Cancellation must stop before all files are checked"
         # Exercise search in the actual task center, independently of bulk creation.
         window = _make_main_window(root / "window")
         window._download_list.blockSignals(True)
@@ -110,9 +146,20 @@ def main():
                   "file_search_ms": file_search, "indexed_media_lookup_ms": lookup,
                   "background_check_ms": round(check_ms, 1),
                   "max_background_heartbeat_gap_ms": round(max(heartbeat_gaps, default=0), 1),
+                  "steady_heartbeat_max_ms": round(max(steady_gaps, default=0), 1),
+                  "steady_heartbeat_p95_ms": percentile(steady_gaps),
+                  "file_search_p95_ms": percentile(search_samples),
+                  "file_selection_p95_ms": percentile(selection_samples),
+                  "final_refresh_ms": round(final_refresh, 1),
+                  "cancel_feedback_ms": round(cancel.get("feedback_ms", 0), 1),
+                  "cancel_finish_ms": round(cancel_finish_ms, 1),
+                  "cancel_checked": page._last_operation_report["checked"],
                   "fixture": "Temporary local one-byte media; measures overhead, not media throughput"}
         window._live_controller.shutdown()
         window.request_quit(confirmed=True)
+        window._service_pool.waitForDone(15000)
+        app.processEvents()
+        page.cancel_work()
         page.close()
         table.close()
     args.output.parent.mkdir(parents=True, exist_ok=True)

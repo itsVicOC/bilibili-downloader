@@ -847,7 +847,7 @@ def test_output_cards_allow_preconfiguration_and_keep_available_choices(workspac
     assert window._codec_combo.currentData() == 7
     assert window._subtitle_check.isChecked()
     assert window._download_btn.isEnabled()
-    assert window._download_actions.status.text() == "已选 1 项"
+    assert window._download_actions.status.text() == "已选 1 个任务"
     window._url_input.setText("BV1Q541167Qg")
     assert not window._download_btn.isEnabled()
     assert window._download_actions.status.text() == "来源已修改"

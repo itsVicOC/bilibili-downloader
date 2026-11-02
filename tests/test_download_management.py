@@ -254,7 +254,8 @@ def test_bulk_remove_110_tasks_waits_for_settlement_undo_and_late_events(
     assert len(table.selected_ids()) == 28
     assert page.bulk_ids("resume") == table.selected_ids()
     page.filter.setCurrentIndex(page.filter.findData("completed"))
-    assert table.selected_ids() == []
+    assert len(table.selected_ids()) == 28
+    assert "筛选外 28 项" in page.selection_bar.summary.text()
     active_id = ids[3]
     paused = []
     worker = SimpleNamespace(pause=lambda: paused.append(True))
@@ -294,8 +295,9 @@ def test_inventory_ui_survives_clearing_tasks_and_background_check(
     assert page.table.item(0, 4).text() == "文件存在"
     assert page.table.item(0, 3).text() == "5.0 B"
     page.search.setText("no match")
-    assert page.selected_ids() == []
-    assert not page.recycle_action.isEnabled()
+    assert len(page.selected_ids()) == 1
+    assert page.recycle_action.isEnabled()
+    assert "筛选外 1 项" in page.selection_bar.summary.text()
 
 
 def test_bulk_confirmation_includes_hidden_tasks_and_can_be_cancelled(
@@ -603,7 +605,9 @@ def test_selection_first_buttons_and_explicit_all(workspace, monkeypatch):
     page._resume_entire_action.trigger()
     assert submitted == [1, 1, 2]
     page.filter.setCurrentIndex(page.filter.findData("attention"))
-    assert not table.selected_ids()
+    assert table.selected_ids() == [1]
+    assert page.bulk_ids("resume") == [1]
+    table.clear_checked()
     assert page.bulk_ids("resume") == [2]
     assert not page.download_detail.isVisible()
 

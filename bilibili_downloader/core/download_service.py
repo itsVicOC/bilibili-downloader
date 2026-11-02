@@ -33,6 +33,7 @@ class DownloadService:
         ffmpeg_path: Optional[str] = None,
         library_repository=None,
         outcome_callback=None,
+        phase_callback=None,
     ):
         self._api_client = api_client
         self._ffmpeg_path = ffmpeg_path
@@ -45,6 +46,7 @@ class DownloadService:
         self._cancelled = False
         self._library = library_repository
         self._outcome_callback = outcome_callback
+        self.phase_callback = phase_callback
 
     def cancel(self) -> None:
         self._cancelled = True
@@ -68,6 +70,8 @@ class DownloadService:
         if item.output_dir and Path(item.output_dir).expanduser().resolve() != self._output_dir:
             self._output_dir = Path(item.output_dir).expanduser().resolve()
             self._downloader = StreamDownloader(self._api_client, str(self._output_dir), ffmpeg_path=self._ffmpeg_path)
+
+        self._downloader.phase_callback = self.phase_callback
 
         def video_progress(progress: float, text: str) -> None:
             self._raise_if_cancelled()
@@ -102,7 +106,19 @@ class DownloadService:
             outcome.warnings.append(lookup_warning)
         self._record_outcome(item, outcome)
 
+        requested = [kind for kind in ("danmaku", "subtitle", "cover", "metadata")
+                     if kind in needed and (getattr(item, f"download_{kind}") or kind == "subtitle" and item.download_all_subtitles)]
+        done = 0
+        def companion_phase(kind):
+            nonlocal done
+            from bilibili_downloader.core.media_policy import ARTIFACT_LABELS
+            from bilibili_downloader.core.progress import DownloadPhase
+            if self.phase_callback:
+                self.phase_callback(DownloadPhase("attachments", f"补全{ARTIFACT_LABELS[kind]}", None, done, len(requested)))
+            done += 1
+
         if item.download_danmaku and "danmaku" in needed:
+            companion_phase("danmaku")
             self._raise_if_cancelled()
             progress_callback(0.90, "正在下载弹幕...")
             danmaku_path = Path(video_path).with_suffix(".ass")
@@ -122,6 +138,7 @@ class DownloadService:
                 outcome.missing_artifacts.append("danmaku")
 
         if (item.download_subtitle or item.download_all_subtitles) and "subtitle" in needed:
+            companion_phase("subtitle")
             self._raise_if_cancelled()
             progress_callback(0.95, "正在下载字幕...")
             subtitles = self._select_subtitles(item, outcome)
@@ -166,6 +183,7 @@ class DownloadService:
 
         media_path = Path(video_path)
         if item.download_cover and "cover" in needed:
+            companion_phase("cover")
             self._raise_if_cancelled()
             progress_callback(0.97, "正在保存封面...")
             try:
@@ -185,6 +203,7 @@ class DownloadService:
                 outcome.missing_artifacts.append("cover")
 
         if item.download_metadata and "metadata" in needed:
+            companion_phase("metadata")
             self._raise_if_cancelled()
             progress_callback(0.99, "正在写入元数据...")
             try:
