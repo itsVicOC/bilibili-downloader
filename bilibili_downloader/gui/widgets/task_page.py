@@ -183,7 +183,7 @@ class TaskPage(QWidget):
         self.selection_bar.select_visible.connect(self.downloads.select_visible)
         self.selection_bar.clear_requested.connect(self.downloads.clear_checked)
         self.selection_bar.review_requested.connect(self.downloads.selection.toggle_review)
-        self.downloads.selection.changed.connect(self.refresh_downloads)
+        self.downloads.selection.changed.connect(self._download_checked_changed)
         self.downloads.selection.focus_changed.connect(self._download_selection)
         layout.addWidget(self.selection_bar)
         self._download_stack = QStackedWidget()
@@ -216,12 +216,22 @@ class TaskPage(QWidget):
         self.filter.setCurrentIndex(0)
         self.refresh_downloads()
 
+    def _download_checked_changed(self):
+        selection = self.downloads.selection.state
+        if selection.reviewing or selection.reviewing != getattr(self, "_download_reviewing", False):
+            self.refresh_downloads()
+        else:
+            self.selection_bar.update_state(selection)
+            self._download_selection()
+            self._selection_actions()
+
     def refresh_downloads(self, *_args):
         key = self.filter.currentData()
         query = self.search.text().strip().casefold()
         count = 0
         visible_ids = []
         selection = self.downloads.selection.state
+        self._download_reviewing = selection.reviewing
         self.search.setEnabled(not selection.reviewing)
         self.filter.setEnabled(not selection.reviewing)
         for task_id, state in self.downloads._states.items():
@@ -263,7 +273,7 @@ class TaskPage(QWidget):
 
     def _selection_actions(self):
         selected = self.downloads.selected_ids()
-        visible = sum(not self.downloads.isRowHidden(self.downloads._row_for(i)) for i in self.downloads._states)
+        visible = len(self.downloads.selection.state.visible)
         total = len(self.downloads._states)
         self._download_count.setText(f"已选 {len(selected)} 项" if selected else f"显示 {visible} / {total} 项")
         self._select_all_action.setEnabled(visible > 0)
@@ -296,7 +306,7 @@ class TaskPage(QWidget):
         return [task_id for task_id, state in self.downloads._states.items()
                 if state in states and task_id not in self.downloads.removing_ids
                 and (scope == "all" or (task_id in selected if selected else
-                     not self.downloads.isRowHidden(self.downloads._row_for(task_id))))]
+                     task_id in self.downloads.selection.state.visible))]
 
     def _download_selection(self):
         self.recovery_action.hide()

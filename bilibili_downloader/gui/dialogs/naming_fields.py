@@ -72,7 +72,7 @@ class NamingFieldDialog(WorkflowDialog):
 
 
 def insert_naming_field(entry, fields, parent=None):
-    start, length, cursor = entry.selectionStart(), len(entry.selectedText()), entry.cursorPosition()
+    start, length, cursor = entry.selectionStart(), entry.selectionLength(), entry.cursorPosition()
     dialog = NamingFieldDialog(fields, parent)
     if dialog.exec() and dialog.variable:
         if start >= 0:

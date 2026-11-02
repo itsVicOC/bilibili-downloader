@@ -17,6 +17,7 @@ from bilibili_downloader.core.models import (
 )
 from bilibili_downloader.core.progress import DownloadPhase
 from bilibili_downloader.gui.dialogs.attachments import AttachmentDialog
+from bilibili_downloader.gui.dialogs.batch_dialog import BatchDialog
 from bilibili_downloader.gui.dialogs.naming_fields import (
     NamingFieldDialog,
     insert_naming_field,
@@ -171,6 +172,18 @@ def test_chinese_field_picker_inserts_real_placeholder_into_selection(qtbot, mon
     assert edit.text() == "前缀 {" + variable + "} 后缀"
 
 
+def test_field_picker_replaces_the_complete_emoji_selection(qtbot, monkeypatch):
+    edit = QLineEdit("前🌠后")
+    qtbot.addWidget(edit)
+    edit.setSelection(1, 2)  # Qt uses UTF-16 positions, including surrogate pairs.
+    def choose(dialog):
+        dialog.table.setCurrentCell(0, 0)
+        return QDialog.Accepted
+    monkeypatch.setattr(NamingFieldDialog, "exec", choose)
+    insert_naming_field(edit, NAMING_FIELDS)
+    assert edit.text() == "前{title}后"
+
+
 def test_preset_undo_keeps_other_templates(workspace):
     panel = workspace._settings_page
     key = "path_template"
@@ -256,6 +269,22 @@ def test_check_updates_rows_without_loading_the_whole_library(workspace, qtbot, 
     assert Path(outcome.video_path).read_bytes() == b"immutable media bytes"
 
 
+def test_media_anomaly_and_missing_file_agree_in_row_and_details(workspace, qtbot, tmp_path):
+    library, item, outcome = stored(tmp_path)
+    outcome.media_verification = {"valid": False, "message": "缺少音轨"}
+    library.record_download(item, outcome)
+    page = workspace._library_page
+    page.repository = library
+    page.refresh()
+    page.table.setCurrentCell(0, 0)
+    assert page.table.item(0, 4).text() == "媒体异常"
+    assert page.detail.result_badges[0].text() == "媒体异常"
+    Path(outcome.video_path).unlink()
+    page.check()
+    qtbot.waitUntil(lambda: not page._jobs)
+    assert page.table.item(0, 4).text() == page.detail.result_badges[0].text() == "文件缺失"
+
+
 def test_file_context_menu_preserves_checks_and_names_bulk_scope(workspace, tmp_path, monkeypatch):
     library, item, outcome = stored(tmp_path)
     second = item.model_copy(deep=True)
@@ -297,6 +326,28 @@ def test_file_model_exposes_unvisited_rows_and_checked_state(qtbot):
     table.model().setData(table.model().index(9999, 0), Qt.Unchecked, Qt.CheckStateRole)
     assert 9999 not in binding.state.selected and len(binding.state.selected) == 9999
     assert len(table._cells) < 10
+
+
+def test_batch_search_reuses_paths_and_directory_changes_invalidate_them(qtbot, tmp_path):
+    dialog = BatchDialog()
+    qtbot.addWidget(dialog)
+    calls, directory = [], [str(tmp_path / "before")]
+    def factory(info):
+        calls.append(info.content_identity)
+        return DownloadItem(video_info=info, output_dir=directory[0])
+    dialog.output_item_factory = factory
+    dialog._on_resolved([VideoInfo(bvid=f"BV{n}", cid=n + 1, title=f"课程 {n}") for n in range(20)], [])
+    baseline_calls = len(calls)
+    dialog.search.setText("课程 1")
+    dialog.selection.clear()
+    dialog.selection.select_visible()
+    assert len(calls) == baseline_calls
+    assert len(dialog.get_video_infos()) == 11
+    assert "11 个任务" in dialog._selected_label.text()
+    directory[0] = str(tmp_path / "after")
+    dialog.set_output_summary("1080P", directory[0])
+    assert len(calls) == baseline_calls + 20
+    assert str(tmp_path / "after") in dialog._path_preview.toolTip()
 
 
 def test_old_check_results_never_overwrite_a_new_location(tmp_path):

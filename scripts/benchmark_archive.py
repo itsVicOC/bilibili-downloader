@@ -17,7 +17,7 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QThreadPool, QTimer
 from PySide6.QtWidgets import QApplication
 
 from bilibili_downloader.core.library import LibraryRepository
@@ -138,11 +138,42 @@ def main():
         for record in records:
             window._download_list.add_item(record.item, download_id=record.id, status=record.status)
         window._download_list.blockSignals(False)
+        window.resize(1120, 760)
+        window._show_tasks(0)
+        window.show()
+        app.processEvents()
         _, queue_search = timed(lambda: window._task_page.search.setText("BVfixture00500"))
+        queue_samples, queue_selection = [], []
+        for n in range(30):
+            _, elapsed = timed(lambda n=n: (window._task_page.search.setText(f"{999 - n:05d}"), app.processEvents()))
+            queue_samples.append(elapsed)
+        window._task_page.search.clear()
+        for _ in range(10):
+            for action in (window._download_list.select_visible, window._download_list.clear_checked):
+                _, elapsed = timed(lambda action=action: (action(), app.processEvents()))
+                queue_selection.append(elapsed)
+        batch = window._batch_page
+        window._show_workspace(0)
+        window._download_tabs.setCurrentIndex(1)
+        _, batch_load = timed(lambda: (batch._on_resolved([record.item.video_info for record in records], []), app.processEvents()))
+        batch_samples, batch_selection = [], []
+        for n in range(30):
+            _, elapsed = timed(lambda n=n: (batch.search.setText(f"{999 - n:05d}"), app.processEvents()))
+            batch_samples.append(elapsed)
+        batch.search.clear()
+        for _ in range(10):
+            for action in (batch.selection.select_visible, batch.selection.clear):
+                _, elapsed = timed(lambda action=action: (action(), app.processEvents()))
+                batch_selection.append(elapsed)
         report = {"platform": platform.platform(), "python": platform.python_version(),
                   "backend": app.platformName(), "tasks": 1000, "file_records": 10000,
                   "task_query_ms": task_query, "queue_population_ms": queue_load,
                   "queue_search_ms": queue_search, "file_population_ms": file_load,
+                  "queue_search_p95_ms": percentile(queue_samples),
+                  "queue_selection_p95_ms": percentile(queue_selection),
+                  "batch_population_ms": batch_load,
+                  "batch_search_p95_ms": percentile(batch_samples),
+                  "batch_selection_p95_ms": percentile(batch_selection),
                   "file_search_ms": file_search, "indexed_media_lookup_ms": lookup,
                   "background_check_ms": round(check_ms, 1),
                   "max_background_heartbeat_gap_ms": round(max(heartbeat_gaps, default=0), 1),
@@ -158,6 +189,7 @@ def main():
         window._live_controller.shutdown()
         window.request_quit(confirmed=True)
         window._service_pool.waitForDone(15000)
+        QThreadPool.globalInstance().waitForDone(15000)
         app.processEvents()
         page.cancel_work()
         page.close()

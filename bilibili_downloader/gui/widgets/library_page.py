@@ -145,6 +145,13 @@ def _size(value):
     return f"{value:.1f} PB"
 
 
+def _media_state(media, outcome):
+    state = media["state"] if media else "unchecked"
+    if state not in {"missing", "inaccessible", "recycled"} and outcome.media_verification.get("valid") is False:
+        return "媒体异常"
+    return FILE_STATES.get(state, "待检查")
+
+
 class LibraryPage(QWidget):
     download_requested = Signal()
     reuse_requested = Signal(object)
@@ -446,7 +453,7 @@ class LibraryPage(QWidget):
                 ),
                 spec,
                 _size(media["size"] if media else None),
-                ("媒体异常" if outcome.media_verification.get("valid") is False else FILE_STATES.get(media["state"], "待检查")) if media else "待检查",
+                _media_state(media, outcome),
                 str(path.parent),
             ]
             rows.append(values)
@@ -489,7 +496,7 @@ class LibraryPage(QWidget):
                 if entry["kind"] != "media":
                     continue
                 outcome = self._assets[row]["outcome"]
-                state = "媒体异常" if outcome.media_verification.get("valid") is False else FILE_STATES[entry["state"]]
+                state = _media_state(entry, outcome)
                 for column, value in ((3, _size(entry["size"])), (4, state)):
                     if self.table.model().rows[row][column] != value:
                         self.table.model().rows[row][column] = value
@@ -621,7 +628,7 @@ class LibraryPage(QWidget):
             hint = " · ".join([hint, *states] if hint else states)
             self.detail_hint.setText(hint)
             self.detail_hint.setVisible(bool(hint))
-            self.detail.set_result(asset["item"], outcome, media_state=FILE_STATES.get(media["state"], "待检查") if media else "待检查")
+            self.detail.set_result(asset["item"], outcome, media_state=_media_state(media, outcome))
             missing = media and media["state"] in {"missing", "inaccessible"}
             primary = ("重新选择位置…", self.relocate) if missing else ("打开文件", lambda: self.open_file(False))
             secondary = ("补全附件…", self.request_supplement) if outcome.missing_artifacts and not missing else ("打开文件夹", lambda: self.open_file(True))

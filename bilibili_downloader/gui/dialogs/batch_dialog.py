@@ -182,8 +182,8 @@ class BatchDialog(QDialog):
         self._progress_area.hide()
         layout.addWidget(self._progress_area)
         self._preview_card = SectionCard("作品清单")
-        self._preview_card.body.setContentsMargins(16, 14, 16, 10)
-        self._preview_card.body.setSpacing(8)
+        self._preview_card.body.setContentsMargins(16, 12, 16, 8)
+        self._preview_card.body.setSpacing(6)
         self._available_label = QLabel()
         self._available_label.setObjectName("MetaLabel")
         self._preview_card.header.insertWidget(1, self._available_label)
@@ -269,6 +269,7 @@ class BatchDialog(QDialog):
     def set_output_summary(self, specs, directory):
         self._output_specs.set_full_text(specs)
         self._output_directory.set_full_text(directory)
+        self._path_cache_rows = None
         self.update_path_previews()
         self.schedule_inventory()
 
@@ -277,22 +278,29 @@ class BatchDialog(QDialog):
         if factory is None:
             return
         from pathlib import Path
+        if (getattr(self, "_path_cache_rows", None) is None
+                or self._path_cache_infos is not self._resolved_items
+                or self._path_cache_factory != factory):
+            self._path_cache_rows = []
+            self._path_cache_infos, self._path_cache_factory = self._resolved_items, factory
+            for row, info in enumerate(self._resolved_items):
+                pages = [info.for_page(p) for p in info.pages] if info.is_multi_part else [info]
+                items = [factory(page) for page in pages]
+                relative = [item.relative_output_path for item in items]
+                paths = [str(Path(item.output_dir) / path) for item, path in zip(items, relative)]
+                self._path_cache_rows.append((info.content_identity, len(items), relative[0].as_posix(), paths[0]))
+                cell = self._preview.item(row, 1)
+                if cell is not None:
+                    cell.setToolTip(info.title + f"\n展开为 {len(items)} 个任务\n" + "\n".join(paths[:5]) + ("\n…" if len(paths) > 5 else ""))
         count, first, full = 0, "", ""
-        chosen = self.get_video_infos()
-        for row, info in enumerate(self._resolved_items):
-            pages = [info.for_page(p) for p in info.pages] if info.is_multi_part else [info]
-            items = [factory(page) for page in pages]
-            paths = [str(Path(item.output_dir) / item.relative_output_path) for item in items]
-            if info in chosen:
-                count += len(items)
-                first = first or items[0].relative_output_path.as_posix()
-                full = full or paths[0]
-            cell = self._preview.item(row, 1)
-            if cell is not None:
-                cell.setToolTip(info.title + f"\n展开为 {len(items)} 个任务\n" + "\n".join(paths[:5]) + ("\n…" if len(paths) > 5 else ""))
+        selected = self.selection.state.selected
+        for identity, task_count, relative, absolute in self._path_cache_rows:
+            if identity in selected:
+                count += task_count
+                first, full = first or relative, full or absolute
         self._path_preview.set_full_text(f"路径示例：{first}" if count else "选择作品后预览保存路径")
         self._path_preview.setToolTip(full)
-        self._selected_label.setText(f"已选 {len(chosen)} 个作品 · {count} 个任务")
+        self._selected_label.setText(f"已选 {len(selected)} 个作品 · {count} 个任务")
 
     def _toggle_input(self, collapsed):
         self._url_text.setVisible(not collapsed)
@@ -410,6 +418,10 @@ class BatchDialog(QDialog):
             self._resolved_items = []
             self._selectors = []
             self._preview.setRowCount(0)
+            self.selection.state.reviewing = False
+            self.selection.reset([], preserve=False)
+            self.selection.set_visible([])
+            self.selection_bar.update_state(self.selection.state)
             self._preview_card.hide()
             self._empty_space.show()
             self._collapse_btn.setChecked(False)
@@ -850,8 +862,8 @@ class BatchDialog(QDialog):
     def get_video_infos(self) -> list:
         return [
             info
-            for row, (info, selector) in enumerate(zip(self._resolved_items, self._selectors))
-            if selector.isChecked()
+            for info in self._resolved_items
+            if info.content_identity in self.selection.state.selected
         ]
 
     def get_urls(self) -> list[str]:

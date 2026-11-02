@@ -167,13 +167,13 @@ class TableSelection(QObject):
 
     def _paint_checks(self):
         if self.paint_only:
-            model = self.table.model()
-            if model.rowCount():
-                model.dataChanged.emit(model.index(0, 0), model.index(model.rowCount() - 1, 0), [Qt.CheckStateRole])
+            self._notify_checks()
             self.table.viewport().update()
             return
         self._syncing = True
         blocked = self.table.blockSignals(True)
+        model = self.table.model()
+        model_blocked = model.blockSignals(True)
         known = set(self.state.order)
         for row in range(self.table.rowCount()):
             item = self.table.item(row, 0)
@@ -183,8 +183,21 @@ class TableSelection(QObject):
                 value = Qt.Checked if item.data(Qt.UserRole) in self.state.selected else Qt.Unchecked
                 if item.data(Qt.CheckStateRole) is None or item.checkState() != value:
                     item.setCheckState(value)
+        model.blockSignals(model_blocked)
+        if not model_blocked:
+            self._notify_checks()
         self.table.blockSignals(blocked)
         self._syncing = False
+
+    def _notify_checks(self):
+        # Offscreen rows read their current state when scrolled into view.
+        # Limit view notifications so task index widgets are not all relaid out.
+        model = self.table.model()
+        if self.table.isVisible() and model.rowCount():
+            first = self.table.rowAt(0)
+            last = self.table.rowAt(self.table.viewport().height() - 1)
+            if first >= 0:
+                model.dataChanged.emit(model.index(first, 0), model.index(last if last >= 0 else model.rowCount() - 1, 0), [Qt.CheckStateRole])
 
     def toggle(self, key):
         if key in self.state.selected:

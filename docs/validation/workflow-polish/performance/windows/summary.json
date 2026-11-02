@@ -1,0 +1,50 @@
+{
+  "baseline": "61754828a85e1cff099c3425e12e0496cb1ef2c1",
+  "revision": "dd636fe4bc7470aa23135b5f43979fa8b1f38ace",
+  "working_tree_dirty": false,
+  "platform": "Windows-2025Server-10.0.26100-SP0",
+  "paired_runs": 3,
+  "baseline_check_median_ms": 233321.0,
+  "after_medians": {
+    "tasks": 1000,
+    "file_records": 10000,
+    "task_query_ms": 32.6,
+    "queue_population_ms": 690.1,
+    "queue_search_ms": 53.2,
+    "file_population_ms": 756.0,
+    "file_search_ms": 51.5,
+    "indexed_media_lookup_ms": 2.5,
+    "background_check_ms": 5639.8,
+    "max_background_heartbeat_gap_ms": 38.3,
+    "steady_heartbeat_max_ms": 38.3,
+    "steady_heartbeat_p95_ms": 21.7,
+    "file_search_p95_ms": 24.0,
+    "file_selection_p95_ms": 22.1,
+    "final_refresh_ms": 44.9,
+    "cancel_feedback_ms": 0.1,
+    "cancel_finish_ms": 31.0,
+    "cancel_checked": 0
+  },
+  "check_reduction": 0.9758,
+  "worst_after_ms": {
+    "file_search_p95_ms": 24.7,
+    "file_selection_p95_ms": 22.9,
+    "steady_heartbeat_max_ms": 38.4,
+    "file_population_ms": 782.5,
+    "final_refresh_ms": 46.7,
+    "cancel_finish_ms": 33.3,
+    "cancel_feedback_ms": 0.1
+  },
+  "limits_ms": {
+    "file_search_p95_ms": 300,
+    "file_selection_p95_ms": 300,
+    "steady_heartbeat_max_ms": 250,
+    "file_population_ms": 2000,
+    "final_refresh_ms": 2000,
+    "cancel_finish_ms": 1000,
+    "cancel_feedback_ms": 100
+  },
+  "failures": [],
+  "passed": true,
+  "fixture": "Synthetic one-byte media; measures database/UI overhead, not real media throughput"
+}
