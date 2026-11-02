@@ -223,12 +223,16 @@ def _create_retry_btn(download_id: int, handler, *, text="继续"):
     return _create_action_btn(text, "PrimaryButton", download_id, handler)
 
 
-def _create_more_btn(download_id: int, handler):
+def _create_more_btn(download_id: int, handler, supplement=None, save_copy=None):
     button = QPushButton("更多")
     button.setObjectName("TableSubtleButton")
     button.setProperty("menuButton", True)
     button.setAccessibleName("任务更多操作")
     menu = PopupMenu(button)
+    if supplement:
+        menu.addAction("补全附件…", lambda: supplement(download_id))
+    if save_copy:
+        menu.addAction("另存一份媒体", lambda: save_copy(download_id))
     action = menu.addAction("移除记录")
     action.setToolTip("仅移除任务记录，保留媒体文件和断点")
     action.triggered.connect(lambda checked=False, task_id=download_id: handler(task_id))
@@ -276,6 +280,8 @@ class DownloadListWidget(RowHoverTable):
     pause_requested = Signal(int)
     delete_requested = Signal(int)
     open_requested = Signal(int)
+    supplement_requested = Signal(int)
+    copy_requested = Signal(int)
     content_state_changed = Signal(bool)
 
     def __init__(self):
@@ -457,6 +463,9 @@ class DownloadListWidget(RowHoverTable):
                     status_item.setText("暂停中...")
                     status_item.setToolTip("暂停中...")
                     status_item.setData(STATUS_TONE_ROLE, "warning")
+        elif self._states.get(download_id) == TaskStatus.QUEUED:
+            self.mark_paused(download_id)
+            self.pause_requested.emit(download_id)
 
     def register_worker(self, download_id: int, worker):
         """Register a worker for a download ID (enables cancel)."""
@@ -522,7 +531,7 @@ class DownloadListWidget(RowHoverTable):
         status_item = self.item(row, 3)
         if status_item:
             warnings = list(getattr(outcome, "warnings", []) or [])
-            status_item.setText("部分完成" if warnings else "完成")
+            status_item.setText(getattr(outcome, "result_label", "部分完成" if warnings else "完成"))
             status_item.setData(STATUS_TONE_ROLE, "warning" if warnings else "success")
             status_item.setToolTip("\n".join(warnings))
 
@@ -693,7 +702,7 @@ class DownloadListWidget(RowHoverTable):
         elif status == TaskStatus.COMPLETED:
             buttons = (
                 _create_open_btn(download_id, self.open_requested.emit),
-                _create_more_btn(download_id, self._on_delete_clicked),
+                _create_more_btn(download_id, self._on_delete_clicked, self.supplement_requested.emit, self.copy_requested.emit),
             )
             controls = _wrap_btns(*buttons)
         else:

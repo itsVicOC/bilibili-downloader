@@ -76,6 +76,10 @@ Path actions now sit beside the download directory, task views highlight whole r
 
 ## Download and install
 
+**In development, not released:** The working tree builds on `0.8.10b1` with durable media reuse, independent attachment repair, strict media matching, queue and batch search, custom part ranges, automatic network retries, media inspection, and directory relinking. Existing settings and queued output snapshots remain compatible. See the [workflow validation](docs/ARCHIVE_WORKFLOW_VALIDATION.md) for evidence and outstanding native/package checks.
+
+![Development batch search](docs/images/archive/archive-batch-dark-1120.png)
+
 Visit the **[BiliFlow website · 1008.si](https://1008.si/)** or **[download the latest stable release from GitHub](https://github.com/itsVicOC/bilibili-downloader/releases/latest)**. To try beta features, browse [all releases](https://github.com/itsVicOC/bilibili-downloader/releases) and look for the `Pre-release` label.
 
 **Choose `full` for your first installation.** It includes a minimal LGPL FFmpeg built from pinned source and the matching live recording engine; Python is not required. The smaller `lite` package needs an external FFmpeg installation and, for live recording, a matching recorder engine.

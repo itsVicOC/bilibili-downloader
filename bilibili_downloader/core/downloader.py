@@ -162,6 +162,21 @@ class StreamDownloader:
         else:
             self.last_video_stream = None
 
+        if item.strict_match:
+            from bilibili_downloader.core.media_policy import (
+                SpecificationMismatchError,
+                specification_warnings,
+            )
+            from bilibili_downloader.core.models import DownloadOutcome
+            selected = DownloadOutcome(
+                video_path="", actual_quality=video_stream.id if video_stream else None,
+                actual_video_codec=video_stream.codecid if video_stream else None,
+                actual_audio_quality=audio_stream.id,
+            )
+            differences = specification_warnings(item, selected)
+            if differences:
+                raise SpecificationMismatchError("严格匹配未满足：" + "；".join(differences))
+
         self._ensure_disk_space(info.duration, video_stream, audio_stream)
 
         relative_output_path = item.relative_output_path
@@ -222,6 +237,8 @@ class StreamDownloader:
                     merged_path,
                     custom_path=self._ffmpeg_path,
                     cancel_checker=lambda: self._cancelled,
+                    progress_callback=lambda p: progress_callback(0.82 + (p or 0) * 0.16, "正在合并视频…" + (f" {p:.0%}" if p is not None else "")),
+                    duration_seconds=info.duration,
                 )
             else:
                 progress_callback(0.88, "正在封装音频...")
@@ -231,6 +248,8 @@ class StreamDownloader:
                     merged_path,
                     custom_path=self._ffmpeg_path,
                     cancel_checker=lambda: self._cancelled,
+                    progress_callback=lambda p: progress_callback(0.88 + (p or 0) * 0.10, "正在封装音频…" + (f" {p:.0%}" if p is not None else "")),
+                    duration_seconds=info.duration,
                 )
             if not success:
                 raise RuntimeError(f"FFmpeg processing failed: {msg}")
@@ -391,9 +410,7 @@ class StreamDownloader:
                     delay = _retry_delay(attempt, last_error)
                     self._wait_for_retry(delay)
 
-        raise RuntimeError(
-            f"下载失败：{last_error}"
-        )
+        raise RuntimeError(f"下载失败：{last_error}") from last_error
 
     def _download_url(
         self,

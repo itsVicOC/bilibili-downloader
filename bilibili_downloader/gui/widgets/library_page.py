@@ -2,6 +2,7 @@
 
 import sqlite3
 import threading
+import time
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, QUrl, Signal
@@ -12,6 +13,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QPlainTextEdit,
@@ -139,8 +141,15 @@ class _LibraryJob(QRunnable):
         self.action = action
 
     def run(self):
+        last_progress = 0.0
+        def progress(done, total):
+            nonlocal last_progress
+            now = time.monotonic()
+            if done == total or now - last_progress >= 0.05:
+                self.signals.progress.emit(done, total)
+                last_progress = now
         try:
-            result = self.action(self.signals.progress.emit)
+            result = self.action(progress)
         except Exception as exc:  # noqa: BLE001
             result = exc
         self.signals.finished.emit(result)
@@ -169,6 +178,7 @@ class _FileTable(RowHoverTable):
 
 class LibraryPage(QWidget):
     download_requested = Signal()
+    reuse_requested = Signal(object)
 
     def __init__(self, parent=None, *, pool=None):
         super().__init__(parent)
@@ -184,6 +194,7 @@ class LibraryPage(QWidget):
         self._notice_callback = None
         self._detail_asset = None
         self._job_kind = ""
+        self.ffmpeg_path = None
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setSingleShot(True)
         self._refresh_timer.timeout.connect(self.refresh)
@@ -233,6 +244,10 @@ class LibraryPage(QWidget):
         menu.addSeparator()
         self.copy_action = menu.addAction("复制路径", self.copy_path)
         self.locate_action = menu.addAction("重新选择文件…", self.relocate)
+        self.relocate_directory_action = menu.addAction("重新定位整个目录…", self.relocate_directory)
+        self.verify_action = menu.addAction("核验媒体轨道与时长", self.verify)
+        self.supplement_action = menu.addAction("补全附件…", self.request_supplement)
+        self.copy_media_action = menu.addAction("另存一份媒体", lambda: self.request_supplement(force_new=True))
         menu.addSeparator()
         self.hide_action = menu.addAction("移除记录", self.hide_selected)
         self.hide_action.setToolTip("保留本地文件，可撤销")
@@ -442,7 +457,7 @@ class LibraryPage(QWidget):
                 ),
                 spec,
                 _size(media["size"] if media else None),
-                FILE_STATES.get(media["state"], "待检查") if media else "待检查",
+                ("媒体异常" if outcome.media_verification.get("valid") is False else FILE_STATES.get(media["state"], "待检查")) if media else "待检查",
                 str(Path(media["path"] if media else asset["path"]).parent),
             ]
             for col, value in enumerate(values):
@@ -559,6 +574,22 @@ class LibraryPage(QWidget):
                     + "\n"
                     + "\n".join(asset["outcome"].warnings)
                 )
+            outcome = asset["outcome"]
+            from bilibili_downloader.core.media_policy import (
+                ARTIFACT_LABELS,
+                specification_warnings,
+            )
+            states = []
+            if outcome.missing_artifacts:
+                states.append("附件待补全：" + "、".join(ARTIFACT_LABELS.get(k, k) for k in outcome.missing_artifacts))
+            unknown = outcome.actual_audio_quality is None or (
+                asset["item"].output_mode == OutputMode.VIDEO
+                and (outcome.actual_quality is None or outcome.actual_video_codec is None)
+            )
+            states.append("实际规格尚未确认" if unknown else "规格不满足原目标" if specification_warnings(asset["item"], outcome) else "规格与原目标一致")
+            if outcome.media_verification:
+                states.append(outcome.media_verification["message"])
+            hint = " · ".join([hint, *states] if hint else states)
             self.detail_hint.setText(hint)
             self.detail_hint.setVisible(bool(hint))
             self.detail_relocate.setVisible(
@@ -623,6 +654,10 @@ class LibraryPage(QWidget):
             button.setToolTip("请选择一个文件" if len(ids) != 1 else button.text())
         self.copy_action.setEnabled(ready and bool(ids))
         self.locate_action.setEnabled(ready and len(ids) == 1 and not self._jobs)
+        self.relocate_directory_action.setEnabled(ready and not self._jobs)
+        self.verify_action.setEnabled(ready and bool(ids or visible) and not self._jobs)
+        for action in (self.supplement_action, self.copy_media_action):
+            action.setEnabled(ready and len(ids) == 1 and not self._jobs)
         self.detail_relocate.setEnabled(not self._jobs)
         self.hide_action.setEnabled(ready and bool(ids) and not self._jobs)
         candidates = [
@@ -663,6 +698,39 @@ class LibraryPage(QWidget):
         if len(ids) != 1:
             return None
         return self._media(next(a for a in self._assets if a["id"] == ids[0]))
+
+    def request_supplement(self, *, force_new=False):
+        from bilibili_downloader.core.models import TaskStatus
+        from bilibili_downloader.gui.dialogs.attachments import choose_attachments
+        ids = self.selected_ids()
+        if len(ids) != 1:
+            return
+        asset = next(a for a in self._assets if a["id"] == ids[0])
+        media = self._media(asset)
+        item = asset["item"]
+        if not force_new:
+            item = choose_attachments(item, self)
+        if item is not None and media:
+            self.reuse_requested.emit(item.model_copy(update={
+                "force_new": force_new, "reuse_media_path": None if force_new else media["path"],
+                "strict_match": False if not force_new else item.strict_match,
+                "retry_count": 0, "retry_at": None, "status": TaskStatus.QUEUED,
+            }, deep=True))
+
+    def verify(self):
+        ids = self.selected_ids() or self.visible_ids()
+        if ids and self.repository:
+            self._run(lambda progress: self.repository.verify_media(ids, self.ffmpeg_path, self._cancel, progress), kind="verify")
+
+    def relocate_directory(self):
+        if self.repository is None or self._jobs:
+            return
+        media = self._file()
+        old, accepted = QInputDialog.getText(self, "原来的根目录", "输入原目录（目录可以已被移动）：", text=str(Path(media["path"]).parent) if media else "")
+        if accepted and old.strip():
+            def new_selected(new):
+                self._run(lambda _progress: {"old": old, "new": new, "changes": self.repository.relocate_directory(old, new)}, kind="relocate_preview")
+            file_picker(self).directory("选择新的根目录（保留相对目录结构）", old, new_selected)
 
     def open_file(self, directory, *, entry=None):
         entry = entry or self._file()
@@ -795,9 +863,12 @@ class LibraryPage(QWidget):
                 "check": "正在检查…",
                 "recycle": "正在移入回收站…",
                 "recover": "正在恢复记录…",
+                "verify": "正在核验媒体…",
+                "relocate_preview": "正在检查目录映射…",
+                "relocate": "正在更新文件位置…",
             }[kind]
         )
-        self.cancel_button.setVisible(kind == "check")
+        self.cancel_button.setVisible(kind in {"check", "verify"})
         self._actions()
         job.signals.progress.connect(self._progress)
 
@@ -808,6 +879,18 @@ class LibraryPage(QWidget):
             self.refresh()
             if isinstance(result, Exception):
                 self._feedback("操作未完成，请重试。", "danger", details=str(result))
+            elif kind == "relocate_preview":
+                changes = result["changes"]
+                unavailable = sum(not c["available"] for c in changes)
+                if not changes or unavailable:
+                    self._feedback(f"未修改位置：{len(changes)} 个文件中 {unavailable} 个目标不可读取。", "warning")
+                    return
+                box = OperationDialog("重新定位整个目录", f"更新 {len(changes)} 个文件记录的位置，不移动文件。",
+                                      "\n".join(f"{c['old']} → {c['new']}" for c in changes), self, confirm="更新位置")
+                if box.exec():
+                    self._run(lambda _progress: self.repository.relocate_directory(result["old"], result["new"], apply=True), kind="relocate")
+            elif kind == "relocate":
+                self._feedback(f"已更新 {len(result)} 个文件的位置。")
             elif kind == "recycle":
                 errors = [(p, e) for p, e in result if e]
                 self._feedback(
@@ -835,6 +918,10 @@ class LibraryPage(QWidget):
                     text += f"，{result['missing']} 个未找到"
                 if result["inaccessible"]:
                     text += f"，{result['inaccessible']} 个无法访问"
+                if result.get("invalid"):
+                    text += f"，{result['invalid']} 个媒体异常"
+                if kind == "verify":
+                    text += "（轨道与时长检查，不代表逐帧完整性校验）"
                 self._feedback(
                     text + "。",
                     "warning" if result["issues"] else "info",

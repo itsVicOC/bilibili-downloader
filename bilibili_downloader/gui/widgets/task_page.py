@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
@@ -77,6 +78,7 @@ class TaskPage(QWidget):
     remove_all_requested = Signal()
     pause_entire_requested = Signal()
     resume_entire_requested = Signal()
+    recovery_requested = Signal(int, str)
 
     def __init__(self, downloads, controller, parent=None):
         super().__init__(parent)
@@ -121,6 +123,12 @@ class TaskPage(QWidget):
         self._download_tools = CommandBar()
         toolbar = self._download_tools.filters
         actions = self._download_tools.actions
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("搜索标题、BV 号、作者或文件名")
+        self.search.setClearButtonEnabled(True)
+        self.search.setMinimumWidth(150)
+        self.search.textChanged.connect(self.refresh_downloads)
+        toolbar.addWidget(self.search)
         self.filter = ComboBox()
         for text, key in (
             ("全部任务", "all"),
@@ -184,10 +192,16 @@ class TaskPage(QWidget):
         self.download_detail = TaskDetailPanel()
         self.download_detail.hide()
         layout.addWidget(self.download_detail)
+        self.recovery_action = QPushButton()
+        self.recovery_action.setObjectName("TextButton")
+        self.recovery_action.clicked.connect(self._request_recovery)
+        self.recovery_action.hide()
+        layout.addWidget(self.recovery_action, alignment=Qt.AlignLeft)
         self.tabs.addTab(tab, "下载队列")
 
     def refresh_downloads(self, *_args):
         key = self.filter.currentData()
+        query = self.search.text().strip().casefold()
         count = 0
         for task_id, state in self.downloads._states.items():
             row = self.downloads._row_for(task_id)
@@ -206,6 +220,13 @@ class TaskPage(QWidget):
                 or (key == "completed" and state == TaskStatus.COMPLETED)
                 or (key == "attention" and (state == TaskStatus.FAILED or warning))
             )
+            item = self.downloads.get_item(task_id)
+            if query and item:
+                info = item.video_info
+                haystack = " ".join((item.display_title, info.bvid, info.author, info.owner_name,
+                                     info.collection_title, item.filename,
+                                     self.downloads._output_paths.get(task_id, ""))).casefold()
+                visible = visible and query in haystack
             self.downloads.setRowHidden(row, not visible)
             if not visible:
                 for column in range(self.downloads.columnCount()):
@@ -255,6 +276,7 @@ class TaskPage(QWidget):
                      not self.downloads.isRowHidden(self.downloads._row_for(task_id))))]
 
     def _download_selection(self):
+        self.recovery_action.hide()
         selected = self.downloads.selected_ids()
         if len(selected) != 1:
             self.download_detail.hide()
@@ -281,6 +303,18 @@ class TaskPage(QWidget):
             status.data(STATUS_TONE_ROLE) if status else "muted",
         )
         self.download_detail.show()
+        task = self.downloads.get_item(task_id)
+        label = {"authentication": "重新登录…", "permission": "检查账号权限…", "storage": "更换保存目录…", "rate_limit": "查看冷却说明"}.get(task.error_category if task else "")
+        if label and self.downloads._states.get(task_id) == TaskStatus.FAILED:
+            self.recovery_action.setText(label)
+            self.recovery_action.show()
+
+    def _request_recovery(self):
+        selected = self.downloads.selected_ids()
+        if len(selected) == 1:
+            item = self.downloads.get_item(selected[0])
+            if item:
+                self.recovery_requested.emit(selected[0], item.error_category)
 
     def _current_tab(self):
         tab = QWidget()

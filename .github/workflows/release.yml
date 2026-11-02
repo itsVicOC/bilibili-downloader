@@ -178,8 +178,10 @@ jobs:
           QT_QPA_PLATFORM: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
         run: |
           python -m scripts.configure_ui_test_display
-          python -X faulthandler -m pytest -q tests/test_download_management.py tests/test_issue_regressions.py
+          python -X faulthandler -m pytest -q tests/test_download_management.py tests/test_issue_regressions.py tests/test_archive_workflow.py
           python -m scripts.capture_docs_screenshots --native --physical-pixels --download-management-only --output-dir "build/release-management-ui"
+          python -m scripts.capture_docs_screenshots --native --physical-pixels --archive-only --output-dir "build/release-management-ui/archive"
+          QT_QPA_PLATFORM=offscreen python -m scripts.benchmark_archive --output build/release-management-ui/archive-benchmark.json
 
       - name: Upload download management native evidence
         if: always()

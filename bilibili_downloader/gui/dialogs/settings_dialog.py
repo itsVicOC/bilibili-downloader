@@ -53,6 +53,7 @@ from bilibili_downloader.gui.widgets.components import (
     ElidedLabel,
     FieldRow,
     Notice,
+    PopupMenu,
     ResponsiveFields,
     SectionCard,
     help_text,
@@ -65,6 +66,24 @@ from bilibili_downloader.gui.widgets.download_options import (
 )
 from bilibili_downloader.gui.widgets.workspace_background import WorkspaceStack
 from bilibili_downloader.utils.validators import render_path_template
+
+NAMING_FIELDS = {
+    "title": ("作品标题", "视频作品的完整标题，例如「星轨旅记」。"),
+    "author": ("UP 主名称", "视频作者的名称，用于按作者建立目录。"),
+    "bvid": ("视频编号（BV 号）", "作品的 B 站视频编号，用于区分同名作品。"),
+    "page": ("分 P 序号", "当前分 P 的序号，例如 1、2、3。"),
+    "page_padded": ("分 P 序号（补零）", "至少补齐三位的分 P 序号，例如 001、002，便于按顺序排列。"),
+    "part": ("分 P 标题", "当前分 P 的小标题；没有标题时使用 P 加序号，例如 P1。"),
+    "part_suffix": ("分 P 后缀", "多分 P 时添加下划线和分 P 标题，例如「_夜航篇」；单 P 时为空。"),
+    "collection": ("合集名称", "视频所属合集的名称；名称缺失时对应目录显示为 untitled（未命名）。"),
+    "quality": ("画质", "请求的画质名称，例如 1080P；发生规格回退时，以任务的实际下载结果为准。"),
+    "codec": ("视频编码", "请求的视频编码名称，例如 HEVC/H.265；发生规格回退时，以任务的实际下载结果为准。"),
+    "series": ("番剧系列名称", "番剧所属系列的名称；缺失时使用合集名称。"),
+    "season": ("番剧季度名称", "番剧当前季度的名称，例如「第二季」；缺失时使用「本季」。"),
+    "section": ("章节名称", "番剧所属章节，例如「正片」「特别篇」；缺失时使用「正片」。"),
+    "episode": ("单集标题", "番剧当前一集的标题；缺失时使用作品标题。"),
+    "episode_number": ("集号", "当前一集的集号；缺失时使用至少两位的顺序编号，例如 01、02。"),
+}
 
 
 def _setting_value(settings, key):
@@ -233,6 +252,11 @@ class SettingsDialog(QDialog):
             formats.body.removeWidget(row)
             format_fields.add_field(row)
         formats.body.addWidget(format_fields)
+        for key, label in (("strict_match", "严格匹配画质、编码与音质"),
+                           ("auto_retry_downloads", "网络失败后自动重试（30、60、120 秒，最多三轮）")):
+            control = QCheckBox(label)
+            self._controls[key] = control
+            formats.body.addWidget(control)
         download.addWidget(formats)
         options = SectionCard("归档附加内容")
         for key, label, description, icon, attr in (
@@ -269,6 +293,34 @@ class SettingsDialog(QDialog):
         ):
             entry = self._entry(key, self._templates_section, label)
             setattr(self, attr, entry)
+            shortcut_row = QHBoxLayout()
+            presets = {
+                "path_template": ("按作者归档", "{author}/{title}{part_suffix}"),
+                "multipart_path_template": ("默认分 P", "{title}/{page_padded} - {part}"),
+                "bangumi_path_template": ("番剧目录", "{series}/{season}/{section}/{episode_number} - {episode}"),
+            }
+            title, value = presets[key]
+            preset = QPushButton(title)
+            preset.setObjectName("TextButton")
+            preset.clicked.connect(lambda _checked=False, field=entry, text=value: field.setText(text))
+            shortcut_row.addWidget(preset)
+            insert = QPushButton("插入字段…")
+            insert.setObjectName("TextButton")
+            insert.setToolTip("按中文名称选择字段；插入的占位符会在下载时替换为对应内容。")
+            menu = PopupMenu(insert)
+            menu.setToolTipsVisible(True)
+            variables = ("title", "author", "bvid", "page", "page_padded", "part", "part_suffix", "collection", "quality", "codec")
+            if key == "bangumi_path_template":
+                variables += ("series", "season", "section", "episode", "episode_number")
+            for variable in variables:
+                name, description = NAMING_FIELDS[variable]
+                action = menu.addAction(f"{name}  {{{variable}}}", lambda checked=False, field=entry, name=variable: field.insert("{" + name + "}"))
+                action.setToolTip(description)
+                action.setStatusTip(description)
+            insert.setMenu(menu)
+            shortcut_row.addWidget(insert)
+            shortcut_row.addStretch()
+            self._templates_section.body.addLayout(shortcut_row)
             preview = ElidedLabel(elide_mode=Qt.ElideMiddle)
             self._template_previews[key] = preview
             preview_row = QHBoxLayout()
@@ -288,7 +340,9 @@ class SettingsDialog(QDialog):
         self._codec_combo.currentIndexChanged.connect(self._update_template_previews)
         self._templates_section.body.addWidget(help_text("仅对新任务生效；已有任务继续使用原保存位置。"))
         self._template_fields = CollapsibleSection("查看命名字段")
-        self._template_fields.body.addWidget(help_text("目录用 / 分隔。支持 title、author、bvid、part、page、page_padded、part_suffix、collection 和番剧章节字段；扩展名自动添加。"))
+        self._template_fields.body.addWidget(help_text("按中文名称选择「插入字段」即可，无需记忆英文。花括号中的占位符会在下载时自动替换为对应内容；目录用 / 分隔，扩展名自动添加。"))
+        for variable, (name, description) in NAMING_FIELDS.items():
+            self._template_fields.body.addWidget(help_text(f"{name} {{{variable}}}：{description}"))
         self._templates_section.body.addWidget(self._template_fields)
         download.addWidget(self._templates_section)
         defaults = SectionCard("默认录制位置与分段")

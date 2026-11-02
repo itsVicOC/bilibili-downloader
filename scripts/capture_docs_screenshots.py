@@ -20,7 +20,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from PySide6.QtCore import QPoint, QRect, QSize, Qt, qVersion
+from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, qVersion
 from PySide6.QtGui import (
     QCloseEvent,
     QColor,
@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QSlider,
+    QToolTip,
 )
 
 from bilibili_downloader.core.appearance import prepare_background
@@ -131,6 +132,10 @@ def _save_widget(app: QApplication, widget, filename: str, popup=None) -> None:
             else:
                 entry.setPlainText(visible)
     _flush_events(app)
+    QToolTip.hideText()
+    # processEvents alone does not destroy replaced table cell widgets. Deliver
+    # deferred deletion as the normal event loop would, before capturing pixels.
+    app.sendPostedEvents(None, QEvent.DeferredDelete)
     output = OUTPUT_DIR / filename
     if isinstance(widget, LoginDialog) and widget._login_active and widget._tabs.currentIndex() == 1:
         if not widget._qr_label.visibleRegion().boundingRect().contains(widget._qr_label.rect()):
@@ -1795,6 +1800,70 @@ def _capture_download_management(app, theme, window, temp_root):
             panel.load_settings(window._settings)
 
 
+def _capture_archive(app, theme, window, temp_root):
+    """New archive workflow, using offline data in both modes and three sizes."""
+    from bilibili_downloader.gui.dialogs.page_selection import PageSelectionDialog
+    from bilibili_downloader.gui.threads.batch_worker import ImportReport
+    _populate_main_window(window)
+    for task_id, existing in window._download_list._items.items():
+        assigned = window._task_repository.add(existing, window._download_list._states[task_id])
+        assert assigned == task_id
+    demo = _demo_video()
+    items = [demo.model_copy(update={"bvid": f"BVarchive{i}", "title": title, "author": "演示作者"})
+             for i, title in enumerate(("系统设计入门", "数据整理入门", "进阶实践"), 1)]
+    window._batch_page._url_text.setPlainText("BVarchive1\nBVarchive2\nBVarchive3")
+    window._batch_page._on_report(ImportReport(items=items))
+    item = window._make_download_item(demo)
+    item.download_subtitle = True
+    task_id = window._task_repository.add(item, TaskStatus.COMPLETED)
+    outcome = DownloadOutcome(video_path=str(temp_root / "示例课程.mp4"), actual_quality=80,
+                              actual_video_codec=12, actual_audio_quality=30280,
+                              missing_artifacts=["subtitle"], warnings=["字幕暂未保存，可单独补全。"])
+    window._download_list.add_item(item, download_id=task_id)
+    window._download_list.mark_done(task_id, outcome)
+    window._task_repository.update(task_id, outcome=outcome, status=TaskStatus.COMPLETED)
+    for mode in ("light", "dark"):
+        theme.set_mode(mode)
+        for width, height in ((900, 640), (1120, 760), (1320, 860)):
+            window.resize(width, height)
+            window._show_workspace(0)
+            window._download_tabs.setCurrentIndex(0)
+            _save_widget(app, window, f"archive-options-{mode}-{width}.png")
+            window._download_tabs.setCurrentIndex(1)
+            window._batch_page.search.setText("入门")
+            _save_widget(app, window, f"archive-batch-{mode}-{width}.png")
+            window._show_tasks(0)
+            window._task_page.search.setText(demo.bvid)
+            window._download_list.selectRow(window._download_list._row_for(task_id))
+            _save_widget(app, window, f"archive-result-{mode}-{width}.png")
+        dialog = PageSelectionDialog(demo.pages, {p.cid for p in demo.pages}, window)
+        dialog.range.setText("1-2")
+        _save_widget(app, dialog, f"archive-pages-{mode}.png")
+        dialog.reject()
+        dialog.deleteLater()
+        window._show_settings_tab(SettingsSection.DOWNLOAD)
+        panel = window._settings_page
+        panel._templates_section.set_expanded(True)
+        window.resize(900, 640)
+        window.show()
+        panel.tabs.currentWidget().ensureWidgetVisible(panel._path_template)
+        _flush_events(app)
+        insert = next(button for button in panel.findChildren(QPushButton) if button.text() == "插入字段…")
+        menu = insert.menu()
+        menu.popup(insert.mapToGlobal(QPoint(0, insert.height())))
+        _save_widget(app, window, f"naming-fields-{mode}.png", popup=menu)
+        menu.hide()
+        panel._template_fields.set_expanded(True)
+        window.show()
+        _flush_events(app)
+        first = next(label for label in panel._template_fields.findChildren(QLabel) if label.text().startswith("作品标题 {title}"))
+        scroll = panel.tabs.currentWidget()
+        scroll.verticalScrollBar().setValue(first.mapTo(scroll.widget(), QPoint()).y() - 120)
+        _save_widget(app, window, f"naming-help-{mode}.png")
+        panel._template_fields.set_expanded(False)
+        panel._templates_section.set_expanded(False)
+
+
 def main(argv=None) -> int:
     global OUTPUT_DIR
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1811,6 +1880,7 @@ def main(argv=None) -> int:
     parser.add_argument("--ui-refresh-only", action="store_true", help="Capture navigation, download cards, modes and account states")
     parser.add_argument("--interactions-only", action="store_true", help="Capture row hover, history removal and isolated clipboard prompts")
     parser.add_argument("--download-management-only", action="store_true", help="Capture multipart queue and independent downloads library")
+    parser.add_argument("--archive-only", action="store_true", help="Capture media results, queue search, batch filters and part selection")
     parser.add_argument("--refinement-only", action="store_true", help="Capture audio, long-content, failure, draft and filtered-task states")
     parser.add_argument("--chrome-only", action="store_true", help="Check native captions using desktop compositor captures")
     parser.add_argument("--glass-only", action="store_true", help="Capture glass wallpaper and complete download guidance in both modes")
@@ -1877,6 +1947,11 @@ def main(argv=None) -> int:
         window._settings.appearance.theme = args.color_theme
         theme.set_color_theme(args.color_theme)
         cleanup.callback(window._live_controller.shutdown)
+        if args.archive_only:
+            _capture_archive(app, theme, window, temp_root)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
         if args.download_management_only:
             _capture_download_management(app, theme, window, temp_root)
             window._live_controller.shutdown()

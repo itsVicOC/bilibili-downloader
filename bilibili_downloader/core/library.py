@@ -9,6 +9,7 @@ import sqlite3
 import stat
 import threading
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -23,6 +24,25 @@ FILE_STATES = {
     "inaccessible": "无法访问",
     "recycled": "已回收",
 }
+_MEDIA_LOCKS = [threading.Lock() for _ in range(64)]
+
+
+@dataclass
+class MediaMatch:
+    state: str
+    outcome: DownloadOutcome | None = None
+    missing: tuple[str, ...] = ()
+
+
+def readable_file(path):
+    try:
+        file = Path(path)
+        if not stat.S_ISREG(file.lstat().st_mode) or file.stat().st_size == 0:
+            return False
+        with file.open("rb") as handle:
+            return bool(handle.read(1))
+    except (OSError, ValueError):
+        return False
 
 
 def absolute_path(path):
@@ -84,6 +104,10 @@ class LibraryRepository:
                     UNIQUE(asset_id, path)
                 );
                 CREATE INDEX IF NOT EXISTS idx_library_file_path ON files(path);
+                CREATE INDEX IF NOT EXISTS idx_library_identity ON assets(identity);
+                CREATE INDEX IF NOT EXISTS idx_library_bvid_cid ON assets(
+                    json_extract(item_json,'$.video_info.bvid'),
+                    json_extract(item_json,'$.video_info.cid'));
                 CREATE TABLE IF NOT EXISTS imports (
                     identity TEXT NOT NULL, path TEXT NOT NULL,
                     asset_id INTEGER NOT NULL REFERENCES assets(id),
@@ -124,6 +148,8 @@ class LibraryRepository:
             update={"video_streams": [], "audio_streams": [], "subtitle_list": []}
         )
         clean = item.model_copy(update={"video_info": info})
+        if outcome.media_signature is None and readable_file(path):
+            outcome.media_signature = self._signature(Path(path).stat())
         with self._connection() as db:
             db.execute(
                 """INSERT INTO assets(identity,path,item_json,outcome_json,created_at)
@@ -166,6 +192,8 @@ class LibraryRepository:
 
     def record_download(self, item, outcome):
         """Write a replayable receipt before changing the independent database."""
+        if outcome.media_signature is None and readable_file(outcome.video_path):
+            outcome.media_signature = self._signature(Path(outcome.video_path).stat())
         info = item.video_info.model_copy(
             update={"video_streams": [], "audio_streams": [], "subtitle_list": []}
         )
@@ -275,6 +303,9 @@ class LibraryRepository:
                 + ("" if include_hidden else " WHERE hidden=0")
                 + " ORDER BY id DESC"
             ).fetchall()
+            grouped_files = {}
+            for entry in db.execute("SELECT * FROM files ORDER BY id"):
+                grouped_files.setdefault(entry["asset_id"], []).append(dict(entry))
             result = []
             for row in rows:
                 asset = dict(row)
@@ -282,14 +313,95 @@ class LibraryRepository:
                 asset["outcome"] = DownloadOutcome.model_validate_json(
                     row["outcome_json"]
                 )
-                asset["files"] = [
-                    dict(f)
-                    for f in db.execute(
-                        "SELECT * FROM files WHERE asset_id=? ORDER BY id", (row["id"],)
-                    )
-                ]
+                asset["files"] = grouped_files.get(row["id"], [])
                 result.append(asset)
             return result
+
+    @contextmanager
+    def media_lock(self, item, cancelled):
+        key = (item.video_info.bvid or item.video_info.content_identity, item.video_info.cid)
+        lock = _MEDIA_LOCKS[hash(key) % len(_MEDIA_LOCKS)]
+        while not lock.acquire(timeout=0.1):
+            cancelled()
+        try:
+            cancelled()
+            yield
+        finally:
+            lock.release()
+
+    def match_media(self, item):
+        """Find a usable asset, including hidden inventory, without task history.
+
+        File rows are authoritative after relocation. A requested specification
+        is never used as evidence of what was actually saved.
+        """
+        from bilibili_downloader.core.media_policy import specifications_match
+
+        self.initialize()
+        info = item.video_info
+        with self._connection() as db:
+            rows = db.execute(
+                "SELECT * FROM assets WHERE identity=? OR "
+                "(json_extract(item_json,'$.video_info.bvid')=? AND ?<>'' AND "
+                "json_extract(item_json,'$.video_info.cid')=?) ORDER BY id DESC",
+                (info.content_identity, info.bvid, info.bvid, info.cid),
+            ).fetchall()
+            assets = [(dict(row), [dict(f) for f in db.execute(
+                "SELECT * FROM files WHERE asset_id=?", (row["id"],)
+            )]) for row in rows]
+        state, best = "not_saved", None
+        for asset, files in assets:
+            previous = DownloadItem.model_validate_json(asset["item_json"])
+            if previous.output_mode != item.output_mode:
+                continue
+            media = next((f for f in files if f["kind"] == "media"), None)
+            if not media or (item.reuse_media_path and absolute_path(item.reuse_media_path) != media["path"]):
+                continue
+            if not readable_file(media["path"]) or media["state"] == "recycled":
+                state = "unavailable"
+                continue
+            outcome = DownloadOutcome.model_validate_json(asset["outcome_json"])
+            signature = outcome.media_signature or media["signature"]
+            if signature is None or self._signature(Path(media["path"]).stat()) != signature:
+                state = "unavailable"
+                continue
+            if outcome.media_verification.get("valid") is False:
+                state = "unavailable"
+                continue
+            if not item.reuse_media_path and not specifications_match(item, outcome):
+                state = "specification_mismatch"
+                continue
+            outcome.video_path = media["path"]
+            # Keep successful attachments, using relocated file records.
+            paths = {f["kind"]: f["path"] for f in files if readable_file(f["path"]) and f["state"] != "recycled"}
+            for kind in ("danmaku", "cover", "metadata"):
+                setattr(outcome, f"{kind}_path", paths.get(kind))
+            old_subtitles = list(outcome.subtitle_paths)
+            subs = [f["path"] for f in files if f["kind"] == "subtitle" and readable_file(f["path"]) and f["state"] != "recycled"]
+            outcome.subtitle_paths = subs
+            outcome.subtitle_languages = {lan: path for lan, path in outcome.subtitle_languages.items() if path in subs}
+            if set(subs) != set(old_subtitles):
+                outcome.subtitle_discovery_complete = False
+            missing = []
+            for kind in ("danmaku", "cover", "metadata"):
+                if getattr(item, f"download_{kind}") and not paths.get(kind):
+                    missing.append(kind)
+            wants_subtitles = item.download_subtitle or item.download_all_subtitles
+            has_subtitles = (
+                bool(subs) and outcome.subtitle_discovery_complete
+                if item.download_all_subtitles else
+                item.selected_subtitle_lan in outcome.subtitle_languages or (
+                    bool(subs) and not outcome.subtitle_languages
+                    and previous.selected_subtitle_lan == item.selected_subtitle_lan
+                    and not previous.download_all_subtitles
+                )
+            )
+            if wants_subtitles and (not has_subtitles or "subtitle" in outcome.missing_artifacts):
+                missing.append("subtitle")
+            match = MediaMatch("missing_attachments" if missing else "saved", outcome, tuple(missing))
+            if best is None or len(missing) < len(best.missing):
+                best = match
+        return best or MediaMatch(state)
 
     def hide(self, asset_ids):
         with self._connection() as db:
@@ -396,7 +508,7 @@ class LibraryRepository:
             raise ValueError("请选择普通文件")
         with self._connection() as db:
             entry = db.execute(
-                "SELECT asset_id,kind FROM files WHERE id=?", (file_id,)
+                "SELECT asset_id,kind,path FROM files WHERE id=?", (file_id,)
             ).fetchone()
             if entry is None:
                 raise ValueError("文件记录已移除")
@@ -409,6 +521,84 @@ class LibraryRepository:
                 "UPDATE files SET path=?,state='unchecked',size=NULL,signature=NULL,checked_at=NULL WHERE id=?",
                 (destination, file_id),
             )
+            self._sync_outcome_paths(db, entry["asset_id"], {entry["path"]: destination})
+
+    @staticmethod
+    def _sync_outcome_paths(db, asset_id, mapping=None):
+        row = db.execute("SELECT outcome_json FROM assets WHERE id=?", (asset_id,)).fetchone()
+        outcome = DownloadOutcome.model_validate_json(row[0])
+        files = [dict(f) for f in db.execute("SELECT * FROM files WHERE asset_id=?", (asset_id,))]
+        for kind in ("media", "danmaku", "cover", "metadata"):
+            entry = next((f for f in files if f["kind"] == kind), None)
+            if entry:
+                setattr(outcome, "video_path" if kind == "media" else f"{kind}_path", entry["path"])
+        outcome.subtitle_paths = [f["path"] for f in files if f["kind"] == "subtitle"]
+        outcome.subtitle_languages = {lan: (mapping or {}).get(path, path) for lan, path in outcome.subtitle_languages.items()}
+        outcome.media_verification = {}
+        outcome.media_signature = LibraryRepository._signature(Path(outcome.video_path).stat()) if readable_file(outcome.video_path) else None
+        db.execute("UPDATE assets SET outcome_json=? WHERE id=?", (outcome.model_dump_json(), asset_id))
+
+    def relocate_directory(self, old_root, new_root, *, apply=False):
+        """Preview or atomically relink a directory; never move media on disk."""
+        old_root, new_root = Path(absolute_path(old_root)), Path(absolute_path(new_root))
+        if old_root == new_root:
+            raise ValueError("新旧目录相同")
+        with self._connection() as db:
+            changes = []
+            for row in db.execute("SELECT * FROM files"):
+                try:
+                    relative = Path(row["path"]).relative_to(old_root)
+                except ValueError:
+                    continue
+                target = str(new_root / relative)
+                changes.append({"id": row["id"], "asset_id": row["asset_id"], "kind": row["kind"],
+                                "old": row["path"], "new": target, "available": readable_file(target)})
+            if not apply:
+                return changes
+            if not changes or any(not entry["available"] for entry in changes):
+                raise ValueError("部分目标文件无法读取，未修改记录。请检查新目录后重试。")
+            # One transaction protects all media and attachment paths against collisions.
+            for entry in changes:
+                if entry["kind"] == "media":
+                    db.execute("UPDATE assets SET path=? WHERE id=?", (entry["new"], entry["asset_id"]))
+                db.execute("UPDATE files SET path=?,state='unchecked',checked_at=NULL,signature=NULL,size=NULL WHERE id=?",
+                           (entry["new"], entry["id"]))
+            mapping = {entry["old"]: entry["new"] for entry in changes}
+            for asset_id in {entry["asset_id"] for entry in changes}:
+                self._sync_outcome_paths(db, asset_id, mapping)
+        return changes
+
+    def verify_media(self, asset_ids, ffmpeg_path=None, cancel=None, progress=None):
+        from bilibili_downloader.core.ffmpeg import FFmpegManager
+        assets = [a for a in self.list_assets() if a["id"] in set(asset_ids)]
+        report = {"checked": 0, "missing": 0, "inaccessible": 0, "invalid": 0, "cancelled": False, "issues": []}
+        for asset in assets:
+            if cancel is not None and cancel.is_set():
+                report["cancelled"] = True
+                break
+            media = next((f for f in asset["files"] if f["kind"] == "media"), None)
+            if not media:
+                continue
+            result = FFmpegManager.inspect_media(Path(media["path"]), asset["item"].output_mode, ffmpeg_path)
+            if result.get("unavailable"):
+                report["inaccessible"] += 1
+            elif not result["valid"]:
+                report["invalid"] += 1
+            if not result["valid"]:
+                report["issues"].append((media["path"], result["message"]))
+            # A missing tool or offline drive is not proof of media corruption.
+            if not result.get("unavailable"):
+                with self._connection() as db:
+                    current = db.execute("SELECT path FROM files WHERE id=?", (media["id"],)).fetchone()
+                    if current and current[0] == media["path"]:
+                        row = db.execute("SELECT outcome_json FROM assets WHERE id=?", (asset["id"],)).fetchone()
+                        outcome = DownloadOutcome.model_validate_json(row[0])
+                        outcome.media_verification = {**result, "checked_at": _now()}
+                        db.execute("UPDATE assets SET outcome_json=? WHERE id=?", (outcome.model_dump_json(), asset["id"]))
+            report["checked"] += 1
+            if progress:
+                progress(report["checked"], len(assets))
+        return report
 
     def recycle(self, entries, move_to_trash=None, progress=None):
         if move_to_trash is None:

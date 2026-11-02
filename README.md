@@ -74,6 +74,10 @@
 
 ## 下载与安装
 
+**开发中，尚未发布：** 当前工作区在 `0.8.10b1` 基础上加入文件复用、独立附件补全、严格规格匹配、队列与批量搜索、自选分 P、网络失败自动重试，以及媒体核验和目录批量重新定位。已有设置和任务快照继续生效；详见[使用说明](docs/USER_GUIDE.md#开发版下载与归档优化未发布)与[验收记录](docs/ARCHIVE_WORKFLOW_VALIDATION.md)。
+
+![开发版批量搜索与筛选](docs/images/archive/archive-batch-dark-1120.png)
+
 访问 **[BiliFlow 官网 · 1008.si](https://1008.si/)** 了解项目，或直接从 **[GitHub Releases 下载最新正式版](https://github.com/itsVicOC/bilibili-downloader/releases/latest)**。想体验 beta 功能，可查看[全部版本](https://github.com/itsVicOC/bilibili-downloader/releases)；预发布版会带有 `Pre-release` 标记。
 
 **首次使用推荐 `full` 包**：内置从固定源码构建的最小 LGPL FFmpeg 和配套直播录制引擎，无需安装 Python。`lite` 包体积更小，需要自行安装 FFmpeg；使用直播功能时还需配置配套录制引擎。

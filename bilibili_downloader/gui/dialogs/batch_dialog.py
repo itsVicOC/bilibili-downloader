@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
@@ -74,6 +75,8 @@ class BatchDialog(QDialog):
         self._selectors = []
         self._resolve_worker = None
         self._resolve_runner = None
+        self.library_repository = None
+        self._inventory_job = None
 
         self.setWindowTitle("批量导入")
         if not embedded:
@@ -183,6 +186,16 @@ class BatchDialog(QDialog):
         self._preview.setShowGrid(False)
         self._preview.setMinimumHeight(100)
         self._preview_card.body.addWidget(self._preview, 1)
+        filters = QHBoxLayout()
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("搜索作品、作者或来源")
+        self.search.setClearButtonEnabled(True)
+        self.search.textChanged.connect(self._filter_results)
+        filters.addWidget(self.search, 1)
+        self.select_unsaved = QPushButton("仅选尚未保存")
+        self.select_unsaved.clicked.connect(self._select_unsaved)
+        filters.addWidget(self.select_unsaved)
+        self._preview_card.body.insertLayout(0, filters)
         self._path_preview = ElidedLabel(elide_mode=Qt.ElideMiddle)
         self._path_preview.setObjectName("MetaLabel")
         self._preview_card.body.addWidget(self._path_preview)
@@ -543,6 +556,60 @@ class BatchDialog(QDialog):
         self._selection_updated()
         self._refresh_source_summary()
         self._sync_result_feedback()
+        self._filter_results()
+
+    def _filter_results(self, *_):
+        query = self.search.text().strip().casefold()
+        for row, selector in enumerate(self._selectors):
+            text = " ".join(self._preview.item(row, col).text() for col in (1, 2, 3))
+            visible = query in text.casefold()
+            self._preview.setRowHidden(row, not visible)
+            if not visible:
+                with QSignalBlocker(selector):
+                    selector.setChecked(False)
+        self._selection_updated()
+
+    def _select_unsaved(self):
+        from bilibili_downloader.gui.threads.inventory_worker import (
+            InventoryMatchRunner,
+        )
+        if self._inventory_job is not None or self.library_repository is None:
+            self._notice.set_message("文件记录尚未就绪，请稍后重试。", "warning")
+            return
+        factory = getattr(self, "output_item_factory", None)
+        if factory is None:
+            return
+        snapshot = self._resolved_items
+        source_snapshot = self._url_text.toPlainText()
+        groups = [[factory(info.for_page(page)) for page in info.pages] or [factory(info)] for info in snapshot]
+        fingerprints = [[item.fingerprint for item in group] for group in groups]
+        job = InventoryMatchRunner(self.library_repository, groups)
+        self._inventory_job = job
+        self.select_unsaved.setEnabled(False)
+        self._notice.set_message("正在核对已有文件与实际规格…")
+
+        def finished(result):
+            self._inventory_job = None
+            self.select_unsaved.setEnabled(True)
+            if snapshot is not self._resolved_items or source_snapshot != self._url_text.toPlainText():
+                return
+            current_groups = [[factory(info.for_page(page)) for page in info.pages] or [factory(info)] for info in snapshot]
+            if fingerprints != [[item.fingerprint for item in group] for group in current_groups]:
+                self._notice.set_message("下载规格已改变，请重新核对已有文件。", "warning")
+                return
+            if isinstance(result, Exception):
+                self._notice.set_message("文件核对未完成，请稍后重试。", "warning")
+                return
+            for row, (selector, saved) in enumerate(zip(self._selectors, result)):
+                with QSignalBlocker(selector):
+                    selector.setChecked(not saved and not self._preview.isRowHidden(row))
+                if saved:
+                    selector.setToolTip("本地已有满足规格的媒体与附件")
+            self._selection_updated()
+            self._notice.set_message(f"已排除 {sum(result)} 个完整保存的作品。")
+
+        job.signals.finished.connect(finished)
+        QThreadPool.globalInstance().start(job)
 
     def _sync_result_feedback(self):
         items = self._resolved_items
@@ -679,8 +746,8 @@ class BatchDialog(QDialog):
         dialog.exec()
 
     def _set_all_checked(self, checked: bool):
-        for selector in self._selectors:
-            if selector.isEnabled():
+        for row, selector in enumerate(self._selectors):
+            if selector.isEnabled() and not self._preview.isRowHidden(row):
                 with QSignalBlocker(selector):
                     selector.setChecked(checked)
         self._selection_updated()
@@ -705,8 +772,8 @@ class BatchDialog(QDialog):
     def get_video_infos(self) -> list:
         return [
             info
-            for info, selector in zip(self._resolved_items, self._selectors)
-            if selector.isChecked()
+            for row, (info, selector) in enumerate(zip(self._resolved_items, self._selectors))
+            if selector.isChecked() and not self._preview.isRowHidden(row)
         ]
 
     def get_urls(self) -> list[str]:

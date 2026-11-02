@@ -2,9 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [main, master, codex/fluent-design-polish]
+    branches: [main, master, 'codex/**']
   pull_request:
     branches: [main, master]
+  workflow_dispatch:
 
 jobs:
   test:
@@ -54,13 +55,14 @@ jobs:
         run: |
           python -m scripts.configure_ui_test_display
           python -X faulthandler -m pytest -vv -s --maxfail=1 tests/test_caption_controls.py tests/test_release_notes.py tests/test_theme.py::test_theme_applies_same_font_to_body_and_native_bold_labels tests/test_ui_refresh.py::test_initial_focus_is_the_source_field tests/test_fluent_design.py tests/test_fluent_refinement.py tests/test_window_state.py tests/test_fluent_window_polish.py tests/test_task_interactions.py tests/test_live_history_removal.py tests/test_clipboard_monitor.py tests/test_clipboard_native.py
-          python -X faulthandler -m pytest -vv -s --maxfail=1 tests/test_download_management.py tests/test_issue_regressions.py
-          for scene in chrome ui-refresh appearance-controls glass refinement interactions download-management; do
+          python -X faulthandler -m pytest -vv -s --maxfail=1 tests/test_download_management.py tests/test_issue_regressions.py tests/test_archive_workflow.py
+          for scene in chrome ui-refresh appearance-controls glass refinement interactions download-management archive; do
             python -m scripts.capture_docs_screenshots --native --physical-pixels "--${scene}-only" --output-dir "build/ui-parity/$scene"
           done
           for color in star_trail bilibili_blue; do
             python -m scripts.capture_docs_screenshots --native --physical-pixels --color-theme "$color" --output-dir "build/ui-parity/full/$color"
           done
+          QT_QPA_PLATFORM=offscreen python -m scripts.benchmark_archive --output build/ui-parity/archive-benchmark.json
 
       - name: Upload native desktop UI evidence
         if: always() && runner.os != 'Linux' && matrix.python-version == '3.12'
