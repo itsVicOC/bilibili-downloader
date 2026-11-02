@@ -36,14 +36,14 @@
 
 | 场景 | 本机测量 |
 |---|---:|
-| 一千条任务数据库读取 | 10.9 ms |
-| 一千条任务列表填充 | 189.2 ms |
-| 一千条任务搜索 | 21.3 ms |
-| 一万条文件列表加载与填充 | 457.9 ms |
-| 一万条文件搜索 | 99.5 ms |
-| 索引匹配已有媒体 | 0.5 ms |
-| 一万条文件后台快速检查（含完成刷新） | 1989.3 ms |
-| 后台检查期间最大界面心跳间隔 | 483.7 ms |
+| 一千条任务数据库读取 | 10.3 ms |
+| 一千条任务列表填充 | 191.1 ms |
+| 一千条任务搜索 | 20.9 ms |
+| 一万条文件列表加载与填充 | 413.8 ms |
+| 一万条文件搜索 | 78.5 ms |
+| 索引匹配已有媒体 | 1.0 ms |
+| 一万条文件后台快速检查（含完成刷新） | 5264.4 ms |
+| 后台检查期间最大界面心跳间隔 | 441.5 ms |
 
 附件查询由逐资产读取改为成批读取；界面恢复任务时批量更新，后台检查最多每 50 ms 推送一次常规进度。基准保留启动填充及完成刷新开销，不把单次搜索耗时作为完整操作耗时。
 
@@ -63,18 +63,46 @@ codesign --verify --deep --strict dist/BilibiliDownloader.app
 git diff --check
 ```
 
-GitHub 验收使用独立 `codex/archive-workflow-acceptance` 分支：推送触发跨平台 CI，Release 工作流以 `publish=false` 执行打包、安装器、更新及回滚验证，不创建版本标签或发布 Release。CI 与打包任务均包含归档专项、中文字段截图和一千任务／一万文件记录基准；冻结更新测试额外核对媒体库和待登记记录的保留及回滚。运行链接与最终结果在验收结束后补充。
+## GitHub 自动验收
 
-首轮 [CI](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41396311357) 发现 Windows 路径大小写导致的断言差异；同时修复字幕语言映射及重定位时的路径标准化，并补充全部字幕重复导入不重复传输的检查。修正后的提交将重新执行完整 CI 和打包验收。
+验收基线为 [`d94268c`](https://github.com/itsVicOC/bilibili-downloader/commit/d94268cc8c99d88841933e25fd03d593d1c08494)，位于独立 `codex/archive-workflow-acceptance` 分支。推送触发跨平台 CI；Release 工作流以 `publish=false` 执行，构建标识为 `dry-run-55`，不创建版本标签或发布 Release。
+
+| 检查 | 运行与结果 |
+|---|---|
+| 跨平台 CI | [15/15 项通过](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41416061006)：Ubuntu／Windows Python 3.11、3.12，macOS Python 3.12，三平台录制引擎、双平台冻结更新器、Windows 四档缩放与依赖审计 |
+| macOS 完整包 | [原生构建与安装验证](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41416128007/job/125180386497)通过；1189 项测试通过、20 项条件跳过，安装 fixture FFmpeg 后原生下载归档专项 79 项通过 |
+| Windows 完整包 | [原生构建与安装验证](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41416128007/job/125180386791)通过；1188 项测试通过、21 项条件跳过，安装 fixture FFmpeg 后原生下载归档专项 79 项通过 |
+| 双平台发布包汇总 | [未发布打包运行](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41416128007)成功；4 个 ZIP／2956 个文件、4 份 SBOM／733 个组件、2 个安装器和 8563 个 FFmpeg 源码文件验证通过，发布步骤按预期跳过 |
+
+CI 与打包任务均包含归档专项、中文字段截图和一千任务／一万文件记录基准。冻结更新测试验证 full/lite 安装重启及启动失败回滚，并核对媒体库和待登记记录的保留及恢复。macOS 已完成 DMG 校验、挂载、复制安装、逐文件对比 ZIP、签名完整性及冻结 CLI 检查；本次使用 ad-hoc 签名，未执行 Apple 公证。Windows 已完成中文及空格路径下 EXE 安装、逐文件对比 ZIP、冻结 CLI、重复安装、运行锁阻止覆盖、更新后卸载和保留用户媒体检查。
+
+[完整测试包附件](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41416128007/artifacts/13129652006)包含双平台 full/lite ZIP、full EXE／DMG、SBOM、`SHA256SUMS.txt` 和两份 `*.verification.json` 安装报告。汇总验证核对包内容、FFmpeg／录制引擎依赖、SBOM 摘要、安装报告与对应 ZIP／安装器摘要，以及校验清单。
+
+`dry-run-55` 的 `BiliFlow-Windows-management-ui-dry-run-55` 和 `BiliFlow-macOS-management-ui-dry-run-55` 附件内均包含 `archive-benchmark.json` 及归档、中文命名字段原生截图。以下基准使用 Python 3.12.10、Qt offscreen 和临时一字节媒体；截图另由原生 windows/cocoa 后端生成。
+
+| 场景 | Windows Server 2025 托管机 | macOS 26.6.2 ARM64 托管机 |
+|---|---:|---:|
+| 一千条任务数据库读取 | 35.0 ms | 16.3 ms |
+| 一千条任务列表填充 | 763.9 ms | 239.5 ms |
+| 一千条任务搜索 | 70.7 ms | 29.1 ms |
+| 一万条文件列表加载与填充 | 1523.4 ms | 709.0 ms |
+| 一万条文件搜索 | 231.5 ms | 110.2 ms |
+| 索引匹配已有媒体 | 2.8 ms | 1.2 ms |
+| 一万条文件后台快速检查 | 148768.7 ms | 7380.3 ms |
+| 后台检查期间最大界面心跳间隔 | 183.5 ms | 611.3 ms |
+
+托管机硬件和文件系统配置不同，平台性能对比仍需同条件对测。Windows 本次整批后台检查约 149 秒，总耗时仍有优化空间；本轮提供规模基线与响应数据，跨机型耗时门槛待定义。CI 工作区截图与基准附件保留 7 天，打包、界面和安装验证报告附件保留 14 天。
+
+首轮 [CI](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41396311357) 发现 Windows 路径大小写导致的断言差异；同时修复字幕语言映射及重定位时的路径标准化，并补充全部字幕重复导入不重复传输的检查。
 
 首轮 Windows 打包任务还暴露批量停止测试的固定十秒等待过早到期；测试替身改为等待取消事件，并在退出时确保释放线程。仍要求 110 个真实线程池任务停止后整批移除、在主线程处理回调、撤销后全部保持暂停状态。
 
-第二轮 Windows 原生专项与截图均已完成，但规模基准清理临时目录时失败：SQLite 的事务上下文不会自动关闭连接。基准脚本显式关闭建档连接，并在临时目录清理成功后才写出结果。同步修正命名字段截图的滚动定位，确保深浅模式都显示「插入字段」按钮；应用行为不受这两项采集脚本修订影响。修复后继续执行完整 CI 与 `publish=false` 打包验收。
+后续 [Windows 原生运行](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41411948250)的专项与截图均已完成，但规模基准清理临时目录时失败：SQLite 的事务上下文不会自动关闭连接。基准脚本显式关闭建档连接，并在临时目录清理成功后才写出结果。同步修正命名字段截图的滚动定位，确保深浅模式都显示「插入字段」按钮；应用行为不受这两项采集脚本修订影响。本地跟踪确认基准退出前所有 SQLite 连接均已关闭，修复后的完整 CI 与 `publish=false` 打包验收均已通过。
 
 ## 尚未完成的发布验收
 
-- Windows 发布包实机安装、升级、启动与回滚；本机无法执行 Windows 实机验收。
-- macOS full/lite 安装包的实际安装与跨版本升级演练；本轮仅验证本地应用构建、冻结 CLI 和签名完整性，不等于安装器或 Apple 公证验收。
+- Windows 用户设备上的安装、启动、旧版本升级及恢复演练；GitHub Windows 原生桌面检查与用户设备验收分开记录。
+- macOS 用户设备上的 full/lite 安装、旧版本升级及权限交互演练；GitHub 托管环境的 DMG 安装和冻结更新器检查已通过，商业签名及 Apple 公证仍未完成。
 - 双路真实直播至少 8 小时，以及真实断网、地址过期、系统睡眠、进程强退和物理磁盘满。继续按 [直播实测清单](LIVE_RECORDING.md#专项实测记录清单)记录文件可读性、缺口、内存和界面响应；现有模拟故障回归不能替代这些实测。
 
 上述项目保留为待验收，不因本轮自动化、原生专项或打包通过而标记完成。

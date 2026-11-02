@@ -76,7 +76,7 @@ Path actions now sit beside the download directory, task views highlight whole r
 
 ## Download and install
 
-**In development, not released:** The working tree builds on `0.8.10b1` with durable media reuse, independent attachment repair, strict media matching, queue and batch search, custom part ranges, automatic network retries, media inspection, and directory relinking. Existing settings and queued output snapshots remain compatible. See the [workflow validation](docs/ARCHIVE_WORKFLOW_VALIDATION.md) for evidence and outstanding native/package checks.
+**In development, not released:** The working tree builds on `0.8.10b1` with durable media reuse, independent attachment repair, strict media matching, queue and batch search, custom part ranges, automatic network retries, media inspection, and directory relinking. Existing settings and queued output snapshots remain compatible. See the [workflow validation](docs/ARCHIVE_WORKFLOW_VALIDATION.md) for automated results and remaining device and long-duration live-recording checks.
 
 ![Development batch search](docs/images/archive/archive-batch-dark-1120.png)
 
