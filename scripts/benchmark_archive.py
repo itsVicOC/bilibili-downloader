@@ -44,6 +44,13 @@ def percentile(values, fraction=.95):
     return round(ordered[max(0, math.ceil(len(ordered) * fraction) - 1)], 1) if ordered else 0.0
 
 
+def settle_events(app):
+    # Qt can post a layout/repaint while dispatching another event. Include
+    # those passes in the measured operation, rather than the following one.
+    for _ in range(4):
+        app.processEvents()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=Path("build/archive-benchmark.json"))
@@ -82,7 +89,7 @@ def main():
         page.resize(1120, 760)
         page.show()
         app.processEvents()
-        _, file_load = timed(lambda: (page.refresh(), app.processEvents()))
+        _, file_load = timed(lambda: (page.refresh(), settle_events(app)))
         _, file_search = timed(lambda: page.search.setText("09999"))
         match, lookup = timed(lambda: repository.match_media(task_items[500]))
         assert match.state == "saved"
@@ -112,13 +119,14 @@ def main():
         final_refresh = page._last_refresh_ms
         search_samples, selection_samples = [], []
         for n in range(30):
-            _, elapsed = timed(lambda n=n: (page.search.setText(f"{9999 - n:05d}"), app.processEvents()))
+            _, elapsed = timed(lambda n=n: (page.search.setText(f"{9999 - n:05d}"), settle_events(app)))
             search_samples.append(elapsed)
         page.search.clear()
+        settle_events(app)
         for _ in range(10):
-            _, elapsed = timed(lambda: (page.select_visible(), app.processEvents()))
+            _, elapsed = timed(lambda: (page.select_visible(), settle_events(app)))
             selection_samples.append(elapsed)
-            _, elapsed = timed(lambda: (page._clear_selection(), app.processEvents()))
+            _, elapsed = timed(lambda: (page._clear_selection(), settle_events(app)))
             selection_samples.append(elapsed)
         cancel = {}
         def cancel_check():
@@ -133,6 +141,8 @@ def main():
         cancel_finish_ms = (time.perf_counter() - cancel["started"]) * 1000 if "started" in cancel else 0
         assert page._last_operation_report["cancelled"], "Cancellation must stop before all files are checked"
         # Exercise search in the actual task center, independently of bulk creation.
+        page.hide()
+        settle_events(app)
         window = _make_main_window(root / "window")
         window._download_list.blockSignals(True)
         for record in records:
@@ -141,29 +151,32 @@ def main():
         window.resize(1120, 760)
         window._show_tasks(0)
         window.show()
-        app.processEvents()
+        settle_events(app)
         _, queue_search = timed(lambda: window._task_page.search.setText("BVfixture00500"))
         queue_samples, queue_selection = [], []
         for n in range(30):
-            _, elapsed = timed(lambda n=n: (window._task_page.search.setText(f"{999 - n:05d}"), app.processEvents()))
+            _, elapsed = timed(lambda n=n: (window._task_page.search.setText(f"{999 - n:05d}"), settle_events(app)))
             queue_samples.append(elapsed)
         window._task_page.search.clear()
+        settle_events(app)
         for _ in range(10):
             for action in (window._download_list.select_visible, window._download_list.clear_checked):
-                _, elapsed = timed(lambda action=action: (action(), app.processEvents()))
+                _, elapsed = timed(lambda action=action: (action(), settle_events(app)))
                 queue_selection.append(elapsed)
         batch = window._batch_page
         window._show_workspace(0)
         window._download_tabs.setCurrentIndex(1)
-        _, batch_load = timed(lambda: (batch._on_resolved([record.item.video_info for record in records], []), app.processEvents()))
+        settle_events(app)
+        _, batch_load = timed(lambda: (batch._on_resolved([record.item.video_info for record in records], []), settle_events(app)))
         batch_samples, batch_selection = [], []
         for n in range(30):
-            _, elapsed = timed(lambda n=n: (batch.search.setText(f"{999 - n:05d}"), app.processEvents()))
+            _, elapsed = timed(lambda n=n: (batch.search.setText(f"{999 - n:05d}"), settle_events(app)))
             batch_samples.append(elapsed)
         batch.search.clear()
+        settle_events(app)
         for _ in range(10):
             for action in (batch.selection.select_visible, batch.selection.clear):
-                _, elapsed = timed(lambda action=action: (action(), app.processEvents()))
+                _, elapsed = timed(lambda action=action: (action(), settle_events(app)))
                 batch_selection.append(elapsed)
         report = {"platform": platform.platform(), "python": platform.python_version(),
                   "backend": app.platformName(), "tasks": 1000, "file_records": 10000,

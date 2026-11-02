@@ -43,7 +43,7 @@ from bilibili_downloader.gui.widgets.background_readability import (
 )
 from bilibili_downloader.gui.widgets.components import PopupMenu, line_icon, palette
 from bilibili_downloader.gui.widgets.row_hover import RowHoverTable, row_option
-from bilibili_downloader.gui.widgets.selection import TableSelection
+from bilibili_downloader.gui.widgets.selection import SelectionItem, TableSelection
 
 ACTION_BUTTON_MIN_WIDTH = 60
 ACTION_BUTTON_GAP = 6
@@ -297,7 +297,7 @@ class DownloadListWidget(RowHoverTable):
         self.removing_ids = set()
         self._placeholder_active = False
         self._setup_ui()
-        self.selection = TableSelection(self)
+        self.selection = TableSelection(self, paint_only=True)
         self.selection.changed.connect(self.itemSelectionChanged.emit)
 
     def _setup_ui(self):
@@ -355,10 +355,11 @@ class DownloadListWidget(RowHoverTable):
         if output_path:
             self._output_paths[download_id] = output_path
 
-        title_item = QTableWidgetItem(item.display_title)
+        title_item = SelectionItem(item.display_title, self.selection, download_id)
         title_item.setToolTip(item.display_title + f"\n{'仅音频' if item.output_mode == OutputMode.AUDIO else '视频'}\n" + str(Path(item.output_dir or "") / item.relative_output_path))
         title_item.setData(Qt.UserRole, download_id)
         self.selection.state.order.append(download_id)
+        self.selection._keys.add(download_id)
         self.selection.state.visible.add(download_id)
         title_item.setFlags(title_item.flags() | Qt.ItemIsUserCheckable)
         title_item.setCheckState(Qt.Unchecked)
@@ -720,6 +721,7 @@ class DownloadListWidget(RowHoverTable):
         self._outcomes.pop(download_id, None)
         self.removing_ids.discard(download_id)
         self.selection.state.selected.discard(download_id)
+        self.selection._keys.discard(download_id)
         self.selection.state.visible.discard(download_id)
         self.selection.state.order = [key for key in self.selection.state.order if key != download_id]
         if row is not None:

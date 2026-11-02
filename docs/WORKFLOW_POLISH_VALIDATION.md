@@ -14,7 +14,7 @@
 | 查看文件结果并继续处理 | [旧文件详情](images/workflow-polish/before/polish-files-light-900.png) | [媒体／规格／附件及上下文操作](images/workflow-polish/after/polish-files-light-900.png) |
 | 看懂命名字段 | [中文菜单](images/workflow-polish/before/naming-fields-light.png) | [中文搜索、用途、示例及占位符](images/workflow-polish/after/naming-fields-light.png) |
 
-补充状态：[批量跨筛选选择](images/workflow-polish/after/archive-batch-dark-900.png)、[筛选外选择](images/workflow-polish/after/polish-filtered-selection-light.png)、[查看已选](images/workflow-polish/after/polish-selection-review-light.png)、[媒体离线](images/workflow-polish/after/polish-attachments-offline-light.png)、[目录映射](images/workflow-polish/after/polish-relocate-light.png)、[完整结果](images/workflow-polish/after/polish-result-details-dark.png)、[网络等待与立即重试](images/workflow-polish/after/polish-retry-dark.png)、[模板预览](images/workflow-polish/after/polish-naming-light.png)、[青蓝深色附件弹窗](images/workflow-polish/after/blue-attachments-dark.png)。
+补充状态：[分 P 无匹配](images/workflow-polish/after/parts-empty-light.png)、[批量跨筛选选择](images/workflow-polish/after/archive-batch-dark-900.png)、[筛选外选择](images/workflow-polish/after/polish-filtered-selection-light.png)、[查看已选](images/workflow-polish/after/polish-selection-review-light.png)、[媒体离线](images/workflow-polish/after/polish-attachments-offline-light.png)、[目录映射](images/workflow-polish/after/polish-relocate-light.png)、[完整结果](images/workflow-polish/after/polish-result-details-dark.png)、[网络等待与立即重试](images/workflow-polish/after/polish-retry-dark.png)、[模板预览](images/workflow-polish/after/polish-naming-light.png)、[青蓝深色附件弹窗](images/workflow-polish/after/blue-attachments-dark.png)。
 
 最终源码的完整原生截图矩阵共 **96 张**，位于 `build/workflow-polish/final-native/{star_trail,bilibili_blue}/`：两套配色、深浅模式、900×640／1120×760／1320×860，包含配置、批量、结果、文件及长标题，附加分 P、字段、补全、零选择、离线、目录映射、重试、无匹配与已选视图。GitHub 对应原生附件保留相同矩阵。
 
@@ -36,12 +36,12 @@
 | 移动目录后重新定位 | 一个弹窗完成原目录、新目录、后台预览和确认；编辑使预览失效；取消不更改记录；普通主按钮统一更新。另测回收／撤销、暂停／重启与清任务后复用 |
 | 中文查找命名字段并替换模板 | 按模板限制字段，中文名称／用途／示例可搜索，插入原光标或选区；常用模板替换可撤销；保存策略与旧任务命名快照不变 |
 
-新增回归见 `tests/test_workflow_polish.py`（41 项，含 15 个字段插入参数）；更新旧测试以反映已确认的跨筛选保留规则。数据库结构、原媒体签名及复用规则保持兼容，选择状态仅存当前会话。
+新增回归见 `tests/test_workflow_polish.py`（42 项，含 15 个字段插入参数）；更新旧测试以反映已确认的跨筛选保留规则。数据库结构、原媒体签名及复用规则保持兼容，选择状态仅存当前会话。
 
 ## 本地验证
 
 - macOS 原生 Cocoa 用户流程、主题和文件模型测试：**158 项通过**；另以 Qt 官方模型检查器验证行数据、勾选状态、模型重置和选择交集。完整两配色截图在该原生测试后独立生成。
-- 已完成完整离屏回归：**1,242 项通过、6 项平台专项跳过**；本轮追加批量缓存、emoji 选区和状态一致性回归，最终完整计数随 GitHub 补录。
+- 最终 `b05fe57` 完整离屏回归：**1,245 项通过、6 项平台专项跳过**；5 条 Qt 测试弃用警告。批量缓存、emoji 选区、媒体状态一致性和分段退出探针均包含在该轮回归内。
 - Ruff、编译与 `git diff --check` 通过。
 - 原生 Tab／Space／Enter、焦点返回、弹窗边界、取消、长标题与两套深浅主题已覆盖自动化及截图；Cocoa 下补充验证 Qt 输入法预编辑、中文提交、Enter 不误提交和取消后的入口焦点返回，组合输入不影响隐藏勾选；真实中文输入法候选窗、系统缩放／混合 DPI、用户设备上的手动键盘与可用性检查继续单独记录。
 
@@ -85,3 +85,6 @@ python -m scripts.benchmark_workflow_polish --output-dir build/workflow-polish/p
 原生测试、截图和配对性能是独立步骤，Windows 及 macOS 分别验证 full/lite 构建、工具链、安装及升级恢复。最终记录将采用后续同一源码的结果，旧的取消或失败运行不计为通过。
 
 用户设备的全新安装／跨版本升级、长时双路直播（至少八小时）、真实断网／磁盘满／拔盘／休眠／强退，以及真实中文输入法候选窗、系统缩放／混合 DPI 和手动可用性仍需单独实测；托管 runner 和合成测试不能替代。自动化全部通过后，也不将这些物理设备项目标记完成。
+
+
+最新验收补充：`b05fe57` 的 Windows 三轮中，仅队列勾选 P95 最慢一轮为 304.2ms 超过 300ms，其余全部门槛通过。队列标题单元格现直接向 Qt 提供会话勾选状态（包括屏外行与辅助功能），避免逐项重写。基准按单个可见工作区测量，操作内部处理四轮立即事件以包含其布局／重绘，并在清空搜索、切换工作区后完成阶段边界事件派发，避免前一操作的遗留布局计入下一操作。本机修正后的队列勾选 P95 7.3ms；300ms 门槛及三轮检验保持不变，最终源码和结果待复验后补录。

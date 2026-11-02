@@ -26,6 +26,7 @@ from bilibili_downloader.gui.dialogs.page_selection import PageSelectionDialog
 from bilibili_downloader.gui.dialogs.relocate_directory import RelocateDirectoryDialog
 from bilibili_downloader.gui.dialogs.settings_dialog import NAMING_FIELDS
 from bilibili_downloader.gui.threads.inventory_worker import InventoryMatchRunner
+from bilibili_downloader.gui.widgets.download_list import DownloadListWidget
 from tests.test_archive_workflow import stored
 from tests.test_workspaces import workspace as workspace
 
@@ -326,6 +327,22 @@ def test_file_model_exposes_unvisited_rows_and_checked_state(qtbot):
     table.model().setData(table.model().index(9999, 0), Qt.Unchecked, Qt.CheckStateRole)
     assert 9999 not in binding.state.selected and len(binding.state.selected) == 9999
     assert len(table._cells) < 10
+
+
+def test_task_check_state_remains_available_for_unvisited_rows(qtbot):
+    table = DownloadListWidget()
+    qtbot.addWidget(table)
+    table.blockSignals(True)
+    for n in range(1000):
+        table.add_item(DownloadItem(video_info=VideoInfo(bvid=f"BV{n}", title=f"课程 {n}")), download_id=n + 1, status=TaskStatus.PAUSED)
+    table.blockSignals(False)
+    table.select_visible()
+    assert table.model().index(999, 0).data(Qt.CheckStateRole) == Qt.Checked.value
+    assert table.item(999, 0).checkState() == Qt.Checked
+    table.item(999, 0).setCheckState(Qt.Unchecked)
+    assert len(table.selected_ids()) == 999 and 1000 not in table.selected_ids()
+    table.clear_checked()
+    assert table.model().index(0, 0).data(Qt.CheckStateRole) == Qt.Unchecked.value
 
 
 def test_batch_search_reuses_paths_and_directory_changes_invalidate_them(qtbot, tmp_path):

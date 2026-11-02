@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QStyle,
     QStyledItemDelegate,
     QStyleOptionViewItem,
+    QTableWidgetItem,
     QWidget,
 )
 
@@ -70,6 +71,27 @@ class SelectionBar(QWidget):
         self.review_button.setEnabled(bool(state.selected) or state.reviewing)
         self.clear_button.setEnabled(bool(state.selected))
         self.all_button.setEnabled(bool(state.visible))
+
+
+class SelectionItem(QTableWidgetItem):
+    """Expose session check state to Qt without rewriting every task cell."""
+
+    def __init__(self, text, binding, key):
+        super().__init__(text)
+        self._binding, self._key = binding, key
+
+    def data(self, role):
+        if role == Qt.CheckStateRole and hasattr(self, "_binding"):
+            return Qt.Checked.value if self._key in self._binding.state.selected else Qt.Unchecked.value
+        return super().data(role)
+
+    def setData(self, role, value):
+        if role == Qt.CheckStateRole and hasattr(self, "_binding"):
+            checked = value in (Qt.Checked, Qt.Checked.value)
+            if checked != (self._key in self._binding.state.selected):
+                self._binding.toggle(self._key)
+        else:
+            super().setData(role, value)
 
 
 class CheckableRowDelegate(QStyledItemDelegate):
@@ -167,7 +189,9 @@ class TableSelection(QObject):
 
     def _paint_checks(self):
         if self.paint_only:
+            blocked = self.table.blockSignals(True)
             self._notify_checks()
+            self.table.blockSignals(blocked)
             self.table.viewport().update()
             return
         self._syncing = True
