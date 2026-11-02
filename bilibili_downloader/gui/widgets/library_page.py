@@ -871,9 +871,9 @@ class LibraryPage(QWidget):
         index = self.table.indexAt(point)
         if not index.isValid():
             return
-        if self.table.item(index.row(), 0).data(Qt.UserRole) not in self.selected_ids():
-            self.table.clearSelection()
-            self.table.selectRow(index.row())
+        self.table.setCurrentCell(index.row(), 0)
+        focused_id = self.table.item(index.row(), 0).data(Qt.UserRole)
+        selected_count = len(self.selected_ids())
         menu = PopupMenu(self.table)
         for title, callback, enabled in (
             ("打开文件", lambda: self.open_file(False), self.open_action.isEnabled()),
@@ -882,10 +882,12 @@ class LibraryPage(QWidget):
                 lambda: self.open_file(True),
                 self.folder_action.isEnabled(),
             ),
-            ("复制路径", self.copy_path, self.copy_action.isEnabled()),
+            ("复制该文件路径", lambda: self.copy_path(entry=self._file()), self.open_action.isEnabled()),
+            ("补全附件…", self.request_supplement, self.supplement_action.isEnabled()),
+            ("检查此文件", lambda: self._run(lambda progress: self.repository.check_files([focused_id], self._cancel, progress)), self.check_button.isEnabled()),
             ("重新选择文件…", self.relocate, self.locate_action.isEnabled()),
-            ("移除记录", self.hide_selected, self.hide_action.isEnabled()),
-            ("移入回收站…", self.recycle_selected, self.recycle_action.isEnabled()),
+            (f"移除所选 {selected_count} 项记录", self.hide_selected, self.hide_action.isEnabled()),
+            (f"将所选 {selected_count} 项移入回收站…", self.recycle_selected, self.recycle_action.isEnabled()),
         ):
             menu.addAction(title, callback).setEnabled(enabled)
         menu.exec(self.table.viewport().mapToGlobal(point))

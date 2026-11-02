@@ -256,6 +256,31 @@ def test_check_updates_rows_without_loading_the_whole_library(workspace, qtbot, 
     assert Path(outcome.video_path).read_bytes() == b"immutable media bytes"
 
 
+def test_file_context_menu_preserves_checks_and_names_bulk_scope(workspace, tmp_path, monkeypatch):
+    library, item, outcome = stored(tmp_path)
+    second = item.model_copy(deep=True)
+    second.video_info.cid += 1
+    second.video_info.bvid = "BVSECOND"
+    other = tmp_path / "other.mp4"
+    other.write_bytes(b"other")
+    library.record_download(second, outcome.model_copy(update={"video_path": str(other)}))
+    page = workspace._library_page
+    page.repository = library
+    page.refresh()
+    page.table.selectRow(0)
+    checked = page.selected_ids()
+    labels = []
+    from PySide6.QtWidgets import QMenu
+    class QuietMenu(QMenu):
+        def exec(self, *_):
+            labels.extend(action.text() for action in self.actions())
+    monkeypatch.setattr("bilibili_downloader.gui.widgets.library_page.PopupMenu", QuietMenu)
+    page._context_menu(page.table.visualItemRect(page.table.item(1, 0)).center())
+    assert page.selected_ids() == checked
+    assert page.selection.state.focused == page.table.item(1, 0).data(Qt.UserRole)
+    assert "移除所选 1 项记录" in labels
+
+
 def test_old_check_results_never_overwrite_a_new_location(tmp_path):
     library, _, outcome = stored(tmp_path)
     asset_id = library.list_assets()[0]["id"]
