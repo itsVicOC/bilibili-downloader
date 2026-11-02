@@ -467,12 +467,16 @@ def test_failed_recycle_never_unlinks_media(tmp_path):
 def test_real_workers_stop_110_queued_downloads_before_removal(
     workspace, monkeypatch, qtbot
 ):
+    cancelled = threading.Event()
+
     class WaitingService:
         def __init__(self, *_args, **_kwargs):
-            self.cancelled = threading.Event()
+            self.cancelled = cancelled
 
         def download(self, _item, _progress):
-            assert self.cancelled.wait(10)
+            # Enqueuing 110 persistent UI rows can exceed ten seconds on a
+            # hosted Windows runner. Only cancellation should end this fixture.
+            self.cancelled.wait()
             raise RuntimeError("Download cancelled by user")
 
         def cancel(self):
@@ -492,23 +496,29 @@ def test_real_workers_stop_110_queued_downloads_before_removal(
 
     monkeypatch.setattr(workspace, "_on_download_paused", paused)
     workspace._download_pool.setMaxThreadCount(1)
-    for index in range(110):
-        workspace._enqueue_download(
-            DownloadItem(
-                video_info=VideoInfo(bvid="demo", cid=index, title=f"Lesson {index}")
+    try:
+        for index in range(110):
+            workspace._enqueue_download(
+                DownloadItem(
+                    video_info=VideoInfo(bvid="demo", cid=index, title=f"Lesson {index}")
+                )
             )
+        assert len(workspace._download_attempts) == 110
+        workspace._remove_task_records(list(workspace._download_attempts))
+        qtbot.waitUntil(lambda: workspace._pending_removal is None, timeout=15000)
+        assert not workspace._download_attempts
+        assert callback_threads and set(callback_threads) == {main_thread}
+        assert workspace._task_repository.list_tasks() == []
+        workspace._undo_removed_tasks()
+        assert len(workspace._task_repository.list_tasks()) == 110
+        assert all(
+            r.status == TaskStatus.PAUSED for r in workspace._task_repository.list_tasks()
         )
-    assert len(workspace._download_attempts) == 110
-    workspace._remove_task_records(list(workspace._download_attempts))
-    qtbot.waitUntil(lambda: workspace._pending_removal is None, timeout=15000)
-    assert not workspace._download_attempts
-    assert callback_threads and set(callback_threads) == {main_thread}
-    assert workspace._task_repository.list_tasks() == []
-    workspace._undo_removed_tasks()
-    assert len(workspace._task_repository.list_tasks()) == 110
-    assert all(
-        r.status == TaskStatus.PAUSED for r in workspace._task_repository.list_tasks()
-    )
+    finally:
+        cancelled.set()
+        for worker in list(workspace._download_attempts.values()):
+            worker.pause()
+        workspace._download_pool.waitForDone(15000)
 
 
 def test_committed_file_is_registered_when_last_progress_callback_cancels(

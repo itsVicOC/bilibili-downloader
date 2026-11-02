@@ -67,6 +67,8 @@ GitHub 验收使用独立 `codex/archive-workflow-acceptance` 分支：推送触
 
 首轮 [CI](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41396311357) 发现 Windows 路径大小写导致的断言差异；同时修复字幕语言映射及重定位时的路径标准化，并补充全部字幕重复导入不重复传输的检查。修正后的提交将重新执行完整 CI 和打包验收。
 
+首轮 Windows 打包任务还暴露批量停止测试的固定十秒等待过早到期；测试替身改为等待取消事件，并在退出时确保释放线程。仍要求 110 个真实线程池任务停止后整批移除、在主线程处理回调、撤销后全部保持暂停状态。
+
 ## 尚未完成的发布验收
 
 - Windows 发布包实机安装、升级、启动与回滚；本机无法执行 Windows 实机验收。
