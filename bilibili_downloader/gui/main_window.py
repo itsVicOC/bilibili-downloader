@@ -904,6 +904,22 @@ class MainWindow(QMainWindow):
         cb.setChecked(checked)
         return cb
 
+    def focusNextPrevChild(self, forward):
+        # Cocoa may skip native combo boxes when full keyboard access is off.
+        # Keep the explicit specification → policy → extras route reachable.
+        if hasattr(self, "_match_policy"):
+            codec = self._codec_stack.currentWidget()
+            chain = [codec, self._match_policy, self._danmaku_check]
+            focused = QApplication.focusWidget()
+            if focused in chain:
+                index = chain.index(focused) + (1 if forward else -1)
+                if 0 <= index < len(chain):
+                    target = chain[index]
+                    if target.isVisible() and target.isEnabled():
+                        target.setFocus(Qt.TabFocusReason if forward else Qt.BacktabFocusReason)
+                        return True
+        return super().focusNextPrevChild(forward)
+
     def _sync_output_mode_controls(self):
         video_mode = self._output_mode_combo.currentData() == OutputMode.VIDEO
         self._quality_combo.setEnabled(video_mode)

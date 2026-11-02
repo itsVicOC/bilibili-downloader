@@ -97,6 +97,29 @@ def test_directory_follows_extras_in_keyboard_order(workspace, qtbot, mode):
     assert QApplication.focusWidget() is workspace._download_actions.directory_button
 
 
+def test_policy_keyboard_route_with_text_only_system_tabs(workspace, qtbot, qapp):
+    hints = qapp.styleHints()
+    original = hints.tabFocusBehavior()
+    try:
+        hints.setTabFocusBehavior(Qt.TabFocusTextControls)
+        resolve(workspace)
+        workspace.show()
+        flush()
+        QApplication.setActiveWindow(workspace)
+        codec = workspace._codec_stack.currentWidget()
+        codec.setFocus()
+        qtbot.keyClick(codec, Qt.Key_Tab)
+        assert QApplication.focusWidget() is workspace._match_policy
+        qtbot.keyClick(workspace._match_policy, Qt.Key_Tab)
+        assert QApplication.focusWidget() is workspace._danmaku_check
+        qtbot.keyClick(workspace._danmaku_check, Qt.Key_Backtab)
+        assert QApplication.focusWidget() is workspace._match_policy
+        qtbot.keyClick(workspace._match_policy, Qt.Key_Backtab)
+        assert QApplication.focusWidget() is codec
+    finally:
+        hints.setTabFocusBehavior(original)
+
+
 def test_settings_bar_stays_compact_and_actions_remain_visible(workspace):
     workspace.resize(900, 640)
     workspace._show_workspace(3)

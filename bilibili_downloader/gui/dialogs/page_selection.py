@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLineEdit,
     QPushButton,
+    QSizePolicy,
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -69,6 +70,8 @@ class PageSelectionDialog(WorkflowDialog):
         self.results = QStackedWidget()
         self.results.addWidget(self.list)
         self.results.addWidget(EmptyState("没有匹配的分 P", "已勾选的分 P 仍会保留，可清除搜索或查看已选。", "清除搜索", self.search.clear))
+        # An inactive empty state must not push the range control below the fold.
+        self.results.widget(1).setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
         self.body.addWidget(self.results, 1)
         ranges = CollapsibleSection("按序号添加")
         row = QHBoxLayout()

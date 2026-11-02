@@ -448,15 +448,22 @@ class LibraryRepository:
         return f"{value.st_dev}:{value.st_ino}:{value.st_size}:{value.st_mtime_ns}"
 
     def check_files(self, asset_ids, cancel=None, progress=None):
-        entries = self.files_for(asset_ids)
+        asset_ids = list(dict.fromkeys(asset_ids))
+        with self._connection() as db:
+            total = 0
+            for offset in range(0, len(asset_ids), 500):
+                batch = asset_ids[offset:offset + 500]
+                marks = ",".join("?" for _ in batch)
+                total += db.execute(f"SELECT COUNT(*) FROM files WHERE asset_id IN ({marks})", batch).fetchone()[0]
         report = {
-            "total": len(entries),
+            "total": total,
             "checked": 0,
             "missing": 0,
             "inaccessible": 0,
             "cancelled": False,
             "issues": [],
             "skipped_changed": 0,
+            "file_updates": [],
         }
         pending = []
         last_flush = time.monotonic()
@@ -467,17 +474,26 @@ class LibraryRepository:
                 return
             with self._connection() as db:
                 for entry, state, size, signature in pending:
+                    checked_at = _now()
                     cursor = db.execute(
                         "UPDATE files SET state=?,size=?,signature=?,checked_at=? "
                         "WHERE id=? AND path=? AND state=? AND checked_at IS ? AND signature IS ?",
-                        (state, size, signature, _now(), entry["id"], entry["path"], entry["state"], entry["checked_at"], entry["signature"]),
+                        (state, size, signature, checked_at, entry["id"], entry["path"], entry["state"], entry["checked_at"], entry["signature"]),
                     )
                     if not cursor.rowcount:
                         report["skipped_changed"] += 1
+                    else:
+                        report["file_updates"].append({**entry, "state": state, "size": size, "signature": signature, "checked_at": checked_at})
             pending.clear()
             last_flush = time.monotonic()
 
-        for entry in entries:
+        def entries():
+            for offset in range(0, len(asset_ids), 500):
+                if cancel is not None and cancel.is_set():
+                    return
+                yield from self.files_for(asset_ids[offset:offset + 500])
+
+        for entry in entries():
             if cancel is not None and cancel.is_set():
                 report["cancelled"] = True
                 break
@@ -518,7 +534,9 @@ class LibraryRepository:
                     )
                 )
             if progress:
-                progress(report["checked"], len(entries))
+                progress(report["checked"], total)
+        if cancel is not None and cancel.is_set() and report["checked"] < total:
+            report["cancelled"] = True
         flush()
         return report
 

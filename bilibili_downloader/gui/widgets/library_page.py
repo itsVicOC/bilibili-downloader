@@ -281,7 +281,7 @@ class LibraryPage(QWidget):
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.selection = TableSelection(self.table, _FileLabelDelegate(self.table))
+        self.selection = TableSelection(self.table, _FileLabelDelegate(self.table), paint_only=True)
         self.selection.changed.connect(self._checked_changed)
         self.selection.focus_changed.connect(self._selection)
         self.selection_bar.select_visible.connect(self.select_visible)
@@ -415,7 +415,6 @@ class LibraryPage(QWidget):
             self.stack.setCurrentIndex(3)
             self._actions()
             return
-        selected = set(self.selected_ids())
         scroll = (
             self.table.verticalScrollBar().value(),
             self.table.horizontalScrollBar().value(),
@@ -473,26 +472,60 @@ class LibraryPage(QWidget):
                 cell = self.table.item(row, col) if same_order else None
                 if cell is None:
                     cell = QTableWidgetItem(value)
+                    if col in (0, 1, 5):
+                        cell.setToolTip(value + ("\n" + item.display_title if col == 0 else ""))
+                    if col == 0:
+                        cell.setData(Qt.UserRole, asset["id"])
                     self.table.setItem(row, col, cell)
                 elif cell.text() != value:
                     cell.setText(value)
-                tooltip = value + ("\n" + item.display_title if col == 0 else "")
-                if cell.toolTip() != tooltip:
-                    cell.setToolTip(tooltip)
-                if col == 0:
-                    cell.setData(Qt.UserRole, asset["id"])
-            if asset["id"] in selected:
-                for col in range(6):
-                    self.table.item(row, col).setSelected(True)
+                    if col in (0, 1, 5):
+                        cell.setToolTip(value + ("\n" + item.display_title if col == 0 else ""))
         self.table.blockSignals(False)
         self.table.setUpdatesEnabled(True)
         self.selection.reset([a["id"] for a in assets])
+        focused = self.selection.state.focused
+        if focused is not None:
+            self.table.blockSignals(True)
+            self.table.setCurrentCell(self.selection.state.order.index(focused), 0)
+            self.table.blockSignals(False)
         self._filter()
         self._selection(attachment_id=attachment_id)
         self.table.verticalScrollBar().setValue(scroll[0])
         self.table.horizontalScrollBar().setValue(scroll[1])
         self._resize_columns()
         self._last_refresh_ms = (time.perf_counter() - refresh_started) * 1000
+
+    def _apply_file_updates(self, updates):
+        """A check only changes file facts; avoid decoding/rebuilding the library."""
+        started = time.perf_counter()
+        self._read_generation += 1
+        entries = {entry["id"]: (row, entry) for row, asset in enumerate(self._assets) for entry in asset["files"]}
+        self.table.blockSignals(True)
+        self.table.setUpdatesEnabled(False)
+        try:
+            for update in updates:
+                current = entries.get(update["id"])
+                if current is None or current[1]["path"] != update["path"]:
+                    continue
+                row, entry = current
+                entry.update(update)
+                if entry["kind"] != "media":
+                    continue
+                outcome = self._assets[row]["outcome"]
+                state = "媒体异常" if outcome.media_verification.get("valid") is False else FILE_STATES[entry["state"]]
+                for column, value in ((3, _size(entry["size"])), (4, state)):
+                    cell = self.table.item(row, column)
+                    if cell.text() != value:
+                        cell.setText(value)
+        finally:
+            self.table.blockSignals(False)
+            self.table.setUpdatesEnabled(True)
+        if self.state_filter.currentData() != "all":
+            self._filter()
+        else:
+            self._selection()
+        self._last_refresh_ms = (time.perf_counter() - started) * 1000
 
     @staticmethod
     def _media(asset):
@@ -502,7 +535,7 @@ class LibraryPage(QWidget):
         return self.selection.state.ids()
 
     def visible_ids(self):
-        return [a["id"] for row, a in enumerate(self._assets) if not self.table.isRowHidden(row)]
+        return [key for key in self.selection.state.order if key in self.selection.state.visible]
 
     def select_visible(self):
         self.selection.select_visible()
@@ -513,10 +546,10 @@ class LibraryPage(QWidget):
 
     def _focused_ids(self):
         focused = self.selection.state.focused
-        if focused in self.visible_ids():
+        if focused in self.selection.state.visible:
             return [focused]
         selected = self.selected_ids()
-        return selected if len(selected) == 1 and selected[0] in self.visible_ids() else []
+        return selected if len(selected) == 1 and selected[0] in self.selection.state.visible else []
 
     def clear_filters(self):
         self.selection.state.reviewing = False
@@ -542,6 +575,7 @@ class LibraryPage(QWidget):
         reviewing = self.selection.state.reviewing
         for control in (self.search, self.type_filter, self.state_filter):
             control.setEnabled(not reviewing)
+        visible_ids = []
         self.table.blockSignals(True)
         for row, asset in enumerate(self._assets):
             media = self._media(asset) or {}
@@ -564,12 +598,14 @@ class LibraryPage(QWidget):
             if reviewing:
                 visible = asset["id"] in self.selection.state.selected
             self.table.setRowHidden(row, not visible)
+            if visible:
+                visible_ids.append(asset["id"])
         self.table.blockSignals(False)
         if not self._load_error and self.repository is not None:
             self.stack.setCurrentIndex(
-                1 if not self._assets else 0 if self.visible_ids() else 2
+                1 if not self._assets else 0 if visible_ids else 2
             )
-        self.selection.set_visible(self.visible_ids())
+        self.selection.set_visible(visible_ids)
         self.selection_bar.update_state(self.selection.state)
         self._selection()
 
@@ -903,7 +939,7 @@ class LibraryPage(QWidget):
         self.cancel_button.setText("取消检查")
         def perform(progress):
             result = action(progress)
-            return result, self.repository.list_assets()
+            return result, None if kind == "check" and "file_updates" in result else self.repository.list_assets()
         job = _LibraryJob(perform)
         self._jobs.add(job)
         self._job_kind = kind
@@ -931,7 +967,10 @@ class LibraryPage(QWidget):
             if not isinstance(result, Exception):
                 result, assets = result
                 self._last_operation_report = result
-                self.refresh(assets=assets)
+                if assets is None:
+                    self._apply_file_updates(result["file_updates"])
+                else:
+                    self.refresh(assets=assets)
             if isinstance(result, Exception):
                 self._feedback("操作未完成，请重试。", "danger", details=str(result))
             elif kind == "relocate_preview":

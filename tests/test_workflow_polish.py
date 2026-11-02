@@ -238,6 +238,24 @@ def test_directory_preview_failure_keeps_its_reason_visible(qtbot, tmp_path):
     assert not dialog.confirm_button.isEnabled()
 
 
+def test_check_updates_rows_without_loading_the_whole_library(workspace, qtbot, tmp_path, monkeypatch):
+    library, _, outcome = stored(tmp_path)
+    page = workspace._library_page
+    page.repository = library
+    page.refresh()
+    page.table.selectRow(0)
+    selected = page.selected_ids()
+    cell = page.table.item(0, 0)
+    monkeypatch.setattr(library, "list_assets", lambda **_: pytest.fail("A file check should retain the loaded list"))
+    page.check()
+    qtbot.waitUntil(lambda: not page._jobs)
+    assert page.table.item(0, 0) is cell
+    assert page.selected_ids() == selected
+    assert page._assets[0]["files"][0]["checked_at"]
+    assert page._last_operation_report["checked"] == 1
+    assert Path(outcome.video_path).read_bytes() == b"immutable media bytes"
+
+
 def test_old_check_results_never_overwrite_a_new_location(tmp_path):
     library, _, outcome = stored(tmp_path)
     asset_id = library.list_assets()[0]["id"]

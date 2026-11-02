@@ -75,12 +75,14 @@ class SelectionBar(QWidget):
 class CheckableRowDelegate(QStyledItemDelegate):
     """Paint a themed checkbox without allocating a widget for each record."""
 
-    def __init__(self, parent, content=None):
+    def __init__(self, parent, content=None, binding=None):
         super().__init__(parent)
         self.content = content
+        self.binding = binding
 
     def paint(self, painter, option, index):
-        if index.data(Qt.CheckStateRole) is None:
+        state_only = self.binding is not None and self.binding.paint_only and index.data(Qt.UserRole) in self.binding._keys
+        if not state_only and index.data(Qt.CheckStateRole) is None:
             return super().paint(painter, option, index)
         opt = QStyleOptionViewItem(option)
         self.initStyleOption(opt, index)
@@ -95,7 +97,7 @@ class CheckableRowDelegate(QStyledItemDelegate):
         else:
             option.widget.style().drawControl(QStyle.CE_ItemViewItem, opt, painter, option.widget)
         p = palette()
-        checked = index.data(Qt.CheckStateRole) == Qt.Checked.value
+        checked = index.data(Qt.UserRole) in self.binding.state.selected if state_only else index.data(Qt.CheckStateRole) == Qt.Checked.value
         rect = QRect(option.rect.left() + 9, option.rect.center().y() - 8, 16, 16)
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing)
@@ -109,6 +111,11 @@ class CheckableRowDelegate(QStyledItemDelegate):
         painter.restore()
 
     def editorEvent(self, event, model, option, index):
+        if self.binding is not None and self.binding.paint_only and index.data(Qt.UserRole) in self.binding._keys:
+            if event.type() == QEvent.MouseButtonRelease and event.button() == Qt.LeftButton and event.position().x() <= option.rect.left() + 30:
+                self.binding.toggle(index.data(Qt.UserRole))
+                return True
+            return False
         if index.data(Qt.CheckStateRole) is None:
             return False
         if event.type() == QEvent.MouseButtonRelease and event.button() == Qt.LeftButton and event.position().x() <= option.rect.left() + 30:
@@ -121,14 +128,16 @@ class TableSelection(QObject):
     changed = Signal()
     focus_changed = Signal()
 
-    def __init__(self, table, content_delegate=None):
+    def __init__(self, table, content_delegate=None, *, paint_only=False):
         super().__init__(table)
         self.table = table
         self.state = SelectionState()
+        self.paint_only = paint_only
+        self._keys = set()
         self._syncing = False
         table._selection_binding = self
         table.installEventFilter(self)
-        table.setItemDelegateForColumn(0, CheckableRowDelegate(table, content_delegate))
+        table.setItemDelegateForColumn(0, CheckableRowDelegate(table, content_delegate, self))
         table.itemChanged.connect(self._item_changed)
         table.currentItemChanged.connect(self._focus)
 
@@ -140,6 +149,9 @@ class TableSelection(QObject):
             if event.key() == Qt.Key_Space and self.table.currentRow() >= 0:
                 item = self.table.item(self.table.currentRow(), 0)
                 if item is not None and item.data(Qt.UserRole) in self.state.order:
+                    if self.paint_only:
+                        self.toggle(item.data(Qt.UserRole))
+                        return True
                     item.setCheckState(Qt.Unchecked if item.checkState() == Qt.Checked else Qt.Checked)
                     return True
         return super().eventFilter(target, event)
@@ -148,9 +160,13 @@ class TableSelection(QObject):
         if keys is None:
             keys = [self.table.item(row, 0).data(Qt.UserRole) for row in range(self.table.rowCount()) if self.table.item(row, 0) is not None]
         self.state.reset(keys, preserve=preserve)
+        self._keys = set(self.state.order)
         self._paint_checks()
 
     def _paint_checks(self):
+        if self.paint_only:
+            self.table.viewport().update()
+            return
         self._syncing = True
         blocked = self.table.blockSignals(True)
         known = set(self.state.order)
@@ -164,6 +180,14 @@ class TableSelection(QObject):
                     item.setCheckState(value)
         self.table.blockSignals(blocked)
         self._syncing = False
+
+    def toggle(self, key):
+        if key in self.state.selected:
+            self.state.selected.remove(key)
+        else:
+            self.state.selected.add(key)
+        self._paint_checks()
+        self.changed.emit()
 
     def _item_changed(self, item):
         if self._syncing or item.column() != 0:
