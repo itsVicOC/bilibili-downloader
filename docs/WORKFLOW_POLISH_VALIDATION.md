@@ -16,7 +16,9 @@
 
 补充状态：[分 P 无匹配](images/workflow-polish/after/parts-empty-light.png)、[批量跨筛选选择](images/workflow-polish/after/archive-batch-dark-900.png)、[筛选外选择](images/workflow-polish/after/polish-filtered-selection-light.png)、[查看已选](images/workflow-polish/after/polish-selection-review-light.png)、[媒体离线](images/workflow-polish/after/polish-attachments-offline-light.png)、[目录映射](images/workflow-polish/after/polish-relocate-light.png)、[完整结果](images/workflow-polish/after/polish-result-details-dark.png)、[网络等待与立即重试](images/workflow-polish/after/polish-retry-dark.png)、[模板预览](images/workflow-polish/after/polish-naming-light.png)、[青蓝深色附件弹窗](images/workflow-polish/after/blue-attachments-dark.png)。
 
-最终源码的完整原生截图矩阵共 **96 张**，位于 `build/workflow-polish/final-native/{star_trail,bilibili_blue}/`：两套配色、深浅模式、900×640／1120×760／1320×860，包含配置、批量、结果、文件及长标题，附加分 P、字段、补全、零选择、离线、目录映射、重试、无匹配与已选视图。GitHub 对应原生附件保留相同矩阵。
+最终源码的完整原生截图矩阵共 **96 张**，位于 `build/workflow-polish/accepted-native/{star_trail,bilibili_blue}/`：两套配色、深浅模式、900×640／1120×760／1320×860，包含配置、批量、结果、文件及长标题，附加分 P、字段、补全、零选择、离线、目录映射、重试、无匹配与已选视图。GitHub 对应原生附件保留相同矩阵。
+
+Windows runner 的同一源码原生画面另见[粉紫浅色 900×640 下载配置](images/workflow-polish/after/windows-download-light-900.png)和[青蓝深色 1320×860 批量清单](images/workflow-polish/after/windows-batch-blue-dark-1320.png)；另有[中文命名字段](images/workflow-polish/after/windows-naming-fields-light.png)与[附件补全](images/workflow-polish/after/windows-attachments-blue-dark.png)。已复核中文字形、窄窗口固定确认栏与跨筛选勾选入口。
 
 ## 按用户操作验收
 
@@ -40,32 +42,38 @@
 
 ## 本地验证
 
-- macOS 原生 Cocoa 用户流程、主题和文件模型测试：**158 项通过**；另以 Qt 官方模型检查器验证行数据、勾选状态、模型重置和选择交集。完整两配色截图在该原生测试后独立生成。
-- 最终 `b05fe57` 完整离屏回归：**1,245 项通过、6 项平台专项跳过**；5 条 Qt 测试弃用警告。批量缓存、emoji 选区、媒体状态一致性和分段退出探针均包含在该轮回归内。
+- macOS 原生用户流程、主题、焦点及模型专项分阶段通过；最后的任务勾选专项为 **96 项通过、1 项平台跳过**。另以 Qt 官方模型检查器验证行数据、勾选状态、模型重置和选择交集。两套配色截图独立生成并复核。
+- 最终 `3eb0a3b` 完整离屏回归：**1,246 项通过、6 项平台专项跳过**；5 条 Qt 测试弃用警告。批量缓存、emoji 选区、媒体状态一致性和分段退出探针均包含在该轮回归内。
 - Ruff、编译与 `git diff --check` 通过。
 - 原生 Tab／Space／Enter、焦点返回、弹窗边界、取消、长标题与两套深浅主题已覆盖自动化及截图；Cocoa 下补充验证 Qt 输入法预编辑、中文提交、Enter 不误提交和取消后的入口焦点返回，组合输入不影响隐藏勾选；真实中文输入法候选窗、系统缩放／混合 DPI、用户设备上的手动键盘与可用性检查继续单独记录。
 
 ## 配对性能基准
 
-GitHub 独立性能矩阵在每个平台同一 runner 内交替执行 `6175482` 基线和验收源码各三次。下表暂录文件模型提交 `dd636fe` 的已通过数据；之后发现的千条批量搜索路径重复计算已修复，并补充队列与批量搜索／选择 P95 及加载门槛，最终三轮结果随后更新。每轮使用 1,000 个任务、10,000 条文件记录和临时一字节媒体，测量数据库／文件系统调用／界面开销，不代表真实视频吞吐或所有设备的表现。
+[最终源码 `3eb0a3b`](https://github.com/itsVicOC/bilibili-downloader/commit/3eb0a3b7f1de72f6b0c5a46ff00e5f20164b1a82)在 GitHub 的 Windows／macOS 独立性能矩阵中均通过。每个平台在同一 runner 内交替执行 `6175482` 基线和最终源码各三次，使用 1,000 个任务、10,000 条文件记录及临时一字节媒体，测量数据库／文件系统调用／界面开销，不代表真实视频吞吐或所有设备的表现。
 
-文件检查每批读取最多 500 个资产，文件系统访问在数据库锁外执行，每 100 项或 250ms 批量提交。文件表使用行数据模型和按需绘制的复选框，缓存搜索文本，检查后批量更新已提交的文件事实；路径／状态校验阻止旧检查覆盖更新记录，取消保留已完成结果。没有新增持久字段。
+检查每批读取最多 500 个资产，在数据库锁外访问文件系统，每 100 项或 250ms 批量提交；路径／状态校验阻止旧结果覆盖更新记录，取消保留已完成结果。文件表使用行数据模型，任务勾选直接向 Qt 提供会话状态；搜索与路径预览缓存按来源／配置失效，避免重复创建任务或遍历更新单元格。没有新增持久字段。
 
-以下响应指标取三轮中最慢值；检查耗时及改进幅度按三轮中位数比较。稳态心跳只计后台检查运行中，初次加载与结束刷新单独约束；原始全程心跳仍保留。Windows 旧版基线单轮超过五分钟，配对步骤允许 40 分钟完成三轮，指标门槛保持原值。
+搜索和选择计时包括四轮立即事件处理，以将布局／重绘计入当前操作；在清空搜索、切换工作区后完成阶段边界事件派发，避免遗留布局错计到下一操作。按单个可见工作区测量。以下时延取三轮中最慢值；检查耗时和降低比例取三轮中位数。稳态心跳只计后台检查运行中，初次加载和结束刷新分别约束；原始全程心跳仍保留。旧 Windows 基线单轮耗时较长，配对步骤上限为 40 分钟，响应门槛保持原值。
 
 | 指标 | macOS runner | Windows runner | 门槛 |
 |---|---:|---:|---:|
-| 万条快速检查中位耗时 | 13,186.4ms → 592.1ms | 待完成 | Windows 降低至少 50% |
-| 检查耗时降低 | 95.51% | 待完成 | — |
-| 搜索 P95 | 17.1ms | 待完成 | 300ms |
-| 勾选／清空 P95 | 21.8ms | 待完成 | 300ms |
-| 稳态心跳最大间隔 | 27.1ms | 待完成 | 250ms |
-| 初次加载 | 467.0ms | 待完成 | 2,000ms |
-| 结束刷新 | 24.8ms | 待完成 | 2,000ms |
-| 取消反馈 | 0.1ms | 待完成 | 100ms |
-| 取消结束 | 31.1ms | 待完成 | 1,000ms |
+| 万条检查中位耗时 | 15,366.9 → 1,609.1ms | 227,247.3 → 5,914.6ms | Windows 降低至少 50% |
+| 检查耗时降低 | 89.53% | 97.40% | — |
+| 队列搜索 P95 | 139.7ms | 123.9ms | 300ms |
+| 队列勾选／清空 P95 | 34.1ms | 22.0ms | 300ms |
+| 批量搜索 P95 | 22.8ms | 24.5ms | 300ms |
+| 批量勾选／清空 P95 | 71.9ms | 49.3ms | 300ms |
+| 文件搜索 P95 | 41.4ms | 25.2ms | 300ms |
+| 文件勾选／清空 P95 | 48.1ms | 28.6ms | 300ms |
+| 队列初次加载 | 878.0ms | 902.2ms | 2,000ms |
+| 批量初次加载 | 537.0ms | 686.9ms | 2,000ms |
+| 文件初次加载 | 913.1ms | 899.4ms | 2,000ms |
+| 后台稳态心跳最大间隔 | 76.3ms | 45.2ms | 250ms |
+| 检查结束刷新 | 44.5ms | 57.5ms | 2,000ms |
+| 取消反馈 | 0.3ms | 0.2ms | 100ms |
+| 取消结束 | 42.5ms | 32.8ms | 1,000ms |
 
-[macOS 三轮原始数据](validation/workflow-polish/performance/macos/summary.json)已归档到仓库；同目录包含六份改前／改后 JSON。Windows 同目录已归档前轮三次配对数据，最终全部列表门槛完成后统一更新。完整 GitHub 附件还保留执行环境和日志。
+[macOS 原始数据](validation/workflow-polish/performance/macos/summary.json)与 [Windows 原始数据](validation/workflow-polish/performance/windows/summary.json)已长期归档到仓库，同目录分别保留六份改前／改后 JSON。报告均记录最终源码 SHA、三轮次数、干净工作区及每项门槛通过。
 
 复现：
 
@@ -73,18 +81,19 @@ GitHub 独立性能矩阵在每个平台同一 runner 内交替执行 `6175482` 
 QT_QPA_PLATFORM=offscreen python -m pytest -q
 ruff check bilibili_downloader tests packaging_hooks scripts
 python -m scripts.capture_workflow_baseline --native --output-dir build/workflow-polish/before-native
-python -m scripts.capture_docs_screenshots --native --workflow-polish-only --color-theme star_trail --output-dir build/workflow-polish/model-native/star_trail
-python -m scripts.capture_docs_screenshots --native --workflow-polish-only --color-theme bilibili_blue --output-dir build/workflow-polish/model-native/bilibili_blue
+python -m scripts.capture_docs_screenshots --native --workflow-polish-only --color-theme star_trail --output-dir build/workflow-polish/accepted-native/star_trail
+python -m scripts.capture_docs_screenshots --native --workflow-polish-only --color-theme bilibili_blue --output-dir build/workflow-polish/accepted-native/bilibili_blue
 python -m scripts.benchmark_workflow_polish --output-dir build/workflow-polish/performance
 ```
 
 ## GitHub 与发布包
 
-前轮文件模型验收源码为 [`dd636fe4bc7470aa23135b5f43979fa8b1f38ace`](https://github.com/itsVicOC/bilibili-downloader/commit/dd636fe4bc7470aa23135b5f43979fa8b1f38ace)。[对应 CI](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41456893229)的双平台文件性能通过；[dry-run-59](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41456926819)在 Windows 的四项退出探针触发总超时。探针已分开启动与退出等待，输出改为文件日志，保持子进程三秒退出看门狗及收尾断言。后续源码、全部列表性能与 publish=false 安装包需重新验收，完成后补录精确提交和结果。不创建标签或发布 Release。
+验收源码为 [`3eb0a3b7f1de72f6b0c5a46ff00e5f20164b1a82`](https://github.com/itsVicOC/bilibili-downloader/commit/3eb0a3b7f1de72f6b0c5a46ff00e5f20164b1a82)，分支为 `codex/archive-workflow-acceptance`。最终 [CI](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41467767003) **17/17 项全部成功**，原始任务摘要已[归档](validation/workflow-polish/github/ci.json)。Windows Python 3.12 完整回归为 1,231 项通过、21 项跳过；原生专项独立通过。[publish=false 打包](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41467887182)也已成功：双平台构建、安装验证及汇总包校验通过，发布步骤跳过。任务及产物摘要已[归档](validation/workflow-polish/github/package.json)。构建标识为 `dry-run-61`，不创建标签或发布 Release。
 
-原生测试、截图和配对性能是独立步骤，Windows 及 macOS 分别验证 full/lite 构建、工具链、安装及升级恢复。最终记录将采用后续同一源码的结果，旧的取消或失败运行不计为通过。
+原生测试、截图和性能为独立步骤。Windows 与 macOS 分别检查 full/lite 构建、工具链、安装、升级和恢复。退出探针分开等待启动就绪与退出完成，使用文件接收子进程日志避免管道阻塞；保留原有三秒退出看门狗和收尾断言。最终记录只采用上述同一源码的结果，旧的取消或失败运行不计为通过。
 
-用户设备的全新安装／跨版本升级、长时双路直播（至少八小时）、真实断网／磁盘满／拔盘／休眠／强退，以及真实中文输入法候选窗、系统缩放／混合 DPI 和手动可用性仍需单独实测；托管 runner 和合成测试不能替代。自动化全部通过后，也不将这些物理设备项目标记完成。
+安装验证比对实际安装内容与 ZIP 并运行 CLI；升级／回滚使用真实冻结更新程序和临时冻结应用资料，覆盖配置、任务库、媒体库与待入库记录恢复。原生交互验证单独运行源码界面。Windows 另验证中文及空格路径安装／重装、运行锁阻止覆盖、更新后的卸载及用户媒体保留；macOS 验证 DMG 挂载、Applications 入口、复制、签名、内容一致性及 CLI。两平台 full／lite 的安装重启与启动失败回滚均通过，汇总包再次校验 SBOM、SHA-256 和安装验证报告。本次 macOS 使用 ad-hoc 签名并通过严格签名校验，未进行 Apple 公证；这些包用于本轮验收。
 
+[下载已校验的汇总验收包](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41467887182/artifacts/13157720799)，包含 Windows／macOS full、lite ZIP，Windows full 安装程序、macOS full DMG、校验清单、SBOM、安装验证报告及 FFmpeg 源码。GitHub 构建附件保留 14 天；性能原始数据和代表截图已存入仓库。验收后的补录提交仅更新文档、截图与数据，保留上述已验收源码。
 
-最新验收补充：`b05fe57` 的 Windows 三轮中，仅队列勾选 P95 最慢一轮为 304.2ms 超过 300ms，其余全部门槛通过。队列标题单元格现直接向 Qt 提供会话勾选状态（包括屏外行与辅助功能），避免逐项重写。基准按单个可见工作区测量，操作内部处理四轮立即事件以包含其布局／重绘，并在清空搜索、切换工作区后完成阶段边界事件派发，避免前一操作的遗留布局计入下一操作。本机修正后的队列勾选 P95 7.3ms；300ms 门槛及三轮检验保持不变，最终源码和结果待复验后补录。
+用户设备的全新安装／跨版本升级、长时双路直播（至少八小时）、真实断网／磁盘满／拔盘／休眠／强退，以及真实中文输入法候选窗、系统缩放／混合 DPI 和手动可用性仍需单独实测；托管 runner 和合成测试不能替代，自动化通过也不将这些物理设备项目标记完成。
