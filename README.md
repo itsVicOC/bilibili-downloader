@@ -74,9 +74,9 @@
 
 ## 下载与安装
 
-**开发中，尚未发布：** 当前工作区在 `0.8.10b1` 基础上加入文件复用、独立附件补全、严格规格匹配、队列与批量搜索、自选分 P、网络失败自动重试，以及媒体核验和目录批量重新定位。已有设置和任务快照继续生效；新增流程现已精修：跨搜索保留勾选并显示筛选外数量，分 P 与附件弹窗统一，结果区分媒体／规格／附件，命名字段支持中文搜索。详见[使用说明](docs/USER_GUIDE.md#开发版下载与归档优化未发布)与[本轮验收记录](docs/WORKFLOW_POLISH_VALIDATION.md)。
+**`v0.8.10b2` 预发布版：** 在 beta 1 基础上加入文件复用、独立附件补全、严格规格匹配、队列与批量搜索、自选分 P、网络失败自动重试，以及媒体核验和目录批量重新定位。已有设置和任务快照继续生效；新增流程现已精修：跨搜索保留勾选并显示筛选外数量，分 P 与附件弹窗统一，结果区分媒体／规格／附件，命名字段支持中文搜索。[下载 beta 2](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10b2) · [使用说明](docs/USER_GUIDE.md#下载与归档优化) · [本轮验收记录](docs/WORKFLOW_POLISH_VALIDATION.md)。
 
-![开发版批量搜索、跨筛选选择与任务数](docs/images/workflow-polish/after/archive-batch-dark-900.png)
+![beta 2 批量搜索、跨筛选选择与任务数](docs/images/workflow-polish/after/archive-batch-dark-900.png)
 
 访问 **[BiliFlow 官网 · 1008.si](https://1008.si/)** 了解项目，或直接从 **[GitHub Releases 下载最新正式版](https://github.com/itsVicOC/bilibili-downloader/releases/latest)**。想体验 beta 功能，可查看[全部版本](https://github.com/itsVicOC/bilibili-downloader/releases)；预发布版会带有 `Pre-release` 标记。
 

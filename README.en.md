@@ -76,9 +76,9 @@ Path actions now sit beside the download directory, task views highlight whole r
 
 ## Download and install
 
-**In development, not released:** The working tree builds on `0.8.10b1` with durable media reuse, independent attachment repair, strict media matching, queue and batch search, custom part ranges, automatic network retries, media inspection, and directory relinking. Existing settings and queued output snapshots remain compatible. The refined workflows retain checked items across filters, show hidden selection counts, unify part and attachment dialogs, separate media/specification/attachment results, and offer searchable Chinese naming fields. See the [polish validation](docs/WORKFLOW_POLISH_VALIDATION.md) for native before/after images, paired performance results, and remaining device and long-duration live-recording checks.
+**`v0.8.10b2` prerelease:** Building on beta 1, this version adds durable media reuse, independent attachment repair, strict media matching, queue and batch search, custom part ranges, automatic network retries, media inspection, and directory relinking. Existing settings and queued output snapshots remain compatible. The refined workflows retain checked items across filters, show hidden selection counts, unify part and attachment dialogs, separate media/specification/attachment results, and offer searchable Chinese naming fields. [Download beta 2](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10b2) · [User guide](docs/USER_GUIDE.md#下载与归档优化) · [Polish validation](docs/WORKFLOW_POLISH_VALIDATION.md), including native before/after images, paired performance results, and remaining device and long-duration live-recording checks. The stable update channel remains on `v0.8.9`.
 
-![Development batch search and selection counts](docs/images/workflow-polish/after/archive-batch-dark-900.png)
+![Beta 2 batch search and selection counts](docs/images/workflow-polish/after/archive-batch-dark-900.png)
 
 Visit the **[BiliFlow website · 1008.si](https://1008.si/)** or **[download the latest stable release from GitHub](https://github.com/itsVicOC/bilibili-downloader/releases/latest)**. To try beta features, browse [all releases](https://github.com/itsVicOC/bilibili-downloader/releases) and look for the `Pre-release` label.
 
