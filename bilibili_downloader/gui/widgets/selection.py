@@ -158,13 +158,18 @@ class TableSelection(QObject):
 
     def reset(self, keys=None, *, preserve=True):
         if keys is None:
-            keys = [self.table.item(row, 0).data(Qt.UserRole) for row in range(self.table.rowCount()) if self.table.item(row, 0) is not None]
+            keys = getattr(self.table.model(), "ids", None)
+            if keys is None:
+                keys = [self.table.item(row, 0).data(Qt.UserRole) for row in range(self.table.rowCount()) if self.table.item(row, 0) is not None]
         self.state.reset(keys, preserve=preserve)
         self._keys = set(self.state.order)
         self._paint_checks()
 
     def _paint_checks(self):
         if self.paint_only:
+            model = self.table.model()
+            if model.rowCount():
+                model.dataChanged.emit(model.index(0, 0), model.index(model.rowCount() - 1, 0), [Qt.CheckStateRole])
             self.table.viewport().update()
             return
         self._syncing = True

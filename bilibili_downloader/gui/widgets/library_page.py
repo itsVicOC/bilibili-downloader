@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, QUrl, Signal
-from PySide6.QtGui import QColor, QDesktopServices, QKeySequence
+from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -22,7 +22,6 @@ from PySide6.QtWidgets import (
     QStyle,
     QStyledItemDelegate,
     QStyleOptionViewItem,
-    QTableWidgetItem,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -47,7 +46,8 @@ from bilibili_downloader.gui.widgets.components import (
     TaskDetailPanel,
     palette,
 )
-from bilibili_downloader.gui.widgets.row_hover import RowHoverTable, row_option
+from bilibili_downloader.gui.widgets.file_table import FileTable
+from bilibili_downloader.gui.widgets.row_hover import row_option
 from bilibili_downloader.gui.widgets.selection import SelectionBar, TableSelection
 
 
@@ -143,22 +143,6 @@ def _size(value):
             return f"{value:.1f} {unit}"
         value /= 1024
     return f"{value:.1f} PB"
-
-
-class _FileTable(RowHoverTable):
-    select_all_requested = Signal()
-
-    def selectRow(self, row):
-        super().selectRow(row)
-        if hasattr(self, "_selection_binding"):
-            self._selection_binding.select_only_row(row)
-
-    def keyPressEvent(self, event):
-        if event.matches(QKeySequence.SelectAll):
-            self.select_all_requested.emit()
-            event.accept()
-        else:
-            super().keyPressEvent(event)
 
 
 class LibraryPage(QWidget):
@@ -259,8 +243,7 @@ class LibraryPage(QWidget):
         summary.addStretch()
         summary.addWidget(self.progress_label)
         layout.addLayout(summary)
-        self.table = _FileTable()
-        self.table.setColumnCount(6)
+        self.table = FileTable()
         self.table.setHorizontalHeaderLabels(
             [
                 "文件 / 作品",
@@ -434,23 +417,21 @@ class LibraryPage(QWidget):
         self._assets = assets
         self.table.setUpdatesEnabled(False)
         self.table.blockSignals(True)
-        same_order = len(assets) == self.table.rowCount() and all(
-            self.table.item(row, 0) is not None and self.table.item(row, 0).data(Qt.UserRole) == asset["id"]
-            for row, asset in enumerate(assets))
-        self.table.setRowCount(len(assets))
+        rows = []
+        titles, search_text, media_index = [], {}, {}
+        quality_names = {q.value: q.label for q in VideoQuality}
         for row, asset in enumerate(assets):
             item, outcome = asset["item"], asset["outcome"]
             media = self._media(asset)
-            quality = next(
-                (q.label for q in VideoQuality if q.value == outcome.actual_quality),
-                "规格未知",
-            )
+            media_index[asset["id"]] = media or {}
+            quality = quality_names.get(outcome.actual_quality, "规格未知")
             spec = (
                 f"仅音频\n{AUDIO_CODEC_MAP.get(outcome.actual_audio_quality, '规格未知')}"
                 if item.output_mode == OutputMode.AUDIO
                 else f"视频 · {quality}\n{VIDEO_CODEC_MAP.get(outcome.actual_video_codec, '编码未知')}"
             )
-            filename = Path(media["path"]).name if media else Path(asset["path"]).name
+            path = Path(media["path"] if media else asset["path"])
+            filename = path.name
             values = [
                 f"{filename}\n{item.video_info.title}",
                 "\n".join(
@@ -466,21 +447,15 @@ class LibraryPage(QWidget):
                 spec,
                 _size(media["size"] if media else None),
                 ("媒体异常" if outcome.media_verification.get("valid") is False else FILE_STATES.get(media["state"], "待检查")) if media else "待检查",
-                str(Path(media["path"] if media else asset["path"]).parent),
+                str(path.parent),
             ]
-            for col, value in enumerate(values):
-                cell = self.table.item(row, col) if same_order else None
-                if cell is None:
-                    cell = QTableWidgetItem(value)
-                    if col in (0, 1, 5):
-                        cell.setToolTip(value + ("\n" + item.display_title if col == 0 else ""))
-                    if col == 0:
-                        cell.setData(Qt.UserRole, asset["id"])
-                    self.table.setItem(row, col, cell)
-                elif cell.text() != value:
-                    cell.setText(value)
-                    if col in (0, 1, 5):
-                        cell.setToolTip(value + ("\n" + item.display_title if col == 0 else ""))
+            rows.append(values)
+            title = item.display_title
+            titles.append(title)
+            info = item.video_info
+            search_text[asset["id"]] = " ".join((title, info.author, info.owner_name, info.collection_title, info.series_title, *(f["path"] for f in asset["files"]))).casefold()
+        self._search_text, self._media_index = search_text, media_index
+        self.table.replace_rows(rows, [a["id"] for a in assets], titles)
         self.table.blockSignals(False)
         self.table.setUpdatesEnabled(True)
         self.selection.reset([a["id"] for a in assets])
@@ -503,6 +478,7 @@ class LibraryPage(QWidget):
         entries = {entry["id"]: (row, entry) for row, asset in enumerate(self._assets) for entry in asset["files"]}
         self.table.blockSignals(True)
         self.table.setUpdatesEnabled(False)
+        changed_rows = []
         try:
             for update in updates:
                 current = entries.get(update["id"])
@@ -515,9 +491,12 @@ class LibraryPage(QWidget):
                 outcome = self._assets[row]["outcome"]
                 state = "媒体异常" if outcome.media_verification.get("valid") is False else FILE_STATES[entry["state"]]
                 for column, value in ((3, _size(entry["size"])), (4, state)):
-                    cell = self.table.item(row, column)
-                    if cell.text() != value:
-                        cell.setText(value)
+                    if self.table.model().rows[row][column] != value:
+                        self.table.model().rows[row][column] = value
+                        changed_rows.append(row)
+            if changed_rows:
+                model = self.table.model()
+                model.dataChanged.emit(model.index(min(changed_rows), 3), model.index(max(changed_rows), 4), [Qt.DisplayRole, Qt.ToolTipRole])
         finally:
             self.table.blockSignals(False)
             self.table.setUpdatesEnabled(True)
@@ -578,22 +557,11 @@ class LibraryPage(QWidget):
         visible_ids = []
         self.table.blockSignals(True)
         for row, asset in enumerate(self._assets):
-            media = self._media(asset) or {}
-            info = asset["item"].video_info
-            searchable = " ".join(
-                [
-                    asset["item"].display_title,
-                    info.author,
-                    info.owner_name,
-                    info.collection_title,
-                    info.series_title,
-                    *(f["path"] for f in asset["files"]),
-                ]
-            )
+            media = self._media_index[asset["id"]]
             visible = (
                 (mode == "all" or asset["item"].output_mode.value == mode)
                 and (state == "all" or media.get("state", "unchecked") == state)
-                and query in searchable.casefold()
+                and query in self._search_text[asset["id"]]
             )
             if reviewing:
                 visible = asset["id"] in self.selection.state.selected

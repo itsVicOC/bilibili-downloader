@@ -213,7 +213,7 @@ jobs:
   archive-performance:
     name: Archive performance (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
@@ -230,7 +230,8 @@ jobs:
       - name: Install performance dependencies
         run: pip install -c constraints.txt -e ".[dev]"
       - name: Compare three paired baselines and enforce UX limits
-        timeout-minutes: 20
+        # The unchanged Windows baseline can take over five minutes per check.
+        timeout-minutes: 40
         run: python -m scripts.benchmark_workflow_polish --output-dir build/workflow-polish/performance
       - name: Upload paired performance evidence
         if: always()

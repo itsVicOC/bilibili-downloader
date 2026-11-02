@@ -281,6 +281,24 @@ def test_file_context_menu_preserves_checks_and_names_bulk_scope(workspace, tmp_
     assert "移除所选 1 项记录" in labels
 
 
+def test_file_model_exposes_unvisited_rows_and_checked_state(qtbot):
+    from bilibili_downloader.gui.widgets.file_table import FileTable
+    from bilibili_downloader.gui.widgets.selection import TableSelection
+    table = FileTable()
+    qtbot.addWidget(table)
+    table.replace_rows([[f"文件 {n}", "作者", "1080P", "1 B", "待检查", "/目录"] for n in range(10000)], list(range(10000)), ["作品"] * 10000)
+    binding = TableSelection(table, paint_only=True)
+    binding.reset()
+    binding.set_visible(range(10000))
+    assert not table._cells
+    assert table.model().data(table.model().index(9999, 0)) == "文件 9999"
+    binding.select_visible()
+    assert table.model().data(table.model().index(9999, 0), Qt.CheckStateRole) == Qt.Checked
+    table.model().setData(table.model().index(9999, 0), Qt.Unchecked, Qt.CheckStateRole)
+    assert 9999 not in binding.state.selected and len(binding.state.selected) == 9999
+    assert len(table._cells) < 10
+
+
 def test_old_check_results_never_overwrite_a_new_location(tmp_path):
     library, _, outcome = stored(tmp_path)
     asset_id = library.list_assets()[0]["id"]
