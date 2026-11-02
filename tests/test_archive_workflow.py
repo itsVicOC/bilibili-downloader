@@ -16,7 +16,7 @@ from bilibili_downloader.core.download_service import DownloadService
 from bilibili_downloader.core.downloader import StreamDownloader
 from bilibili_downloader.core.errors import ErrorCategory, classify_error
 from bilibili_downloader.core.ffmpeg import FFmpegManager
-from bilibili_downloader.core.library import LibraryRepository
+from bilibili_downloader.core.library import LibraryRepository, absolute_path
 from bilibili_downloader.core.media_policy import SpecificationMismatchError
 from bilibili_downloader.core.models import (
     DownloadItem,
@@ -64,7 +64,7 @@ def test_reuse_survives_task_cleanup_restart_and_hidden_inventory(tmp_path, monk
     service = DownloadService(object(), str(tmp_path), library_repository=restarted)
     no_transfer(monkeypatch, service)
     result = service.download(item, lambda *_: None)
-    assert result.reused_media and result.video_path == original.video_path
+    assert result.reused_media and absolute_path(result.video_path) == absolute_path(original.video_path)
     assert Path(original.video_path).read_bytes() == b"immutable media bytes"
 
 
@@ -95,7 +95,7 @@ def test_attachment_failure_is_independently_recoverable(tmp_path, monkeypatch):
     monkeypatch.setattr("bilibili_downloader.core.download_service.DanmakuDownloader.download_and_convert", lambda _, target: target.write_text("ASS"))
     result = service.download(requested, lambda *_: None)
     assert not result.missing_artifacts and not result.warnings
-    assert result.video_path == original.video_path
+    assert absolute_path(result.video_path) == absolute_path(original.video_path)
 
 
 def test_requesting_all_subtitles_extends_a_previously_single_language_download(tmp_path, monkeypatch):
@@ -115,8 +115,11 @@ def test_requesting_all_subtitles_extends_a_previously_single_language_download(
     assert result.subtitle_discovery_complete and len(result.subtitle_paths) == 2
     assert writes == [tracks[0].url, tracks[1].url]
     assert Path(original.video_path).read_bytes() == b"immutable media bytes"
-    Path(result.subtitle_languages["en"]).unlink()
     requested = item.model_copy(update={"download_all_subtitles": True})
+    reused = service.download(requested, lambda *_: None)
+    assert reused.subtitle_discovery_complete and set(reused.subtitle_languages) == {"zh-Hans", "en"}
+    assert len(writes) == 2
+    Path(reused.subtitle_languages["en"]).unlink()
     assert library.match_media(requested).missing == ("subtitle",)
     repaired = service.download(requested, lambda *_: None)
     assert repaired.subtitle_discovery_complete and writes[-1] == tracks[1].url
@@ -209,7 +212,7 @@ def test_concurrent_services_only_transfer_media_once(tmp_path, monkeypatch):
         assert started.wait(5)
         second = executor.submit(services[1].download, item, lambda *_: None)
         release.set()
-        assert first.result().video_path == second.result().video_path
+        assert absolute_path(first.result().video_path) == absolute_path(second.result().video_path)
     assert transfers == [True]
 
 
@@ -240,15 +243,15 @@ def test_directory_relocation_keeps_companions_and_reuses_new_paths(tmp_path, mo
     service = DownloadService(object(), str(old), library_repository=library)
     no_transfer(monkeypatch, service)
     result = service.download(item, lambda *_: None)
-    assert result.video_path == str(new / "lesson.mp4")
-    assert result.subtitle_languages == {"zh-Hans": str(new / subtitle.name)}
+    assert absolute_path(result.video_path) == absolute_path(new / "lesson.mp4")
+    assert result.subtitle_languages == {"zh-Hans": absolute_path(new / subtitle.name)}
 
 
 def test_directory_relocation_is_atomic_when_targets_are_missing(tmp_path):
     library, _, original = stored(tmp_path)
     with pytest.raises(ValueError, match="未修改"):
         library.relocate_directory(tmp_path, tmp_path / "absent", apply=True)
-    assert library.list_assets()[0]["path"] == original.video_path
+    assert library.list_assets()[0]["path"] == absolute_path(original.video_path)
 
 
 def test_verification_distinguishes_tool_failure_from_corruption(tmp_path, monkeypatch):

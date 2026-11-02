@@ -376,11 +376,11 @@ class LibraryRepository:
             paths = {f["kind"]: f["path"] for f in files if readable_file(f["path"]) and f["state"] != "recycled"}
             for kind in ("danmaku", "cover", "metadata"):
                 setattr(outcome, f"{kind}_path", paths.get(kind))
-            old_subtitles = list(outcome.subtitle_paths)
+            old_subtitles = {absolute_path(path) for path in outcome.subtitle_paths}
             subs = [f["path"] for f in files if f["kind"] == "subtitle" and readable_file(f["path"]) and f["state"] != "recycled"]
             outcome.subtitle_paths = subs
-            outcome.subtitle_languages = {lan: path for lan, path in outcome.subtitle_languages.items() if path in subs}
-            if set(subs) != set(old_subtitles):
+            outcome.subtitle_languages = {lan: absolute_path(path) for lan, path in outcome.subtitle_languages.items() if absolute_path(path) in subs}
+            if set(subs) != old_subtitles:
                 outcome.subtitle_discovery_complete = False
             missing = []
             for kind in ("danmaku", "cover", "metadata"):
@@ -533,7 +533,7 @@ class LibraryRepository:
             if entry:
                 setattr(outcome, "video_path" if kind == "media" else f"{kind}_path", entry["path"])
         outcome.subtitle_paths = [f["path"] for f in files if f["kind"] == "subtitle"]
-        outcome.subtitle_languages = {lan: (mapping or {}).get(path, path) for lan, path in outcome.subtitle_languages.items()}
+        outcome.subtitle_languages = {lan: (mapping or {}).get(absolute_path(path), absolute_path(path)) for lan, path in outcome.subtitle_languages.items()}
         outcome.media_verification = {}
         outcome.media_signature = LibraryRepository._signature(Path(outcome.video_path).stat()) if readable_file(outcome.video_path) else None
         db.execute("UPDATE assets SET outcome_json=? WHERE id=?", (outcome.model_dump_json(), asset_id))

@@ -65,6 +65,8 @@ git diff --check
 
 GitHub 验收使用独立 `codex/archive-workflow-acceptance` 分支：推送触发跨平台 CI，Release 工作流以 `publish=false` 执行打包、安装器、更新及回滚验证，不创建版本标签或发布 Release。CI 与打包任务均包含归档专项、中文字段截图和一千任务／一万文件记录基准；冻结更新测试额外核对媒体库和待登记记录的保留及回滚。运行链接与最终结果在验收结束后补充。
 
+首轮 [CI](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41396311357) 发现 Windows 路径大小写导致的断言差异；同时修复字幕语言映射及重定位时的路径标准化，并补充全部字幕重复导入不重复传输的检查。修正后的提交将重新执行完整 CI 和打包验收。
+
 ## 尚未完成的发布验收
 
 - Windows 发布包实机安装、升级、启动与回滚；本机无法执行 Windows 实机验收。
