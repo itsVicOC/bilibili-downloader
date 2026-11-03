@@ -96,6 +96,14 @@ macOS 万条快速检查中位耗时为 18.66 → 1.71 秒，降低 90.83%。Win
 
 本轮没有创建或修改 Release／标签，包版本仍为 `0.8.10b2`；开发增量尚未发布。文档与证据另行归档，不改变已验收应用源码。
 
+## 弹窗居中补充修复
+
+基于 `f328777` 修复嵌入页面使用局部坐标定位弹窗的问题。每次显示时改用所属顶层窗口的全局外框（含系统标题栏）计算中心，再限制到该窗口所在屏幕的可用区域；重新打开使用主窗口当前位置，打开后仍可自行拖动。嵌入页面和其他窗口不受影响，系统原生文件选择器继续由系统管理。
+
+- 本地完整回归 1,314 项通过、6 项平台专项跳过，Ruff、编译与差异检查通过。macOS Cocoa 原生回归 85 项通过、1 项虚拟屏幕专项跳过。新增定位测试覆盖普通／流程／消息／长诊断／文件选择弹窗、嵌套弹窗、主窗口移动及缩放后重开、手动拖动、负坐标多屏和小工作区。
+- 实际设置页在 900×640 和 1120×760、深浅主题下打开及重新打开「命名字段」，四次原生外框中心偏移均为 0px。[浅色首次打开](images/ui-feedback/dialog-placement/dialog-placement-light-opened.png)、[深色移动后重开](images/ui-feedback/dialog-placement/dialog-placement-dark-reopened.png)、[坐标记录](validation/ui-feedback/dialog-placement-macos.json)已归档。
+- 复现截图：`python scripts/capture_docs_screenshots.py --native --dialog-placement-only --output-dir build/dialog-placement`。Windows／macOS CI 已加入新增原生测试和该截图场景；以上历史 CI 与打包结果对应前一轮源码，不代表此补充修复的通过结果。
+
 ## 继续单独记录的实机项目
 
 用户设备上的真实中文输入法候选窗、混合 DPI／系统缩放、小屏幕人工操作和辅助技术体验，以及长时双路直播、拔盘、磁盘满与物理网络故障仍需实测。此处没有将自动化截图或合成性能数据表述为上述设备验收已通过。发布安排另行决定。

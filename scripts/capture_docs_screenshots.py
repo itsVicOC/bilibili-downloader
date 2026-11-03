@@ -1962,6 +1962,49 @@ def _capture_workflow_polish(app, theme, window, temp_root):
         panel._templates_section.set_expanded(False)
 
 
+def _capture_dialog_placement(app, theme, window):
+    """Exercise an embedded settings-page entry without manually moving dialogs."""
+    from PySide6.QtTest import QTest
+
+    from bilibili_downloader.gui.dialogs.naming_fields import NamingFieldDialog
+    from bilibili_downloader.gui.dialogs.settings_dialog import NAMING_FIELDS
+
+    rows = []
+    for dark in (False, True):
+        theme.apply_theme(dark)
+        mode = "dark" if dark else "light"
+        window.resize(900, 640)
+        window.move(window.screen().availableGeometry().topLeft() + QPoint(100, 80))
+        window._show_settings_tab(SettingsSection.DOWNLOAD)
+        window.show()
+        QTest.qWait(100)
+        dialog = NamingFieldDialog(NAMING_FIELDS, window._settings_page)
+        for reopening in (False, True):
+            if reopening:
+                window.move(window.pos() + QPoint(90, 40))
+                window.resize(1120, 760)
+                QTest.qWait(50)
+            dialog.show()
+            QTest.qWait(100)
+            owner_frame = window.frameGeometry()
+            frame = dialog.frameGeometry()
+            delta = frame.center() - owner_frame.center()
+            assert delta.manhattanLength() <= 2, (owner_frame, frame)
+            assert window.screen().availableGeometry().contains(frame)
+            suffix = "reopened" if reopening else "opened"
+            rows.append(dict(mode=mode, state=suffix, owner=owner_frame.getRect(),
+                             dialog=frame.getRect(), center_delta=(delta.x(), delta.y())))
+            _save_widget(app, window, f"dialog-placement-{mode}-{suffix}.png", popup=dialog)
+            dialog.hide()
+            window.show()
+        dialog.reject()
+        dialog.deleteLater()
+    (OUTPUT_DIR / "dialog-placement.json").write_text(
+        json.dumps(dict(backend=app.platformName(), qt=qVersion(), cases=rows), indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
 def main(argv=None) -> int:
     global OUTPUT_DIR
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1979,6 +2022,7 @@ def main(argv=None) -> int:
     parser.add_argument("--interactions-only", action="store_true", help="Capture row hover, history removal and isolated clipboard prompts")
     parser.add_argument("--download-management-only", action="store_true", help="Capture multipart queue and independent downloads library")
     parser.add_argument("--workflow-polish-only", action="store_true", help="Capture the refined archive workflows and recovery dialogs")
+    parser.add_argument("--dialog-placement-only", action="store_true", help="Verify centered dialogs from embedded settings before and after moving the window")
     parser.add_argument("--archive-only", action="store_true", help="Capture media results, queue search, batch filters and part selection")
     parser.add_argument("--refinement-only", action="store_true", help="Capture audio, long-content, failure, draft and filtered-task states")
     parser.add_argument("--chrome-only", action="store_true", help="Check native captions using desktop compositor captures")
@@ -2046,6 +2090,10 @@ def main(argv=None) -> int:
         window._settings.appearance.theme = args.color_theme
         theme.set_color_theme(args.color_theme)
         cleanup.callback(window._live_controller.shutdown)
+        if args.dialog_placement_only:
+            _capture_dialog_placement(app, theme, window)
+            window.request_quit(confirmed=True)
+            return 0
         if args.workflow_polish_only:
             _capture_workflow_polish(app, theme, window, temp_root)
             window._live_controller.shutdown()
