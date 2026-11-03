@@ -1,8 +1,8 @@
 """Visible actions, input modality and screen limits under real layout pressure."""
 
 import pytest
-from PySide6.QtCore import QPoint, QRect, QSize, Qt
-from PySide6.QtGui import QColor, QImage, QPainter
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, QSize, Qt
+from PySide6.QtGui import QColor, QEnterEvent, QImage, QMouseEvent, QPainter
 from PySide6.QtWidgets import (
     QApplication,
     QLineEdit,
@@ -251,6 +251,23 @@ def test_dropdown_hover_has_fill_without_edge_lines_and_keyboard_focus_is_inset(
 
 
 def test_table_keyboard_focus_switches_back_to_pointer_without_changing_current(qapp, qtbot):
+    def move_pointer(viewport, point):
+        # A runner may warp the cursor without delivering a native move.
+        # Exercise the real Qt handlers, as with the keyboard input below.
+        qtbot.mouseMove(viewport, point)
+        global_point = QPointF(viewport.mapToGlobal(point))
+        qapp.sendEvent(viewport, QEnterEvent(QPointF(point),
+                       QPointF(viewport.mapTo(viewport.window(), point)), global_point))
+        qapp.sendEvent(viewport, QMouseEvent(QEvent.MouseMove, QPointF(point), global_point,
+                       Qt.NoButton, Qt.NoButton, Qt.NoModifier))
+
+    def move_to_row(row, ready):
+        table.activateWindow()
+        QApplication.setActiveWindow(table)
+        move_pointer(table.viewport(), table.visualItemRect(table.item(row, 0)).center())
+        flush(qapp)
+        return ready()
+
     ThemeManager(qapp, "star_trail", "light")
     table = RowHoverTable(2, 2)
     qtbot.addWidget(table)
@@ -264,16 +281,14 @@ def test_table_keyboard_focus_switches_back_to_pointer_without_changing_current(
     # Cocoa positions newly shown windows asynchronously; move after exposure.
     qtbot.waitExposed(table)
     qtbot.wait(80)
-    start = table.visualItemRect(table.item(1, 0)).center()
-    qtbot.mouseMove(table.viewport(), start)
-    qtbot.waitUntil(lambda: table._row_hover._pointer_pos == table.viewport().mapToGlobal(start))
+    qtbot.waitUntil(lambda: move_to_row(1, lambda: table._row_hover.index.isValid() and table._row_hover.index.row() == 1))
     table.setCurrentCell(0, 0)
     table.setFocus(Qt.TabFocusReason)
     qtbot.keyClick(table, Qt.Key_Down)
     flush(qapp)
-    assert table.property("keyboardFocus") and table.currentRow() == 1
-    qtbot.mouseMove(table.viewport(), table.visualItemRect(table.item(0, 0)).center())
-    qtbot.waitUntil(lambda: not table.property("keyboardFocus"))
+    assert table.hasFocus() and table.property("keyboardFocus") and table.currentRow() == 1
+    qtbot.waitUntil(lambda: move_to_row(0, lambda: not table.property("keyboardFocus")
+                                      and table._row_hover.index.isValid() and table._row_hover.index.row() == 0))
     assert not table.property("keyboardFocus") and table.currentRow() == 1
 
 
