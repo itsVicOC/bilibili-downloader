@@ -26,6 +26,7 @@ def main():
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
     from PySide6.QtCore import QPoint, QRect, qVersion
+    from PySide6.QtGui import QColor
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import (
         QAbstractItemView,
@@ -138,8 +139,17 @@ def main():
         combo.showPopup()
         flush()
         view = combo.view()
+        # Reopening a popup under a stationary cursor does not generate a
+        # native mouse move. Enter from another row before recording hover.
+        QTest.mouseMove(view.viewport(), view.visualRect(combo.model().index(0, 0)).center())
+        flush()
         QTest.mouseMove(view.viewport(), view.visualRect(combo.model().index(1, 0)).center())
         flush()
+        hover = view.visualRect(combo.model().index(1, 0))
+        sample = view.viewport().grab().toImage()
+        ratio = sample.devicePixelRatio()
+        color = sample.pixelColor(round((hover.left() + 8) * ratio), round(hover.center().y() * ratio))
+        assert color == QColor(theme_palette(theme.is_dark, args.color_theme).control_hover), (mode, color.name())
         assert view.window().grab().save(str(args.output_dir / f"feedback-hover-{mode}.png"))
         from PySide6.QtCore import Qt
         QTest.keyClick(view, Qt.Key_Down)
@@ -168,8 +178,12 @@ def main():
         QApplication.setActiveWindow(host)
         table.setFocus(Qt.TabFocusReason)
         flush()
+        table.setCurrentCell(2, 0)
+        QTest.mouseMove(table.viewport(), table.visualItemRect(table.item(2, 0)).center())
+        flush()
         QTest.mouseMove(table.viewport(), table.visualItemRect(table.item(0, 0)).center())
         flush()
+        assert table._row_hover.index.isValid() and table._row_hover.index.row() == 0
         assert host.grab().save(str(args.output_dir / f"feedback-row-hover-{mode}.png"))
         table.setCurrentCell(0, 0)
         QTest.keyClick(table, Qt.Key_Down)
