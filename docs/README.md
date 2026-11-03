@@ -4,6 +4,8 @@
 
 项目入口：[官方网站 · 1008.si](https://1008.si/) · [中文 README](../README.md) · [English README](../README.en.md)。详细指南目前以简体中文为主。
 
+[`v0.8.10b3` 预发布版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10b3) 精简提示、移除悬停描边与竖线、改善窄空间按钮收纳，并让弹窗相对软件窗口居中；原生对比、回归与打包状态见[提示与布局精修验收](UI_FEEDBACK_VALIDATION.md)。
+
 [`v0.8.10b2` 预发布版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10b2) 在独立下载文件列表基础上提供媒体复用、附件补全、搜索与分 P 选择、自动重试和归档核验；新增用法见[用户指南](USER_GUIDE.md#下载与归档优化)，功能测试与实测边界见[归档流程验收](ARCHIVE_WORKFLOW_VALIDATION.md)。后续体验精修统一了选择、弹窗、详情与中文命名字段，并优化万条文件检查；当前测试与双平台交付状态见[流程精修验收](WORKFLOW_POLISH_VALIDATION.md)。
 
 `v0.8.9` 正式版汇总四个 beta 阶段的 Fluent 精修、窗口记忆、目录邻近操作、任务整行悬停、录制历史移除与撤销和前台剪贴板识别。用户已确认 Windows／macOS 实机验证完成；功能说明与截图见[第五轮验收](FLUENT_V5_VALIDATION.md)，安装包见 [0.8.9 正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9)。
@@ -17,8 +19,6 @@
 稳定版文档对应 `v0.8.9`；预发布与开发增量按上文单独标注。窗口激活、最大化与还原及双平台界面检查见[视觉规范与验证](UI_DESIGN.md)，小流的十二套动画与时段规则见[小流设计与预览](MASCOT_DESIGN.md)，五类设置、模式与背景玻璃模糊见[用户指南](USER_GUIDE.md)，版本变化和验证范围见[更新日志](../CHANGELOG.md#v089---2026-10-24)。
 
 ## 推荐阅读路线
-
-开发分支在 beta 2 后继续精简提示、移除悬停描边并改善窄空间按钮收纳；原生对比、回归与打包状态见[提示与布局精修验收](UI_FEEDBACK_VALIDATION.md)，发布安排另行决定。
 
 ### 我想使用 BiliFlow
 

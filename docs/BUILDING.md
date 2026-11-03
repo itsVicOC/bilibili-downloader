@@ -181,6 +181,13 @@ python scripts/build_app_icons.py
 
 ## 发布流程
 
+### 0.8.10 beta 3 发布检查（2026-11-03）
+
+- 基于 `codex/ui-feedback-boundaries` 中的弹窗修复 `af45d12` 准备 `v0.8.10b3`，包含提示减负、无描边悬停、响应式操作栏及弹窗居中。应用源码 [CI 41575862175](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41575862175) **17/17 项成功**，包含两平台原生交互、截图与三轮性能；[源码验收摘要](validation/releases/0.8.10b3/source-ci.json)已归档。
+- 发布版本本地完整回归 **1,314 项通过、6 项平台专项跳过**，更新与发布相关 91 项测试通过，Ruff、编译与差异检查通过。
+- 发布说明在两套配色 × 深浅模式 × 480×360／680×520 下完成 8 项 macOS 原生检查，无横向滚动，弹窗外框相对软件窗口居中；隔离设置页显示 `v0.8.10b3`。截图：[浅色窄弹窗](images/releases/0.8.10b3/notes-star_trail-light-480.png)、[青蓝深色](images/releases/0.8.10b3/notes-bilibili_blue-dark-680.png)、[版本页面](images/releases/0.8.10b3/about-native.png)。未读取用户账号或启动更新服务。
+- 发布流水线补充弹窗定位原生测试与截图场景；实际构建、附件核验与发布结论在流水线完成后追加。
+
 ### 0.8.10 beta 2 发布检查（2026-11-03）
 
 - 从 `codex/archive-workflow-acceptance` 的发布提交 `6cd1b46494d32d8a9d37a2d5590ad62307c955a6` 创建 `v0.8.10b2`；远端附注标签已核对到同一提交。包含媒体复用、独立附件补全、严格规格、网络重试、核验／目录定位及流程精修。既有任务路径与规格快照保持兼容；从 beta 2 起跨筛选保留勾选，操作数量包含筛选外已选项。

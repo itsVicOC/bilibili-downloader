@@ -74,11 +74,11 @@
 
 ## 下载与安装
 
-**开发分支（尚未发布）：** 在 `v0.8.10b2` 基础上精简重复提示、统一无描边悬停与键盘焦点，并让窄窗口中的次要操作自动收进「更多」。详见[原生对比与验收记录](docs/UI_FEEDBACK_VALIDATION.md)。以下 beta 2 下载包保持已发布内容。
+**`v0.8.10b3` 预发布版：** 精简重复提示，移除悬停描边与列表竖线；窄窗口中的次要操作自动收进「更多」，按钮与操作数量保持完整。弹窗每次打开均相对所属软件窗口居中，靠近屏幕边缘时自动避让。[下载 beta 3](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10b3) · [原生对比与验收记录](docs/UI_FEEDBACK_VALIDATION.md)。正式更新通道继续使用 `v0.8.9`。
 
-**`v0.8.10b2` 预发布版：** 在 beta 1 基础上加入文件复用、独立附件补全、严格规格匹配、队列与批量搜索、自选分 P、网络失败自动重试，以及媒体核验和目录批量重新定位。已有设置和任务快照继续生效；新增流程现已精修：跨搜索保留勾选并显示筛选外数量，分 P 与附件弹窗统一，结果区分媒体／规格／附件，命名字段支持中文搜索。[下载 beta 2](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10b2) · [使用说明](docs/USER_GUIDE.md#下载与归档优化) · [本轮验收记录](docs/WORKFLOW_POLISH_VALIDATION.md)。
+继续包含 beta 2 的文件复用、独立附件补全、严格规格匹配、队列与批量搜索、自选分 P、网络失败自动重试，以及媒体核验和目录批量重新定位。已有设置和任务快照继续生效；跨搜索保留勾选并显示筛选外数量，结果区分媒体／规格／附件，命名字段支持中文搜索。[使用说明](docs/USER_GUIDE.md#下载与归档优化) · [流程精修验收](docs/WORKFLOW_POLISH_VALIDATION.md)。
 
-![beta 2 批量搜索、跨筛选选择与任务数](docs/images/workflow-polish/after/archive-batch-dark-900.png)
+![批量搜索、跨筛选选择与任务数](docs/images/ui-feedback/after/archive-batch-light-900.png)
 
 访问 **[BiliFlow 官网 · 1008.si](https://1008.si/)** 了解项目，或直接从 **[GitHub Releases 下载最新正式版](https://github.com/itsVicOC/bilibili-downloader/releases/latest)**。想体验 beta 功能，可查看[全部版本](https://github.com/itsVicOC/bilibili-downloader/releases)；预发布版会带有 `Pre-release` 标记。
 

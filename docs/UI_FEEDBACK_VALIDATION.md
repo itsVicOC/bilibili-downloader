@@ -1,6 +1,6 @@
 # 提示、悬停与布局精修验收
 
-日期：2026-11-03。基线为已发布的 `v0.8.10b2`（`6cd1b46494d32d8a9d37a2d5590ad62307c955a6`），实施分支为 `codex/ui-feedback-boundaries`。本轮为尚未发布的 GUI 增量，版本号保持 `0.8.10b2`；没有修改已发布安装包、标签或 Release。所有测试和截图使用临时演示数据，不读取用户账号或媒体。
+日期：2026-11-03。基线为已发布的 `v0.8.10b2`（`6cd1b46494d32d8a9d37a2d5590ad62307c955a6`），实施分支为 `codex/ui-feedback-boundaries`。本轮 GUI 增量纳入 `v0.8.10b3`，以下保留各阶段源码与验收结果；beta 2 已发布安装包和标签保持原内容。所有测试和截图使用临时演示数据，不读取用户账号或媒体。
 
 ## 原生前后对比
 
@@ -94,7 +94,7 @@ macOS 万条快速检查中位耗时为 18.66 → 1.71 秒，降低 90.83%。Win
 
 安装验证比对实际安装内容与 ZIP，验证配置、任务库、媒体库和待恢复记录的保留；full／lite 工具链、CLI 启动、录制器样例和安装更新路径沿用既有发布门槛。原生测试、截图与性能分步执行，最终报告采用 `d670dc0` 的通过结果。早期未通过或停止的运行不计入最终通过。
 
-本轮没有创建或修改 Release／标签，包版本仍为 `0.8.10b2`；开发增量尚未发布。文档与证据另行归档，不改变已验收应用源码。
+上述为 beta 3 准备前的开发验收，当时未创建 Release／标签、包版本仍为 `0.8.10b2`。后续 beta 3 发布状态单独记录于[构建与发布](BUILDING.md)。
 
 ## 弹窗居中补充修复
 
@@ -103,6 +103,7 @@ macOS 万条快速检查中位耗时为 18.66 → 1.71 秒，降低 90.83%。Win
 - 本地完整回归 1,314 项通过、6 项平台专项跳过，Ruff、编译与差异检查通过。macOS Cocoa 原生回归 85 项通过、1 项虚拟屏幕专项跳过。新增定位测试覆盖普通／流程／消息／长诊断／文件选择弹窗、嵌套弹窗、主窗口移动及缩放后重开、手动拖动、负坐标多屏和小工作区。
 - 实际设置页在 900×640 和 1120×760、深浅主题下打开及重新打开「命名字段」，四次原生外框中心偏移均为 0px。[浅色首次打开](images/ui-feedback/dialog-placement/dialog-placement-light-opened.png)、[深色移动后重开](images/ui-feedback/dialog-placement/dialog-placement-dark-reopened.png)、[坐标记录](validation/ui-feedback/dialog-placement-macos.json)已归档。
 - 复现截图：`python scripts/capture_docs_screenshots.py --native --dialog-placement-only --output-dir build/dialog-placement`。Windows／macOS CI 已加入新增原生测试和该截图场景；以上历史 CI 与打包结果对应前一轮源码，不代表此补充修复的通过结果。
+- 弹窗修复提交 `af45d12` 的[跨平台 CI](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41575862175) **17/17 项通过**，包含 Windows／macOS 原生定位测试与截图、完整回归和三轮性能基准。
 
 ## 继续单独记录的实机项目
 
