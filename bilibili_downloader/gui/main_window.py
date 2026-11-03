@@ -9,7 +9,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThreadPool, QTimer, QUrl
+from PySide6.QtCore import QSize, Qt, QThreadPool, QTimer, QUrl
 from PySide6.QtGui import (
     QAction,
     QActionGroup,
@@ -221,6 +221,9 @@ class MainWindow(QMainWindow):
         if remember_window:
             from bilibili_downloader.gui.window_state import WindowStateStore
             self._window_state = WindowStateStore(self, self._config.data_dir / "ui-state.json")
+        else:
+            from bilibili_downloader.gui.window_bounds import ScreenBounds
+            self._screen_bounds = ScreenBounds(self, QSize(900, 640))
         self._set_shell_enabled(not startup_paused)
         if not startup_paused:
             self._initialize_library()
@@ -550,7 +553,8 @@ class MainWindow(QMainWindow):
         self._match_policy.currentIndexChanged.connect(lambda _: self._strict_match_check.setChecked(self._match_policy.currentData()))
         self._strict_match_check.toggled.connect(lambda checked: self._match_policy.setCurrentIndex(int(checked)))
         controls.body.addWidget(FieldRow("规格不满足时", self._match_policy))
-        controls.body.addWidget(help_text("画质、编码或音质无法满足目标时，按此规则处理。"))
+        self._match_policy.setToolTip("请求的画质、编码或音质不可用时，允许回退或停止该项。")
+        self._match_policy.setAccessibleDescription(self._match_policy.toolTip())
         self._danmaku_check = DownloadOptionCard("下载弹幕", "ASS", "star")
         self._danmaku_check.setChecked(self._settings.download_danmaku)
         self._subtitle_check = DownloadOptionCard("下载字幕", "SRT", "info")
@@ -1057,7 +1061,7 @@ class MainWindow(QMainWindow):
         if self._current_video is None or not hasattr(selection, "cid"):
             if self._current_video is not None:
                 self._download_btn.setEnabled(True)
-                self._resolve_notice.set_message("批量分 P 将在下载时逐项确认可用规格。" if selection in ("all", "selected") else "")
+                self._resolve_notice.set_message("")
             return
         token, source_info = self._page_stream_request, self._current_video
         worker = ResolveWorker(self._api_client, "", video_info=source_info.for_page(selection))

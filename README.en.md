@@ -76,6 +76,8 @@ Path actions now sit beside the download directory, task views highlight whole r
 
 ## Download and install
 
+**Development branch (unreleased):** Further polish on top of `v0.8.10b2` reduces repeated hints, separates hover from keyboard focus, and moves secondary actions into a More menu when space is limited. See the [native comparisons and validation record](docs/UI_FEEDBACK_VALIDATION.md). The published beta 2 downloads below retain their original contents.
+
 **`v0.8.10b2` prerelease:** Building on beta 1, this version adds durable media reuse, independent attachment repair, strict media matching, queue and batch search, custom part ranges, automatic network retries, media inspection, and directory relinking. Existing settings and queued output snapshots remain compatible. The refined workflows retain checked items across filters, show hidden selection counts, unify part and attachment dialogs, separate media/specification/attachment results, and offer searchable Chinese naming fields. [Download beta 2](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10b2) · [User guide](docs/USER_GUIDE.md#下载与归档优化) · [Polish validation](docs/WORKFLOW_POLISH_VALIDATION.md), including native before/after images, paired performance results, and remaining device and long-duration live-recording checks. The stable update channel remains on `v0.8.9`.
 
 ![Beta 2 batch search and selection counts](docs/images/workflow-polish/after/archive-batch-dark-900.png)

@@ -163,3 +163,7 @@ class FileTable(QTableView):
     def setRowHidden(self, row, hidden):
         super().setRowHidden(row, hidden)
         self._row_hover.schedule()
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        self._row_hover.paint_focus()

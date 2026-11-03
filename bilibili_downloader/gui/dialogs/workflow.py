@@ -1,18 +1,22 @@
 """Consistent, bounded workflow dialogs with a fixed action footer."""
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
     QDialog,
-    QHBoxLayout,
     QLabel,
     QLineEdit,
     QPlainTextEdit,
-    QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 from bilibili_downloader.gui.widgets.components import Notice, help_text, scroll_area
+from bilibili_downloader.gui.widgets.responsive_actions import (
+    ActionButton,
+    ResponsiveActions,
+)
+from bilibili_downloader.gui.window_bounds import ScreenBounds
 
 
 class WorkflowDialog(QDialog):
@@ -24,11 +28,13 @@ class WorkflowDialog(QDialog):
         root.setContentsMargins(24, 24, 24, 20)
         root.setSpacing(16)
         heading = QLabel(title)
+        heading.setWordWrap(True)
         heading.setObjectName("DialogTitle")
         root.addWidget(heading)
         if description:
             root.addWidget(help_text(description))
         self.content = QWidget()
+        self.content.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.body = QVBoxLayout(self.content)
         self.body.setContentsMargins(0, 0, 0, 0)
         self.body.setSpacing(12)
@@ -36,22 +42,30 @@ class WorkflowDialog(QDialog):
         root.addWidget(self.scroller, 1)
         self.notice = Notice()
         root.addWidget(self.notice)
-        footer = QHBoxLayout()
+        self.footer = QWidget()
+        from PySide6.QtWidgets import QBoxLayout
+        footer = QBoxLayout(QBoxLayout.LeftToRight, self.footer)
+        footer.setContentsMargins(0, 0, 0, 0)
         footer.setSpacing(8)
         self.footer_hint = help_text("")
         footer.addWidget(self.footer_hint, 1)
-        self.cancel_button = QPushButton("取消")
+        self.footer_actions = ResponsiveActions()
+        self.cancel_button = ActionButton("取消")
+        self.cancel_button.setProperty("alwaysVisible", True)
         self.cancel_button.clicked.connect(self.reject)
-        self.confirm_button = QPushButton(confirm)
+        self.confirm_button = ActionButton(confirm)
+        self.confirm_button.setProperty("alwaysVisible", True)
         self.confirm_button.setObjectName("PrimaryButton")
         self.confirm_button.setAutoDefault(False)
         self.confirm_button.clicked.connect(self.accept)
-        footer.addWidget(self.cancel_button)
-        footer.addWidget(self.confirm_button)
-        root.addLayout(footer)
+        self.footer_actions.row.addWidget(self.cancel_button)
+        self.footer_actions.row.addWidget(self.confirm_button)
+        footer.addWidget(self.footer_actions)
+        root.addWidget(self.footer)
         self.resize(width, 500)
         self._return_focus = parent.focusWidget() if parent else None
         self.finished.connect(self._restore_focus)
+        self._screen_bounds = ScreenBounds(self, QSize(420, 0))
 
     def _restore_focus(self, _result):
         from shiboken6 import isValid

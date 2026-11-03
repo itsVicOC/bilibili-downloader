@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QStackedWidget,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -31,6 +30,7 @@ from bilibili_downloader.gui.threads.batch_worker import (
     SourceResolveWorker,
 )
 from bilibili_downloader.gui.widgets.components import (
+    ActionButton,
     ElidedLabel,
     EmptyState,
     MessageBox,
@@ -38,6 +38,7 @@ from bilibili_downloader.gui.widgets.components import (
     OutputActionBar,
     SectionCard,
 )
+from bilibili_downloader.gui.widgets.row_hover import RowHoverTable
 from bilibili_downloader.gui.widgets.selection import SelectionBar, TableSelection
 
 
@@ -110,6 +111,11 @@ class BatchDialog(QDialog):
             self.setMinimumSize(700, 520)
             self.resize(820, 640)
         self._setup_ui()
+        if not embedded:
+            from PySide6.QtCore import QSize
+
+            from bilibili_downloader.gui.window_bounds import ScreenBounds
+            self._screen_bounds = ScreenBounds(self, QSize(700, 0))
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -150,9 +156,10 @@ class BatchDialog(QDialog):
         self._url_text.textChanged.connect(self._refresh_input_count)
         self._input_card.body.addWidget(self._url_text)
         input_row = QHBoxLayout()
-        hint = QLabel("支持多个来源，解析后可逐项选择作品")
+        hint = QLabel("")
         self._input_hint = hint
         hint.setObjectName("MetaLabel")
+        hint.hide()
         input_row.addWidget(hint, 1)
         self._resolve_btn = QPushButton("解析并预览")
         self._resolve_btn.setObjectName("PrimaryButton")
@@ -186,8 +193,9 @@ class BatchDialog(QDialog):
         self._preview_card.body.setSpacing(6)
         self._available_label = QLabel()
         self._available_label.setObjectName("MetaLabel")
+        self._available_label.hide()
         self._preview_card.header.insertWidget(1, self._available_label)
-        self._preview = QTableWidget(0, 5)
+        self._preview = RowHoverTable(0, 5)
         self._preview.setObjectName("BatchPreview")
         self._preview.setHorizontalHeaderLabels(["", "作品", "UP 主", "来源", "保存情况"])
         header = self._preview.horizontalHeader()
@@ -231,6 +239,7 @@ class BatchDialog(QDialog):
         self._path_preview = ElidedLabel(elide_mode=Qt.ElideMiddle)
         self._path_preview.setObjectName("MetaLabel")
         self._preview_card.body.addWidget(self._path_preview)
+        self._path_preview.hide()
         self._result_label = QLabel("解析后可在此筛选要加入的作品")
         self._result_label.setObjectName("MetaLabel")
         self._result_label.setTextFormat(Qt.PlainText)
@@ -252,7 +261,7 @@ class BatchDialog(QDialog):
         self._notice = Notice(action="查看详情", callback=self._show_errors)
         self._notice.action.hide()
         layout.addWidget(self._notice)
-        self._action_bar = OutputActionBar("已选 0 个作品 · 0 个任务")
+        self._action_bar = OutputActionBar("0 个任务")
         self._selected_label = self._action_bar.status
         self._output_specs = self._action_bar.specs
         self._output_directory = self._action_bar.directory
@@ -261,13 +270,15 @@ class BatchDialog(QDialog):
         self._action_bar.submit_requested.connect(self.accept)
         self._action_bar.edit_button.setVisible(self._embedded)
         if not self._embedded:
-            cancel = QPushButton("取消")
+            cancel = ActionButton("取消")
+            cancel.setProperty("alwaysVisible", True)
             cancel.clicked.connect(self.reject)
             self._footer_actions.insertWidget(0, cancel)
         layout.addWidget(self._action_bar)
 
     def set_output_summary(self, specs, directory):
         self._output_specs.set_full_text(specs)
+        self._default_directory = directory
         self._output_directory.set_full_text(directory)
         self._path_cache_rows = None
         self.update_path_previews()
@@ -300,11 +311,12 @@ class BatchDialog(QDialog):
                 first, full = first or relative, full or absolute
         self._path_preview.set_full_text(f"路径示例：{first}" if count else "选择作品后预览保存路径")
         self._path_preview.setToolTip(full)
-        self._selected_label.setText(f"已选 {len(selected)} 个作品 · {count} 个任务")
+        self._output_directory.set_full_text(f"预计：{first}" if full else getattr(self, "_default_directory", ""), copy_value=full or getattr(self, "_default_directory", ""))
+        self._selected_label.setText(f"{count} 个任务")
 
     def _toggle_input(self, collapsed):
         self._url_text.setVisible(not collapsed)
-        self._input_hint.setVisible(not collapsed)
+        self._input_hint.hide()
         self._resolve_btn.setVisible(not collapsed)
         self._source_summary.setVisible(collapsed)
         self._count_label.setVisible(not collapsed)
@@ -329,7 +341,7 @@ class BatchDialog(QDialog):
     def _selection_updated(self):
         count = len(self.get_video_infos())
         valid = self._resolved_source == self._url_text.toPlainText()
-        self._selected_label.setText(f"已选 {count} 个作品 · {sum(len(info.pages) if info.is_multi_part else 1 for info in self.get_video_infos())} 个任务")
+        self._selected_label.setText(f"{sum(len(info.pages) if info.is_multi_part else 1 for info in self.get_video_infos())} 个任务")
         self._add_btn.setEnabled(count > 0 and valid and not self._busy)
         self.update_path_previews()
         if self._inventory_results:
@@ -337,7 +349,10 @@ class BatchDialog(QDialog):
                 inventory_summary,
             )
             groups = [group for group, selector in zip(self._inventory_results, self._selectors) if selector.isChecked()]
-            self._result_label.setText(self._report_summary() + " · " + inventory_summary(groups))
+            self._result_label.setText(inventory_summary(groups) if groups else "")
+        else:
+            self._result_label.setText("")
+        self._result_label.setVisible(bool(self._result_label.text()))
 
     def _refresh_input_count(self):
         if self._resolved_source is not None:
@@ -640,8 +655,10 @@ class BatchDialog(QDialog):
         self._inventory_results = []
         if self._inventory_job is not None:
             self._inventory_job.cancel()
-        if self._resolved_items:
-            self._result_label.setText(self._report_summary() + " · 已有文件待核对")
+        pending = bool(self._resolved_items and self.library_repository is not None
+                       and getattr(self, "output_item_factory", None))
+        self._result_label.setText("正在核对已有文件…" if pending else "")
+        self._result_label.setVisible(pending)
         self._inventory_timer.start(150)
 
     def _refresh_inventory(self):
@@ -678,6 +695,8 @@ class BatchDialog(QDialog):
                 return
             if isinstance(result, Exception):
                 self._notice.set_message("已有文件暂未核对，可继续加入任务；下载时会再次确认。", "warning")
+                self._result_label.clear()
+                self._result_label.hide()
                 for row in range(self._preview.rowCount()):
                     self._preview.item(row, 4).setText("待确认")
                 return
@@ -686,6 +705,7 @@ class BatchDialog(QDialog):
                 self._preview.item(row, 4).setText(group.label)
                 self._preview.item(row, 4).setToolTip(group.label)
             self._selection_updated()
+            self._sync_result_feedback()
 
         job.signals.finished.connect(finished)
         QThreadPool.globalInstance().start(job)
@@ -700,11 +720,12 @@ class BatchDialog(QDialog):
                 self.selection.state.selected.add(info.content_identity)
         self.selection._paint_checks()
         self._filter_results()
-        self._notice.set_message("已勾选当前结果中未完整保存的作品；其他已选内容继续保留。", "success")
+        self._sync_result_feedback()
 
     def _sync_result_feedback(self):
         items = self._resolved_items
         self._issue_btn.setVisible(bool(items and self._errors))
+        self._issue_btn.setText(f"未解析（{len(self._errors)}）")
         self._issue_btn.setAccessibleName(f"查看 {len(self._errors)} 项未解析内容及重试入口")
         self._issue_btn.setToolTip(self._report_summary())
         if self._resolved_source != self._url_text.toPlainText():
@@ -716,7 +737,7 @@ class BatchDialog(QDialog):
             self._notice.action.show()
         else:
             self._notice.set_message(
-                "解析已取消。" if self._report.cancelled and not items else ""
+                ("已取消解析，保留已解析结果。" if items else "解析已取消。") if self._report.cancelled else ""
             )
             self._notice.action.hide()
 
@@ -762,7 +783,7 @@ class BatchDialog(QDialog):
         dialog.resize(760, 440)
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(24, 24, 24, 24)
-        detail = QTableWidget(len(self._report.issues), 3)
+        detail = RowHoverTable(len(self._report.issues), 3)
         detail.setHorizontalHeaderLabels(["内容", "原因", "链接"])
         detail.setEditTriggers(QAbstractItemView.NoEditTriggers)
         detail.setSelectionBehavior(QAbstractItemView.SelectRows)

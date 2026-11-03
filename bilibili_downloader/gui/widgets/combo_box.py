@@ -1,7 +1,7 @@
 """Theme-aware selectors with anchored popups and Qt's input handling."""
 
 from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt
-from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QColor, QCursor, QGuiApplication, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -61,11 +61,13 @@ class _OptionDelegate(QStyledItemDelegate):
         painter.setClipRect(opt.rect)
         painter.setRenderHint(QPainter.Antialiasing)
         if current or (highlighted and enabled):
-            painter.setPen(
-                QPen(QColor(p.focus), 1) if highlighted and not current else Qt.NoPen
-            )
+            painter.setPen(Qt.NoPen)
             painter.setBrush(QColor(p.subtle_selection if current else p.control_hover))
             painter.drawRoundedRect(rect, 6, 6)
+        if enabled and index == self.combo.view().currentIndex() and self.combo.view().property("keyboardFocus"):
+            painter.setPen(QPen(QColor(p.focus), 1))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRoundedRect(rect.adjusted(2, 1, -2, -1), 5, 5)
         color = p.disabled if not enabled else p.active_text if current else p.text
         painter.setPen(QColor(color))
         painter.setFont(opt.font)
@@ -112,6 +114,8 @@ class ComboBox(QComboBox):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setProperty("popupOpen", False)
+        self._explicit_tooltip = ""
+        self._pointer_pos = QCursor.pos()
         self.setMaxVisibleItems(8)
         self.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
         self.setMinimumContentsLength(8)
@@ -122,15 +126,33 @@ class ComboBox(QComboBox):
         view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         view.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         view.setTextElideMode(Qt.ElideRight)
+        view.viewport().installEventFilter(self)
+        view.installEventFilter(self)
         self.setView(view)
         self.setItemDelegate(_OptionDelegate(self))
         popup = view.window()
         popup.setObjectName("ComboPopup")
         popup.setAttribute(Qt.WA_TranslucentBackground, True)
         popup.installEventFilter(self)
-        self.currentTextChanged.connect(self.setToolTip)
+        self.currentTextChanged.connect(self._sync_tooltip)
+
+    def setToolTip(self, text):
+        self._explicit_tooltip = text
+        self._sync_tooltip()
+
+    def _sync_tooltip(self, *_args):
+        super().setToolTip(self._explicit_tooltip or self.currentText())
 
     def eventFilter(self, watched, event):
+        if watched in (self.view(), self.view().viewport()):
+            if event.type() == QEvent.KeyPress:
+                self._pointer_pos = QCursor.pos()
+            moved = event.type() == QEvent.MouseMove and QCursor.pos() != self._pointer_pos
+            if event.type() == QEvent.MouseMove:
+                self._pointer_pos = QCursor.pos()
+            if (moved or event.type() == QEvent.MouseButtonPress) and self.view().property("keyboardFocus"):
+                self.view().setProperty("keyboardFocus", False)
+                self.view().viewport().update()
         # Escape and outside clicks can hide Qt's popup without calling hidePopup.
         if event.type() == QEvent.Hide and watched.objectName() == "ComboPopup":
             if self.property("popupOpen"):
@@ -147,7 +169,10 @@ class ComboBox(QComboBox):
     def showPopup(self):
         if not self.isEnabled() or not self.count():
             return
+        keyboard = bool(self.property("keyboardFocus"))
+        self._pointer_pos = QCursor.pos()
         super().showPopup()
+        self.view().setProperty("keyboardFocus", keyboard)
         self._position_popup()
         self._sync_popup_state()
 

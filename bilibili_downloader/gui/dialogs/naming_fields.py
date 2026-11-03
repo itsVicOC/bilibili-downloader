@@ -6,17 +6,17 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLineEdit,
     QStackedWidget,
-    QTableWidget,
     QTableWidgetItem,
 )
 
 from bilibili_downloader.gui.dialogs.workflow import WorkflowDialog
 from bilibili_downloader.gui.widgets.components import EmptyState
+from bilibili_downloader.gui.widgets.row_hover import RowHoverTable
 
 
 class NamingFieldDialog(WorkflowDialog):
     def __init__(self, fields, parent=None, *, read_only=False):
-        super().__init__("命名字段", "按中文名称查找字段，查看用途和示例。占位符会在下载时替换为实际内容。", parent, confirm="关闭" if read_only else "插入此字段", width=740)
+        super().__init__("命名字段", parent=parent, confirm="关闭" if read_only else "插入此字段", width=740)
         self.fields = fields
         self.variable = None
         self.read_only = read_only
@@ -24,7 +24,7 @@ class NamingFieldDialog(WorkflowDialog):
         self.search.setPlaceholderText("搜索中文名称、用途或占位符")
         self.search.setClearButtonEnabled(True)
         self.body.addWidget(self.search)
-        self.table = QTableWidget(len(fields), 2)
+        self.table = RowHoverTable(len(fields), 2)
         self.table.setHorizontalHeaderLabels(["字段与示例", "占位符"])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.table.setColumnWidth(1, 155)

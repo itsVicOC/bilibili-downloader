@@ -39,6 +39,7 @@ from bilibili_downloader.gui.dialogs.file_picker import file_picker
 from bilibili_downloader.gui.dialogs.workflow import WorkflowDialog
 from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
+    ActionButton,
     CommandBar,
     EmptyState,
     Notice,
@@ -199,9 +200,10 @@ class LibraryPage(QWidget):
         self.state_filter.setFixedWidth(112)
         self.state_filter.currentIndexChanged.connect(self._filter)
         self.tools.filters.addWidget(self.state_filter)
-        self.open_action = QPushButton("打开文件")
-        self.folder_action = QPushButton("打开文件夹")
-        self.check_button = QPushButton("检查文件")
+        self.open_action = ActionButton("打开文件")
+        self.folder_action = ActionButton("打开文件夹")
+        self.check_button = ActionButton("检查文件")
+        self.check_button.setProperty("alwaysVisible", True)
         for button, callback in (
             (self.open_action, lambda: self.open_file(False)),
             (self.folder_action, lambda: self.open_file(True)),
@@ -212,7 +214,8 @@ class LibraryPage(QWidget):
             self.tools.actions.addWidget(button)
         self.open_action.hide()
         self.folder_action.hide()
-        self.cancel_button = QPushButton("取消检查")
+        self.cancel_button = ActionButton("取消检查")
+        self.cancel_button.setProperty("alwaysVisible", True)
         self.cancel_button.clicked.connect(self._request_cancel)
         self.cancel_button.hide()
         self.tools.actions.addWidget(self.cancel_button)
@@ -602,33 +605,17 @@ class LibraryPage(QWidget):
                 "recycled": "文件已回收，可从系统回收站恢复后检查。",
             }.get(media["state"] if media else "unchecked", "")
             if asset["outcome"].warnings:
-                hint += (
-                    " " if hint else ""
-                ) + f"有 {len(asset['outcome'].warnings)} 条下载提示，悬停作品可查看。"
                 self.detail_title.setToolTip(
                     asset["item"].display_title
                     + "\n"
                     + "\n".join(asset["outcome"].warnings)
                 )
             outcome = self._presented_outcome(asset)
-            from bilibili_downloader.core.media_policy import (
-                ARTIFACT_LABELS,
-                specification_warnings,
-            )
-            states = []
-            if outcome.missing_artifacts:
-                states.append("附件待补全：" + "、".join(ARTIFACT_LABELS.get(k, k) for k in outcome.missing_artifacts))
-            unknown = outcome.actual_audio_quality is None or (
-                asset["item"].output_mode == OutputMode.VIDEO
-                and (outcome.actual_quality is None or outcome.actual_video_codec is None)
-            )
-            states.append("实际规格尚未确认" if unknown else "规格不满足原目标" if specification_warnings(asset["item"], outcome) else "规格与原目标一致")
-            if outcome.media_verification:
-                states.append(outcome.media_verification["message"])
-            hint = " · ".join([hint, *states] if hint else states)
-            self.detail_hint.setText(hint)
-            self.detail_hint.setVisible(bool(hint))
             self.detail.set_result(asset["item"], outcome, media_state=_media_state(media, outcome))
+            if not hint and outcome.media_verification.get("valid") is False:
+                hint = outcome.media_verification.get("message", "")
+            self.detail_hint.set_full_text(hint)
+            self.detail_hint.setVisible(bool(hint))
             missing = media and media["state"] in {"missing", "inaccessible"}
             primary = ("重新选择位置…", self.relocate) if missing else ("打开文件", lambda: self.open_file(False))
             secondary = ("补全附件…", self.request_supplement) if outcome.missing_artifacts and not missing else ("打开文件夹", lambda: self.open_file(True))

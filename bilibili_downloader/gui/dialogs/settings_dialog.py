@@ -49,10 +49,12 @@ from bilibili_downloader.gui.widgets.background_picker import BackgroundPicker
 from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
     ActionBar,
+    ActionButton,
     CollapsibleSection,
     ElidedLabel,
     FieldRow,
     Notice,
+    ResponsiveActions,
     ResponsiveFields,
     SectionCard,
     help_text,
@@ -168,6 +170,11 @@ class SettingsDialog(QDialog):
         self.setWindowTitle("BiliFlow 设置")
         self._setup_ui()
         self.load_settings(settings)
+        if not embedded:
+            from PySide6.QtCore import QSize
+
+            from bilibili_downloader.gui.window_bounds import ScreenBounds
+            self._screen_bounds = ScreenBounds(self, QSize(620, 0))
         for control in self._controls.values():
             if isinstance(control, QLineEdit):
                 control.textChanged.connect(self._draft_changed)
@@ -208,7 +215,8 @@ class SettingsDialog(QDialog):
         self._clipboard_check = QCheckBox("前台识别剪贴板中的 B 站内容")
         self._controls["clipboard_monitor_enabled"] = self._clipboard_check
         recognition.body.addWidget(self._clipboard_check)
-        recognition.body.addWidget(help_text("启动和切回前台时也会检查已复制的内容；确认后才联网解析。"))
+        self._clipboard_check.setToolTip("启动和切回前台时检查剪贴板，确认后才联网解析。")
+        self._clipboard_check.setAccessibleDescription(self._clipboard_check.toolTip())
         download.addWidget(recognition)
         formats = SectionCard("默认媒体规格")
         self._output_mode_combo = self._combo(
@@ -337,9 +345,8 @@ class SettingsDialog(QDialog):
         self._output_dir.textChanged.connect(self._update_template_previews)
         for combo in (self._output_mode_combo, self._audio_combo, self._quality_combo, self._codec_combo):
             combo.currentIndexChanged.connect(self._update_template_previews)
-        self._templates_section.body.addWidget(help_text("仅对新任务生效；已有任务继续使用原保存位置。目录用 / 分隔，扩展名自动添加。"))
-        self._template_fields = CollapsibleSection("字段使用说明")
-        self._template_fields.body.addWidget(help_text("展开对应模板的高级编辑，点击「插入字段」即可按中文查找，无需记忆英文。"))
+        self._templates_section.body.addWidget(help_text("仅对新任务生效，已有任务保持原保存位置。"))
+        self._template_fields = CollapsibleSection("全部命名字段")
         browse_fields = QPushButton("搜索全部命名字段…")
         browse_fields.setObjectName("TextButton")
         browse_fields.clicked.connect(self._browse_naming_fields)
@@ -420,7 +427,7 @@ class SettingsDialog(QDialog):
             self._probe_notices[kind] = notice
             entry.textChanged.connect(lambda _text, n=notice: n.set_message(""))
             engines.body.addWidget(notice)
-        engines.body.addWidget(help_text("检测使用当前草稿路径，不会自动保存设置。"))
+        engines.setToolTip("检测使用当前草稿路径，不会自动保存设置。")
         self._probe_notice = self._probe_notices["ffmpeg"]
         storage = SectionCard("断点缓存")
         storage.body.addWidget(
@@ -451,7 +458,8 @@ class SettingsDialog(QDialog):
             [("仅更新正式版", UpdateChannel.STABLE), ("更新最新版（包含 beta、rc 版）", UpdateChannel.LATEST)],
         )
         self._update_channel.currentIndexChanged.connect(lambda *_args: self.update_channel_changed.emit())
-        update_card.body.addWidget(help_text("启动检查使用已保存设置；手动检查使用当前通道，也能查看已跳过的版本。"))
+        self._update_channel.setToolTip("启动检查使用已保存通道；手动检查使用当前选择，包含已跳过版本。")
+        self._update_channel.setAccessibleDescription(self._update_channel.toolTip())
         self._update_notice = Notice()
         update_card.body.addWidget(self._update_notice)
         self._update_progress = QProgressBar()
@@ -543,13 +551,12 @@ class SettingsDialog(QDialog):
         example_layout = QVBoxLayout(example_page)
         example_layout.setContentsMargins(16, 16, 16, 16)
         example_card = SectionCard("玻璃效果预览")
-        example_card.body.addWidget(help_text("背景保留细节，文字清晰可读。"))
         example_layout.addWidget(example_card)
         example_layout.addStretch()
         self._glass_preview.addWidget(example_page)
         self._glass_preview.set_background(background_path(BUILTIN_BACKGROUNDS[0].reference), builtin=True)
         glass.body.addWidget(self._glass_preview)
-        glass.body.addWidget(help_text("应用于所有工作区的图片背景。"))
+        self._glass_blur.setToolTip("应用于所有工作区的图片背景。")
         self._glass_blur.valueChanged.connect(self._sync_glass_blur)
         appearance.addWidget(glass)
         self._background_grid = QGridLayout()
@@ -576,11 +583,14 @@ class SettingsDialog(QDialog):
         self._draft_label = ElidedLabel("所有修改已保存")
         self._draft_label.setObjectName("MetaLabel")
         footer.addWidget(self._draft_label, 1)
-        self._reset_btn = QPushButton("撤销修改")
+        self._settings_actions = ResponsiveActions()
+        footer.addWidget(self._settings_actions)
+        self._reset_btn = ActionButton("撤销修改")
         self._reset_btn.setObjectName("OutputSecondaryButton")
         self._reset_btn.clicked.connect(lambda: self.load_settings(self._settings))
-        footer.addWidget(self._reset_btn)
-        self._save_btn = QPushButton("保存设置")
+        self._settings_actions.row.addWidget(self._reset_btn)
+        self._save_btn = ActionButton("保存设置")
+        self._save_btn.setProperty("alwaysVisible", True)
         self._save_btn.setAutoDefault(not self._embedded)
         self._save_btn.setDefault(not self._embedded)
         self._save_btn.setObjectName("PrimaryButton")
@@ -588,11 +598,12 @@ class SettingsDialog(QDialog):
         self._save_btn.setFixedHeight(44)
         self._save_btn.clicked.connect(self._accept_if_valid)
         if not self._embedded:
-            cancel = QPushButton("取消")
+            cancel = ActionButton("取消")
+            cancel.setProperty("alwaysVisible", True)
             cancel.setObjectName("OutputSecondaryButton")
             cancel.clicked.connect(self.reject)
-            footer.addWidget(cancel)
-        footer.addWidget(self._save_btn)
+            self._settings_actions.row.addWidget(cancel)
+        self._settings_actions.row.addWidget(self._save_btn)
         layout.addWidget(self._action_bar)
 
     def _sync_appearance_preview(self, *_args):

@@ -808,7 +808,10 @@ def test_batch_summary_counts_expanded_pages(workspace):
     batch = workspace._batch_page
     batch._url_text.setPlainText("BVdemo")
     batch._on_resolved([multipart()], [])
-    assert batch._selected_label.text() == "已选 1 个作品 · 110 个任务"
+    assert batch._selected_label.text() == "110 个任务"
+    assert "已选 1 项" in batch.selection_bar.summary.text()
+    assert batch._path_preview.isHidden()
+    assert batch._output_directory.toolTip() == batch._path_preview.toolTip()
     assert "001 -" in batch._path_preview._full_text
     assert "路径示例" in batch._path_preview._full_text
     assert workspace._settings.output_dir not in batch._path_preview._full_text

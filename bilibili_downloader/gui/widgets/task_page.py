@@ -30,6 +30,7 @@ from bilibili_downloader.gui.resources.styles import UI_METRICS
 from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
     ActionBar,
+    ActionButton,
     CommandBar,
     ElidedLabel,
     EmptyState,
@@ -37,6 +38,7 @@ from bilibili_downloader.gui.widgets.components import (
     Notice,
     PageHeader,
     PopupMenu,
+    ResponsiveActions,
     SectionCard,
     StatusBadge,
     TaskDetailPanel,
@@ -154,7 +156,7 @@ class TaskPage(QWidget):
             ("暂停", self.pause_all_requested),
             ("继续", self.resume_all_requested),
         ):
-            button = QPushButton(text)
+            button = ActionButton(text)
             button.setObjectName("TableSubtleButton")
             button.clicked.connect(signal.emit)
             self._bulk_buttons.append(button)
@@ -345,7 +347,7 @@ class TaskPage(QWidget):
             self.download_detail.set_actions(("打开文件夹", lambda: self.downloads.open_requested.emit(task_id)), secondary)
         elif task and task.retry_at:
             self.download_detail.set_actions(("立即重试", lambda: self.downloads.retry_requested.emit(task_id)),
-                                            ("停止等待", lambda: self.downloads._on_pause_clicked(task_id)))
+                                            ("停止等待", lambda: self.downloads._on_pause_clicked(task_id)), secondary_required=True)
         self.download_detail.show()
         label = {"authentication": "登录后重试…", "permission": "核对权限后重试…", "storage": "更换目录并重试…", "rate_limit": "查看冷却说明"}.get(task.error_category if task else "")
         if label and self.downloads._states.get(task_id) == TaskStatus.FAILED:
@@ -595,11 +597,14 @@ class TaskPage(QWidget):
         self.history_detail.setParent(self.history_summary)
         self.history_summary.setToolTip("")
         self.history_actions = ActionBar()
-        footer = self.history_actions.row
-        self.open_button = QPushButton("打开目录")
+        self._history_action_strip = ResponsiveActions()
+        self.history_actions.row.addWidget(self._history_action_strip, 1)
+        footer = self._history_action_strip.row
+        self.open_button = ActionButton("打开目录")
+        self.open_button.setProperty("actionPriority", 50)
         self.open_button.clicked.connect(self._open)
         footer.addWidget(self.open_button)
-        self.copy_path_button = QPushButton("复制路径")
+        self.copy_path_button = ActionButton("复制路径")
         self.copy_path_button.clicked.connect(lambda: QApplication.clipboard().setText(str(self._selected_path() or "")))
         footer.addWidget(self.copy_path_button)
         self.history_more = QPushButton("更多")
@@ -618,14 +623,16 @@ class TaskPage(QWidget):
         self.history_more.setMenu(self.history_menu)
         footer.addWidget(self.history_more)
         footer.addStretch()
-        self.export_button = QPushButton("合并导出 MP4")
+        self.export_button = ActionButton("合并导出 MP4")
+        self.export_button.setProperty("alwaysVisible", True)
         self.export_button.setObjectName("PrimaryButton")
         self.export_button.clicked.connect(self._export_mp4)
-        self.export_play = QPushButton("打开 MP4")
+        self.export_play = ActionButton("打开 MP4")
+        self.export_play.setProperty("actionPriority", 30)
         self.export_play.clicked.connect(self._play_export)
         self.export_play.hide()
         footer.addWidget(self.export_play)
-        self.export_location = QPushButton("所在目录")
+        self.export_location = ActionButton("所在目录")
         self.export_location.setObjectName("TextButton")
         self.export_location.clicked.connect(self._open_export)
         self.export_location.hide()

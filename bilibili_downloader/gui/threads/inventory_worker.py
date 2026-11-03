@@ -38,7 +38,9 @@ def inventory_summary(groups):
         for key, count in group.counts().items():
             counts[key] = counts.get(key, 0) + count
     new = counts['not_saved'] + counts['specification_mismatch'] + counts['unavailable']
-    return f"复用 {counts['saved']} · 补附件 {counts['missing_attachments']} · 新下载 {new}"
+    return " · ".join(f"{label} {count}" for label, count in (
+        ("复用", counts['saved']), ("补附件", counts['missing_attachments']), ("新下载", new)
+    ) if count) or "未选择作品"
 
 
 class InventorySignals(QObject):

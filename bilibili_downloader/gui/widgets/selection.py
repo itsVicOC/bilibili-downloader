@@ -5,9 +5,7 @@ from dataclasses import dataclass, field
 from PySide6.QtCore import QEvent, QObject, QRect, Qt, Signal
 from PySide6.QtGui import QColor, QKeySequence, QPainter, QPen
 from PySide6.QtWidgets import (
-    QHBoxLayout,
     QLabel,
-    QPushButton,
     QStyle,
     QStyledItemDelegate,
     QStyleOptionViewItem,
@@ -16,6 +14,10 @@ from PySide6.QtWidgets import (
 )
 
 from bilibili_downloader.gui.widgets.components import palette
+from bilibili_downloader.gui.widgets.responsive_actions import (
+    ActionButton,
+    ResponsiveActions,
+)
 from bilibili_downloader.gui.widgets.row_hover import row_option
 
 
@@ -49,20 +51,26 @@ class SelectionBar(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        row = QHBoxLayout(self)
+        from PySide6.QtWidgets import QBoxLayout
+        row = QBoxLayout(QBoxLayout.LeftToRight, self)
+        self.row = row
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(8)
         self.summary = QLabel()
         self.summary.setObjectName("MetaLabel")
         self.summary.setWordWrap(True)
         row.addWidget(self.summary, 1)
-        self.all_button = QPushButton("全选当前结果")
-        self.review_button = QPushButton("查看已选")
-        self.clear_button = QPushButton("清空全部选择")
+        self.action_strip = ResponsiveActions(more_text="选择操作")
+        self.all_button = ActionButton("全选当前结果")
+        self.all_button.setProperty("actionPriority", 50)
+        self.review_button = ActionButton("查看已选")
+        self.review_button.setProperty("actionPriority", 30)
+        self.clear_button = ActionButton("清空全部选择")
         for button, signal in ((self.all_button, self.select_visible), (self.review_button, self.review_requested), (self.clear_button, self.clear_requested)):
             button.setObjectName("TableSubtleButton")
             button.clicked.connect(signal.emit)
-            row.addWidget(button)
+            self.action_strip.row.addWidget(button)
+        row.addWidget(self.action_strip)
 
     def update_state(self, state):
         suffix = f"，筛选外 {state.outside} 项" if state.outside else ""
@@ -71,6 +79,12 @@ class SelectionBar(QWidget):
         self.review_button.setEnabled(bool(state.selected) or state.reviewing)
         self.clear_button.setEnabled(bool(state.selected))
         self.all_button.setEnabled(bool(state.visible))
+
+    def resizeEvent(self, event):
+        from PySide6.QtWidgets import QBoxLayout
+        self.row.setDirection(QBoxLayout.TopToBottom if event.size().width() < 480 else QBoxLayout.LeftToRight)
+        self.action_strip.schedule()
+        super().resizeEvent(event)
 
 
 class SelectionItem(QTableWidgetItem):
@@ -105,7 +119,9 @@ class CheckableRowDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index):
         state_only = self.binding is not None and self.binding.paint_only and index.data(Qt.UserRole) in self.binding._keys
         if not state_only and index.data(Qt.CheckStateRole) is None:
-            return super().paint(painter, option, index)
+            opt = QStyleOptionViewItem(option)
+            self.initStyleOption(opt, index)
+            return option.widget.style().drawControl(QStyle.CE_ItemViewItem, row_option(opt, index), painter, option.widget)
         opt = QStyleOptionViewItem(option)
         self.initStyleOption(opt, index)
         opt.features &= ~QStyleOptionViewItem.HasCheckIndicator

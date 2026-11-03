@@ -18,6 +18,8 @@
 
 ## 推荐阅读路线
 
+开发分支在 beta 2 后继续精简提示、移除悬停描边并改善窄空间按钮收纳；原生对比、回归与打包状态见[提示与布局精修验收](UI_FEEDBACK_VALIDATION.md)，发布安排另行决定。
+
 ### 我想使用 BiliFlow
 
 1. 从 [GitHub Releases](https://github.com/itsVicOC/bilibili-downloader/releases/latest) 选择适合系统的 full 或 lite 安装包。

@@ -11,12 +11,12 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QStackedWidget,
-    QTableWidget,
     QTableWidgetItem,
 )
 
 from bilibili_downloader.gui.dialogs.workflow import WorkflowDialog
 from bilibili_downloader.gui.widgets.components import CollapsibleSection, EmptyState
+from bilibili_downloader.gui.widgets.row_hover import RowHoverTable
 from bilibili_downloader.gui.widgets.selection import SelectionBar, TableSelection
 
 
@@ -38,7 +38,7 @@ def parse_page_range(text, maximum):
 
 class PageSelectionDialog(WorkflowDialog):
     def __init__(self, pages, selected, parent=None, *, title=""):
-        super().__init__("选择分 P", title or "搜索和切换视图会保留勾选；确认后应用到本次下载。", parent, confirm="确认选择")
+        super().__init__("选择分 P", title, parent, confirm="确认选择")
         self.pages = pages
         self.search = QLineEdit()
         self.search.setPlaceholderText("搜索分 P 标题或序号")
@@ -46,7 +46,7 @@ class PageSelectionDialog(WorkflowDialog):
         self.body.addWidget(self.search)
         self.selection_bar = SelectionBar()
         self.body.addWidget(self.selection_bar)
-        self.list = QTableWidget(len(pages), 2)
+        self.list = RowHoverTable(len(pages), 2)
         self.list.setHorizontalHeaderLabels(["分 P", "时长"])
         self.list.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.list.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
@@ -122,7 +122,7 @@ class PageSelectionDialog(WorkflowDialog):
         self.selection.state.selected.update(self.pages[n - 1].cid for n in numbers)
         self.selection._paint_checks()
         self.filter()
-        self.notice.set_message(f"已添加范围，合计选中 {len(self.selection.state.selected)} P。", "success")
+        self.notice.set_message("")
 
     def selected_pages(self):
         return [page for page in self.pages if page.cid in self.selection.state.selected]

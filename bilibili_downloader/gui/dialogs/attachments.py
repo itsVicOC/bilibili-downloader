@@ -31,7 +31,7 @@ def companion_status(item, outcome, kind):
 
 class AttachmentDialog(WorkflowDialog):
     def __init__(self, item, parent=None, *, outcome=None):
-        super().__init__("补全附件", "已有媒体和已保存的附件会保留。选择这次需要补全的内容。", parent, confirm="开始补全")
+        super().__init__("补全附件", "仅补全所选附件，保留已有媒体和附件。", parent, confirm="开始补全")
         self.item = item
         self.choices = {}
         title = QLabel(item.display_title)
@@ -52,7 +52,7 @@ class AttachmentDialog(WorkflowDialog):
             state, saved, missing = companion_status(item, outcome, kind)
             check.setEnabled(not saved and self.media_available)
             check.setChecked(missing and self.media_available)
-            check.setToolTip("已有文件会保留" if saved else "开始后确认来源并补全所选内容")
+            check.setToolTip("此附件已保存" if saved else "")
             self.choices[kind] = check
             row.addWidget(check, 1)
             row.addWidget(StatusBadge(state, "success" if saved else "warning" if missing else "muted"))
@@ -64,7 +64,8 @@ class AttachmentDialog(WorkflowDialog):
         self.all_subtitles.setEnabled(self.choices["subtitle"].isEnabled() and self.choices["subtitle"].isChecked())
         self.body.addWidget(self.all_subtitles)
         self.choices["subtitle"].toggled.connect(lambda checked: self.all_subtitles.setEnabled(checked))
-        self.body.addWidget(help_text("不选择全部语言时沿用该作品原来的字幕语言。没有可用字幕或来源无权限时，会保留媒体并说明原因。"))
+        self.all_subtitles.setToolTip("未勾选时沿用原字幕语言；无可用字幕时保留媒体并记录原因。")
+        self.all_subtitles.setAccessibleDescription(self.all_subtitles.toolTip())
         self.body.addStretch()
         if not self.media_available:
             self.notice.set_message("已有媒体无法访问，请先在下载文件中重新定位或检查磁盘连接。", "warning")
@@ -75,7 +76,6 @@ class AttachmentDialog(WorkflowDialog):
         count = sum(check.isChecked() and check.isEnabled() for check in self.choices.values())
         self.confirm_button.setEnabled(count > 0 and self.media_available)
         self.confirm_button.setText(f"开始补全（{count} 项）")
-        self.footer_hint.setText("主媒体保持不变")
 
     def selected_item(self):
         flags = {f"download_{key}": check.isChecked() and check.isEnabled() for key, check in self.choices.items()}
