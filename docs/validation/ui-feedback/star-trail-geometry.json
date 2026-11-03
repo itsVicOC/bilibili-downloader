@@ -1,7 +1,7 @@
 {
   "complete": true,
   "platform": "darwin",
-  "qt": "6.11.2",
+  "qt": "6.11.1",
   "backend": "cocoa",
   "version": "0.8.10b2",
   "color_theme": "star_trail",
@@ -35,7 +35,7 @@
       "file": "feedback-output-light-560.png",
       "requested_width": 560,
       "actual_width": 560,
-      "height": 126,
+      "height": 166,
       "clipped_buttons": [],
       "clipped_labels": []
     },
@@ -115,7 +115,7 @@
       "file": "feedback-output-dark-560.png",
       "requested_width": 560,
       "actual_width": 560,
-      "height": 126,
+      "height": 166,
       "clipped_buttons": [],
       "clipped_labels": []
     },
@@ -168,6 +168,7 @@
       "clipped_labels": []
     }
   ],
-  "revision": "ea897f23203afeaae8f4db2037765e4ea15048df",
-  "working_tree_dirty": true
+  "input_method": "QTest cursor movement and Qt viewport input; hover fill and row hit asserted",
+  "revision": "d670dc0a0573d47f1b0c928b5d78d93d46d2574f",
+  "working_tree_dirty": false
 }

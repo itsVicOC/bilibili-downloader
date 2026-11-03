@@ -16,7 +16,9 @@
 | 打开附件补全 | [重复保护说明](images/ui-feedback/before/polish-attachments-light.png) | [保留逐项状态与一处保护说明](images/ui-feedback/after/polish-attachments-light.png) |
 | 查看文件结果并继续处理 | [重复规格说明](images/ui-feedback/before/polish-files-light-900.png) | [三类结果及上下文操作](images/ui-feedback/after/polish-files-light-900.png) |
 
-补充：[完整行键盘焦点](images/ui-feedback/after/feedback-row-keyboard-light.png)、[窄栏选择统计与选择操作](images/ui-feedback/after/feedback-selection-light-420.png)、[青蓝深色下载配置](images/ui-feedback/after/blue-options-dark-900.png)、[媒体不可访问错误](images/ui-feedback/after/polish-attachments-offline-light.png)。完整矩阵在 GitHub 原生截图附件中保留。
+补充：[完整行键盘焦点](images/ui-feedback/after/feedback-row-keyboard-light.png)、[窄栏选择统计与选择操作](images/ui-feedback/after/feedback-selection-light-420.png)、[青蓝深色下载配置](images/ui-feedback/after/blue-options-dark-900.png)、[青蓝深色实际悬停](images/ui-feedback/after/blue-hover-dark.png)、[媒体不可访问错误](images/ui-feedback/after/polish-attachments-offline-light.png)。完整矩阵在 GitHub 原生截图附件中保留。
+
+同一源码的 Windows 原生样本：[150% 字体与万条数量](images/ui-feedback/after/windows-feedback-output-light-font150.png)、[青蓝深色悬停](images/ui-feedback/after/windows-feedback-hover-dark.png)、[整行键盘焦点](images/ui-feedback/after/windows-feedback-row-keyboard-light.png)。已复核中文文字、按钮完整性及悬停／焦点分离；几何原始记录见[粉紫](validation/ui-feedback/windows-star-trail-geometry.json)与[青蓝](validation/ui-feedback/windows-blue-geometry.json)。
 
 ## 操作与边界
 
@@ -33,10 +35,14 @@
 
 ## 本地与 GitHub 验证
 
-原生截图、原生测试、完整离屏回归与性能基准独立执行。完整页面矩阵共 96 张，为两套配色 × 深浅模式 × 三种窗口尺寸（900×640、1120×760、1320×860），补充分 P、字段、离线、错误、空结果、等待与完整详情。操作区另有 56 张截图，覆盖三种宽度及 150% 字体；测试确认真实字体度量增加。几何原始记录见[粉紫](validation/ui-feedback/star-trail-geometry.json)、[青蓝](validation/ui-feedback/blue-geometry.json)及[改前基线](validation/ui-feedback/baseline-geometry.json)。
+原生截图、原生测试、完整离屏回归与性能基准独立执行。每个平台的页面矩阵有 96 张，为两套配色 × 深浅模式 × 三种窗口尺寸（900×640、1120×760、1320×860），补充分 P、字段、离线、错误、空结果、等待与完整详情。操作区另有 56 张截图，覆盖三种宽度及 150% 字体；测试确认真实字体度量增加。GitHub 双平台共保留本轮矩阵 304 张，其他通用场景未计入。Cocoa 几何原始记录见[粉紫](validation/ui-feedback/star-trail-geometry.json)、[青蓝](validation/ui-feedback/blue-geometry.json)及[改前基线](validation/ui-feedback/baseline-geometry.json)。
 
 - 新增 `tests/test_ui_feedback.py`，验证共享操作栏、菜单单次触发、焦点转移、完整统计、控件边界及屏幕适配；下拉说明在切换选项后继续保留。
-- 最终 Cocoa 原生专项通过 **108 项**，含新增 52 项提示、悬停与边界测试；最终完整回归和 CI／双平台 `publish=false` 打包结果将随最终源码提交回填。
+- 最终验收提交 `d670dc0` 的完整离屏回归为 **1,300 项通过、6 项平台专项跳过**（266.72 秒）；9 条 Qt 测试弃用警告。Cocoa 原生专项 **120 项通过**，含新增 53 项提示、悬停与边界测试及原有操作栏检查；最终源码重新生成完整原生截图矩阵。Ruff、编译与 `git diff --check` 通过。原始[本地验证摘要](validation/ui-feedback/local-tests.json)保留命令与源码信息。
+- 首轮 GitHub 验收发现截图脚本按控件遍历顺序取到空菜单，以及 Linux 字体下测试没有实际触发收纳。`ea178f9` 改为定位可见且有内容的菜单，以长文案明确触发收纳并确认原按钮确实获得焦点；原有完整文字、边界、单次触发及焦点返回断言继续保留。旧运行停止，最终记录采用修正后同一源码的结果。
+- 原生截图进一步要求鼠标实际从其他行移入，验证悬停填充像素及整行命中状态，覆盖两套配色和深浅模式；Windows 旧操作栏测试改为核对可见控件，不再将隐藏的备用菜单按钮当作屏幕溢出。隐藏控件的焦点转移与菜单行为继续由新专项验证。
+- 原生自动化使用 QTest 及匹配的 Qt 视图输入事件。Cocoa／Windows runner 有时只移动光标而不投递鼠标移动，测试会等待窗口显示与实际命中行；截图继续校验真实绘制的底色，不直接设置悬停或焦点绘制状态。此类自动化不替代物理鼠标和键盘的实机验收。
+- 空闲复核发现操作栏无条件通知父布局会产生重复排版。`d670dc0` 只在尺寸提示改变时通知父布局；同一孤立场景先等待 200ms，再采样 500ms，额外布局从 10,080 次降为 0 次。新增测试同时验证空闲稳定和改变文案／宽度后继续正确收纳，已有字体与边界断言全部保留。
 - 沿用千条任务、万条文件记录的三轮配对基准与原响应门槛：搜索／选择 P95 ≤300ms，后台稳态心跳 ≤250ms，初次加载及结束刷新 ≤2s，取消 ≤1s。结果以本轮 GitHub 同一源码的报告为准。
 
 复现命令：
@@ -44,13 +50,51 @@
 ```bash
 QT_QPA_PLATFORM=offscreen python -m pytest -q
 ruff check bilibili_downloader tests scripts packaging_hooks
-QT_QPA_PLATFORM=cocoa python -m pytest -q tests/test_ui_feedback.py tests/test_combo_box.py tests/test_workflow_polish.py
+QT_QPA_PLATFORM=cocoa python -m pytest -q tests/test_ui_feedback.py tests/test_combo_box.py tests/test_workflow_polish.py tests/test_fluent_refinement.py
 python -m scripts.capture_ui_feedback --native --color-theme star_trail --output-dir build/ui-feedback/pressure-after/star_trail
 python -m scripts.capture_docs_screenshots --native --physical-pixels --workflow-polish-only --color-theme star_trail --output-dir build/ui-feedback/after-native/star_trail
 python -m scripts.benchmark_workflow_polish --output-dir build/ui-feedback/performance
 ```
 
 Windows 原生测试使用 `QT_QPA_PLATFORM=windows`。对照截图使用 `scripts.capture_ui_feedback --source-root <已归档 beta2 源码> --record-baseline`；该模式记录旧布局的溢出，不把旧行为作为新实现的通过标准。`geometry.json` 只有完整执行后才标记 `complete: true`，记录按钮／文字边界与源码信息。
+
+## 配对性能结果
+
+性能基线沿用归档优化前的 `6175482`，界面截图基线为已发布 beta 2。基准在每个平台同一 runner 上交替执行改前／改后各三次，使用 1,000 条任务、10,000 条文件记录与一字节临时媒体，持续验证既有归档性能门槛。它衡量数据库、文件系统及界面开销，不代表实际影音下载吞吐。
+
+以下响应取三轮最慢值（单位 ms），检查耗时取中位数。最终源码为 `d670dc0`，两平台工作区均干净。
+
+| 指标 | macOS | Windows | 门槛 |
+|---|---:|---:|---:|
+| 队列搜索 P95 | 131.7 | 123.8 | 300 |
+| 队列选择 P95 | 31.6 | 24.6 | 300 |
+| 批量搜索 P95 | 50.1 | 26.3 | 300 |
+| 批量选择 P95 | 100.8 | 69.8 | 300 |
+| 文件搜索 P95 | 30.8 | 27.0 | 300 |
+| 文件选择 P95 | 40.3 | 27.4 | 300 |
+| 队列初次加载 | 755.5 | 843.5 | 2,000 |
+| 批量初次加载 | 466.2 | 657.8 | 2,000 |
+| 文件初次加载 | 793.0 | 778.1 | 2,000 |
+| 后台稳态心跳最大间隔 | 71.4 | 59.2 | 250 |
+| 检查结束刷新 | 30.8 | 34.6 | 2,000 |
+| 取消反馈 | 0.2 | 0.2 | 100 |
+| 取消结束 | 59.5 | 15.9 | 1,000 |
+
+macOS 万条快速检查中位耗时为 18.66 → 1.71 秒，降低 90.83%。Windows 万条快速检查中位耗时为 232.45 → 5.59 秒，降低 97.59%。
+
+最终 [macOS](validation/ui-feedback/performance/macos/summary.json) 与 [Windows](validation/ui-feedback/performance/windows/summary.json) 报告及六份分轮原始数据已归档，所有门槛通过。
+
+早期提交 `b934c8e` 曾出现单轮取消结束 1,753ms 的长尾；[原报告](validation/ui-feedback/performance/prior-macos-b934/summary.json)保留。本机三轮复核为 14.1／14.3／14.1ms，未复现该长尾；[本机报告](validation/ui-feedback/performance/local/summary.json)仅作复核，包含文档修改导致的工作区脏标记。补充修复空闲布局循环后，最终 `d670dc0` 重新执行两平台完整三轮基准，门槛保持不变；原始长尾记录继续供后续实机核对。
+
+## GitHub 与打包验收
+
+最终源码为 [`d670dc0a0573d47f1b0c928b5d78d93d46d2574f`](https://github.com/itsVicOC/bilibili-downloader/commit/d670dc0a0573d47f1b0c928b5d78d93d46d2574f)，分支为 `codex/ui-feedback-boundaries`。[最终 CI](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41569073936) **17/17 项全部成功**，覆盖 Windows／macOS／Linux、Python 3.11／3.12、原生交互与截图、四档 Windows 标题栏缩放、更新器／录制器与独立三轮配对性能基准。原始[任务摘要](validation/ui-feedback/github/ci.json)与[原生／性能附件标识](validation/ui-feedback/github/ci-artifacts.json)已归档。
+
+[双平台 `publish=false` 打包验收](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41569374432)同一源码已成功：Windows／macOS 构建、原生交互与截图、冻结应用、完整安装、升级与失败回滚，以及汇总包校验通过；发布步骤按预期跳过。构建标识为 `dry-run-69`。原始[任务摘要](validation/ui-feedback/github/package.json)与[产物标识及摘要](validation/ui-feedback/github/package-artifacts.json)已归档。
+
+安装验证比对实际安装内容与 ZIP，验证配置、任务库、媒体库和待恢复记录的保留；full／lite 工具链、CLI 启动、录制器样例和安装更新路径沿用既有发布门槛。原生测试、截图与性能分步执行，最终报告采用 `d670dc0` 的通过结果。早期未通过或停止的运行不计入最终通过。
+
+本轮没有创建或修改 Release／标签，包版本仍为 `0.8.10b2`；开发增量尚未发布。文档与证据另行归档，不改变已验收应用源码。
 
 ## 继续单独记录的实机项目
 
