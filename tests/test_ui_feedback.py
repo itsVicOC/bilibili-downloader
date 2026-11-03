@@ -138,6 +138,36 @@ def test_short_output_count_keeps_whole_words_beside_long_specs(qapp, qtbot, tex
     assert_buttons_fit(bar)
 
 
+def test_output_bar_settles_when_idle_and_reflows_after_changes(qapp, qtbot, monkeypatch):
+    ThemeManager(qapp, "star_trail", "light")
+    host = QWidget()
+    qtbot.addWidget(host)
+    layout = QVBoxLayout(host)
+    bar = OutputActionBar("已选 10000 个任务")
+    bar.specs.set_full_text("1080P · HEVC · MP4")
+    layout.addWidget(bar)
+    layout.addStretch()
+    calls = []
+    original = bar._reflow
+    def observed():
+        calls.append(True)
+        original()
+    monkeypatch.setattr(bar, "_reflow", observed)
+    host.resize(900, 400)
+    host.show()
+    qtbot.wait(100)
+    calls.clear()
+    qtbot.wait(100)
+    assert len(calls) <= 2, "An idle action bar must not continuously invalidate its parent layout"
+    bar.primary_button.setText("加入 10000 个任务")
+    host.resize(420, 400)
+    qtbot.wait(100)
+    assert_buttons_fit(host)
+    calls.clear()
+    qtbot.wait(100)
+    assert len(calls) <= 2
+
+
 def test_overflow_uses_one_action_and_preserves_dynamic_state_and_focus(qapp, qtbot):
     ThemeManager(qapp, "star_trail", "light")
     strip = ResponsiveActions()

@@ -110,6 +110,7 @@ class ResponsiveActions(QWidget):
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self._buttons = []
         self._queued = False
+        self._last_size_hint = None
         self._overflow = ()
         self._forced = set()
         self._own_more = QPushButton(more_text, self)
@@ -205,7 +206,10 @@ class ResponsiveActions(QWidget):
         direction = QBoxLayout.TopToBottom if required() > self.width() else QBoxLayout.LeftToRight
         if self.row.direction() != direction:
             self.row.setDirection(direction)
-        self.updateGeometry()
+        hint = self.sizeHint()
+        if hint != self._last_size_hint:
+            self._last_size_hint = hint
+            self.updateGeometry()
 
     def event(self, event):
         if event.type() in (QEvent.LayoutRequest, QEvent.FontChange, QEvent.StyleChange) and hasattr(self, "row"):
