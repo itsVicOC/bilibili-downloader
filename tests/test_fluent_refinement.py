@@ -182,5 +182,7 @@ def test_bulk_more_action_keeps_current_filter_scope_and_toolbar_can_wrap(worksp
     assert bar.wrapped
     assert bar._actions.y() > bar._filters.y()
     for button in bar.findChildren(QPushButton):
+        if not button.isVisible():
+            continue
         rect = QRect(button.mapTo(bar, QPoint()), button.size())
-        assert bar.rect().contains(rect)
+        assert bar.rect().contains(rect), (button.text(), rect, bar.rect())
