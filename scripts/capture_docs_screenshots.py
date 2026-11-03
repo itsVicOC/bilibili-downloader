@@ -489,7 +489,7 @@ def _capture_dropdowns(app, theme, window):
             button = next(
                 button
                 for button in window._task_page.findChildren(QPushButton)
-                if button.menu()
+                if button.isVisible() and button.menu() and button.menu().actions()
             )
             menu = button.menu()
             button.showMenu()
