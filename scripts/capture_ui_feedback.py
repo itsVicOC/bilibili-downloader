@@ -25,8 +25,8 @@ def main():
     else:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-    from PySide6.QtCore import QPoint, QRect, qVersion
-    from PySide6.QtGui import QColor
+    from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, Qt, qVersion
+    from PySide6.QtGui import QColor, QCursor, QEnterEvent, QMouseEvent
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import (
         QAbstractItemView,
@@ -63,6 +63,44 @@ def main():
         for _ in range(8):
             app.processEvents()
         QTest.qWait(35)
+
+    def expose(host):
+        host.show()
+        host.raise_()
+        host.activateWindow()
+        QApplication.setActiveWindow(host)
+        assert QTest.qWaitForWindowExposed(host, 1000)
+        QTest.qWait(80)
+        flush()
+
+    def hover_row(view, index, ready):
+        # Window-server placement and native pointer delivery are asynchronous.
+        # Recompute global input from the settled widget and keep moving until
+        # the real hover state is observed; never synthesize the painted state.
+        for attempt in range(20):
+            point = view.visualRect(index).center() + QPoint(attempt % 2, 0)
+            viewport = view.viewport()
+            QTest.mouseMove(viewport, point)
+            # Cocoa may warp the cursor without delivering a native move in a
+            # noninteractive runner session. Deliver the matching Qt input,
+            # just as QTest.keyClick does, through the real viewport handlers.
+            global_point = QPointF(viewport.mapToGlobal(point))
+            if not viewport.underMouse():
+                app.sendEvent(viewport, QEnterEvent(QPointF(point),
+                              QPointF(viewport.mapTo(view.window(), point)), global_point))
+            app.sendEvent(viewport, QMouseEvent(QEvent.MouseMove, QPointF(point), global_point,
+                          Qt.NoButton, Qt.NoButton, Qt.NoModifier))
+            flush()
+            if ready():
+                return
+        view.window().grab().save(str(args.output_dir / "failed-hover.png"))
+        feedback = getattr(view, "_row_hover", None)
+        raise AssertionError(dict(row=index.row(), cursor=(QCursor.pos().x(), QCursor.pos().y()),
+                                  target=str(view.viewport().mapToGlobal(view.visualRect(index).center())),
+                                  current=view.currentIndex().row(), visible=view.isVisible(),
+                                  active=view.window().isActiveWindow(),
+                                  suspended=getattr(feedback, "_suspended", None),
+                                  hovered=feedback.index.row() if feedback else None))
 
     def shell():
         host = QWidget()
@@ -131,11 +169,7 @@ def main():
         combo.addItems(["当前选项 · 1080P", "其他选项 · 720P", "另一选项 · 480P"])
         layout.addWidget(combo)
         host.resize(360, 80)
-        host.show()
-        host.raise_()
-        host.activateWindow()
-        QApplication.setActiveWindow(host)
-        flush()
+        expose(host)
         combo.showPopup()
         flush()
         view = combo.view()
@@ -143,15 +177,14 @@ def main():
         # native mouse move. Enter from another row before recording hover.
         QTest.mouseMove(view.viewport(), view.visualRect(combo.model().index(0, 0)).center())
         flush()
-        QTest.mouseMove(view.viewport(), view.visualRect(combo.model().index(1, 0)).center())
-        flush()
-        hover = view.visualRect(combo.model().index(1, 0))
-        sample = view.viewport().grab().toImage()
-        ratio = sample.devicePixelRatio()
-        color = sample.pixelColor(round((hover.left() + 8) * ratio), round(hover.center().y() * ratio))
-        assert color == QColor(theme_palette(theme.is_dark, args.color_theme).control_hover), (mode, color.name())
+        def hover_fill_ready():
+            hover = view.visualRect(combo.model().index(1, 0))
+            sample = view.viewport().grab().toImage()
+            ratio = sample.devicePixelRatio()
+            color = sample.pixelColor(round((hover.left() + 8) * ratio), round(hover.center().y() * ratio))
+            return color == QColor(theme_palette(theme.is_dark, args.color_theme).control_hover)
+        hover_row(view, combo.model().index(1, 0), hover_fill_ready)
         assert view.window().grab().save(str(args.output_dir / f"feedback-hover-{mode}.png"))
-        from PySide6.QtCore import Qt
         QTest.keyClick(view, Qt.Key_Down)
         flush()
         assert view.window().grab().save(str(args.output_dir / f"feedback-keyboard-{mode}.png"))
@@ -172,18 +205,14 @@ def main():
                 table.setItem(row, column, QTableWidgetItem(text))
         layout.addWidget(table)
         host.resize(560, 250)
-        host.show()
-        host.raise_()
-        host.activateWindow()
-        QApplication.setActiveWindow(host)
+        expose(host)
         table.setFocus(Qt.TabFocusReason)
         flush()
         table.setCurrentCell(2, 0)
         QTest.mouseMove(table.viewport(), table.visualItemRect(table.item(2, 0)).center())
         flush()
-        QTest.mouseMove(table.viewport(), table.visualItemRect(table.item(0, 0)).center())
-        flush()
-        assert table._row_hover.index.isValid() and table._row_hover.index.row() == 0
+        hover_row(table, table.model().index(0, 0),
+                  lambda: table._row_hover.index.isValid() and table._row_hover.index.row() == 0)
         assert host.grab().save(str(args.output_dir / f"feedback-row-hover-{mode}.png"))
         table.setCurrentCell(0, 0)
         QTest.keyClick(table, Qt.Key_Down)
@@ -207,7 +236,8 @@ def main():
         theme.apply_theme(theme.is_dark)
     profile = dict(complete=True, platform=sys.platform, qt=qVersion(), backend=app.platformName(),
                    version=__version__, color_theme=args.color_theme,
-                   baseline=args.record_baseline, cases=rows)
+                   baseline=args.record_baseline, cases=rows,
+                   input_method="QTest cursor movement and Qt viewport input; hover fill and row hit asserted")
     if not args.source_root:
         profile["revision"] = os.environ.get("GITHUB_SHA") or subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
         profile["working_tree_dirty"] = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=root, text=True).strip())
