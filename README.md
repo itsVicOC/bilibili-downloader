@@ -68,15 +68,15 @@
 
 `v0.8.3` 为软件更新接入[官方镜像](https://1008.si/download/)，优先加速查询和下载，网络失败时自动尝试 GitHub。v0.8.2 及更早版本可从官网加速下载本版后手动安装；后续更新走镜像。
 
-`v0.8.9` 正式版汇总全界面 [Fluent Design 精修](docs/FLUENT_DESIGN.md)：横向作品摘要、响应式规格和附加内容、矮窗口紧凑布局、统一设置与任务操作，并记住主窗口大小、位置和最大化状态。保留粉紫／青蓝、小流、粉底白字、Markdown 更新说明及 Windows 自绘窗口按钮。用户已完成 Windows 和 macOS 实机验证。[下载 0.8.9 正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9) · [更新日志](CHANGELOG.md#v089---2026-10-24)。
+`v0.8.10` 正式版汇总三个 beta 阶段的下载管理、媒体复用、独立附件补全、跨筛选选择与界面精修，修复多分 P 命名和音轨封装问题。用户已确认实机测试通过；保留 [Fluent Design](docs/FLUENT_DESIGN.md)、粉紫／青蓝、小流、窗口记忆及 Windows 自绘窗口按钮。[下载 0.8.10 正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10) · [更新日志](CHANGELOG.md#v0810---2026-11-06)。
 
 下载目录按钮紧随路径，任务中心采用整行悬停，录制历史支持整场移除与撤销；默认开启的前台剪贴板识别需确认后才解析，不自动加入队列。账号、配置、背景选择、任务和媒体文件保持兼容。操作说明与截图见[用户指南](docs/USER_GUIDE.md)、[窗口记忆验收](docs/FLUENT_V4_VALIDATION.md)和[交互验收](docs/FLUENT_V5_VALIDATION.md)。
 
 ## 下载与安装
 
-**`v0.8.10b3` 预发布版：** 精简重复提示，移除悬停描边与列表竖线；窄窗口中的次要操作自动收进「更多」，按钮与操作数量保持完整。弹窗每次打开均相对所属软件窗口居中，靠近屏幕边缘时自动避让。[下载 beta 3](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10b3) · [原生对比与验收记录](docs/UI_FEEDBACK_VALIDATION.md)。正式更新通道继续使用 `v0.8.9`。
+**`v0.8.10` 正式版：** 精简重复提示，移除悬停描边与列表竖线；窄窗口中的次要操作自动收进「更多」，按钮与操作数量保持完整。弹窗每次打开均相对所属软件窗口居中，靠近屏幕边缘时自动避让。[下载正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10) · [原生对比与验收记录](docs/UI_FEEDBACK_VALIDATION.md)。正式更新通道和包含 beta 的通道均可升级。
 
-继续包含 beta 2 的文件复用、独立附件补全、严格规格匹配、队列与批量搜索、自选分 P、网络失败自动重试，以及媒体核验和目录批量重新定位。已有设置和任务快照继续生效；跨搜索保留勾选并显示筛选外数量，结果区分媒体／规格／附件，命名字段支持中文搜索。[使用说明](docs/USER_GUIDE.md#下载与归档优化) · [流程精修验收](docs/WORKFLOW_POLISH_VALIDATION.md)。
+包含文件复用、独立附件补全、严格规格匹配、队列与批量搜索、自选分 P、网络失败自动重试，以及媒体核验和目录批量重新定位。已有设置和任务快照继续生效；跨搜索保留勾选并显示筛选外数量，结果区分媒体／规格／附件，命名字段支持中文搜索。[使用说明](docs/USER_GUIDE.md#下载与归档优化) · [流程精修验收](docs/WORKFLOW_POLISH_VALIDATION.md)。
 
 ![批量搜索、跨筛选选择与任务数](docs/images/ui-feedback/after/archive-batch-light-900.png)
 

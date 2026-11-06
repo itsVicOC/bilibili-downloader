@@ -181,6 +181,13 @@ python scripts/build_app_icons.py
 
 ## 发布流程
 
+### 0.8.10 正式版发布检查（2026-11-06）
+
+- 用户于 2026-11-06 确认实机测试通过，并授权将 0.8.10 beta 相关分支合并至 `main` 后发布正式版；实机结论由用户确认，本节保留各 beta 阶段自动化验收的原始范围。
+- `codex/ui-feedback-boundaries` 已包含 `codex/archive-workflow-acceptance` 的全部提交；beta 1 已在 `main`。合并时保留完整提交历史，正式版应用功能相对 `v0.8.10b3` 仅更新版本号为 `0.8.10`，同步更新中英文首页、文档入口和正式版更新日志。
+- 从 `main` 的正式发布提交创建附注标签 `v0.8.10`，通过现有 Release 工作流重新构建 Windows／macOS full、lite ZIP 和 full EXE／DMG，并验证更新回滚、媒体样例、安装器、SBOM 及 SHA-256。发布后的 CI、附件和更新通道复核结论另行追加。
+- 历史 beta 标签与附件保留；正式版使用「仅更新正式版」通道，beta 用户亦可升级。
+
 ### 0.8.10 beta 3 发布检查（2026-11-03）
 
 - 基于 `codex/ui-feedback-boundaries` 中的弹窗修复 `af45d12` 准备 `v0.8.10b3`，包含提示减负、无描边悬停、响应式操作栏及弹窗居中。应用源码 [CI 41575862175](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41575862175) **17/17 项成功**，包含两平台原生交互、截图与三轮性能；[源码验收摘要](validation/releases/0.8.10b3/source-ci.json)已归档。

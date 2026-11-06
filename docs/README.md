@@ -4,6 +4,8 @@
 
 项目入口：[官方网站 · 1008.si](https://1008.si/) · [中文 README](../README.md) · [English README](../README.en.md)。详细指南目前以简体中文为主。
 
+[`v0.8.10` 正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10) 汇总下述三个 beta 阶段的下载管理、媒体复用、附件补全、跨筛选选择及界面精修。用户于 2026-11-06 确认实机测试通过；功能与 beta 3 一致，已有账号、配置、任务与媒体继续兼容。正式更新通道及 beta 通道均可升级，见[更新日志](../CHANGELOG.md#v0810---2026-11-06)和[正式发布检查](BUILDING.md#0810-正式版发布检查2026-11-06)。
+
 [`v0.8.10b3` 预发布版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10b3) 精简提示、移除悬停描边与竖线、改善窄空间按钮收纳，并让弹窗相对软件窗口居中；原生对比、回归与打包状态见[提示与布局精修验收](UI_FEEDBACK_VALIDATION.md)。
 
 [`v0.8.10b2` 预发布版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10b2) 在独立下载文件列表基础上提供媒体复用、附件补全、搜索与分 P 选择、自动重试和归档核验；新增用法见[用户指南](USER_GUIDE.md#下载与归档优化)，功能测试与实测边界见[归档流程验收](ARCHIVE_WORKFLOW_VALIDATION.md)。后续体验精修统一了选择、弹窗、详情与中文命名字段，并优化万条文件检查；当前测试与双平台交付状态见[流程精修验收](WORKFLOW_POLISH_VALIDATION.md)。
@@ -16,7 +18,7 @@
 
 `v0.8.9b1`（0.8.9 beta1）的界面规范见 [Fluent Design 精修](FLUENT_DESIGN.md)，包含设计参数、动效规则与视觉验证方法；粉底白字、文本选区及 Windows 标题栏悬停的结果见[可读性验收记录](UI_READABILITY_VALIDATION.md)。
 
-稳定版文档对应 `v0.8.9`；预发布与开发增量按上文单独标注。窗口激活、最大化与还原及双平台界面检查见[视觉规范与验证](UI_DESIGN.md)，小流的十二套动画与时段规则见[小流设计与预览](MASCOT_DESIGN.md)，五类设置、模式与背景玻璃模糊见[用户指南](USER_GUIDE.md)，版本变化和验证范围见[更新日志](../CHANGELOG.md#v089---2026-10-24)。
+稳定版文档对应 `v0.8.10`；上文 beta 记录保留各阶段的验证范围。窗口激活、最大化与还原及双平台界面检查见[视觉规范与验证](UI_DESIGN.md)，小流的十二套动画与时段规则见[小流设计与预览](MASCOT_DESIGN.md)，五类设置、模式与背景玻璃模糊见[用户指南](USER_GUIDE.md)，版本变化和验证范围见[更新日志](../CHANGELOG.md#v0810---2026-11-06)。
 
 ## 推荐阅读路线
 
