@@ -268,7 +268,7 @@ class SettingsDialog(QDialog):
         options = SectionCard("归档附加内容")
         for key, label, description, icon, attr in (
             ("download_danmaku", "下载弹幕", "ASS", "star", "_danmaku_check"),
-            ("download_subtitle", "下载字幕", "SRT", "info", "_subtitle_check"),
+            ("download_subtitle", "下载字幕", "中英文 · 含 AI · 独立 SRT", "info", "_subtitle_check"),
             ("download_cover", "保存封面", "图片", "folder", "_cover_check"),
             ("download_metadata", "保存元数据", "JSON", "tasks", "_metadata_check"),
         ):
