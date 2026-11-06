@@ -557,7 +557,7 @@ class MainWindow(QMainWindow):
         self._match_policy.setAccessibleDescription(self._match_policy.toolTip())
         self._danmaku_check = DownloadOptionCard("下载弹幕", "ASS", "star")
         self._danmaku_check.setChecked(self._settings.download_danmaku)
-        self._subtitle_check = DownloadOptionCard("下载字幕", "SRT", "info")
+        self._subtitle_check = DownloadOptionCard("下载字幕", "中英文 · 含 AI · 独立 SRT", "info")
         self._subtitle_check.setChecked(self._settings.download_subtitle)
         self._all_subtitles_check = self._create_checkbox(
             "全部字幕", self._settings.download_all_subtitles
@@ -742,6 +742,8 @@ class MainWindow(QMainWindow):
         dialog.body.addWidget(help_text("附加内容：" + ("、".join(extras) or "无")))
         if self._all_subtitles_check.isChecked():
             dialog.body.addWidget(help_text("字幕语言：全部可用语言"))
+        elif self._subtitle_check.isChecked():
+            dialog.body.addWidget(help_text("字幕语言：中文和英文（含 AI），各自保存为独立 SRT"))
         if infos:
             path = ReadOnlyPath()
             item = self._make_download_item(infos[0])
@@ -1756,7 +1758,7 @@ class MainWindow(QMainWindow):
         available_audio = {stream.id for stream in audio_streams}
         self._populate_audio_combo(available_audio or None)
         self._subtitle_check.setEnabled(True)
-        self._subtitle_check.setToolTip("每个分 P 下载时会单独查询可用字幕轨道")
+        self._subtitle_check.setToolTip("下载可用的中文和英文字幕，包含 AI 字幕，各语言保存为独立 SRT；勾选全部字幕可下载其他语言。")
         self._all_subtitles_check.setEnabled(self._subtitle_check.isChecked())
         self._refresh_download_summary()
 
@@ -1862,6 +1864,7 @@ class MainWindow(QMainWindow):
             download_danmaku=self._danmaku_check.isChecked(),
             download_subtitle=self._subtitle_check.isChecked(),
             download_all_subtitles=all_subtitles,
+            selected_subtitle_lan="zh-en",
             download_cover=self._cover_check.isChecked(),
             download_metadata=self._metadata_check.isChecked(),
             strict_match=self._strict_match_check.isChecked(),

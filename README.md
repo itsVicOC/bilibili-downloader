@@ -227,6 +227,7 @@ cargo build --release --locked --manifest-path native/recorder/Cargo.toml
 python -m bilibili_downloader test BV1GJ411x7h7
 
 # 下载 1080P 视频，并保存弹幕与字幕
+# 默认下载中文和英文字幕（含 AI 字幕），各语言保存为独立 SRT；使用 --all-subtitles 下载全部语言。
 python -m bilibili_downloader download BV1GJ411x7h7 \
   --quality 80 --danmaku --subtitle
 

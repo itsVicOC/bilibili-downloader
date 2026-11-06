@@ -126,6 +126,46 @@ def test_requesting_all_subtitles_extends_a_previously_single_language_download(
     assert len(writes) == 3
 
 
+def test_chinese_english_ai_subtitles_extend_and_reuse_existing_media(tmp_path, monkeypatch):
+    library, item, original = stored(tmp_path)
+    tracks = [SubtitleInfo(lan=lan, url=f"https://example.test/{lan}")
+              for lan in ("ai-zh", "ai-en", "ai-ja")]
+    service = DownloadService(SimpleNamespace(get_subtitle_tracks=lambda *_: tracks),
+                              str(tmp_path), library_repository=library)
+    no_transfer(monkeypatch, service)
+    writes = []
+
+    def convert(url, path):
+        writes.append(path.name)
+        path.write_text(url)
+
+    monkeypatch.setattr("bilibili_downloader.core.download_service.SubtitleDownloader.download_and_convert", convert)
+    single = item.model_copy(update={"download_subtitle": True, "selected_subtitle_lan": "ai-zh"})
+    service.download(single, lambda *_: None)
+    pair = item.model_copy(update={"download_subtitle": True, "selected_subtitle_lan": "zh-en"})
+    assert library.match_media(pair).missing == ("subtitle",)
+    result = service.download(pair, lambda *_: None)
+    assert set(result.subtitle_languages) == {"ai-zh", "ai-en"}
+    assert len(writes) == 2
+    assert library.match_media(pair).state == "saved"
+    service.download(pair, lambda *_: None)
+    assert len(writes) == 2
+    Path(result.subtitle_languages["ai-en"]).unlink()
+    assert library.match_media(pair).missing == ("subtitle",)
+    service.download(pair, lambda *_: None)
+    assert len(writes) == 3
+    assert library.match_media(pair.model_copy(update={"download_all_subtitles": True})).missing == ("subtitle",)
+    assert Path(original.video_path).read_bytes() == b"immutable media bytes"
+
+
+def test_gui_subtitle_download_requests_chinese_and_english(workspace):
+    workspace._subtitle_check.setChecked(True)
+    workspace._all_subtitles_check.setChecked(False)
+    item = workspace._make_download_item(VideoInfo(bvid="BVdemo", cid=123))
+    assert item.download_subtitle and item.selected_subtitle_lan == "zh-en"
+    assert not item.download_all_subtitles
+
+
 def test_reusing_companions_preserves_their_conversion_warnings(tmp_path, monkeypatch):
     from bilibili_downloader.core.timed_text import ConversionReport
     library, item, _ = stored(tmp_path)

@@ -149,7 +149,7 @@ class DownloadService:
                 from bilibili_downloader.core.library import readable_file
                 if subtitle.lan in outcome.subtitle_languages and readable_file(outcome.subtitle_languages[subtitle.lan]):
                     continue
-                if item.download_all_subtitles:
+                if item.download_all_subtitles or item.selected_subtitle_lan == "zh-en":
                     language = sanitize_filename(
                         subtitle.lan or subtitle.lan_doc or str(index + 1)
                     )
@@ -270,10 +270,10 @@ class DownloadService:
                 item.video_info.content_identity,
                 redact_sensitive_text(exc),
             )
-            tracks = item.video_info.subtitle_list
-            if not tracks:
-                outcome.warnings.append(f"字幕轨道查询失败：{exc}")
-                return []
+            # Metadata tracks are not bound to the selected page and must not
+            # replace a failed, page-specific subtitle lookup.
+            outcome.warnings.append(f"字幕轨道查询失败：{redact_sensitive_text(exc)}")
+            return []
 
         if not tracks:
             outcome.warnings.append("该分 P 没有可下载的字幕")
@@ -285,6 +285,19 @@ class DownloadService:
                 identity = track.lan or track.url
                 unique.setdefault(identity, track)
             return list(unique.values())
+
+        if item.selected_subtitle_lan == "zh-en":
+            selected = {
+                track.lan: track for track in tracks
+                if track.lan.removeprefix("ai-").split("-")[0] in {"zh", "en"}
+            }
+            languages = {lan.removeprefix("ai-").split("-")[0] for lan in selected}
+            for code, label in (("zh", "中文"), ("en", "英文")):
+                if code not in languages:
+                    outcome.warnings.append(f"该分 P 没有可下载的{label}字幕（含 AI 字幕）")
+                    if "subtitle" not in outcome.missing_artifacts:
+                        outcome.missing_artifacts.append("subtitle")
+            return list(selected.values())
 
         for track in tracks:
             if track.lan == item.selected_subtitle_lan:

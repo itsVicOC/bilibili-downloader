@@ -16,7 +16,9 @@ VIEW_ENDPOINT = "/x/web-interface/view"
 
 # Video playback URL (no WBI required as of 2026, but may change)
 PLAYURL_ENDPOINT = "/x/player/playurl"
-PLAYER_INFO_ENDPOINT = "/x/player/v2"
+# Subtitle discovery must use the signed player endpoint. The legacy /v2
+# endpoint can return unrelated subtitle tracks even for the requested BV/CID.
+PLAYER_INFO_ENDPOINT = "/x/player/wbi/v2"
 
 # Professionally generated content (bangumi / PGC)
 PGC_SEASON_ENDPOINT = "/pgc/view/web/season"
