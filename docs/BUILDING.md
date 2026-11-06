@@ -181,6 +181,35 @@ python scripts/build_app_icons.py
 
 ## 发布流程
 
+### 0.8.10 正式版发布检查（2026-11-06）
+
+- 用户于 2026-11-06 确认实机测试通过，并授权将 0.8.10 beta 相关分支合并至 `main` 后发布正式版；实机结论由用户确认，本节保留各 beta 阶段自动化验收的原始范围。
+- `codex/ui-feedback-boundaries` 已包含 `codex/archive-workflow-acceptance` 的全部提交；beta 1 已在 `main`。合并时保留完整提交历史，正式版应用功能相对 `v0.8.10b3` 仅更新版本号为 `0.8.10`，同步更新中英文首页、文档入口和正式版更新日志。
+- 从 `main` 的正式发布提交创建附注标签 `v0.8.10`，通过现有 Release 工作流重新构建 Windows／macOS full、lite ZIP 和 full EXE／DMG，并验证更新回滚、媒体样例、安装器、SBOM 及 SHA-256。发布后的 CI、附件和更新通道复核结论另行追加。
+- 历史 beta 标签与附件保留；正式版使用「仅更新正式版」通道，beta 用户亦可升级。
+
+### 0.8.10 beta 3 发布检查（2026-11-03）
+
+- 基于 `codex/ui-feedback-boundaries` 中的弹窗修复 `af45d12` 准备 `v0.8.10b3`，包含提示减负、无描边悬停、响应式操作栏及弹窗居中。应用源码 [CI 41575862175](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41575862175) **17/17 项成功**，包含两平台原生交互、截图与三轮性能；[源码验收摘要](validation/releases/0.8.10b3/source-ci.json)已归档。
+- 发布版本本地完整回归 **1,314 项通过、6 项平台专项跳过**，更新与发布相关 91 项测试通过，Ruff、编译与差异检查通过。
+- 发布说明在两套配色 × 深浅模式 × 480×360／680×520 下完成 8 项 macOS 原生检查，无横向滚动，弹窗外框相对软件窗口居中；隔离设置页显示 `v0.8.10b3`。截图：[浅色窄弹窗](images/releases/0.8.10b3/notes-star_trail-light-480.png)、[青蓝深色](images/releases/0.8.10b3/notes-bilibili_blue-dark-680.png)、[版本页面](images/releases/0.8.10b3/about-native.png)。未读取用户账号或启动更新服务。
+- 发布提交为 `f0161c18d6edb349e864a1d568cb21989b6e4ad5`，远端附注标签已核对指向同一提交。[发布提交 CI](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41585821014) **17/17 项成功**；[Release 41585821013](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41585821013) **5/5 项成功**，包含新增弹窗定位原生测试、截图，以及 full／lite、升级回滚、媒体样例、安装器与 ZIP 和汇总包验证。原始摘要见[CI](validation/releases/0.8.10b3/ci.json)、[发布任务](validation/releases/0.8.10b3/release-workflow.json)与[标签目标](validation/releases/0.8.10b3/tag-target.json)。
+- [v0.8.10b3](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10b3) 于 **2026-11-03 14:27（北京时间）**公开，非草稿、标记为预发布版；14 个附件齐全，正式版 Latest 保持 `v0.8.9`。下载全部公开附件后逐项校验大小及 GitHub SHA-256 digest，14 项均匹配；正文与发布标签中的更新日志一致。
+- 公开发布包复核通过：4 个 ZIP／2956 个文件、4 份 SBOM／733 个组件、2 个原生安装器和 8563 个 FFmpeg 源码文件。macOS arm64 DMG 在本机只读挂载并临时复制，签名、526 个载荷文件和冻结 CLI 与公开 ZIP 及 CI 报告一致，包内版本为 `0.8.10b3`；未安装到 Applications 或启动用户业务服务。见[发布审计](validation/releases/0.8.10b3/audit.json)及[本机安装包复核](validation/releases/0.8.10b3/macos-native.json)。
+- 公开元信息回放的 7 个更新选择场景通过：beta 2 与 `0.8.9` 的「更新最新版」选择 beta 3，beta 3 不重复提示，正式通道不选择 beta 或降级。官方镜像随后已同步：14 个附件的 ID、大小和摘要与 GitHub 一致，校验清单一致，六个 EXE／DMG／ZIP 下载入口 HEAD 均为 200 且大小匹配；真实网络更新查询确认 beta 2 最新通道发现 beta 3、beta 3 不重复提示、旧正式版仍选择 `v0.8.9`。见[镜像核对](validation/releases/0.8.10b3/mirror.json)。仅查询和验证，未部署镜像或安装升级；用户设备、长时直播与物理故障继续单独记录。
+
+### 0.8.10 beta 2 发布检查（2026-11-03）
+
+- 从 `codex/archive-workflow-acceptance` 的发布提交 `6cd1b46494d32d8a9d37a2d5590ad62307c955a6` 创建 `v0.8.10b2`；远端附注标签已核对到同一提交。包含媒体复用、独立附件补全、严格规格、网络重试、核验／目录定位及流程精修。既有任务路径与规格快照保持兼容；从 beta 2 起跨筛选保留勾选，操作数量包含筛选外已选项。
+- 发布版本本地完整回归 **1246 项通过、6 项平台跳过**，Ruff、编译和 diff 检查通过。真实发布说明在两套配色 × 深浅模式 × 480×360／680×520 下原生检查通过；隔离默认设置的「关于与更新」显示 `v0.8.10b2`。截图：[浅色窄弹窗](images/releases/0.8.10b2/notes-star_trail-light-480.png)、[深色弹窗](images/releases/0.8.10b2/notes-bilibili_blue-dark-680.png)、[版本页面](images/releases/0.8.10b2/about-native.png)。未读取用户账号或启动更新服务。更新弹窗的发布日期沿用 GitHub UTC 日期，更新日志日期使用北京时间。
+- 同一发布提交的 [CI 41477723880](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41477723880) **17/17 项成功**；[Release 41477760583](https://github.com/itsVicOC/bilibili-downloader/actions/runs/41477760583) **5/5 项成功**，重新构建并验证两平台 full／lite、冻结更新与回滚、录制媒体样本、SBOM、原生安装报告和汇总包。
+- macOS 性能任务首次因 GitHub arm64 托管 runner 容量不足、始终未分配到 runner 而取消；随后在同一发布提交上补跑该项通过，源码未改动。原始提示见[runner 记录](validation/releases/0.8.10b2/macos-runner-annotations.json)。
+- [v0.8.10b2](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10b2) 于 **2026-11-03 00:35（北京时间）**公开，非草稿、标记为预发布版；14 个附件齐全，正式版 Latest 保持 `v0.8.9`。下载全部公开附件后逐项校验大小及 GitHub SHA-256 digest，14 项均匹配；正文与标签中的更新日志一致。
+- macOS arm64 的实际 DMG 在本机只读挂载、临时复制并复核签名、526 个载荷文件和冻结 CLI，结果与 CI 原生报告一致；包内构建版本为 `0.8.10b2`。未安装到 Applications 或启动用户业务服务。本次 macOS 为 ad-hoc 签名，未进行 Apple 公证。
+- 对公开附件重复执行 bundle 验证：4 个 ZIP／2956 个文件、4 份 SBOM／733 个组件、2 个原生安装器和 8563 个 FFmpeg 源码文件通过；两份原生报告绑定的安装器、ZIP 摘要及构建版本一致。原始结论见[发布审计](validation/releases/0.8.10b2/audit.json)、[CI 任务](validation/releases/0.8.10b2/ci.json)和[发布任务](validation/releases/0.8.10b2/release-workflow.json)。
+- 官方镜像已自动同步 beta 2：14 个附件的 ID、大小和摘要与 GitHub 一致，校验清单一致；六个 EXE／DMG／ZIP 下载目标 HEAD 均为 200 且大小匹配。真实网络的应用更新查询确认 beta 1 最新通道发现 beta 2，beta 2 不重复提示，`0.8.8` 正式通道发现 `0.8.9`。仅查询校验，未部署镜像或安装升级，结果见[镜像核对](validation/releases/0.8.10b2/mirror.json)。
+- 以公开 GitHub 元信息回放 7 个更新选择场景：beta 1 和 `0.8.9` 的「更新最新版」发现 beta 2；beta 2 不重复提示，正式通道不选择 beta，也不降级；`0.8.8` 正式通道仍发现 `0.8.9`。只查询和回放元信息，不在用户数据上安装升级。用户设备、长时双路直播和物理故障等范围继续按[流程精修验收](WORKFLOW_POLISH_VALIDATION.md)单独记录。
+
 ### 0.8.9 正式版发布检查（2026-10-24）
 
 - 用户于 2026-10-24 确认 beta 4 已完成 Windows／macOS 实机验证，并授权合并、正式发布与开发分支清理；实机结论和自动化专项的范围分别记录在[第五轮验收](FLUENT_V5_VALIDATION.md#正式版实机确认2026-10-24)。
@@ -333,7 +362,7 @@ git push origin vX.Y.Z
 - `MACOS_SIGNING_IDENTITY`：完整的 Developer ID Application 身份名称。
 - `APPLE_ID`、`APPLE_APP_PASSWORD`、`APPLE_TEAM_ID`：`notarytool` 公证凭据。
 
-未配置 `MACOS_CERTIFICATE` 时该步骤会跳过，保持未签名发布行为。Windows Authenticode 仍需维护者提供独立代码签名证书。所有凭据必须存放在 GitHub Secrets 中，不得提交到仓库。
+未配置 `MACOS_CERTIFICATE` 时使用 ad-hoc 签名并校验签名结构，不执行 Apple 公证；Developer ID 签名与公证需配置上述 Secrets。Windows Authenticode 仍需维护者提供独立代码签名证书。所有凭据必须存放在 GitHub Secrets 中，不得提交到仓库。
 
 CI 与 Release workflow 中的第三方 Action 固定到完整提交 SHA，行尾注释记录对应主版本。Dependabot 的 `github-actions` 更新器负责提交 SHA 升级；不要手动改回浮动主版本标签。
 

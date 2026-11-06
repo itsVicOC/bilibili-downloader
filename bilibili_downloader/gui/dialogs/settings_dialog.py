@@ -49,10 +49,12 @@ from bilibili_downloader.gui.widgets.background_picker import BackgroundPicker
 from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
     ActionBar,
+    ActionButton,
     CollapsibleSection,
     ElidedLabel,
     FieldRow,
     Notice,
+    ResponsiveActions,
     ResponsiveFields,
     SectionCard,
     help_text,
@@ -65,6 +67,24 @@ from bilibili_downloader.gui.widgets.download_options import (
 )
 from bilibili_downloader.gui.widgets.workspace_background import WorkspaceStack
 from bilibili_downloader.utils.validators import render_path_template
+
+NAMING_FIELDS = {
+    "title": ("作品标题", "视频作品的完整标题，例如「星轨旅记」。"),
+    "author": ("UP 主名称", "视频作者的名称，例如「示例 UP 主」，用于按作者建立目录。"),
+    "bvid": ("视频编号（BV 号）", "作品的 B 站视频编号，例如 BV1GJ411x7h7，用于区分同名作品。"),
+    "page": ("分 P 序号", "当前分 P 的序号，例如 1、2、3。"),
+    "page_padded": ("分 P 序号（补零）", "至少补齐三位的分 P 序号，例如 001、002，便于按顺序排列。"),
+    "part": ("分 P 标题", "当前分 P 的小标题；没有标题时使用 P 加序号，例如 P1。"),
+    "part_suffix": ("分 P 后缀", "多分 P 时添加下划线和分 P 标题，例如「_夜航篇」；单 P 时为空。"),
+    "collection": ("合集名称", "视频所属合集，例如「城市漫游」；缺失时对应目录显示为 untitled（未命名）。"),
+    "quality": ("画质", "请求的画质名称，例如 1080P；发生规格回退时，以任务的实际下载结果为准。"),
+    "codec": ("视频编码", "请求的视频编码名称，例如 HEVC/H.265；发生规格回退时，以任务的实际下载结果为准。"),
+    "series": ("番剧系列名称", "番剧所属系列，例如「示例番剧」；缺失时使用合集名称。"),
+    "season": ("番剧季度名称", "番剧当前季度的名称，例如「第二季」；缺失时使用「本季」。"),
+    "section": ("章节名称", "番剧所属章节，例如「正片」「特别篇」；缺失时使用「正片」。"),
+    "episode": ("单集标题", "番剧当前一集的标题，例如「启程」；缺失时使用作品标题。"),
+    "episode_number": ("集号", "当前一集的集号；缺失时使用至少两位的顺序编号，例如 01、02。"),
+}
 
 
 def _setting_value(settings, key):
@@ -150,6 +170,11 @@ class SettingsDialog(QDialog):
         self.setWindowTitle("BiliFlow 设置")
         self._setup_ui()
         self.load_settings(settings)
+        if not embedded:
+            from PySide6.QtCore import QSize
+
+            from bilibili_downloader.gui.window_bounds import ScreenBounds
+            self._screen_bounds = ScreenBounds(self, QSize(620, 0))
         for control in self._controls.values():
             if isinstance(control, QLineEdit):
                 control.textChanged.connect(self._draft_changed)
@@ -190,7 +215,8 @@ class SettingsDialog(QDialog):
         self._clipboard_check = QCheckBox("前台识别剪贴板中的 B 站内容")
         self._controls["clipboard_monitor_enabled"] = self._clipboard_check
         recognition.body.addWidget(self._clipboard_check)
-        recognition.body.addWidget(help_text("启动和切回前台时也会检查已复制的内容；确认后才联网解析。"))
+        self._clipboard_check.setToolTip("启动和切回前台时检查剪贴板，确认后才联网解析。")
+        self._clipboard_check.setAccessibleDescription(self._clipboard_check.toolTip())
         download.addWidget(recognition)
         formats = SectionCard("默认媒体规格")
         self._output_mode_combo = self._combo(
@@ -233,6 +259,11 @@ class SettingsDialog(QDialog):
             formats.body.removeWidget(row)
             format_fields.add_field(row)
         formats.body.addWidget(format_fields)
+        for key, label in (("strict_match", "严格匹配画质、编码与音质"),
+                           ("auto_retry_downloads", "网络失败后自动重试（30、60、120 秒，最多三轮）")):
+            control = QCheckBox(label)
+            self._controls[key] = control
+            formats.body.addWidget(control)
         download.addWidget(formats)
         options = SectionCard("归档附加内容")
         for key, label, description, icon, attr in (
@@ -258,37 +289,68 @@ class SettingsDialog(QDialog):
             self._cover_check, self._metadata_check, max_columns=2,
         ))
         download.addWidget(options)
-        self._templates_section = CollapsibleSection("高级命名与目录模板")
+        self._templates_section = CollapsibleSection("命名与目录")
         self._template_previews = {}
         self._template_paths = {}
         self._template_copy_buttons = {}
+        self._template_editors = {}
+        self._template_undo = {}
+        self._template_undo_buttons = {}
+        presets = {
+            "path_template": ("按作者归档", "{author}/{title}{part_suffix}"),
+            "multipart_path_template": ("默认分 P", "{title}/{page_padded} - {part}"),
+            "bangumi_path_template": ("番剧目录", "{series}/{season}/{section}/{episode_number} - {episode}"),
+        }
         for key, label, attr in (
-            ("path_template", "单视频命名", "_path_template"),
-            ("multipart_path_template", "多分 P 命名", "_multipart_path_template"),
-            ("bangumi_path_template", "番剧命名", "_bangumi_path_template"),
+            ("path_template", "普通视频", "_path_template"),
+            ("multipart_path_template", "多分 P 视频", "_multipart_path_template"),
+            ("bangumi_path_template", "番剧", "_bangumi_path_template"),
         ):
-            entry = self._entry(key, self._templates_section, label)
-            setattr(self, attr, entry)
+            group = SectionCard(label)
+            preset = QPushButton(presets[key][0])
+            preset.setObjectName("TableSubtleButton")
+            preset.clicked.connect(lambda _checked=False, field=key: self._apply_template_preset(field, presets[field][1]))
+            group.header.addWidget(preset)
+            undo = QPushButton("撤销替换")
+            undo.setObjectName("TextButton")
+            undo.setEnabled(False)
+            undo.clicked.connect(lambda _checked=False, field=key: self._undo_template_preset(field))
+            self._template_undo_buttons[key] = undo
+            group.header.addWidget(undo)
             preview = ElidedLabel(elide_mode=Qt.ElideMiddle)
+            preview.setObjectName("DetailValue")
             self._template_previews[key] = preview
-            preview_row = QHBoxLayout()
-            preview_row.addWidget(preview, 1)
+            group.body.addWidget(preview)
             copy_path = QPushButton("复制完整预计路径")
             copy_path.setObjectName("TextButton")
             copy_path.clicked.connect(lambda _checked=False, field=key: QApplication.clipboard().setText(self._template_paths.get(field, "")))
             self._template_copy_buttons[key] = copy_path
-            preview_row.addWidget(copy_path)
-            self._templates_section.body.addLayout(preview_row)
+            group.body.addWidget(copy_path, alignment=Qt.AlignLeft)
+            editor = CollapsibleSection("高级编辑")
+            self._template_editors[key] = editor
+            entry = self._entry(key, editor, "命名模板")
+            setattr(self, attr, entry)
             entry.textChanged.connect(self._update_template_previews)
+            variables = ("title", "author", "bvid", "page", "page_padded", "part", "part_suffix", "collection", "quality", "codec")
+            if key == "bangumi_path_template":
+                variables += ("series", "season", "section", "episode", "episode_number")
+            insert = QPushButton("插入字段…")
+            insert.setObjectName("TextButton")
+            insert.setToolTip("搜索中文名称，查看用途和示例后插入。")
+            insert.clicked.connect(lambda _checked=False, field=entry, names=variables: self._insert_naming_field(field, names))
+            editor.body.addWidget(insert, alignment=Qt.AlignLeft)
+            group.body.addWidget(editor)
+            self._templates_section.body.addWidget(group)
         self._path_template.setPlaceholderText("{author}/{title}{part_suffix}")
         self._output_dir.textChanged.connect(self._update_template_previews)
-        self._output_mode_combo.currentIndexChanged.connect(self._update_template_previews)
-        self._audio_combo.currentIndexChanged.connect(self._update_template_previews)
-        self._quality_combo.currentIndexChanged.connect(self._update_template_previews)
-        self._codec_combo.currentIndexChanged.connect(self._update_template_previews)
-        self._templates_section.body.addWidget(help_text("仅对新任务生效；已有任务继续使用原保存位置。"))
-        self._template_fields = CollapsibleSection("查看命名字段")
-        self._template_fields.body.addWidget(help_text("目录用 / 分隔。支持 title、author、bvid、part、page、page_padded、part_suffix、collection 和番剧章节字段；扩展名自动添加。"))
+        for combo in (self._output_mode_combo, self._audio_combo, self._quality_combo, self._codec_combo):
+            combo.currentIndexChanged.connect(self._update_template_previews)
+        self._templates_section.body.addWidget(help_text("仅对新任务生效，已有任务保持原保存位置。"))
+        self._template_fields = CollapsibleSection("全部命名字段")
+        browse_fields = QPushButton("搜索全部命名字段…")
+        browse_fields.setObjectName("TextButton")
+        browse_fields.clicked.connect(self._browse_naming_fields)
+        self._template_fields.body.addWidget(browse_fields)
         self._templates_section.body.addWidget(self._template_fields)
         download.addWidget(self._templates_section)
         defaults = SectionCard("默认录制位置与分段")
@@ -365,7 +427,7 @@ class SettingsDialog(QDialog):
             self._probe_notices[kind] = notice
             entry.textChanged.connect(lambda _text, n=notice: n.set_message(""))
             engines.body.addWidget(notice)
-        engines.body.addWidget(help_text("检测使用当前草稿路径，不会自动保存设置。"))
+        engines.setToolTip("检测使用当前草稿路径，不会自动保存设置。")
         self._probe_notice = self._probe_notices["ffmpeg"]
         storage = SectionCard("断点缓存")
         storage.body.addWidget(
@@ -396,7 +458,8 @@ class SettingsDialog(QDialog):
             [("仅更新正式版", UpdateChannel.STABLE), ("更新最新版（包含 beta、rc 版）", UpdateChannel.LATEST)],
         )
         self._update_channel.currentIndexChanged.connect(lambda *_args: self.update_channel_changed.emit())
-        update_card.body.addWidget(help_text("启动检查使用已保存设置；手动检查使用当前通道，也能查看已跳过的版本。"))
+        self._update_channel.setToolTip("启动检查使用已保存通道；手动检查使用当前选择，包含已跳过版本。")
+        self._update_channel.setAccessibleDescription(self._update_channel.toolTip())
         self._update_notice = Notice()
         update_card.body.addWidget(self._update_notice)
         self._update_progress = QProgressBar()
@@ -488,13 +551,12 @@ class SettingsDialog(QDialog):
         example_layout = QVBoxLayout(example_page)
         example_layout.setContentsMargins(16, 16, 16, 16)
         example_card = SectionCard("玻璃效果预览")
-        example_card.body.addWidget(help_text("背景保留细节，文字清晰可读。"))
         example_layout.addWidget(example_card)
         example_layout.addStretch()
         self._glass_preview.addWidget(example_page)
         self._glass_preview.set_background(background_path(BUILTIN_BACKGROUNDS[0].reference), builtin=True)
         glass.body.addWidget(self._glass_preview)
-        glass.body.addWidget(help_text("应用于所有工作区的图片背景。"))
+        self._glass_blur.setToolTip("应用于所有工作区的图片背景。")
         self._glass_blur.valueChanged.connect(self._sync_glass_blur)
         appearance.addWidget(glass)
         self._background_grid = QGridLayout()
@@ -521,11 +583,14 @@ class SettingsDialog(QDialog):
         self._draft_label = ElidedLabel("所有修改已保存")
         self._draft_label.setObjectName("MetaLabel")
         footer.addWidget(self._draft_label, 1)
-        self._reset_btn = QPushButton("撤销修改")
+        self._settings_actions = ResponsiveActions()
+        footer.addWidget(self._settings_actions)
+        self._reset_btn = ActionButton("撤销修改")
         self._reset_btn.setObjectName("OutputSecondaryButton")
         self._reset_btn.clicked.connect(lambda: self.load_settings(self._settings))
-        footer.addWidget(self._reset_btn)
-        self._save_btn = QPushButton("保存设置")
+        self._settings_actions.row.addWidget(self._reset_btn)
+        self._save_btn = ActionButton("保存设置")
+        self._save_btn.setProperty("alwaysVisible", True)
         self._save_btn.setAutoDefault(not self._embedded)
         self._save_btn.setDefault(not self._embedded)
         self._save_btn.setObjectName("PrimaryButton")
@@ -533,11 +598,12 @@ class SettingsDialog(QDialog):
         self._save_btn.setFixedHeight(44)
         self._save_btn.clicked.connect(self._accept_if_valid)
         if not self._embedded:
-            cancel = QPushButton("取消")
+            cancel = ActionButton("取消")
+            cancel.setProperty("alwaysVisible", True)
             cancel.setObjectName("OutputSecondaryButton")
             cancel.clicked.connect(self.reject)
-            footer.addWidget(cancel)
-        footer.addWidget(self._save_btn)
+            self._settings_actions.row.addWidget(cancel)
+        self._settings_actions.row.addWidget(self._save_btn)
         layout.addWidget(self._action_bar)
 
     def _sync_appearance_preview(self, *_args):
@@ -553,6 +619,24 @@ class SettingsDialog(QDialog):
         self._glass_preview.set_glass_blur(value)
         for picker in self._background_pickers.values():
             picker.set_glass_blur(value)
+
+    def _insert_naming_field(self, entry, variables):
+        from bilibili_downloader.gui.dialogs.naming_fields import insert_naming_field
+        insert_naming_field(entry, {key: NAMING_FIELDS[key] for key in variables}, self)
+
+    def _browse_naming_fields(self):
+        from bilibili_downloader.gui.dialogs.naming_fields import NamingFieldDialog
+        NamingFieldDialog(NAMING_FIELDS, self, read_only=True).exec()
+
+    def _apply_template_preset(self, key, value):
+        self._template_undo[key] = self._controls[key].text()
+        self._template_undo_buttons[key].setEnabled(True)
+        self._controls[key].setText(value)
+
+    def _undo_template_preset(self, key):
+        if key in self._template_undo:
+            self._controls[key].setText(self._template_undo.pop(key))
+            self._template_undo_buttons[key].setEnabled(False)
 
     def _update_template_previews(self, *_args):
         info = VideoInfo(title="星轨旅记", author="示例UP主", bvid="BV1DEMO", cid=1,
@@ -940,6 +1024,9 @@ class SettingsDialog(QDialog):
         self.show_section(section)
         if entry in (self._path_template, self._multipart_path_template, self._bangumi_path_template):
             self._templates_section.set_expanded(True)
+            for key, editor in self._template_editors.items():
+                if self._controls[key] is entry:
+                    editor.set_expanded(True)
         self._notice.set_message(message, "danger")
         for key, control in self._controls.items():
             if control is entry and key in self._field_rows:

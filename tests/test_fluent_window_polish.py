@@ -25,7 +25,7 @@ def test_compact_download_keeps_core_specs_and_confirmation_visible(workspace, s
     workspace._on_resolve_success(VideoInfo(bvid="BV1DEMO2026A", title="城市夜航"), [], [], True)
     flush()
     assert workspace._density.compact
-    controls = [workspace._page_combo, workspace._output_mode_combo, workspace._quality_combo,
+    controls = [workspace._choose_pages_btn, workspace._output_mode_combo, workspace._quality_combo,
                 workspace._codec_combo, workspace._download_btn, workspace._output_summary]
     if size[0] == 1120:
         controls += [workspace._metadata_check, workspace._all_subtitles_check]

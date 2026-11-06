@@ -1,0 +1,24 @@
+{
+  "protocol": 1,
+  "build": {
+    "version": "0.8.10b2",
+    "platform": "Windows",
+    "architecture": "x86_64",
+    "variant": "full",
+    "updater_protocol": 1
+  },
+  "files": 958,
+  "installer": "BilibiliDownloader-Windows-full-v0.8.10b2-setup.exe",
+  "installer_sha256": "009c7049f59ae0bd1dbe00346fda5d29b8d6f4e09f95dccaeeb1b9c651f64159",
+  "archive": "BilibiliDownloader-Windows-full-v0.8.10b2.zip",
+  "archive_sha256": "52fb9c0d19da6dc37515762653d47e0c95ca96bc625cfcc3a1239de007c67846",
+  "checks": [
+    "install",
+    "payload",
+    "cli",
+    "reinstall",
+    "running-guard",
+    "updated-uninstall",
+    "preserve-media"
+  ]
+}
