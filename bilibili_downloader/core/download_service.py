@@ -143,7 +143,7 @@ class DownloadService:
             progress_callback(0.95, "正在下载字幕...")
             subtitles = self._select_subtitles(item, outcome)
             outcome.subtitle_discovery_complete = bool(subtitles) and item.download_all_subtitles
-            if not subtitles:
+            if not subtitles and "subtitle" not in outcome.missing_artifacts:
                 outcome.missing_artifacts.append("subtitle")
             for index, subtitle in enumerate(subtitles):
                 from bilibili_downloader.core.library import readable_file

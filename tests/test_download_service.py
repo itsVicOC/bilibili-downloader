@@ -59,6 +59,7 @@ def test_chinese_english_selection_reports_missing_language_without_foreign_fall
     outcome = DownloadOutcome(video_path=str(tmp_path / "video.mp4"))
     assert [track.lan for track in service._select_subtitles(item, outcome)] == ["ai-zh"]
     assert outcome.warnings == ["该分 P 没有可下载的英文字幕（含 AI 字幕）"]
+    assert outcome.missing_artifacts == ["subtitle"]
 
 
 def test_service_reports_quality_and_codec_fallback(monkeypatch, tmp_path):
