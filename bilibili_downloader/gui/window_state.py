@@ -127,6 +127,9 @@ class WindowStateStore(QObject):
             return
         self._restoring = False
         self._ready = True
+        handle = self.window.windowHandle()
+        if handle is not None:
+            handle.screenChanged.connect(self._screens_changed)
         self._ensure_visible()
         # Some native backends finalize frame offsets after the first move.
         # One bounded post-show correction handles that without polling.
@@ -188,6 +191,9 @@ class WindowStateStore(QObject):
                 self._timer.start()
                 if event.type() == QEvent.WindowStateChange:
                     QTimer.singleShot(0, self._ensure_visible)
+            elif event.type() == QEvent.ScreenChangeInternal:
+                self._capture()
+                QTimer.singleShot(0, self._ensure_visible)
             elif event.type() in (QEvent.Hide, QEvent.Close):
                 self.flush()
         return False

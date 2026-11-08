@@ -148,3 +148,14 @@ def test_popup_uses_available_screen_without_covering_field(
         assert popup.top() == anchor.bottom() + 5
     else:
         assert popup.bottom() == anchor.top() - 5
+
+
+def test_explicit_help_survives_changing_selection(qtbot):
+    combo = ComboBox()
+    qtbot.addWidget(combo)
+    combo.addItems(["允许回退并提示", "停止该项"])
+    combo.setToolTip("规格不满足时决定是否继续下载")
+    combo.setCurrentIndex(1)
+    assert combo.toolTip() == "规格不满足时决定是否继续下载"
+    combo.setToolTip("")
+    assert combo.toolTip() == combo.currentText()

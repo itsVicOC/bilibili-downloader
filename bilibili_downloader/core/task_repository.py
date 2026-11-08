@@ -305,7 +305,7 @@ class TaskRepository:
                     root = root.parent
             self.update_item(record.id, record.item.model_copy(update={"output_dir": str(root)}))
 
-    def find_duplicate(self, item: DownloadItem) -> Optional[TaskRecord]:
+    def find_duplicate(self, item: DownloadItem, *, include_completed=True) -> Optional[TaskRecord]:
         statuses = (
             TaskStatus.QUEUED.value,
             TaskStatus.DOWNLOADING.value,
@@ -313,6 +313,8 @@ class TaskRepository:
             TaskStatus.MERGING.value,
             TaskStatus.COMPLETED.value,
         )
+        if not include_completed:
+            statuses = tuple(s for s in statuses if s != TaskStatus.COMPLETED.value)
         placeholders = ",".join("?" for _ in statuses)
         with self._lock, self._open_connection() as connection:
             row = connection.execute(

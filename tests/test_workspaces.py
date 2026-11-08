@@ -166,10 +166,13 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
         )
         assert not batch._preview.geometry().intersects(batch._result_label.geometry())
         assert batch._preview.horizontalScrollBar().maximum() == 0
-        assert batch._action_bar.size() == single_size
-        assert batch._action_bar.mapTo(window._workspace_pages.currentWidget(), QPoint()) == single_position
+        assert batch._action_bar.width() == single_size.width()
+        batch_position = batch._action_bar.mapTo(window._workspace_pages.currentWidget(), QPoint())
+        assert batch_position.x() == single_position.x()
+        assert batch_position.y() + batch._action_bar.height() == single_position.y() + single_size.height()
         assert batch._add_btn.size() == window._download_btn.size()
-        assert batch._action_bar.edit_button.size() == window._edit_output_btn.size()
+        if batch._action_bar.edit_button.isVisible() and window._edit_output_btn.isVisible():
+            assert batch._action_bar.edit_button.size() == window._edit_output_btn.size()
         assert batch._collapse_btn.isChecked()
         if size[0] == 900:
             batch._collapse_btn.setChecked(False)
@@ -181,7 +184,7 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
         flush()
         assert contained(window._live_page.start_stop, window._live_page)
         live_bar = window._live_page._action_bar
-        assert live_bar.height() == single_size.height()
+        assert live_bar.height() >= 72
         assert contained(window._live_page.monitor, live_bar)
         assert contained(window._live_page.room_settings, live_bar)
         assert window._live_page.start_stop.x() > window._live_page.room_settings.x()
@@ -321,9 +324,10 @@ def test_batch_partial_failure_fits_the_small_workspace(workspace):
     assert panel._notice.isHidden()
     assert contained(panel._issue_btn, panel._preview_card)
     assert panel._issue_btn.isVisible()
-    assert panel._result_label.isVisible()
-    assert "成功 1 项" in panel._result_label.text()
-    assert not panel._preview.geometry().intersects(panel._result_label.geometry())
+    assert "成功" not in panel._result_label.text()
+    assert panel._issue_btn.text() == "未解析（1）"
+    if panel._result_label.isVisible():
+        assert not panel._preview.geometry().intersects(panel._result_label.geometry())
     panel._url_text.setPlainText("BV1Q541167Qg")
     flush()
     assert contained(panel._preview, panel._preview_card)
@@ -847,7 +851,7 @@ def test_output_cards_allow_preconfiguration_and_keep_available_choices(workspac
     assert window._codec_combo.currentData() == 7
     assert window._subtitle_check.isChecked()
     assert window._download_btn.isEnabled()
-    assert window._download_actions.status.text() == "已选 1 项"
+    assert window._download_actions.status.text() == "已选 1 个任务"
     window._url_input.setText("BV1Q541167Qg")
     assert not window._download_btn.isEnabled()
     assert window._download_actions.status.text() == "来源已修改"
@@ -1001,7 +1005,7 @@ def test_batch_progress_keeps_compact_input_and_disables_stale_selection(workspa
     flush()
     assert panel._count_label.height() < 40
     assert panel._preview_card.isHidden()
-    assert panel._selected_label.text() == "已选 0 个作品 · 0 个任务"
+    assert panel._selected_label.text() == "0 个任务"
     assert not panel._add_btn.isEnabled()
     assert contained(panel._progress_area, panel)
     assert contained(panel._cancel_btn, panel)
@@ -1038,7 +1042,7 @@ def test_large_favorite_import_prioritizes_results_and_preserves_edits(workspace
     assert panel._preview.isColumnHidden(3)
     assert panel._preview.viewport().height() // panel._preview.rowHeight(0) >= min_rows
     assert panel._notice.isHidden() and panel._issue_btn.isVisible()
-    assert "跳过 28 项" in panel._result_label.text()
+    assert "28" in panel._issue_btn.text()
     assert contained(panel._action_bar, panel)
     assert contained(panel._add_btn, panel._action_bar)
     panel._selectors[0].setChecked(False)

@@ -465,29 +465,29 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QCheckBox:disabled {{ color: {p.disabled}; }}
     QCheckBox::indicator:disabled {{ background: {p.surface_raised}; border-color: {p.divider}; }}
     QCheckBox::indicator:checked:disabled {{ background: {p.border}; }}
-    QTableWidget, QTreeWidget {{
+    QTableView, QTreeWidget {{
         background: {p.surface}; alternate-background-color: {p.surface}; color: {p.text};
         border: none; border-radius: {m.radius}px; gridline-color: {p.row_divider};
         selection-background-color: {p.selection}; selection-color: {p.text}; outline: none;
     }}
-    QTableWidget::item, QTreeWidget::item {{ padding: 8px; border-bottom: 1px solid {p.row_divider}; }}
-    QTableWidget::item:hover, QTreeWidget::item:hover {{ background: {p.surface_raised}; }}
-    QTableWidget::item:selected, QTreeWidget::item:selected {{ background: {p.selection}; color: {p.text}; }}
-    QStackedWidget[customBackground="true"] QTableWidget,
+    QTableView::item, QTreeWidget::item {{ padding: 8px; border-bottom: 1px solid {p.row_divider}; }}
+    QTableView::item:hover, QTreeWidget::item:hover {{ background: {p.surface_raised}; }}
+    QTableView::item:selected, QTreeWidget::item:selected {{ background: {p.selection}; color: {p.text}; }}
+    QStackedWidget[customBackground="true"] QTableView,
     QStackedWidget[customBackground="true"] QTreeWidget {{ background: transparent; alternate-background-color: transparent; }}
-    QStackedWidget[customBackground="true"] QTableWidget QWidget#qt_scrollarea_viewport,
+    QStackedWidget[customBackground="true"] QTableView QWidget#qt_scrollarea_viewport,
     QStackedWidget[customBackground="true"] QTreeWidget QWidget#qt_scrollarea_viewport {{ background: transparent; }}
-    QStackedWidget[customBackground="true"] QTableWidget::item,
+    QStackedWidget[customBackground="true"] QTableView::item,
     QStackedWidget[customBackground="true"] QTreeWidget::item {{ background: {reading_surface}; }}
-    QStackedWidget[customBackground="true"] QTableWidget::item:hover,
+    QStackedWidget[customBackground="true"] QTableView::item:hover,
     QStackedWidget[customBackground="true"] QTreeWidget::item:hover {{ background: {p.surface_raised}; }}
-    QStackedWidget[customBackground="true"] QTableWidget::item:selected,
+    QStackedWidget[customBackground="true"] QTableView::item:selected,
     QStackedWidget[customBackground="true"] QTreeWidget::item:selected {{ background: {p.selection}; color: {p.text}; }}
-    QTableWidget[wholeRowHover="true"]::item:hover, QTreeWidget[wholeRowHover="true"]::item:hover,
-    QStackedWidget[customBackground="true"] QTableWidget[wholeRowHover="true"]::item:hover,
+    QTableView[wholeRowHover="true"]::item:hover, QTreeWidget[wholeRowHover="true"]::item:hover,
+    QStackedWidget[customBackground="true"] QTableView[wholeRowHover="true"]::item:hover,
     QStackedWidget[customBackground="true"] QTreeWidget[wholeRowHover="true"]::item:hover {{ background: {p.row_hover}; }}
-    QTableWidget[wholeRowHover="true"]::item:selected, QTreeWidget[wholeRowHover="true"]::item:selected,
-    QStackedWidget[customBackground="true"] QTableWidget[wholeRowHover="true"]::item:selected,
+    QTableView[wholeRowHover="true"]::item:selected, QTreeWidget[wholeRowHover="true"]::item:selected,
+    QStackedWidget[customBackground="true"] QTableView[wholeRowHover="true"]::item:selected,
     QStackedWidget[customBackground="true"] QTreeWidget[wholeRowHover="true"]::item:selected {{ background: {p.selection}; color: {p.text}; }}
     QHeaderView::section {{ background: {p.table_header}; color: {p.muted}; border: none; border-bottom: 1px solid {p.card_border}; padding: 0 10px; min-height: 40px; font-size: 9pt; }}
     QTableCornerButton::section {{ background: {p.surface_raised}; border: none; }}
@@ -581,7 +581,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     #BatchImport QPushButton#TableSubtleButton:hover {{ background: {p.surface_raised}; color: {p.text}; }}
     #BatchImport QPushButton#TableSubtleButton[warningAction="true"] {{ color: {p.warning}; min-height: 22px; max-height: 22px; }}
     #BatchImport QPushButton#TableSubtleButton[warningAction="true"]:hover {{ color: {p.warning}; }}
-    QTableWidget#BatchPreview {{ border: none; border-radius: 0; }}
+    QTableView#BatchPreview {{ border: none; border-radius: 0; }}
     #BatchImport QHeaderView::section {{ background: {p.surface}; min-height: 34px; }}
     #BatchImport QPlainTextEdit {{ border-color: {p.divider}; }}
     #BatchImport QPlainTextEdit:focus {{ border-color: {p.focus}; }}

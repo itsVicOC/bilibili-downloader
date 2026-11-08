@@ -1,0 +1,31 @@
+{
+  "source_revision": "d670dc0a0573d47f1b0c928b5d78d93d46d2574f",
+  "platform": "macOS-27.0.1-arm64-arm-64bit",
+  "python": "3.11.15",
+  "qt": "6.11.2",
+  "full": {
+    "command": "QT_QPA_PLATFORM=offscreen python -m pytest -q",
+    "passed": 1300,
+    "skipped": 6,
+    "warnings": 9,
+    "seconds": 266.72
+  },
+  "native": {
+    "command": "QT_QPA_PLATFORM=cocoa python -m pytest -q tests/test_ui_feedback.py tests/test_combo_box.py tests/test_workflow_polish.py tests/test_fluent_refinement.py",
+    "passed": 120,
+    "warnings": 8,
+    "seconds": 15.7,
+    "consecutive_passes": 1
+  },
+  "ruff": "passed",
+  "compileall": "passed",
+  "diff_check": "passed",
+  "fixture": "isolated test/demo data; no user media or account access",
+  "idle_layout_probe": {
+    "backend": "offscreen",
+    "settle_ms": 200,
+    "sample_ms": 500,
+    "before_layout_passes": 10080,
+    "after_layout_passes": 0
+  }
+}

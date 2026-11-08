@@ -1,0 +1,20 @@
+{
+  "source_sha": "618f0f8ebbdec358190b24e691f7dea46a516084",
+  "version": "0.8.10",
+  "pytest": {
+    "passed": 1314,
+    "skipped": 6,
+    "warnings": 9,
+    "duration_seconds": 276.59,
+    "qt_backend": "offscreen"
+  },
+  "ruff": "passed",
+  "compileall": "passed",
+  "git_diff_check": "passed",
+  "application_diff_from_v0.8.10b3": "version metadata only",
+  "device_testing": {
+    "confirmed_by": "user",
+    "date": "2026-11-06",
+    "scope": "User confirmed device testing passed; no further device details supplied"
+  }
+}

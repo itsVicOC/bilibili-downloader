@@ -1,0 +1,101 @@
+{
+  "total_count": 6,
+  "artifacts": [
+    {
+      "id": 13202248070,
+      "name": "BiliFlow-Windows-management-ui-dry-run-69",
+      "size_in_bytes": 8243397,
+      "expired": false,
+      "digest": "sha256:6d3a8b8784abecb0a80aec640886bd8d37789398d31c6f726652981b59fe7526",
+      "created_at": "2026-11-03T03:39:13Z",
+      "expires_at": "2026-11-17T03:39:11Z",
+      "workflow_run": {
+        "id": 41569374432,
+        "repository_id": 1240907604,
+        "head_repository_id": 1240907604,
+        "head_branch": "codex/ui-feedback-boundaries",
+        "head_sha": "d670dc0a0573d47f1b0c928b5d78d93d46d2574f"
+      }
+    },
+    {
+      "id": 13202104455,
+      "name": "BilibiliDownloader-release-dry-run-69",
+      "size_in_bytes": 521838258,
+      "expired": false,
+      "digest": "sha256:8d9033ddccbd2c282cf799f2cceb5bbe96dd61f30106172373c3a9d25f0e18fc",
+      "created_at": "2026-11-03T03:44:58Z",
+      "expires_at": "2026-11-17T03:44:42Z",
+      "workflow_run": {
+        "id": 41569374432,
+        "repository_id": 1240907604,
+        "head_repository_id": 1240907604,
+        "head_branch": "codex/ui-feedback-boundaries",
+        "head_sha": "d670dc0a0573d47f1b0c928b5d78d93d46d2574f"
+      }
+    },
+    {
+      "id": 13202069546,
+      "name": "BilibiliDownloader-Windows-dry-run-69",
+      "size_in_bytes": 254989538,
+      "expired": false,
+      "digest": "sha256:166bc83e93cdf223553f73144f674360ec480f5b4668f513039e288943da6f54",
+      "created_at": "2026-11-03T03:43:52Z",
+      "expires_at": "2026-11-17T03:43:43Z",
+      "workflow_run": {
+        "id": 41569374432,
+        "repository_id": 1240907604,
+        "head_repository_id": 1240907604,
+        "head_branch": "codex/ui-feedback-boundaries",
+        "head_sha": "d670dc0a0573d47f1b0c928b5d78d93d46d2574f"
+      }
+    },
+    {
+      "id": 13201670744,
+      "name": "BiliFlow-macOS-management-ui-dry-run-69",
+      "size_in_bytes": 14007912,
+      "expired": false,
+      "digest": "sha256:4bdbf9ff55d66aa140bbb3c01d48e1d8555e89df295fa301cdbabbe88d1082a8",
+      "created_at": "2026-11-03T03:17:24Z",
+      "expires_at": "2026-11-17T03:17:22Z",
+      "workflow_run": {
+        "id": 41569374432,
+        "repository_id": 1240907604,
+        "head_repository_id": 1240907604,
+        "head_branch": "codex/ui-feedback-boundaries",
+        "head_sha": "d670dc0a0573d47f1b0c928b5d78d93d46d2574f"
+      }
+    },
+    {
+      "id": 13201268595,
+      "name": "BiliFlow-Windows-visuals-dry-run-69",
+      "size_in_bytes": 12457889,
+      "expired": false,
+      "digest": "sha256:c9a23ff2fb29bf02dce14ce488e4795dfb8d098735b0d8ab1b45742081444fbb",
+      "created_at": "2026-11-03T03:23:46Z",
+      "expires_at": "2026-11-17T03:23:44Z",
+      "workflow_run": {
+        "id": 41569374432,
+        "repository_id": 1240907604,
+        "head_repository_id": 1240907604,
+        "head_branch": "codex/ui-feedback-boundaries",
+        "head_sha": "d670dc0a0573d47f1b0c928b5d78d93d46d2574f"
+      }
+    },
+    {
+      "id": 13200819943,
+      "name": "BilibiliDownloader-macOS-dry-run-69",
+      "size_in_bytes": 224577060,
+      "expired": false,
+      "digest": "sha256:94bce124805f0dbb32a5beba9600a8717844f472a493505c240f26e9f65f9726",
+      "created_at": "2026-11-03T03:20:46Z",
+      "expires_at": "2026-11-17T03:20:38Z",
+      "workflow_run": {
+        "id": 41569374432,
+        "repository_id": 1240907604,
+        "head_repository_id": 1240907604,
+        "head_branch": "codex/ui-feedback-boundaries",
+        "head_sha": "d670dc0a0573d47f1b0c928b5d78d93d46d2574f"
+      }
+    }
+  ]
+}

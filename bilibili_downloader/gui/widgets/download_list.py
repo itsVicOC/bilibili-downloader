@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import QItemSelectionModel, QRect, QSize, Qt, Signal
+from PySide6.QtCore import QRect, QSize, Qt, Signal
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -43,6 +43,7 @@ from bilibili_downloader.gui.widgets.background_readability import (
 )
 from bilibili_downloader.gui.widgets.components import PopupMenu, line_icon, palette
 from bilibili_downloader.gui.widgets.row_hover import RowHoverTable, row_option
+from bilibili_downloader.gui.widgets.selection import SelectionItem, TableSelection
 
 ACTION_BUTTON_MIN_WIDTH = 60
 ACTION_BUTTON_GAP = 6
@@ -99,7 +100,7 @@ class _ReadableProgressBar(QProgressBar):
         p = palette()
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        text = f"{self.value()}%"
+        text = self.property("stageCaption") or f"{self.value()}%"
         painter.setPen(QColor(p.text))
         painter.setFont(self.font())
         painter.drawText(self.rect().adjusted(0, 0, 0, -10), Qt.AlignRight | Qt.AlignVCenter, text)
@@ -223,12 +224,16 @@ def _create_retry_btn(download_id: int, handler, *, text="继续"):
     return _create_action_btn(text, "PrimaryButton", download_id, handler)
 
 
-def _create_more_btn(download_id: int, handler):
+def _create_more_btn(download_id: int, handler, supplement=None, save_copy=None):
     button = QPushButton("更多")
     button.setObjectName("TableSubtleButton")
     button.setProperty("menuButton", True)
     button.setAccessibleName("任务更多操作")
     menu = PopupMenu(button)
+    if supplement:
+        menu.addAction("补全附件…", lambda: supplement(download_id))
+    if save_copy:
+        menu.addAction("另存一份媒体", lambda: save_copy(download_id))
     action = menu.addAction("移除记录")
     action.setToolTip("仅移除任务记录，保留媒体文件和断点")
     action.triggered.connect(lambda checked=False, task_id=download_id: handler(task_id))
@@ -276,6 +281,8 @@ class DownloadListWidget(RowHoverTable):
     pause_requested = Signal(int)
     delete_requested = Signal(int)
     open_requested = Signal(int)
+    supplement_requested = Signal(int)
+    copy_requested = Signal(int)
     content_state_changed = Signal(bool)
 
     def __init__(self):
@@ -285,14 +292,17 @@ class DownloadListWidget(RowHoverTable):
         self._items = {}  # download_id -> DownloadItem snapshot
         self._id_to_row = {}  # download_id -> current row index
         self._states = {}  # download_id -> TaskStatus
+        self._outcomes = {}
         self._output_paths = {}  # download_id -> completed media path
         self.removing_ids = set()
         self._placeholder_active = False
         self._setup_ui()
+        self.selection = TableSelection(self, paint_only=True)
+        self.selection.changed.connect(self.itemSelectionChanged.emit)
 
     def _setup_ui(self):
         self.setColumnCount(5)
-        self.setHorizontalHeaderLabels(["作品", "规格", "传输进度", "任务状态", "操作"])
+        self.setHorizontalHeaderLabels(["作品", "规格", "处理阶段", "任务状态", "操作"])
         self.horizontalHeaderItem(3).setTextAlignment(Qt.AlignCenter)
         self.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
@@ -345,9 +355,14 @@ class DownloadListWidget(RowHoverTable):
         if output_path:
             self._output_paths[download_id] = output_path
 
-        title_item = QTableWidgetItem(item.display_title)
+        title_item = SelectionItem(item.display_title, self.selection, download_id)
         title_item.setToolTip(item.display_title + f"\n{'仅音频' if item.output_mode == OutputMode.AUDIO else '视频'}\n" + str(Path(item.output_dir or "") / item.relative_output_path))
         title_item.setData(Qt.UserRole, download_id)
+        self.selection.state.order.append(download_id)
+        self.selection._keys.add(download_id)
+        self.selection.state.visible.add(download_id)
+        title_item.setFlags(title_item.flags() | Qt.ItemIsUserCheckable)
+        title_item.setCheckState(Qt.Unchecked)
         self.setItem(row, 0, title_item)
 
         quality_label = (
@@ -371,6 +386,8 @@ class DownloadListWidget(RowHoverTable):
         progress_bar.setMinimum(0)
         progress_bar.setMaximum(100)
         progress_bar.setValue(int(progress * 100))
+        if status == TaskStatus.QUEUED:
+            progress_bar.setProperty("stageCaption", "等待重试" if item.retry_at else "等待开始")
         self.setCellWidget(row, 2, _ProgressCell(progress_bar))
         _set_progress_state(
             progress_bar,
@@ -457,6 +474,9 @@ class DownloadListWidget(RowHoverTable):
                     status_item.setText("暂停中...")
                     status_item.setToolTip("暂停中...")
                     status_item.setData(STATUS_TONE_ROLE, "warning")
+        elif self._states.get(download_id) == TaskStatus.QUEUED:
+            self.mark_paused(download_id)
+            self.pause_requested.emit(download_id)
 
     def register_worker(self, download_id: int, worker):
         """Register a worker for a download ID (enables cancel)."""
@@ -482,7 +502,11 @@ class DownloadListWidget(RowHoverTable):
         if row is None:
             return
         progress_bar = self._progress_at(row)
-        if progress_bar:
+        if progress_bar and status == TaskStatus.QUEUED:
+            progress_bar.setProperty("phaseActive", False)
+            _set_progress_state(progress_bar, "PausedProgress")
+            progress_bar.setProperty("stageCaption", "等待重试" if self._items[download_id].retry_at else "等待开始")
+        if progress_bar and not progress_bar.property("phaseActive"):
             progress_bar.setValue(int(progress * 100))
 
         self._states[download_id] = status
@@ -492,10 +516,29 @@ class DownloadListWidget(RowHoverTable):
             status_item.setText(status_text)
             status_item.setToolTip(status_text)
 
+    def update_phase(self, download_id, phase):
+        row = self._row_for(download_id)
+        if row is None:
+            return
+        bar = self._progress_at(row)
+        if bar:
+            bar.setProperty("phaseActive", True)
+            bar.setValue(round(100 * (phase.done / max(1, phase.total) if phase.stage == "attachments" else phase.progress or 0)))
+            if phase.stage == "attachments":
+                caption = f"附件 {phase.done}/{phase.total}"
+            elif phase.progress is not None:
+                caption = f"{phase.label} {phase.progress:.0%}"
+            else:
+                caption = phase.label + "…"
+            bar.setProperty("stageCaption", caption)
+            bar.update()
+
     def mark_downloading(self, download_id: int):
         self._states[download_id] = TaskStatus.DOWNLOADING
         row = self._row_for(download_id)
         if row is not None:
+            self._progress_at(row).setProperty("stageCaption", "")
+            self._progress_at(row).setProperty("phaseActive", False)
             _set_progress_state(self._progress_at(row), "")
             self.item(row, 3).setData(STATUS_TONE_ROLE, "active")
         self._set_actions(download_id, TaskStatus.DOWNLOADING)
@@ -508,22 +551,25 @@ class DownloadListWidget(RowHoverTable):
             return
         self._states[download_id] = TaskStatus.COMPLETED
         if outcome is not None:
+            self._outcomes[download_id] = outcome
             self._output_paths[download_id] = outcome.video_path
         progress_bar = self._progress_at(row)
         if progress_bar:
             _set_progress_state(
                 progress_bar,
                 "WarningProgress"
-                if getattr(outcome, "warnings", None)
+                if getattr(outcome, "warnings", None) or getattr(outcome, "missing_artifacts", None) or getattr(outcome, "spec_warnings", None)
                 else "CompletedProgress",
             )
             progress_bar.setValue(100)
 
+        if progress_bar:
+            progress_bar.setProperty("stageCaption", "媒体已保存" if outcome and outcome.missing_artifacts else "已完成")
         status_item = self.item(row, 3)
         if status_item:
             warnings = list(getattr(outcome, "warnings", []) or [])
-            status_item.setText("部分完成" if warnings else "完成")
-            status_item.setData(STATUS_TONE_ROLE, "warning" if warnings else "success")
+            status_item.setText(getattr(outcome, "result_label", "部分完成" if warnings else "完成"))
+            status_item.setData(STATUS_TONE_ROLE, "warning" if warnings or getattr(outcome, "missing_artifacts", None) or getattr(outcome, "spec_warnings", None) else "success")
             status_item.setToolTip("\n".join(warnings))
 
         if outcome is not None and outcome.actual_quality is not None:
@@ -672,7 +718,12 @@ class DownloadListWidget(RowHoverTable):
         self._workers.pop(download_id, None)
         self._states.pop(download_id, None)
         self._output_paths.pop(download_id, None)
+        self._outcomes.pop(download_id, None)
         self.removing_ids.discard(download_id)
+        self.selection.state.selected.discard(download_id)
+        self.selection._keys.discard(download_id)
+        self.selection.state.visible.discard(download_id)
+        self.selection.state.order = [key for key in self.selection.state.order if key != download_id]
         if row is not None:
             self.removeRow(row)
             self._rebuild_row_mapping()
@@ -693,7 +744,7 @@ class DownloadListWidget(RowHoverTable):
         elif status == TaskStatus.COMPLETED:
             buttons = (
                 _create_open_btn(download_id, self.open_requested.emit),
-                _create_more_btn(download_id, self._on_delete_clicked),
+                _create_more_btn(download_id, self._on_delete_clicked, self.supplement_requested.emit, self.copy_requested.emit),
             )
             controls = _wrap_btns(*buttons)
         else:
@@ -753,24 +804,27 @@ class DownloadListWidget(RowHoverTable):
         super().resizeEvent(event)
 
     def selected_ids(self):
-        return [self.item(index.row(), 0).data(Qt.UserRole)
-                for index in self.selectionModel().selectedRows()
-                if not self.isRowHidden(index.row()) and self.item(index.row(), 0).data(Qt.UserRole) in self._states]
+        return self.selection.state.ids()
 
     def select_visible(self):
-        was_blocked = self.blockSignals(True)
-        self.clearSelection()
-        for task_id in self._states:
-            row = self._row_for(task_id)
-            if row is not None and not self.isRowHidden(row):
-                self.selectionModel().select(self.model().index(row, 0), QItemSelectionModel.Select | QItemSelectionModel.Rows)
-        self.blockSignals(was_blocked)
-        if not was_blocked:
-            self.itemSelectionChanged.emit()
+        self.selection.select_visible()
+
+    def clear_checked(self):
+        self.selection.clear()
+
+    def selectRow(self, row):
+        super().selectRow(row)
+        if hasattr(self, "selection"):
+            self.selection.select_only_row(row)
 
     def keyPressEvent(self, event):
         if event.matches(QKeySequence.SelectAll):
             self.select_visible()
+            event.accept()
+            return
+        if event.key() == Qt.Key_Space and self.currentRow() >= 0:
+            item = self.item(self.currentRow(), 0)
+            item.setCheckState(Qt.Unchecked if item.checkState() == Qt.Checked else Qt.Checked)
             event.accept()
             return
         super().keyPressEvent(event)
@@ -779,6 +833,10 @@ class DownloadListWidget(RowHoverTable):
 def _set_progress_state(progress_bar: QProgressBar, object_name: str):
     """Refresh QSS when switching progress bar visual state."""
     progress_bar.setObjectName(object_name)
+    caption = {"PausedProgress": "已暂停", "CancelledProgress": "已取消", "ErrorProgress": "待重试"}.get(object_name)
+    if caption:
+        progress_bar.setProperty("stageCaption", caption)
+        progress_bar.setProperty("phaseActive", False)
     progress_bar.style().unpolish(progress_bar)
     progress_bar.style().polish(progress_bar)
 
