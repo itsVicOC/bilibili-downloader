@@ -16,7 +16,7 @@ dependencies = [
     "Pillow>=13.0.0",
     "defusedxml>=0.7",
     "keyring>=25.0",
-    "packaging>=26.2",
+    "packaging>=26.3",
 ]
 
 [project.optional-dependencies]
