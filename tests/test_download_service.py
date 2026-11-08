@@ -49,7 +49,7 @@ def test_chinese_english_subtitles_include_ai_and_keep_separate_files(monkeypatc
     assert not outcome.warnings
 
 
-def test_chinese_english_selection_reports_missing_language_without_foreign_fallback(tmp_path):
+def test_chinese_english_selection_uses_available_language_without_foreign_fallback(tmp_path):
     service = DownloadService(FakeAPI([
         SubtitleInfo(lan="ai-ja", url="https://i0.hdslb.com/ja.json"),
         SubtitleInfo(lan="ai-zh", url="https://i0.hdslb.com/zh.json"),
@@ -58,8 +58,9 @@ def test_chinese_english_selection_reports_missing_language_without_foreign_fall
                         download_subtitle=True, selected_subtitle_lan="zh-en")
     outcome = DownloadOutcome(video_path=str(tmp_path / "video.mp4"))
     assert [track.lan for track in service._select_subtitles(item, outcome)] == ["ai-zh"]
-    assert outcome.warnings == ["该分 P 没有可下载的英文字幕（含 AI 字幕）"]
-    assert outcome.missing_artifacts == ["subtitle"]
+    assert outcome.subtitle_discovery_languages == ["ai-ja", "ai-zh"]
+    assert outcome.warnings == []
+    assert outcome.missing_artifacts == []
 
 
 def test_service_reports_quality_and_codec_fallback(monkeypatch, tmp_path):

@@ -143,7 +143,12 @@ class DownloadService:
             progress_callback(0.95, "正在下载字幕...")
             subtitles = self._select_subtitles(item, outcome)
             outcome.subtitle_discovery_complete = bool(subtitles) and item.download_all_subtitles
-            if not subtitles and "subtitle" not in outcome.missing_artifacts:
+            selection_discovered = (
+                not item.download_all_subtitles
+                and item.selected_subtitle_lan == "zh-en"
+                and outcome.subtitle_discovery_languages is not None
+            )
+            if not subtitles and not selection_discovered and "subtitle" not in outcome.missing_artifacts:
                 outcome.missing_artifacts.append("subtitle")
             for index, subtitle in enumerate(subtitles):
                 from bilibili_downloader.core.library import readable_file
@@ -252,6 +257,7 @@ class DownloadService:
         outcome: DownloadOutcome,
     ) -> list[SubtitleInfo]:
         tracks = []
+        outcome.subtitle_discovery_languages = None
         try:
             if item.video_info.bvid:
                 tracks = self._api_client.get_subtitle_tracks(
@@ -275,6 +281,7 @@ class DownloadService:
             outcome.warnings.append(f"字幕轨道查询失败：{redact_sensitive_text(exc)}")
             return []
 
+        outcome.subtitle_discovery_languages = list(dict.fromkeys(track.lan for track in tracks))
         if not tracks:
             outcome.warnings.append("该分 P 没有可下载的字幕")
             return []
@@ -291,12 +298,8 @@ class DownloadService:
                 track.lan: track for track in tracks
                 if track.lan.removeprefix("ai-").split("-")[0] in {"zh", "en"}
             }
-            languages = {lan.removeprefix("ai-").split("-")[0] for lan in selected}
-            for code, label in (("zh", "中文"), ("en", "英文")):
-                if code not in languages:
-                    outcome.warnings.append(f"该分 P 没有可下载的{label}字幕（含 AI 字幕）")
-                    if "subtitle" not in outcome.missing_artifacts:
-                        outcome.missing_artifacts.append("subtitle")
+            if not selected:
+                outcome.warnings.append("该分 P 没有可下载的中文或英文字幕（含 AI 字幕）")
             return list(selected.values())
 
         for track in tracks:
