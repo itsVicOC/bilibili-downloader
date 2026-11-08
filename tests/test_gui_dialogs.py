@@ -153,7 +153,7 @@ def test_main_window_separates_download_and_service_pools(qtbot, tmp_path):
 
     controls = window.findChild(QWidget, "ControlPanel")
     assert controls.layout().contentsMargins().left() == 16
-    assert controls.layout().spacing() == 12
+    assert controls.layout().spacing() == 8
     assert not window._download_btn.isEnabled()
 
     audio_index = window._output_mode_combo.findData(OutputMode.AUDIO)

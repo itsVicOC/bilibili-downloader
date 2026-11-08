@@ -8,7 +8,12 @@ from PySide6.QtCore import QObject, QRunnable, Signal
 
 from bilibili_downloader.api.client import BilibiliAPIClient
 from bilibili_downloader.core.download_service import DownloadService
-from bilibili_downloader.core.errors import redact_sensitive_text, user_error_message
+from bilibili_downloader.core.errors import (
+    ErrorCategory,
+    classify_error,
+    redact_sensitive_text,
+    user_error_message,
+)
 from bilibili_downloader.core.models import DownloadItem
 
 logger = logging.getLogger(__name__)
@@ -30,6 +35,7 @@ class DownloadWorker(QObject):
     paused = Signal(int)
     metrics = Signal(int, float, object)
     outcome_saved = Signal(int, object)
+    phase = Signal(int, object)
     settled = Signal(int)
 
     def __init__(
@@ -52,6 +58,8 @@ class DownloadWorker(QObject):
         self._service: Optional[DownloadService] = None
         self._running = False
         self._library_repository = library_repository
+        self.retryable = False
+        self.error_category = ""
 
     @property
     def is_running(self) -> bool:
@@ -72,12 +80,15 @@ class DownloadWorker(QObject):
                 outcome_callback=lambda outcome: self.outcome_saved.emit(self._download_id, outcome),
             )
 
+            self._service.phase_callback = lambda phase: self.phase.emit(self._download_id, phase)
+
             def progress_cb(pct: float, text: str):
                 if self._cancelled:
                     self._service.cancel()
                     raise RuntimeError("Cancelled")
                 metrics = self._service.transfer_metrics
-                if metrics.speed_bytes_per_second > 0 and "下载" in text:
+                transferring = text.startswith(("正在下载视频流", "正在下载音频流"))
+                if metrics.speed_bytes_per_second > 0 and transferring:
                     text = _progress_text(
                         text,
                         metrics.speed_bytes_per_second,
@@ -86,8 +97,8 @@ class DownloadWorker(QObject):
                 self.progress.emit(self._download_id, pct, text)
                 self.metrics.emit(
                     self._download_id,
-                    metrics.speed_bytes_per_second,
-                    metrics.eta_seconds,
+                    metrics.speed_bytes_per_second if transferring else 0,
+                    metrics.eta_seconds if transferring else None,
                 )
 
             outcome = self._service.download(self._item, progress_cb)
@@ -104,6 +115,8 @@ class DownloadWorker(QObject):
                 logger.info("Download cancelled for %s", self._item.video_info.title)
                 self.cancelled.emit(self._download_id)
             else:
+                self.error_category = classify_error(e).category.value
+                self.retryable = self.error_category == ErrorCategory.NETWORK.value
                 logger.error(
                     "Download error for %s: %s",
                     self._item.video_info.title,

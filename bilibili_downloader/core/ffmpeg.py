@@ -131,6 +131,30 @@ class FFmpegManager:
             return False, f"FFmpeg check failed: {e}"
 
     @staticmethod
+    def inspect_media(source, output_mode, custom_path=None):
+        from bilibili_downloader.core.models import OutputMode
+        exe = FFmpegManager.find_executable(custom_path)
+        if exe is None:
+            return {"valid": False, "unavailable": True, "message": "未找到 FFmpeg，请在工具与存储中检查路径。"}
+        try:
+            with source.open("rb") as handle:
+                handle.read(1)
+            result = subprocess.run(
+                [str(exe), "-nostdin", "-hide_banner", "-protocol_whitelist", "file", "-i", str(source.resolve())],
+                capture_output=True, timeout=30, **_subprocess_window_kwargs(),
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return {"valid": False, "unavailable": True, "message": "无法核验，请检查文件、磁盘连接和 FFmpeg 后重试。"}
+        info = result.stderr.decode("utf-8", errors="replace")
+        match = re.search(r"Duration: (\d+):(\d+):(\d+(?:\.\d+)?)", info)
+        duration = int(match[1]) * 3600 + int(match[2]) * 60 + float(match[3]) if match else 0
+        video = any("Stream #" in line and "Video:" in line and "attached pic" not in line for line in info.splitlines())
+        audio = bool(re.search(r"Stream #.*Audio:", info))
+        valid = audio and (video or output_mode == OutputMode.AUDIO) and duration > 0
+        return {"valid": valid, "duration": duration, "has_video": video, "has_audio": audio,
+                "message": "轨道与时长可解析；未执行逐帧解码校验。" if valid else "媒体轨道或时长异常，请检查或重新下载。"}
+
+    @staticmethod
     def build_live_remux_command(source: Path, output: Path, executable="ffmpeg") -> list[str]:
         return [executable, "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
                 "-protocol_whitelist", "file", "-i", str(source.resolve()),
@@ -350,6 +374,8 @@ class FFmpegManager:
         output_path: Path,
         custom_path: Optional[str] = None,
         cancel_checker: Optional[Callable[[], bool]] = None,
+        progress_callback=None,
+        duration_seconds=0,
     ) -> tuple[bool, str]:
         """Execute FFmpeg to merge video and audio streams.
 
@@ -366,7 +392,9 @@ class FFmpegManager:
             return False, "FFmpeg not found"
 
         cmd = cls.build_merge_command(video_path, audio_path, output_path, executable=str(exe))
-        return cls._execute_command(cmd, output_path, cancel_checker)
+        return cls._execute_command(cmd, output_path, cancel_checker, timeout_seconds=None,
+                                    progress_callback=progress_callback, duration_seconds=duration_seconds,
+                                    stall_timeout_seconds=600)
 
     @classmethod
     def remux_audio(
@@ -375,13 +403,17 @@ class FFmpegManager:
         output_path: Path,
         custom_path: Optional[str] = None,
         cancel_checker: Optional[Callable[[], bool]] = None,
+        progress_callback=None,
+        duration_seconds=0,
     ) -> tuple[bool, str]:
         """Losslessly remux one DASH audio stream into a standalone file."""
         exe = cls.find_executable(custom_path)
         if exe is None:
             return False, "FFmpeg not found"
         cmd = cls.build_audio_command(audio_path, output_path, executable=str(exe))
-        return cls._execute_command(cmd, output_path, cancel_checker)
+        return cls._execute_command(cmd, output_path, cancel_checker, timeout_seconds=None,
+                                    progress_callback=progress_callback, duration_seconds=duration_seconds,
+                                    stall_timeout_seconds=600)
 
     @staticmethod
     def _execute_command(
@@ -391,6 +423,9 @@ class FFmpegManager:
         *,
         temporary_path: Optional[Path] = None,
         timeout_seconds: float | None = 300,
+        progress_callback=None,
+        duration_seconds=0,
+        stall_timeout_seconds=None,
     ) -> tuple[bool, str]:
         # Keep the media suffix so FFmpeg can infer the output container.
         safe_output = temporary_path or output_path.with_name(
@@ -400,9 +435,14 @@ class FFmpegManager:
         _remove_partial_output(safe_output)
 
         process = None
+        progress_path = None
         try:
             if cancel_checker and cancel_checker():
                 return False, "FFmpeg processing cancelled"
+            if progress_callback is not None or stall_timeout_seconds is not None:
+                with tempfile.NamedTemporaryFile(prefix="biliflow-progress-", delete=False) as handle:
+                    progress_path = Path(handle.name)
+                command = [*command[:-1], "-nostats", "-progress", str(progress_path), command[-1]]
             # A file-backed stderr avoids deadlocking when FFmpeg produces more
             # output than an unread PIPE buffer can hold.
             with tempfile.TemporaryFile() as log_file:
@@ -415,6 +455,8 @@ class FFmpegManager:
                 deadline = time.monotonic() + timeout_seconds if timeout_seconds is not None else None
                 cancelled = False
                 timed_out = False
+                last_activity = time.monotonic()
+                last_position = -1
                 while process.poll() is None:
                     if cancel_checker and cancel_checker():
                         cancelled = True
@@ -425,6 +467,20 @@ class FFmpegManager:
                         timed_out = True
                         process.kill()
                         break
+
+                    if progress_path is not None:
+                        data = progress_path.read_text(encoding="utf-8", errors="replace")
+                        positions = re.findall(r"^out_time_us=(\d+)$", data, re.MULTILINE)
+                        position = int(positions[-1]) if positions else 0
+                        if position > last_position:
+                            last_position = position
+                            last_activity = time.monotonic()
+                            if progress_callback is not None:
+                                progress_callback(min(0.99, position / 1_000_000 / duration_seconds) if duration_seconds else None)
+                        if stall_timeout_seconds is not None and time.monotonic() - last_activity > stall_timeout_seconds:
+                            timed_out = True
+                            process.kill()
+                            break
 
                     time.sleep(0.2)
 
@@ -437,7 +493,7 @@ class FFmpegManager:
                 return False, f"FFmpeg processing cancelled\n{output[-500:]}"
             if timed_out:
                 _remove_partial_output(safe_output)
-                return False, f"FFmpeg processing timed out (5 min limit)\n{output[-500:]}"
+                return False, f"FFmpeg processing timed out，处理长时间无进展，可检查磁盘后重试\n{output[-500:]}"
             if process.returncode != 0:
                 _remove_partial_output(safe_output)
                 error_lines = []
@@ -451,6 +507,8 @@ class FFmpegManager:
             # Atomic rename within same directory (avoids cross-drive copy+delete)
             if safe_output.exists():
                 safe_output.replace(output_path)
+                if progress_callback is not None:
+                    progress_callback(1.0)
                 return True, output
             return False, f"FFmpeg succeeded but output file not found: {safe_output.name}"
         except OSError as e:
@@ -462,6 +520,15 @@ class FFmpegManager:
                 process.wait()
             _remove_partial_output(safe_output)
             raise
+        except Exception:
+            _remove_partial_output(safe_output)
+            raise
+        finally:
+            if process is not None and process.poll() is None:
+                process.kill()
+                process.wait()
+            if progress_path is not None:
+                progress_path.unlink(missing_ok=True)
 
 
 def _publish_without_overwrite(source: Path, destination: Path) -> None:

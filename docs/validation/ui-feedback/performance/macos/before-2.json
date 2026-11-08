@@ -1,0 +1,16 @@
+{
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "python": "3.12.10",
+  "backend": "offscreen",
+  "tasks": 1000,
+  "file_records": 10000,
+  "task_query_ms": 33.7,
+  "queue_population_ms": 478.0,
+  "queue_search_ms": 40.3,
+  "file_population_ms": 1180.8,
+  "file_search_ms": 173.1,
+  "indexed_media_lookup_ms": 2.2,
+  "background_check_ms": 14742.2,
+  "max_background_heartbeat_gap_ms": 1304.7,
+  "fixture": "Temporary local one-byte media; measures overhead, not media throughput"
+}

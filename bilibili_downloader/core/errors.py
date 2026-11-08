@@ -49,6 +49,10 @@ _COOKIE_PATTERN = re.compile(
 
 def classify_error(error: BaseException) -> ErrorDetails:
     """Classify an exception without exposing credentials or signed URLs."""
+    if isinstance(error, RuntimeError) and error.__cause__ is not None:
+        cause = classify_error(error.__cause__)
+        if cause.category != ErrorCategory.UNKNOWN:
+            return cause
     if isinstance(error, BangumiAccessError):
         category = (
             ErrorCategory.AUTHENTICATION

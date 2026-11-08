@@ -112,7 +112,7 @@ def test_light_theme_overrides_core_surfaces():
     light = load_stylesheet(False)
 
     assert "#Sidebar" in light
-    assert "QTableWidget" in light
+    assert "QTableView" in light
     assert "QDialog" in light
     assert "background: #ffffff" in light
 

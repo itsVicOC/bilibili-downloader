@@ -3,7 +3,7 @@
 import weakref
 
 from PySide6.QtCore import QEvent, QObject, QPersistentModelIndex, QRect, Qt, QTimer
-from PySide6.QtGui import QColor, QCursor
+from PySide6.QtGui import QColor, QCursor, QPainter, QPen
 from PySide6.QtWidgets import (
     QPushButton,
     QStyle,
@@ -20,6 +20,9 @@ from bilibili_downloader.gui.widgets.components import palette
 
 def row_option(option, index):
     opt = QStyleOptionViewItem(option)
+    # A focus rectangle per cell leaves vertical seams on mouse interaction.
+    # Keyboard focus is painted once across the row by its owning view.
+    opt.state &= ~QStyle.State_HasFocus
     view = opt.widget
     feedback = getattr(view, "_row_hover", None)
     if feedback is not None:
@@ -45,6 +48,7 @@ class RowHover(QObject):
         self._menu = None
         self._queued = False
         self._suspended = False
+        self._pointer_pos = QCursor.pos()
         view.setProperty("wholeRowHover", True)
         view.setMouseTracking(True)
         view.viewport().setMouseTracking(True)
@@ -117,6 +121,22 @@ class RowHover(QObject):
                 menu = child.menu()
                 menu.aboutToShow.connect(lambda m=menu, owner=child: self.pin(m, self.view.indexAt(owner.mapTo(self.view.viewport(), owner.rect().center()))))
 
+    def paint_focus(self):
+        view = self.view
+        if not view.hasFocus() or not view.property("keyboardFocus"):
+            return
+        index = view.currentIndex()
+        if not index.isValid():
+            return
+        rect = self._rect(index).intersected(view.viewport().rect()).adjusted(2, 2, -3, -3)
+        if rect.isEmpty():
+            return
+        painter = QPainter(view.viewport())
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(QPen(QColor(palette().focus), 1))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawRoundedRect(rect, 5, 5)
+
     def pin(self, menu, index):
         menu.installEventFilter(self)
         self._menu = menu
@@ -128,6 +148,14 @@ class RowHover(QObject):
             return False
         kind = event.type()
         view = self.view
+        if kind == QEvent.KeyPress:
+            self._pointer_pos = QCursor.pos()
+        moved = kind == QEvent.MouseMove and QCursor.pos() != self._pointer_pos
+        if kind == QEvent.MouseMove:
+            self._pointer_pos = QCursor.pos()
+        if (moved or kind == QEvent.MouseButtonPress) and view.property("keyboardFocus"):
+            view.setProperty("keyboardFocus", False)
+            view.viewport().update()
         window = self._window() if self._window else None
         if watched is self._menu and kind in (QEvent.Hide, QEvent.Close):
             self._menu = None
@@ -174,6 +202,10 @@ class RowHoverTable(QTableWidget):
         super().setRowHidden(row, hide)
         self._row_hover.schedule()
 
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        self._row_hover.paint_focus()
+
 
 class RowHoverTree(QTreeWidget):
     def __init__(self, *args, **kwargs):
@@ -190,3 +222,7 @@ class RowHoverTree(QTreeWidget):
             color = p.selection if self.selectionModel().isSelected(index) else p.row_hover
             painter.fillRect(rect, QColor(color))
         super().drawBranches(painter, rect, index)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        self._row_hover.paint_focus()

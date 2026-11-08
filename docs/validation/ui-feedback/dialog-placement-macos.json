@@ -1,0 +1,86 @@
+{
+  "backend": "cocoa",
+  "qt": "6.11.2",
+  "cases": [
+    {
+      "mode": "light",
+      "state": "opened",
+      "owner": [
+        100,
+        110,
+        900,
+        640
+      ],
+      "dialog": [
+        180,
+        136,
+        740,
+        588
+      ],
+      "center_delta": [
+        0,
+        0
+      ]
+    },
+    {
+      "mode": "light",
+      "state": "reopened",
+      "owner": [
+        190,
+        150,
+        1120,
+        760
+      ],
+      "dialog": [
+        380,
+        236,
+        740,
+        588
+      ],
+      "center_delta": [
+        0,
+        0
+      ]
+    },
+    {
+      "mode": "dark",
+      "state": "opened",
+      "owner": [
+        100,
+        110,
+        900,
+        640
+      ],
+      "dialog": [
+        180,
+        136,
+        740,
+        588
+      ],
+      "center_delta": [
+        0,
+        0
+      ]
+    },
+    {
+      "mode": "dark",
+      "state": "reopened",
+      "owner": [
+        190,
+        150,
+        1120,
+        760
+      ],
+      "dialog": [
+        380,
+        236,
+        740,
+        588
+      ],
+      "center_delta": [
+        0,
+        0
+      ]
+    }
+  ]
+}

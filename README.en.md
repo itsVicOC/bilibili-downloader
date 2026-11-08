@@ -59,7 +59,7 @@ This README is available in English and Simplified Chinese. The current desktop 
 | Local archives | Save MP4, M4A, or Hi-Res FLAC, plus ASS danmaku, SRT subtitles, covers, and JSON metadata |
 | Persistent task center | Manage downloads, active recordings, and history; apply bulk actions to filtered or all tasks, undo record removal, and resume interrupted downloads after restarting |
 | Live recording | Monitor rooms, record automatically or manually, reconnect, merge a session into one MP4 automatically or on demand, and use global or per-room directories; see the [live recording guide](docs/LIVE_RECORDING.md) |
-| Batch and multi-part downloads | Select individual or all parts, preview/filter batches, track or cancel metadata imports, retry failed entries, read paginated sources, deduplicate tasks, and run 1–8 concurrent downloads |
+| Batch and multi-part downloads | Search and check parts, add ranges, retain selections across filters, preview batches, track or cancel metadata imports, retry failed entries, read paginated sources, deduplicate tasks, and run 1–8 concurrent downloads |
 | Account login | Start with QR login or use the Cookie fallback; manage your account from the sidebar with username and avatar, retaining only allowed Cookie fields and preferring the system credential store |
 | Cross-platform desktop UI | A PySide6 interface with a responsive layout down to 900×640, manual light/dark modes, and automatic system theme switching |
 | Themes and backgrounds | Xinghe and Qinghai themes; twelve Xiao Liu wallpapers or custom images, with large previews, filters, drag-and-drop imports, and independent light/dark visibility per workspace |
@@ -70,11 +70,17 @@ This README is available in English and Simplified Chinese. The current desktop 
 
 Automatic updates are available starting with `v0.8.1b1` and are currently a beta feature. First install a version that includes the updater manually. Check [Releases](https://github.com/itsVicOC/bilibili-downloader/releases) for stable and prerelease status.
 
-Stable `v0.8.9` brings the full [Fluent Design polish](docs/FLUENT_DESIGN.md): horizontal media summaries, responsive specifications and extras, compact layouts for shorter windows, consistent settings and task actions, and restoration of the main window's size, position, and maximized state. The pink/purple and blue themes, Xiao Liu, pink buttons with white labels, Markdown release notes, and custom Windows caption controls remain available. The user has completed testing on physical Windows and macOS machines. [Download stable 0.8.9](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9) · [Changelog](CHANGELOG.md#v089---2026-10-24) (Chinese).
+Stable `v0.8.10` combines three beta stages of download management, durable media reuse, independent attachment repair, selection across filters, and UI polish, with fixes for multi-part naming and missing audio tracks. The user has confirmed that device testing passed. [Fluent Design](docs/FLUENT_DESIGN.md), the pink/purple and blue themes, Xiao Liu, window restoration, and custom Windows caption controls remain available. [Download stable 0.8.10](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10) · [Changelog](CHANGELOG.md#v0810---2026-11-06) (Chinese).
 
 Path actions now sit beside the download directory, task views highlight whole rows, and recording-history sessions can be removed with undo while keeping all media files. Foreground clipboard recognition is enabled by default and requires confirmation before parsing; it does not queue downloads automatically. Accounts, settings, wallpapers, tasks, and media remain compatible. See the [user guide](docs/USER_GUIDE.md), [window restoration validation](docs/FLUENT_V4_VALIDATION.md), and [interaction validation](docs/FLUENT_V5_VALIDATION.md) (Chinese).
 
 ## Download and install
+
+**Stable `v0.8.10`:** Reduces repeated hints, removes hover outlines and cell-edge lines, and moves secondary actions into a More menu when space is limited. Button labels and operation counts remain visible. Dialogs open centered on their owning application window and stay within screen boundaries. [Download stable release](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10) · [Native comparisons and validation record](docs/UI_FEEDBACK_VALIDATION.md). Both stable and beta update channels can upgrade to this release.
+
+Includes durable media reuse, independent attachment repair, strict media matching, queue and batch search, custom part ranges, automatic network retries, media inspection, and directory relinking. Existing settings and queued output snapshots remain compatible. Checked items persist across filters with hidden selection counts; results separate media, specifications, and attachments, and naming fields support Chinese search. [User guide](docs/USER_GUIDE.md#下载与归档优化) · [Workflow validation](docs/WORKFLOW_POLISH_VALIDATION.md), including native comparisons, paired performance results, and the scope of the beta-stage checks.
+
+![Batch search and selection counts](docs/images/ui-feedback/after/archive-batch-light-900.png)
 
 Visit the **[BiliFlow website · 1008.si](https://1008.si/)** or **[download the latest stable release from GitHub](https://github.com/itsVicOC/bilibili-downloader/releases/latest)**. To try beta features, browse [all releases](https://github.com/itsVicOC/bilibili-downloader/releases) and look for the `Pre-release` label.
 

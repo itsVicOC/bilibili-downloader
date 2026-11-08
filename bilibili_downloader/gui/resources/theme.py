@@ -4,7 +4,7 @@ import sys
 
 from PySide6.QtCore import QEvent, QObject, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QPalette
-from PySide6.QtWidgets import QAbstractButton, QTabBar
+from PySide6.QtWidgets import QAbstractButton, QAbstractItemView, QComboBox, QTabBar
 
 from bilibili_downloader.gui.resources import load_stylesheet
 from bilibili_downloader.gui.resources.styles import theme_palette
@@ -17,7 +17,7 @@ class _ButtonFocusFilter(QObject):
     """Distinguish keyboard focus from a mouse click without changing geometry."""
 
     def eventFilter(self, target, event):
-        if isinstance(target, (QAbstractButton, QTabBar)):
+        if isinstance(target, (QAbstractButton, QTabBar, QAbstractItemView, QComboBox)):
             kind = event.type()
             if kind == QEvent.FocusIn:
                 visible = event.reason() in (
@@ -34,6 +34,8 @@ class _ButtonFocusFilter(QObject):
                 target.style().unpolish(target)
                 target.style().polish(target)
                 target.update()
+                if isinstance(target, QAbstractItemView):
+                    target.viewport().update()
         return False
 
 

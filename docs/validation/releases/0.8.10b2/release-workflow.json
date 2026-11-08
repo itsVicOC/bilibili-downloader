@@ -1,0 +1,52 @@
+{
+  "name": "Release",
+  "headSha": "6cd1b46494d32d8a9d37a2d5590ad62307c955a6",
+  "headBranch": "v0.8.10b2",
+  "event": "push",
+  "conclusion": "success",
+  "createdAt": "2026-11-02T16:03:52Z",
+  "updatedAt": "2026-11-02T16:35:45Z",
+  "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/41477760583",
+  "jobs": [
+    {
+      "name": "Validate release request",
+      "conclusion": "success",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/41477760583/job/125387729884",
+      "databaseId": 125387729884,
+      "startedAt": "2026-11-02T16:03:54Z",
+      "completedAt": "2026-11-02T16:03:57Z"
+    },
+    {
+      "name": "Build Windows",
+      "conclusion": "success",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/41477760583/job/125387770652",
+      "databaseId": 125387770652,
+      "startedAt": "2026-11-02T16:04:17Z",
+      "completedAt": "2026-11-02T16:33:58Z"
+    },
+    {
+      "name": "Build macOS",
+      "conclusion": "success",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/41477760583/job/125387770854",
+      "databaseId": 125387770854,
+      "startedAt": "2026-11-02T16:04:01Z",
+      "completedAt": "2026-11-02T16:21:21Z"
+    },
+    {
+      "name": "Assemble and verify release bundle",
+      "conclusion": "success",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/41477760583/job/125404937493",
+      "databaseId": 125404937493,
+      "startedAt": "2026-11-02T16:34:04Z",
+      "completedAt": "2026-11-02T16:34:59Z"
+    },
+    {
+      "name": "Publish GitHub Release",
+      "conclusion": "success",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/41477760583/job/125405514815",
+      "databaseId": 125405514815,
+      "startedAt": "2026-11-02T16:35:01Z",
+      "completedAt": "2026-11-02T16:35:44Z"
+    }
+  ]
+}

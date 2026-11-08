@@ -254,7 +254,8 @@ def test_bulk_remove_110_tasks_waits_for_settlement_undo_and_late_events(
     assert len(table.selected_ids()) == 28
     assert page.bulk_ids("resume") == table.selected_ids()
     page.filter.setCurrentIndex(page.filter.findData("completed"))
-    assert table.selected_ids() == []
+    assert len(table.selected_ids()) == 28
+    assert "筛选外 28 项" in page.selection_bar.summary.text()
     active_id = ids[3]
     paused = []
     worker = SimpleNamespace(pause=lambda: paused.append(True))
@@ -294,8 +295,9 @@ def test_inventory_ui_survives_clearing_tasks_and_background_check(
     assert page.table.item(0, 4).text() == "文件存在"
     assert page.table.item(0, 3).text() == "5.0 B"
     page.search.setText("no match")
-    assert page.selected_ids() == []
-    assert not page.recycle_action.isEnabled()
+    assert len(page.selected_ids()) == 1
+    assert page.recycle_action.isEnabled()
+    assert "筛选外 1 项" in page.selection_bar.summary.text()
 
 
 def test_bulk_confirmation_includes_hidden_tasks_and_can_be_cancelled(
@@ -467,12 +469,16 @@ def test_failed_recycle_never_unlinks_media(tmp_path):
 def test_real_workers_stop_110_queued_downloads_before_removal(
     workspace, monkeypatch, qtbot
 ):
+    cancelled = threading.Event()
+
     class WaitingService:
         def __init__(self, *_args, **_kwargs):
-            self.cancelled = threading.Event()
+            self.cancelled = cancelled
 
         def download(self, _item, _progress):
-            assert self.cancelled.wait(10)
+            # Enqueuing 110 persistent UI rows can exceed ten seconds on a
+            # hosted Windows runner. Only cancellation should end this fixture.
+            self.cancelled.wait()
             raise RuntimeError("Download cancelled by user")
 
         def cancel(self):
@@ -492,23 +498,29 @@ def test_real_workers_stop_110_queued_downloads_before_removal(
 
     monkeypatch.setattr(workspace, "_on_download_paused", paused)
     workspace._download_pool.setMaxThreadCount(1)
-    for index in range(110):
-        workspace._enqueue_download(
-            DownloadItem(
-                video_info=VideoInfo(bvid="demo", cid=index, title=f"Lesson {index}")
+    try:
+        for index in range(110):
+            workspace._enqueue_download(
+                DownloadItem(
+                    video_info=VideoInfo(bvid="demo", cid=index, title=f"Lesson {index}")
+                )
             )
+        assert len(workspace._download_attempts) == 110
+        workspace._remove_task_records(list(workspace._download_attempts))
+        qtbot.waitUntil(lambda: workspace._pending_removal is None, timeout=15000)
+        assert not workspace._download_attempts
+        assert callback_threads and set(callback_threads) == {main_thread}
+        assert workspace._task_repository.list_tasks() == []
+        workspace._undo_removed_tasks()
+        assert len(workspace._task_repository.list_tasks()) == 110
+        assert all(
+            r.status == TaskStatus.PAUSED for r in workspace._task_repository.list_tasks()
         )
-    assert len(workspace._download_attempts) == 110
-    workspace._remove_task_records(list(workspace._download_attempts))
-    qtbot.waitUntil(lambda: workspace._pending_removal is None, timeout=15000)
-    assert not workspace._download_attempts
-    assert callback_threads and set(callback_threads) == {main_thread}
-    assert workspace._task_repository.list_tasks() == []
-    workspace._undo_removed_tasks()
-    assert len(workspace._task_repository.list_tasks()) == 110
-    assert all(
-        r.status == TaskStatus.PAUSED for r in workspace._task_repository.list_tasks()
-    )
+    finally:
+        cancelled.set()
+        for worker in list(workspace._download_attempts.values()):
+            worker.pause()
+        workspace._download_pool.waitForDone(15000)
 
 
 def test_committed_file_is_registered_when_last_progress_callback_cancels(
@@ -593,7 +605,9 @@ def test_selection_first_buttons_and_explicit_all(workspace, monkeypatch):
     page._resume_entire_action.trigger()
     assert submitted == [1, 1, 2]
     page.filter.setCurrentIndex(page.filter.findData("attention"))
-    assert not table.selected_ids()
+    assert table.selected_ids() == [1]
+    assert page.bulk_ids("resume") == [1]
+    table.clear_checked()
     assert page.bulk_ids("resume") == [2]
     assert not page.download_detail.isVisible()
 
@@ -794,7 +808,10 @@ def test_batch_summary_counts_expanded_pages(workspace):
     batch = workspace._batch_page
     batch._url_text.setPlainText("BVdemo")
     batch._on_resolved([multipart()], [])
-    assert batch._selected_label.text() == "已选 1 个作品 · 110 个任务"
+    assert batch._selected_label.text() == "110 个任务"
+    assert "已选 1 项" in batch.selection_bar.summary.text()
+    assert batch._path_preview.isHidden()
+    assert batch._output_directory.toolTip() == batch._path_preview.toolTip()
     assert "001 -" in batch._path_preview._full_text
     assert "路径示例" in batch._path_preview._full_text
     assert workspace._settings.output_dir not in batch._path_preview._full_text

@@ -1,0 +1,12 @@
+{
+  "commit": {
+    "sha": "f0161c18d6edb349e864a1d568cb21989b6e4ad5",
+    "type": "commit",
+    "url": "https://api.github.com/repos/itsVicOC/bilibili-downloader/git/commits/f0161c18d6edb349e864a1d568cb21989b6e4ad5"
+  },
+  "ref": "refs/tags/v0.8.10b3",
+  "tag_object": {
+    "sha": "248aab4873ca0cf58d83b906e1e63454a5783d79",
+    "type": "tag"
+  }
+}

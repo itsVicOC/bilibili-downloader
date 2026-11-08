@@ -1,0 +1,13 @@
+{
+  "ref": "refs/tags/v0.8.10b2",
+  "tag_object": {
+    "sha": "6c8bd0b3738186c89bf6a6b9d240ee9319895ab0",
+    "type": "tag",
+    "url": "https://api.github.com/repos/itsVicOC/bilibili-downloader/git/tags/6c8bd0b3738186c89bf6a6b9d240ee9319895ab0"
+  },
+  "commit": {
+    "sha": "6cd1b46494d32d8a9d37a2d5590ad62307c955a6",
+    "type": "commit",
+    "url": "https://api.github.com/repos/itsVicOC/bilibili-downloader/git/commits/6cd1b46494d32d8a9d37a2d5590ad62307c955a6"
+  }
+}
