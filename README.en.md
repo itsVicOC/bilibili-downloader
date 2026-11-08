@@ -231,6 +231,7 @@ The app detects `native/recorder/target/release/biliflow-recorder` automatically
 python -m bilibili_downloader test BV1GJ411x7h7
 
 # Download 1080P video with danmaku and subtitles
+# Save available Chinese and English tracks (including AI) as separate SRT files; use --all-subtitles for every language.
 python -m bilibili_downloader download BV1GJ411x7h7 \
   --quality 80 --danmaku --subtitle
 
