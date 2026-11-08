@@ -1,0 +1,217 @@
+"""Offline, repeatable 1,000-task / 10,000-file desktop baseline.
+
+Uses temporary synthetic one-byte media, never the user's configuration or
+files. Results describe UI/database overhead, not real media disk throughput.
+"""
+
+import argparse
+import json
+import math
+import os
+import platform
+import sqlite3
+import tempfile
+import time
+from contextlib import closing
+from pathlib import Path
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PySide6.QtCore import QThreadPool, QTimer
+from PySide6.QtWidgets import QApplication
+
+from bilibili_downloader.core.library import LibraryRepository
+from bilibili_downloader.core.models import (
+    DownloadItem,
+    DownloadOutcome,
+    TaskStatus,
+    VideoInfo,
+)
+from bilibili_downloader.core.task_repository import TaskRepository
+from bilibili_downloader.gui.widgets.download_list import DownloadListWidget
+from bilibili_downloader.gui.widgets.library_page import LibraryPage
+from scripts.capture_docs_screenshots import _make_main_window
+
+
+def timed(call):
+    start = time.perf_counter()
+    result = call()
+    return result, round((time.perf_counter() - start) * 1000, 1)
+
+
+def percentile(values, fraction=.95):
+    ordered = sorted(values)
+    return round(ordered[max(0, math.ceil(len(ordered) * fraction) - 1)], 1) if ordered else 0.0
+
+
+def settle_events(app):
+    # Qt can post a layout/repaint while dispatching another event. Include
+    # those passes in the measured operation, rather than the following one.
+    for _ in range(4):
+        app.processEvents()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, default=Path("build/archive-benchmark.json"))
+    args = parser.parse_args()
+    app = QApplication.instance() or QApplication([])
+    with tempfile.TemporaryDirectory(prefix="biliflow-benchmark-") as directory:
+        root = Path(directory)
+        repository = LibraryRepository(root / "library.sqlite3")
+        tasks = TaskRepository(root / "tasks.sqlite3")
+        task_items = []
+        with closing(sqlite3.connect(repository.database_path)) as db, db:
+            for n in range(10_000):
+                path = root / f"fixture-{n:05d}.mp4"
+                path.write_bytes(b"x")
+                item = DownloadItem(video_info=VideoInfo(bvid=f"BVfixture{n:05d}", cid=n + 1,
+                                    title=f"演示文件 {n:05d}", author=f"作者 {n % 100}"), output_dir=str(root))
+                outcome = DownloadOutcome(video_path=str(path), actual_quality=80, actual_video_codec=12, actual_audio_quality=30280)
+                outcome.media_signature = LibraryRepository._signature(path.stat())
+                asset_id = db.execute("INSERT INTO assets(identity,path,item_json,outcome_json,created_at) VALUES(?,?,?,?,?)",
+                                      (item.video_info.content_identity, str(path), item.model_dump_json(), outcome.model_dump_json(), "2026-11-02")).lastrowid
+                db.execute("INSERT INTO files(asset_id,kind,path,state,size) VALUES(?,'media',?,'unchecked',1)", (asset_id, str(path)))
+                if n < 1000:
+                    task_items.append(item)
+        for item in task_items:
+            tasks.add(item, TaskStatus.PAUSED)
+        records, task_query = timed(tasks.list_tasks)
+        table = DownloadListWidget()
+        def load_tasks():
+            table.blockSignals(True)
+            for record in records:
+                table.add_item(record.item, download_id=record.id, status=record.status)
+            table.blockSignals(False)
+        _, queue_load = timed(load_tasks)
+        page = LibraryPage()
+        page.repository = repository
+        page.resize(1120, 760)
+        page.show()
+        app.processEvents()
+        _, file_load = timed(lambda: (page.refresh(), settle_events(app)))
+        _, file_search = timed(lambda: page.search.setText("09999"))
+        match, lookup = timed(lambda: repository.match_media(task_items[500]))
+        assert match.state == "saved"
+        page.search.clear()
+        heartbeat_gaps = []
+        steady_gaps = []
+        last = time.perf_counter()
+        def heartbeat():
+            nonlocal last
+            now = time.perf_counter()
+            gap = (now - last) * 1000
+            heartbeat_gaps.append(gap)
+            if page._jobs:
+                steady_gaps.append(gap)
+            last = now
+        timer = QTimer()
+        timer.setInterval(20)
+        timer.timeout.connect(heartbeat)
+        timer.start()
+        started = time.perf_counter()
+        page.check()
+        while page._jobs:
+            app.processEvents()
+            time.sleep(0.001)
+        check_ms = (time.perf_counter() - started) * 1000
+        timer.stop()
+        final_refresh = page._last_refresh_ms
+        search_samples, selection_samples = [], []
+        for n in range(30):
+            _, elapsed = timed(lambda n=n: (page.search.setText(f"{9999 - n:05d}"), settle_events(app)))
+            search_samples.append(elapsed)
+        page.search.clear()
+        settle_events(app)
+        for _ in range(10):
+            _, elapsed = timed(lambda: (page.select_visible(), settle_events(app)))
+            selection_samples.append(elapsed)
+            _, elapsed = timed(lambda: (page._clear_selection(), settle_events(app)))
+            selection_samples.append(elapsed)
+        cancel = {}
+        def cancel_check():
+            cancel["started"] = time.perf_counter()
+            page.cancel_button.click()
+            cancel["feedback_ms"] = (time.perf_counter() - cancel["started"]) * 1000
+        page.check()
+        QTimer.singleShot(30, cancel_check)
+        while page._jobs:
+            app.processEvents()
+            time.sleep(.001)
+        cancel_finish_ms = (time.perf_counter() - cancel["started"]) * 1000 if "started" in cancel else 0
+        assert page._last_operation_report["cancelled"], "Cancellation must stop before all files are checked"
+        # Exercise search in the actual task center, independently of bulk creation.
+        page.hide()
+        settle_events(app)
+        window = _make_main_window(root / "window")
+        window._download_list.blockSignals(True)
+        for record in records:
+            window._download_list.add_item(record.item, download_id=record.id, status=record.status)
+        window._download_list.blockSignals(False)
+        window.resize(1120, 760)
+        window._show_tasks(0)
+        window.show()
+        settle_events(app)
+        _, queue_search = timed(lambda: window._task_page.search.setText("BVfixture00500"))
+        queue_samples, queue_selection = [], []
+        for n in range(30):
+            _, elapsed = timed(lambda n=n: (window._task_page.search.setText(f"{999 - n:05d}"), settle_events(app)))
+            queue_samples.append(elapsed)
+        window._task_page.search.clear()
+        settle_events(app)
+        for _ in range(10):
+            for action in (window._download_list.select_visible, window._download_list.clear_checked):
+                _, elapsed = timed(lambda action=action: (action(), settle_events(app)))
+                queue_selection.append(elapsed)
+        batch = window._batch_page
+        window._show_workspace(0)
+        window._download_tabs.setCurrentIndex(1)
+        settle_events(app)
+        _, batch_load = timed(lambda: (batch._on_resolved([record.item.video_info for record in records], []), settle_events(app)))
+        batch_samples, batch_selection = [], []
+        for n in range(30):
+            _, elapsed = timed(lambda n=n: (batch.search.setText(f"{999 - n:05d}"), settle_events(app)))
+            batch_samples.append(elapsed)
+        batch.search.clear()
+        settle_events(app)
+        for _ in range(10):
+            for action in (batch.selection.select_visible, batch.selection.clear):
+                _, elapsed = timed(lambda action=action: (action(), settle_events(app)))
+                batch_selection.append(elapsed)
+        report = {"platform": platform.platform(), "python": platform.python_version(),
+                  "backend": app.platformName(), "tasks": 1000, "file_records": 10000,
+                  "task_query_ms": task_query, "queue_population_ms": queue_load,
+                  "queue_search_ms": queue_search, "file_population_ms": file_load,
+                  "queue_search_p95_ms": percentile(queue_samples),
+                  "queue_selection_p95_ms": percentile(queue_selection),
+                  "batch_population_ms": batch_load,
+                  "batch_search_p95_ms": percentile(batch_samples),
+                  "batch_selection_p95_ms": percentile(batch_selection),
+                  "file_search_ms": file_search, "indexed_media_lookup_ms": lookup,
+                  "background_check_ms": round(check_ms, 1),
+                  "max_background_heartbeat_gap_ms": round(max(heartbeat_gaps, default=0), 1),
+                  "steady_heartbeat_max_ms": round(max(steady_gaps, default=0), 1),
+                  "steady_heartbeat_p95_ms": percentile(steady_gaps),
+                  "file_search_p95_ms": percentile(search_samples),
+                  "file_selection_p95_ms": percentile(selection_samples),
+                  "final_refresh_ms": round(final_refresh, 1),
+                  "cancel_feedback_ms": round(cancel.get("feedback_ms", 0), 1),
+                  "cancel_finish_ms": round(cancel_finish_ms, 1),
+                  "cancel_checked": page._last_operation_report["checked"],
+                  "fixture": "Temporary local one-byte media; measures overhead, not media throughput"}
+        window._live_controller.shutdown()
+        window.request_quit(confirmed=True)
+        window._service_pool.waitForDone(15000)
+        QThreadPool.globalInstance().waitForDone(15000)
+        app.processEvents()
+        page.cancel_work()
+        page.close()
+        table.close()
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

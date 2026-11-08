@@ -18,8 +18,8 @@ from pathlib import Path, PurePosixPath
 
 BUILD_INFO_FILENAME = "biliflow-build.json"
 UPDATER_PROTOCOL = 1
-DATA_FILES = ("config.json", "tasks.sqlite3", "live.sqlite3")
-DATA_DIRECTORIES = ("backgrounds",)
+DATA_FILES = ("config.json", "tasks.sqlite3", "live.sqlite3", "library.sqlite3")
+DATA_DIRECTORIES = ("backgrounds", "library-pending")
 
 
 class UpdateError(ValueError):
@@ -401,8 +401,11 @@ def ensure_install_data_outside(
     def payload_paths(value):
         if isinstance(value, dict):
             for key, entry in value.items():
-                if key in ("output_dir", "output_path", "directory", "path"):
+                if key in ("output_dir", "output_path", "directory", "path", "video_path", "danmaku_path", "cover_path", "metadata_path"):
                     check(entry, existing=True)
+                elif key == "subtitle_paths" and isinstance(entry, list):
+                    for subtitle_path in entry:
+                        check(subtitle_path, existing=True)
                 elif isinstance(entry, (dict, list)):
                     payload_paths(entry)
         elif isinstance(value, list):
@@ -445,6 +448,13 @@ def ensure_install_data_outside(
                     if table == "tasks":
                         for row in connection.execute("SELECT output_path FROM tasks"):
                             check(row[0], existing=True)
+        library = data / "library.sqlite3"
+        if library.is_file():
+            with closing(sqlite3.connect(library.as_uri() + "?mode=ro", uri=True)) as connection:
+                for row in connection.execute("SELECT path FROM files"):
+                    check(row[0], existing=True)
+        for receipt in (data / "library-pending").glob("*.json"):
+            payload_paths(json.loads(receipt.read_text("utf-8")))
         if any(path.is_dir() for path in target.rglob(".biliflow-parts")):
             raise InstallDataInApplicationError(
                 "程序目录内仍有下载断点缓存，请先移到程序目录之外，或手动安装更新。"

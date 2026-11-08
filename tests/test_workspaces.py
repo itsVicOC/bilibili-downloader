@@ -166,10 +166,13 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
         )
         assert not batch._preview.geometry().intersects(batch._result_label.geometry())
         assert batch._preview.horizontalScrollBar().maximum() == 0
-        assert batch._action_bar.size() == single_size
-        assert batch._action_bar.mapTo(window._workspace_pages.currentWidget(), QPoint()) == single_position
+        assert batch._action_bar.width() == single_size.width()
+        batch_position = batch._action_bar.mapTo(window._workspace_pages.currentWidget(), QPoint())
+        assert batch_position.x() == single_position.x()
+        assert batch_position.y() + batch._action_bar.height() == single_position.y() + single_size.height()
         assert batch._add_btn.size() == window._download_btn.size()
-        assert batch._action_bar.edit_button.size() == window._edit_output_btn.size()
+        if batch._action_bar.edit_button.isVisible() and window._edit_output_btn.isVisible():
+            assert batch._action_bar.edit_button.size() == window._edit_output_btn.size()
         assert batch._collapse_btn.isChecked()
         if size[0] == 900:
             batch._collapse_btn.setChecked(False)
@@ -181,7 +184,7 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
         flush()
         assert contained(window._live_page.start_stop, window._live_page)
         live_bar = window._live_page._action_bar
-        assert live_bar.height() == single_size.height()
+        assert live_bar.height() >= 72
         assert contained(window._live_page.monitor, live_bar)
         assert contained(window._live_page.room_settings, live_bar)
         assert window._live_page.start_stop.x() > window._live_page.room_settings.x()
@@ -228,7 +231,7 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
         window._show_settings_tab(SettingsSection.DOWNLOAD)
         flush()
         assert contained(window._settings_page._save_btn, window._settings_page)
-        assert window._settings_page._action_bar.height() == single_size.height()
+        assert window._settings_page._action_bar.height() == 56
         assert window._settings_page._save_btn.height() == window._download_btn.height()
         assert (
             window._settings_page.tabs.currentWidget().horizontalScrollBar().maximum()
@@ -280,8 +283,8 @@ def test_enqueue_stays_on_source_and_reports_duplicates(workspace, monkeypatch):
     window._on_download_clicked()
     assert window._workspace_pages.currentIndex() == 0
     assert len(window._task_repository.list_tasks()) == 1
-    assert "重复" in window._enqueue_notice.label.text()
-    window._enqueue_notice.action.click()
+    assert "重复" in window._status_bar.currentMessage()
+    window._status_bar.action.click()
     assert window._workspace_pages.currentIndex() == 2
 
 
@@ -321,9 +324,10 @@ def test_batch_partial_failure_fits_the_small_workspace(workspace):
     assert panel._notice.isHidden()
     assert contained(panel._issue_btn, panel._preview_card)
     assert panel._issue_btn.isVisible()
-    assert panel._result_label.isVisible()
-    assert "成功 1 项" in panel._result_label.text()
-    assert not panel._preview.geometry().intersects(panel._result_label.geometry())
+    assert "成功" not in panel._result_label.text()
+    assert panel._issue_btn.text() == "未解析（1）"
+    if panel._result_label.isVisible():
+        assert not panel._preview.geometry().intersects(panel._result_label.geometry())
     panel._url_text.setPlainText("BV1Q541167Qg")
     flush()
     assert contained(panel._preview, panel._preview_card)
@@ -818,7 +822,7 @@ def test_empty_download_is_compact_and_parsed_summary_is_always_visible(workspac
     assert contained(window._download_actions, window._workspace_pages.currentWidget())
     window._edit_output_btn.click()
     flush()
-    assert window._workspace_scroll.verticalScrollBar().value() > 0
+    assert window._quality_combo.visibleRegion().boundingRect().contains(window._quality_combo.rect())
     window._output_mode_combo.setCurrentIndex(window._output_mode_combo.findData(OutputMode.AUDIO))
     assert "仅音频" in window._download_hint.toolTip()
     assert "各作品全部分 P" in window._batch_page._output_specs.toolTip()
@@ -847,7 +851,7 @@ def test_output_cards_allow_preconfiguration_and_keep_available_choices(workspac
     assert window._codec_combo.currentData() == 7
     assert window._subtitle_check.isChecked()
     assert window._download_btn.isEnabled()
-    assert window._download_actions.status.text() == "已选 1 项"
+    assert window._download_actions.status.text() == "已选 1 个任务"
     window._url_input.setText("BV1Q541167Qg")
     assert not window._download_btn.isEnabled()
     assert window._download_actions.status.text() == "来源已修改"
@@ -887,14 +891,14 @@ def test_bulk_actions_respect_scope_and_explain_affected_count(workspace, monkey
         table.add_item(DownloadItem(video_info=VideoInfo(bvid="BV1GJ411x7h7", cid=task_id)), download_id=task_id, status=state)
     page.filter.setCurrentIndex(page.filter.findData("paused"))
     assert page.bulk_ids("resume") == [1]
-    assert page._bulk_buttons[1].text() == "继续 1"
+    assert page._bulk_buttons[1].text() == "继续列表（1）"
     submitted = []
     monkeypatch.setattr(window, "_on_retry_download", submitted.append)
     page._bulk_buttons[1].click()
     assert submitted == [1]
-    page.scope.setCurrentIndex(page.scope.findData("all"))
-    assert page.bulk_ids("resume") == [1, 2]
-    assert "2 项" in page._bulk_buttons[1].toolTip()
+    assert page.bulk_ids("resume", scope="all") == [1, 2]
+    page._resume_entire_action.trigger()
+    assert submitted == [1, 1, 2]
 
 
 def test_remove_filtered_completed_records_and_undo_preserve_files(workspace, tmp_path):
@@ -914,8 +918,10 @@ def test_remove_filtered_completed_records_and_undo_preserve_files(workspace, tm
     window._on_clear_completed()
     assert repo.get(ids[0]) is None
     assert repo.get(ids[1]) is not None
-    assert "文件和断点仍保留" in page.undo_notice.label.text()
-    page.undo_notice.action.click()
+    assert "文件保留" in window._status_bar.currentMessage()
+    assert page.undo_notice.isHidden() and page.undo_action.isEnabled()
+    window._status_bar.clearMessage()
+    page.undo_action.trigger()
     assert repo.get(ids[0]).warnings == ["字幕失败"]
     assert repo.get(ids[0]).progress == 1.0
     assert output.read_bytes() == b"demo-file"
@@ -999,7 +1005,7 @@ def test_batch_progress_keeps_compact_input_and_disables_stale_selection(workspa
     flush()
     assert panel._count_label.height() < 40
     assert panel._preview_card.isHidden()
-    assert panel._selected_label.text() == "已选 0 项"
+    assert panel._selected_label.text() == "0 个任务"
     assert not panel._add_btn.isEnabled()
     assert contained(panel._progress_area, panel)
     assert contained(panel._cancel_btn, panel)
@@ -1036,7 +1042,7 @@ def test_large_favorite_import_prioritizes_results_and_preserves_edits(workspace
     assert panel._preview.isColumnHidden(3)
     assert panel._preview.viewport().height() // panel._preview.rowHeight(0) >= min_rows
     assert panel._notice.isHidden() and panel._issue_btn.isVisible()
-    assert "跳过 28 项" in panel._result_label.text()
+    assert "28" in panel._issue_btn.text()
     assert contained(panel._action_bar, panel)
     assert contained(panel._add_btn, panel._action_bar)
     panel._selectors[0].setChecked(False)

@@ -4,7 +4,21 @@
 
 项目入口：[官方网站 · 1008.si](https://1008.si/) · [中文 README](../README.md) · [English README](../README.en.md)。详细指南目前以简体中文为主。
 
-本次文档对应 `v0.8.2`：主题和背景设置见[外观指南](USER_GUIDE.md#主题与工作区背景)，批量来源的部分失败、取消和重试见[用户指南](USER_GUIDE.md)，版本变化和验证范围见[更新日志](../CHANGELOG.md#v082---2026-10-19)。
+[`v0.8.10` 正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10) 汇总下述三个 beta 阶段的下载管理、媒体复用、附件补全、跨筛选选择及界面精修。用户于 2026-11-06 确认实机测试通过；功能与 beta 3 一致，已有账号、配置、任务与媒体继续兼容。正式更新通道及 beta 通道均可升级，见[更新日志](../CHANGELOG.md#v0810---2026-11-06)和[正式发布检查](BUILDING.md#0810-正式版发布检查2026-11-06)。
+
+[`v0.8.10b3` 预发布版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10b3) 精简提示、移除悬停描边与竖线、改善窄空间按钮收纳，并让弹窗相对软件窗口居中；原生对比、回归与打包状态见[提示与布局精修验收](UI_FEEDBACK_VALIDATION.md)。
+
+[`v0.8.10b2` 预发布版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10b2) 在独立下载文件列表基础上提供媒体复用、附件补全、搜索与分 P 选择、自动重试和归档核验；新增用法见[用户指南](USER_GUIDE.md#下载与归档优化)，功能测试与实测边界见[归档流程验收](ARCHIVE_WORKFLOW_VALIDATION.md)。后续体验精修统一了选择、弹窗、详情与中文命名字段，并优化万条文件检查；当前测试与双平台交付状态见[流程精修验收](WORKFLOW_POLISH_VALIDATION.md)。
+
+`v0.8.9` 正式版汇总四个 beta 阶段的 Fluent 精修、窗口记忆、目录邻近操作、任务整行悬停、录制历史移除与撤销和前台剪贴板识别。用户已确认 Windows／macOS 实机验证完成；功能说明与截图见[第五轮验收](FLUENT_V5_VALIDATION.md)，安装包见 [0.8.9 正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9)。
+
+`v0.8.9b3`（0.8.9 beta 3）基于 `codex/fluent-design-polish` 分支，包含第三、四轮 Fluent 精修、矮窗口紧凑布局和主窗口大小／位置／最大化状态记忆。截图、前后对比及验证范围见[第三轮验收](FLUENT_V3_VALIDATION.md)和[第四轮验收](FLUENT_V4_VALIDATION.md)，安装包见 [beta 3 预发布版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9b3)。
+
+`v0.8.9b2`（0.8.9 beta 2）基于 `codex/fluent-design-polish` 分支提供第二轮 Fluent 精修。Windows 自绘按钮、Markdown 更新说明、背景手部与截图记录见[第二轮验收](FLUENT_V2_VALIDATION.md)和[背景手部复核](BACKGROUND_HAND_REVIEW.md)。
+
+`v0.8.9b1`（0.8.9 beta1）的界面规范见 [Fluent Design 精修](FLUENT_DESIGN.md)，包含设计参数、动效规则与视觉验证方法；粉底白字、文本选区及 Windows 标题栏悬停的结果见[可读性验收记录](UI_READABILITY_VALIDATION.md)。
+
+稳定版文档对应 `v0.8.10`；上文 beta 记录保留各阶段的验证范围。窗口激活、最大化与还原及双平台界面检查见[视觉规范与验证](UI_DESIGN.md)，小流的十二套动画与时段规则见[小流设计与预览](MASCOT_DESIGN.md)，五类设置、模式与背景玻璃模糊见[用户指南](USER_GUIDE.md)，版本变化和验证范围见[更新日志](../CHANGELOG.md#v0810---2026-11-06)。
 
 ## 推荐阅读路线
 
@@ -31,6 +45,8 @@
 | [English README](../README.en.md) | 英文项目介绍、安装、快速上手与常见问题 | 英文读者 |
 | [用户指南](USER_GUIDE.md) | GUI、CLI、任务状态、登录、目录模板与本地数据 | 使用者 |
 | [直播录制](LIVE_RECORDING.md) | 房间监控、录制历史、原生引擎和发布验收状态 | 使用者、维护者 |
+| [小流设计与预览](MASCOT_DESIGN.md) | 十二套动画、五个时段、完整 / 迷你布局及素材记录 | 使用者、维护者 |
+| [内置背景图库](BUILTIN_BACKGROUNDS.md) | 十二景作品、画风、页面推荐与背景选择 | 使用者 |
 | [视觉规范与验证](UI_DESIGN.md) | 统一组件、页面导航、主题与尺寸截图、关键状态及验证范围 | 使用者、维护者 |
 | [故障排查](TROUBLESHOOTING.md) | 启动、解析、画质、FFmpeg、网络、登录与恢复 | 使用者、支持人员 |
 | [版权与合规说明](COPYRIGHT.md) | 支持边界、禁止用途与权利人反馈 | 所有人 |

@@ -1,5 +1,6 @@
 """Single GUI owner for live services, history updates and MP4 exports."""
 
+import sqlite3
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from threading import Event
@@ -9,7 +10,10 @@ from PySide6.QtCore import QLockFile, QObject, QTimer, Signal
 from bilibili_downloader.core.errors import redact_sensitive_text
 from bilibili_downloader.core.ffmpeg import FFmpegManager
 from bilibili_downloader.core.live_models import LiveExport
-from bilibili_downloader.core.live_repository import LiveRepository
+from bilibili_downloader.core.live_repository import (
+    LiveRepository,
+    history_removal_reason,
+)
 from bilibili_downloader.core.live_service import LiveService
 
 
@@ -20,6 +24,9 @@ class LiveUiController(QObject):
     export_changed = Signal(bool, str)
     addition_changed = Signal(bool)
     settings_applied = Signal(bool, str)
+    history_undo_changed = Signal(bool)
+    history_feedback = Signal(str, bool)
+    history_focus_requested = Signal(str)
 
     def __init__(self, config, parent=None, service_factory=LiveService, *, autostart=True):
         super().__init__(parent)
@@ -43,6 +50,7 @@ class LiveUiController(QObject):
         self._export = None
         self._settings_result = None
         self._active_session = None
+        self._removed_history = None
         self._cancel = Event()
         self._exports = ThreadPoolExecutor(
             max_workers=1, thread_name_prefix="live-export"
@@ -162,6 +170,62 @@ class LiveUiController(QObject):
         self.repository.update_export(session.id, LiveExport(path=str(Path(output).expanduser().resolve())))
         self.notify("已加入合并队列，原始分段会保留。")
         self.refresh()
+
+    def history_removal_reason(self, session_id):
+        if self._closed or self.repository is None:
+            return "直播服务暂不可用。"
+        session = self.repository.session(session_id)
+        if session is None:
+            return "此场次记录已不存在。"
+        reason = history_removal_reason(session)
+        if reason:
+            return reason
+        rows = self.service.snapshot() if self.service else self.rows
+        if any(row.get("active_output_dir") and Path(row["active_output_dir"]).resolve() == Path(session.directory).resolve() for row in rows):
+            return "此场次仍在录制、重连或收尾，结束后可移除记录。"
+        if self._export is not None and (
+            self._active_session == session.id or (
+                self.export_source and any(Path(segment.path).resolve() == Path(self.export_source).resolve() for segment in session.segments)
+            )
+        ):
+            return "此场次正在执行导出，完成后可移除记录。"
+        return ""
+
+    def remove_history(self, session_id):
+        try:
+            reason = self.history_removal_reason(session_id)
+            if reason:
+                self.notify(reason, "warning")
+                return False
+            snapshot = self.repository.remove_session(session_id)
+            if snapshot is None:
+                self.refresh()
+                return False
+        except (OSError, ValueError, sqlite3.Error) as exc:
+            self.notify(f"移除录制历史失败：{exc}", "danger")
+            return False
+        self._removed_history = snapshot
+        self.refresh()
+        self.history_undo_changed.emit(True)
+        self.history_feedback.emit("已移除录制历史，录制文件仍保留", True)
+        return True
+
+    def undo_remove_history(self):
+        if self._removed_history is None or self._closed:
+            return False
+        snapshot = self._removed_history
+        try:
+            if not self.repository.restore_session(snapshot):
+                raise ValueError("相同 ID 的记录已存在，未覆盖现有内容")
+        except (OSError, ValueError, sqlite3.Error) as exc:
+            self.notify(f"恢复录制历史失败，可重试：{exc}", "danger")
+            return False
+        self._removed_history = None
+        self.refresh()
+        self.history_focus_requested.emit(snapshot.id)
+        self.history_undo_changed.emit(False)
+        self.history_feedback.emit("已恢复录制历史", False)
+        return True
 
     def _start_next_export(self):
         for session in reversed(self.repository.sessions()):

@@ -1,0 +1,57 @@
+{
+  "ready": true,
+  "url": "https://dl.1008.si/releases/index.json",
+  "tag": "v0.8.10b2",
+  "asset_metadata_matches": 14,
+  "checksums_match": true,
+  "live_update_checks": [
+    {
+      "current": "0.8.10b1",
+      "channel": "latest",
+      "offered": "v0.8.10b2"
+    },
+    {
+      "current": "0.8.10b2",
+      "channel": "latest",
+      "offered": null
+    },
+    {
+      "current": "0.8.8",
+      "channel": "stable",
+      "offered": "v0.8.9"
+    }
+  ],
+  "download_heads": [
+    {
+      "name": "BilibiliDownloader-macOS-full-v0.8.10b2.dmg",
+      "status": 200,
+      "bytes": 81114642
+    },
+    {
+      "name": "BilibiliDownloader-macOS-full-v0.8.10b2.zip",
+      "status": 200,
+      "bytes": 75433024
+    },
+    {
+      "name": "BilibiliDownloader-macOS-lite-v0.8.10b2.zip",
+      "status": 200,
+      "bytes": 70308351
+    },
+    {
+      "name": "BilibiliDownloader-Windows-full-v0.8.10b2-setup.exe",
+      "status": 200,
+      "bytes": 71416435
+    },
+    {
+      "name": "BilibiliDownloader-Windows-full-v0.8.10b2.zip",
+      "status": 200,
+      "bytes": 95246019
+    },
+    {
+      "name": "BilibiliDownloader-Windows-lite-v0.8.10b2.zip",
+      "status": 200,
+      "bytes": 89483941
+    }
+  ],
+  "scope": "Read-only public metadata, checksum GET and binary HEAD; no deployment or installation"
+}

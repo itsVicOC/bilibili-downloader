@@ -1,5 +1,6 @@
 """Pixel fidelity, animation lifecycle, fallback and sidebar geometry."""
 
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,9 @@ from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
 from bilibili_downloader.gui.resources.paths import asset_path
 from bilibili_downloader.gui.resources.theme import ThemeManager
 from bilibili_downloader.gui.widgets import pixel_mascot
+from bilibili_downloader.gui.widgets.mascot_animation import CLIPS, PERIODS
 from bilibili_downloader.gui.widgets.pixel_mascot import FRAME_DURATIONS, PixelMascot
+from tests.test_mascot_animation import FakeClock
 from tests.test_workspaces import workspace as workspace
 
 
@@ -45,9 +48,11 @@ def test_atlas_has_binary_alpha_shared_palette_and_stable_body():
 
 
 @pytest.mark.parametrize("dpr", [1, 1.5, 2])
-def test_paint_keeps_each_source_pixel_crisp(qtbot, dpr):
+@pytest.mark.parametrize("action", list(CLIPS))
+def test_paint_keeps_each_source_pixel_crisp(qtbot, dpr, action):
     mascot = PixelMascot()
     qtbot.addWidget(mascot)
+    mascot._freeze_preview(datetime(2026, 10, 21, 10), action, 3)
     image = QImage(round(80 * dpr), round(80 * dpr), QImage.Format_RGBA8888)
     image.setDevicePixelRatio(dpr)
     image.fill(Qt.transparent)
@@ -65,7 +70,8 @@ def test_animation_pauses_when_hidden_minimized_or_inactive(qtbot, qapp, monkeyp
     host = QWidget()
     qtbot.addWidget(host)
     layout = QVBoxLayout(host)
-    mascot = PixelMascot(host)
+    clock = FakeClock()
+    mascot = PixelMascot(host, now=clock.now, clock=clock.monotonic)
     layout.addWidget(mascot)
     active = [True]
     monkeypatch.setattr(mascot, "_application_active", lambda: active[0])
@@ -73,9 +79,10 @@ def test_animation_pauses_when_hidden_minimized_or_inactive(qtbot, qapp, monkeyp
     flush()
     assert mascot._timer.isActive()
     mascot._timer.stop()
+    clock.advance(mascot._player.delay_ms + 1)
     mascot._advance_frame()
     assert mascot._frame_index == 1
-    assert mascot._timer.interval() == FRAME_DURATIONS[1]
+    assert mascot._timer.interval() == mascot._player.durations[1]
 
     mascot.hide()
     assert not mascot._timer.isActive()
@@ -115,7 +122,7 @@ def test_unavailable_animation_uses_static_first_frame(
     monkeypatch.setattr(
         pixel_mascot,
         "asset_path",
-        lambda name: str(invalid) if name == "xiaoliu_idle.png" else resolve(name),
+        lambda name: str(invalid) if name.startswith("xiaoliu_") else resolve(name),
     )
     mascot = PixelMascot()
     qtbot.addWidget(mascot)
@@ -134,12 +141,13 @@ def test_frozen_bundle_loads_both_assets(qtbot, tmp_path, monkeypatch):
 
     bundle = tmp_path / "bilibili_downloader/gui/assets"
     bundle.mkdir(parents=True)
-    for name in ("xiaoliu.png", "xiaoliu_idle.png"):
+    for name in ("xiaoliu.png", *(clip.asset for clip in CLIPS.values())):
         (bundle / name).write_bytes(Path(asset_path(name)).read_bytes())
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
     mascot = PixelMascot()
     qtbot.addWidget(mascot)
+    assert set(mascot._clips) == set(CLIPS)
     assert len(mascot._frames) == 6
     assert not mascot._still.isNull()
 
@@ -206,3 +214,72 @@ def test_sidebar_fits_both_mascot_sizes_and_compact_navigation(
         qapp.setProperty("darkTheme", previous[3])
         qapp.setProperty("colorTheme", previous[4])
         theme.deleteLater()
+
+
+@pytest.mark.parametrize("action", [key for key in CLIPS if key != "idle"])
+def test_action_assets_have_shared_palette_clear_poses_and_neutral_endpoints(action):
+    with Image.open(asset_path(CLIPS[action].asset)) as source:
+        atlas = source.convert("RGBA")
+    with Image.open(asset_path("xiaoliu.png")) as source:
+        neutral = source.convert("RGBA")
+    assert atlas.size == (320, 40)
+    assert {alpha for _, alpha in atlas.getchannel("A").getcolors()} == {0, 255}
+    palette = {pixel[:3] for pixel in neutral.get_flattened_data() if pixel[3]}
+    assert {pixel[:3] for pixel in atlas.get_flattened_data() if pixel[3]} <= palette
+    assert atlas.crop((0, 0, 40, 40)).tobytes() == neutral.tobytes()
+    assert atlas.crop((280, 0, 320, 40)).tobytes() == neutral.tobytes()
+    body_poses = set()
+    for index in range(1, 7):
+        frame = atlas.crop((index * 40, 0, (index + 1) * 40, 40))
+        left, top, right, bottom = frame.getbbox()
+        assert 0 < left < right < 40
+        assert 0 < top < bottom < 40
+        body_poses.add(frame.crop((0, 20, 40, 40)).tobytes())
+    assert len(body_poses) >= 3
+    assert sum(CLIPS[action].durations) == (6000 if action == "doze" else 2560)
+    assert Path(asset_path(CLIPS[action].asset)).stat().st_size < 15000
+
+
+@pytest.mark.parametrize("hour,period", list(zip((6, 10, 14, 20, 1), PERIODS)))
+def test_caption_keeps_time_period_across_layout_changes(qtbot, hour, period):
+    card = pixel_mascot.MascotCard()
+    qtbot.addWidget(card)
+    card.mascot._freeze_preview(datetime(2026, 10, 21, hour))
+    assert card.caption.text() == period.caption
+    card._set_mini(True)
+    assert card.caption.text() == period.caption.replace("，", "\n")
+    card._set_mini(False)
+    assert card.caption.text() == period.caption
+    assert period.name in card.accessibleName()
+    assert period.caption in card.mascot.toolTip()
+
+
+def test_one_bad_action_is_skipped_and_missing_library_uses_legacy_idle(qtbot, tmp_path, monkeypatch):
+    resolve = pixel_mascot.asset_path
+    invalid = str(tmp_path / "missing.png")
+    monkeypatch.setattr(pixel_mascot, "asset_path", lambda name: invalid if name == "xiaoliu_cheer.png" else resolve(name))
+    clock = FakeClock()
+    mascot = PixelMascot(now=clock.now, clock=clock.monotonic)
+    qtbot.addWidget(mascot)
+    mascot._player.resume()
+    assert "cheer" not in mascot._clips
+    assert mascot._player.clip == "hop"
+    monkeypatch.setattr(pixel_mascot, "asset_path", lambda name: resolve(name) if name in ("xiaoliu.png", "xiaoliu_idle.png") else invalid)
+    legacy = PixelMascot(now=clock.now, clock=clock.monotonic)
+    qtbot.addWidget(legacy)
+    legacy._player.resume()
+    assert legacy._player.clip == "idle"
+    assert legacy._player.running
+    assert legacy._player.idle_remaining_ms is None
+
+
+def test_damaged_idle_still_allows_healthy_actions(qtbot, tmp_path, monkeypatch):
+    resolve = pixel_mascot.asset_path
+    monkeypatch.setattr(pixel_mascot, "asset_path", lambda name: str(tmp_path / "missing.png") if name == "xiaoliu_idle.png" else resolve(name))
+    clock = FakeClock()
+    mascot = PixelMascot(now=clock.now, clock=clock.monotonic)
+    qtbot.addWidget(mascot)
+    mascot._player.resume()
+    assert mascot._player.clip == "cheer"
+    assert mascot._player.running
+    assert mascot._clips["idle"][0].toImage() == mascot._still.toImage()

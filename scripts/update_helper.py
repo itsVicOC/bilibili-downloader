@@ -155,11 +155,11 @@ def _snapshot(data, directory):
     for name in DATA_DIRECTORIES:
         source = data / name
         if source.is_symlink() or (source.exists() and not source.is_dir()):
-            raise UpdateError("用户背景目录无效，请检查后重试")
+            raise UpdateError(f"用户数据目录 {name} 无效，请检查后重试")
         existed[name] = source.is_dir()
         if existed[name]:
             if any(path.is_symlink() for path in source.rglob("*")):
-                raise UpdateError("背景目录包含符号链接，请检查后重试")
+                raise UpdateError(f"用户数据目录 {name} 包含符号链接，请检查后重试")
             shutil.copytree(source, directory / name)
     atomic_json(directory / "files.json", existed)
 
@@ -180,6 +180,8 @@ def _restore_snapshot(data, directory):
         if existed[name]:
             shutil.copytree(directory / name, destination)
     for name in DATA_FILES:
+        if name not in existed:
+            continue
         destination = data / name
         if name.endswith(".sqlite3"):
             for suffix in ("-wal", "-shm"):

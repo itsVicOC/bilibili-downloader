@@ -151,7 +151,8 @@ class TestFFmpegBuildCommand:
         assert "video.m4s" in cmd[3]
         assert cmd[4] == "-i"
         assert "audio.m4s" in cmd[5]
-        assert cmd[6:9] == ["-c", "copy", "-movflags"]
+        assert cmd[6:10] == ["-map", "0:v:0", "-map", "1:a:0"]
+        assert cmd[10:13] == ["-c", "copy", "-movflags"]
         assert "output.mp4" in cmd[-1]
 
     def test_merge_with_extra_args(self):

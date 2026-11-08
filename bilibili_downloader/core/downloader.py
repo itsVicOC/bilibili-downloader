@@ -80,11 +80,18 @@ class StreamDownloader:
         self._cancelled = False
         self.last_video_stream: Optional[StreamInfo] = None
         self.last_audio_stream: Optional[StreamInfo] = None
+        self.phase_callback = None
+        self.media_ready_callback: Optional[Callable[[str], None]] = None
         self._transfer_metrics = TransferMetrics()
 
     @property
     def transfer_metrics(self) -> TransferMetrics:
         return self._transfer_metrics
+
+    def _phase(self, stage, label, progress=None):
+        if self.phase_callback is not None:
+            from bilibili_downloader.core.progress import DownloadPhase
+            self.phase_callback(DownloadPhase(stage, label, progress))
 
     def cancel(self):
         """Signal the downloader to cancel current operation."""
@@ -114,6 +121,7 @@ class StreamDownloader:
         self._cancelled = False
         info = item.video_info
 
+        self._phase("prepare", "确认可用规格")
         progress_callback(0.0, "正在获取流地址...")
 
         # Determine fnval flags
@@ -161,11 +169,26 @@ class StreamDownloader:
         else:
             self.last_video_stream = None
 
+        if item.strict_match:
+            from bilibili_downloader.core.media_policy import (
+                SpecificationMismatchError,
+                specification_warnings,
+            )
+            from bilibili_downloader.core.models import DownloadOutcome
+            selected = DownloadOutcome(
+                video_path="", actual_quality=video_stream.id if video_stream else None,
+                actual_video_codec=video_stream.codecid if video_stream else None,
+                actual_audio_quality=audio_stream.id,
+            )
+            differences = specification_warnings(item, selected)
+            if differences:
+                raise SpecificationMismatchError("严格匹配未满足：" + "；".join(differences))
+
         self._ensure_disk_space(info.duration, video_stream, audio_stream)
 
         relative_output_path = item.relative_output_path
-        if item.output_mode == OutputMode.AUDIO and audio_stream.id == 30251:
-            relative_output_path = relative_output_path.with_suffix(".flac")
+        if item.output_mode == OutputMode.AUDIO:
+            relative_output_path = relative_output_path.with_suffix(".flac" if audio_stream.id == 30251 else ".m4a")
 
         with _reserved_download_cache(self._output_dir, item) as tmp, _reserved_output_path(
             self._output_dir / relative_output_path
@@ -180,8 +203,10 @@ class StreamDownloader:
             )
 
             if video_stream is not None:
+                self._phase("transfer", "传输视频", 0.0)
                 progress_callback(0.0, "正在下载视频流...")
                 def video_progress(p):
+                    self._phase("transfer", "传输视频", p)
                     progress_callback(p * 0.6, "正在下载视频流...")
                 if info.episode_id:
                     self._download_stream(
@@ -197,8 +222,10 @@ class StreamDownloader:
                 audio_start = 0.0
                 audio_weight = 0.85
 
+            self._phase("transfer", "传输音频", 0.0)
             progress_callback(audio_start, "正在下载音频流...")
             def audio_progress(p):
+                self._phase("transfer", "传输音频", p)
                 progress_callback(
                     audio_start + p * audio_weight, "正在下载音频流..."
                 )
@@ -212,6 +239,12 @@ class StreamDownloader:
             if self._cancelled:
                 raise RuntimeError("Download cancelled by user")
 
+            def mux_progress(p):
+                self._phase("mux", "封装媒体", p)
+                start, weight = (0.82, 0.16) if video_stream is not None else (0.88, 0.10)
+                progress_callback(start + (p or 0) * weight, "正在封装媒体…" + (f" {p:.0%}" if p is not None else ""))
+
+            self._phase("mux", "封装媒体", None)
             if video_stream is not None:
                 progress_callback(0.82, "正在合并视频...")
                 merged_path = tmp / f"merged{output_path.suffix}"
@@ -221,6 +254,8 @@ class StreamDownloader:
                     merged_path,
                     custom_path=self._ffmpeg_path,
                     cancel_checker=lambda: self._cancelled,
+                    progress_callback=mux_progress,
+                    duration_seconds=info.duration,
                 )
             else:
                 progress_callback(0.88, "正在封装音频...")
@@ -230,11 +265,16 @@ class StreamDownloader:
                     merged_path,
                     custom_path=self._ffmpeg_path,
                     cancel_checker=lambda: self._cancelled,
+                    progress_callback=mux_progress,
+                    duration_seconds=info.duration,
                 )
             if not success:
                 raise RuntimeError(f"FFmpeg processing failed: {msg}")
 
             merged_path.replace(output_path)
+            # Register the committed file before a cancellable progress callback.
+            if self.media_ready_callback is not None:
+                self.media_ready_callback(str(output_path))
             shutil.rmtree(tmp, ignore_errors=True)
             _remove_empty_cache_root(tmp.parent)
 
@@ -387,9 +427,7 @@ class StreamDownloader:
                     delay = _retry_delay(attempt, last_error)
                     self._wait_for_retry(delay)
 
-        raise RuntimeError(
-            f"下载失败：{last_error}"
-        )
+        raise RuntimeError(f"下载失败：{last_error}") from last_error
 
     def _download_url(
         self,

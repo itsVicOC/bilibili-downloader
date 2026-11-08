@@ -56,7 +56,7 @@ class GlassBackdrop:
         painter.end()
         self.original = QPixmap.fromImage(base)
         picture = Image.frombytes("RGBA", (base.width(), base.height()), base.bits().tobytes()).convert("RGB")
-        picture = ImageEnhance.Color(picture).enhance(1.12)
+        picture = ImageEnhance.Color(picture).enhance(.82)
         picture = picture.filter(ImageFilter.GaussianBlur(blur * self.scale))
         foregrounds = (colors.text, glass_text_color(colors))
         # Bound every channel, so even black/white art keeps text readable.
@@ -68,7 +68,7 @@ class GlassBackdrop:
         surface = QColor(colors.surface)
         channels = []
         for channel, tint in zip(picture.split(), (surface.red(), surface.green(), surface.blue())):
-            lut = [round(value * .88 + tint * .12) for value in range(256)]
+            lut = [round(value * .68 + tint * .32) for value in range(256)]
             lut = [min(bound, value) if dark else max(bound, value) for value in lut]
             channels.append(channel.point(lut))
         picture = Image.merge("RGB", channels).convert("RGBA")
@@ -97,19 +97,19 @@ class GlassBackdrop:
         inner.addRoundedRect(rect.adjusted(3, 3, -3, -3), max(1, radius - 3), max(1, radius - 3))
         painter.save()
         painter.setClipPath(path.subtracted(inner), Qt.IntersectClip)
-        painter.setOpacity(.18)
+        painter.setOpacity(.07)
         painter.drawPixmap(rect, self.original, source.adjusted(2, 2, -2, -2))
         painter.restore()
         shine = QLinearGradient(rect.topLeft(), rect.bottomRight())
-        shine.setColorAt(0, QColor(255, 255, 255, 14 if self.dark else 72))
+        shine.setColorAt(0, QColor(255, 255, 255, 10 if self.dark else 24))
         shine.setColorAt(.24, QColor(255, 255, 255, 6))
         shine.setColorAt(.70, QColor(255, 255, 255, 0))
-        shine.setColorAt(1, QColor(255, 255, 255, 14 if self.dark else 28))
+        shine.setColorAt(1, QColor(255, 255, 255, 8 if self.dark else 12))
         painter.fillPath(path, shine)
         rim = QLinearGradient(rect.topLeft(), rect.bottomLeft())
-        rim.setColorAt(0, QColor(255, 255, 255, 118 if self.dark else 210))
-        rim.setColorAt(.45, QColor(255, 255, 255, 24 if self.dark else 84))
-        rim.setColorAt(1, QColor(0, 0, 0, 52 if self.dark else 30))
+        rim.setColorAt(0, QColor(255, 255, 255, 42 if self.dark else 100))
+        rim.setColorAt(.45, QColor(255, 255, 255, 16 if self.dark else 36))
+        rim.setColorAt(1, QColor(0, 0, 0, 32 if self.dark else 18))
         painter.setBrush(Qt.NoBrush)
         painter.setPen(QPen(rim, 1))
         painter.drawPath(path)

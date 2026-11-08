@@ -8,6 +8,8 @@ import json
 import os
 import sys
 import tempfile
+from contextlib import ExitStack
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -18,7 +20,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from PySide6.QtCore import QPoint, QRect, Qt, qVersion
+from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, qVersion
 from PySide6.QtGui import (
     QCloseEvent,
     QColor,
@@ -39,6 +41,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QSlider,
+    QToolTip,
 )
 
 from bilibili_downloader.core.appearance import prepare_background
@@ -51,6 +54,7 @@ from bilibili_downloader.core.models import (
     AppSettings,
     ContentKind,
     DownloadItem,
+    DownloadOutcome,
     OutputMode,
     StreamInfo,
     TaskStatus,
@@ -67,12 +71,31 @@ from bilibili_downloader.gui.dialogs.update_dialog import UpdateDialog
 from bilibili_downloader.gui.live_controller import LiveUiController
 from bilibili_downloader.gui.main_window import MainWindow
 from bilibili_downloader.gui.resources.paths import asset_path
+from bilibili_downloader.gui.resources.styles import theme_palette
 from bilibili_downloader.gui.resources.theme import ThemeManager
 from bilibili_downloader.gui.settings_sections import SettingsSection
 from bilibili_downloader.gui.widgets.components import ElidedLabel
+from bilibili_downloader.gui.widgets.pixel_mascot import PixelMascot
 from bilibili_downloader.utils.config import ConfigManager
 
 OUTPUT_DIR = PROJECT_ROOT / "docs" / "images"
+DEMO_RELEASE_NOTES = """## Fluent 界面精修
+
+- **统一材质与交互**：保留粉紫／青蓝品牌，让内容更清晰。
+- 修复 Windows 窗口按钮的色差、悬停与图标对齐。
+- 更新说明支持标题、列表、表格与 `行内代码`。
+
+### 兼容与验证
+
+| 项目 | 说明 |
+| --- | --- |
+| 用户数据 | 保留账号、任务、录制历史和外观设置 |
+| 窗口行为 | 保留拖动、缩放和关闭流程 |
+
+> 此处为离线演示数据，不会执行更新。
+
+[查看发布说明](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9b1)
+"""
 
 
 def _flush_events(app: QApplication) -> None:
@@ -84,6 +107,9 @@ def _save_widget(app: QApplication, widget, filename: str, popup=None) -> None:
     widget.ensurePolished()
     widget.show()
     _flush_events(app)
+    if not filename.startswith(("biliflow-mascot-", "xiaoliu-")):
+        for mascot in widget.findChildren(PixelMascot):
+            mascot._freeze_preview(datetime(2026, 10, 21, 10))
     # Keep the actual temporary files for eligibility checks, but display a
     # stable demonstration path instead of machine-specific temporary roots.
     masked = []
@@ -106,6 +132,10 @@ def _save_widget(app: QApplication, widget, filename: str, popup=None) -> None:
             else:
                 entry.setPlainText(visible)
     _flush_events(app)
+    QToolTip.hideText()
+    # processEvents alone does not destroy replaced table cell widgets. Deliver
+    # deferred deletion as the normal event loop would, before capturing pixels.
+    app.sendPostedEvents(None, QEvent.DeferredDelete)
     output = OUTPUT_DIR / filename
     if isinstance(widget, LoginDialog) and widget._login_active and widget._tabs.currentIndex() == 1:
         if not widget._qr_label.visibleRegion().boundingRect().contains(widget._qr_label.rect()):
@@ -193,7 +223,7 @@ def _make_main_window(workdir: Path, *, desktop_platform=None) -> MainWindow:
     controller = LiveUiController(config, service_factory=DemoLiveService)
     window = MainWindow(
         config_manager=config, task_repository=repository, live_controller=controller,
-        desktop_platform=desktop_platform,
+        desktop_platform=desktop_platform, remember_window=False,
     )
     controller.timer.stop()
     window.resize(1320, 860)
@@ -459,7 +489,7 @@ def _capture_dropdowns(app, theme, window):
             button = next(
                 button
                 for button in window._task_page.findChildren(QPushButton)
-                if button.menu()
+                if button.isVisible() and button.menu() and button.menu().actions()
             )
             menu = button.menu()
             button.showMenu()
@@ -1021,6 +1051,62 @@ def _capture_lifecycle(app, theme, temp_root):
         window.deleteLater()
 
 
+def _capture_refinement(app, theme, window):
+    """Exercise the reorganized layout with content that a normal demo omits."""
+    _populate_main_window(window)
+    info = window._current_video.model_copy(deep=True)
+    directory = window._settings.output_dir
+    checks = []
+    for theme_id in ("star_trail", "bilibili_blue"):
+        window._settings.appearance.theme = theme_id
+        theme.set_color_theme(theme_id)
+        for dark in (False, True):
+            theme.apply_theme(dark)
+            mode = "dark" if dark else "light"
+            for width, height in ((900, 640), (1120, 760), (1320, 860)):
+                window.resize(width, height)
+                for state in ("audio", "long-content", "failed", "settings-draft", "task-filter"):
+                    window._settings.output_dir = directory
+                    window._output_summary.setText(directory)
+                    window._on_resolve_success(info, info.video_streams, info.audio_streams, True)
+                    window._output_mode_combo.setCurrentIndex(window._output_mode_combo.findData(OutputMode.VIDEO))
+                    window._show_workspace(0)
+                    window._workspace_scroll.verticalScrollBar().setValue(0)
+                    if state == "audio":
+                        window._output_mode_combo.setCurrentIndex(window._output_mode_combo.findData(OutputMode.AUDIO))
+                        assert not window._quality_combo.isEnabled()
+                    elif state == "long-content":
+                        long_info = info.model_copy(update={
+                            "title": "星轨旅记🌠：穿过漫长的夜色与城市街巷，记录沿途的每一束光。" * 8,
+                            "author": "一个非常长的离线演示 UP 主昵称" * 5,
+                        })
+                        window._video_info.set_video_info(long_info)
+                        long_path = "~/Downloads/" + "长目录与 Unicode 演示/" * 12 + "BiliFlow"
+                        window._settings.output_dir = long_path
+                        window._output_summary.setText(long_path)
+                        window._refresh_download_summary()
+                    elif state == "failed":
+                        window._on_resolve_error("网络连接暂时不可用，请检查连接后重新解析。")
+                        assert not window._download_btn.isEnabled()
+                    elif state == "settings-draft":
+                        panel = window._settings_page
+                        panel._path_template.setText("待保存/{author}/{title}{part_suffix}")
+                        window._show_settings_tab(SettingsSection.DOWNLOAD)
+                    else:
+                        page = window._task_page
+                        page.filter.setCurrentIndex(page.filter.findData("paused"))
+                        window._show_tasks(0)
+                    window._url_input.deselect()
+                    _save_widget(app, window, f"refine-{theme_id}-{state}-{mode}-{width}.png")
+                    checks.append({"theme": theme_id, "mode": mode, "state": state,
+                                   "requested_size": [width, height],
+                                   "actual_size": [window.width(), window.height()],
+                                   "horizontal_scroll": window._workspace_scroll.horizontalScrollBar().maximum()})
+                    window._settings_page.load_settings(window._settings_page._settings)
+                    window._task_page.filter.setCurrentIndex(0)
+    (OUTPUT_DIR / "refinement-checks.json").write_text(json.dumps(checks, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def _capture_builtin_backgrounds(app, theme, window, temp_root):
     from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
     from bilibili_downloader.gui.dialogs.background_gallery import BackgroundGallery
@@ -1104,9 +1190,7 @@ def _capture_mascot(app, theme, window):
                 window.show()
                 _flush_events(app)
                 card = window._mascot_card
-                card.mascot._timer.stop()
-                card.mascot._frame_index = 0
-                card.mascot.update()
+                card.mascot._freeze_preview(datetime(2026, 10, 21, 10))
                 for control in (*window._nav_buttons, window._settings_nav, window._header_login):
                     assert window._sidebar.rect().contains(QRect(control.mapTo(window._sidebar, QPoint()), control.size()))
                 assert card.isVisible() == (width >= 1120)
@@ -1117,6 +1201,18 @@ def _capture_mascot(app, theme, window):
                 _save_widget(app, window, f"biliflow-mascot-{theme_id}-{mode}-{width}x{height}.png")
                 if width == 1120:
                     _save_widget(app, card, f"xiaoliu-card-{theme_id}-{mode}-{'mini' if card._mini else 'full'}.png")
+            for hour, key, action in ((6, "morning", "stretch"), (10, "day", "cheer"),
+                                      (14, "afternoon", "sip"), (20, "evening", "stargaze"),
+                                      (1, "night", "doze")):
+                for height in (640, 760):
+                    window.resize(1120, height)
+                    window.show()
+                    window._mascot_card.show()
+                    _flush_events(app)
+                    card = window._mascot_card
+                    assert card._mini == (height == 640)
+                    card.mascot._freeze_preview(datetime(2026, 10, 21, hour), action, 3)
+                    _save_widget(app, card, f"xiaoliu-{key}-{theme_id}-{mode}-{'mini' if card._mini else 'full'}.png")
     screen = app.primaryScreen()
     (OUTPUT_DIR / "rendering-profile.json").write_text(json.dumps({
         "platform": app.platformName(), "qt_version": qVersion(),
@@ -1125,12 +1221,68 @@ def _capture_mascot(app, theme, window):
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def _refresh_document_previews(group):
+    """Refresh the stable filenames linked by guides from the captured matrix."""
+    aliases = {
+        "appearance-controls": {
+            "settings-light": "controls-star_trail-settings-light-1320",
+            "live-settings-light": "controls-star_trail-live-settings-light-1320",
+            "blur-light": "controls-star_trail-glass-light-900",
+            "blur-clear": "controls-star_trail-blur-0-light",
+            "blur-soft": "controls-star_trail-blur-40-light",
+            "gallery-light": "controls-star_trail-gallery-light",
+            "gallery-small": "controls-star_trail-gallery-small-light",
+        },
+        "glass": {
+            "download-empty-light": "glass-star_trail-builtin-empty-light-1320",
+            "download-resolved-light": "glass-star_trail-builtin-resolved-light-1320",
+            "live-light": "glass-star_trail-builtin-live-light-1320",
+            "custom-dark": "glass-star_trail-custom-resolved-dark-1120",
+            "download-empty-small": "glass-star_trail-builtin-empty-light-900",
+        },
+        "ui-refresh": {
+            "download-light": "ui-star_trail-download-light-1320",
+            "live-light-1120": "ui-star_trail-live-light-1120",
+            "live-dark-900": "ui-star_trail-live-dark-900",
+            "tasks-light": "ui-star_trail-tasks-light-1120",
+            "options-dark": "ui-star_trail-options-dark-900",
+            "appearance-light": "ui-star_trail-settings-appearance-light-1320",
+            "about-light": "ui-star_trail-settings-about-light-900",
+            "account-light": "ui-star_trail-account-valid-light",
+            "account-unknown-light": "ui-star_trail-account-unknown-light",
+            "account-long-name-dark": "ui-star_trail-account-long-name-dark",
+            "native-options-light": "ui-star_trail-options-light-900",
+            "native-account-light": "ui-star_trail-account-valid-light",
+            "native-switch-light": "ui-star_trail-switch-qr-light",
+            "naming-light": "ui-star_trail-naming-light-900",
+            "tools-light": "ui-star_trail-settings-tools-light-1120",
+        },
+    }
+    for name, source in aliases[group].items():
+        image = QImage(str(OUTPUT_DIR / f"{source}.png"))
+        if image.isNull():
+            raise RuntimeError(f"Missing screenshot source: {source}")
+        target = OUTPUT_DIR / f"{name}.png"
+        previous = QImage(str(target))
+        if not previous.isNull() and previous.size() != image.size():
+            # Keep the established logical/physical pixel sizes of linked images.
+            if abs(previous.width() / previous.height() - image.width() / image.height()) > 0.01:
+                raise RuntimeError(f"Unexpected screenshot aspect ratio: {name}")
+            image = image.scaled(previous.size(), Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+        if not image.save(str(target)):
+            raise RuntimeError(f"Cannot save documentation preview: {target}")
+
+
 def _capture_ui_refresh(app, theme, window):
     """Seven UI improvements, using isolated fixtures and native-resolution evidence."""
     import qrcode
 
     _populate_main_window(window)
     _populate_live_page(window, Path(app.property("docsTempRoot")) / "ui-live")
+    batch = _make_batch_dialog()
+    window._batch_page._url_text.setPlainText(batch._url_text.toPlainText())
+    window._batch_page._on_resolved(batch._resolved_items, [])
+    batch.deleteLater()
     checks = []
     for theme_id in ("star_trail", "bilibili_blue"):
         window._settings.appearance.theme = theme_id
@@ -1142,11 +1294,25 @@ def _capture_ui_refresh(app, theme, window):
                 window.resize(width, height)
                 window._show_workspace(0)
                 window._workspace_scroll.verticalScrollBar().setValue(0)
+                window.show()
+                _flush_events(app)
+                # Native frame margins settle on first exposure. Set the final
+                # client viewport after that, then verify the actual result.
+                window.resize(width, height)
+                _flush_events(app)
+                # Qt 6.11 Windows may report its initial expanded-frame
+                # increment in the client size. Record that small difference;
+                # a desktop-clamped 1024px sample must still fail this matrix.
+                native_frame_increment = app.platformName() == "windows" and (
+                    0 <= window.width() - width <= 8 and 0 <= window.height() - height <= 36
+                )
+                if window.size() != QSize(width, height) and not native_frame_increment:
+                    raise AssertionError(f"Desktop clamped requested UI size {width}x{height} to {window.width()}x{window.height()}")
                 _save_widget(app, window, f"ui-{theme_id}-download-{mode}-{width}.png")
                 window._workspace_scroll.ensureWidgetVisible(window._metadata_check, 0, 12)
                 _save_widget(app, window, f"ui-{theme_id}-options-{mode}-{width}.png")
                 cards = (window._danmaku_check, window._subtitle_check, window._cover_check, window._metadata_check)
-                assert all(card.height() >= 36 + card.fontMetrics().height() + 4 for card in cards)
+                assert all(card.height() >= card.fontMetrics().height() + 16 for card in cards)
                 for section in SettingsSection:
                     window._show_settings_tab(section)
                     _save_widget(app, window, f"ui-{theme_id}-settings-{section.value}-{mode}-{width}.png")
@@ -1160,10 +1326,20 @@ def _capture_ui_refresh(app, theme, window):
                 for index, name in ((1, "live"), (2, "tasks")):
                     window._show_workspace(index)
                     _save_widget(app, window, f"ui-{theme_id}-{name}-{mode}-{width}.png")
+                for index, name in ((1, "recording"), (2, "history")):
+                    window._show_tasks(index)
+                    _save_widget(app, window, f"ui-{theme_id}-{name}-{mode}-{width}.png")
+                window._show_workspace(0)
+                window._download_tabs.setCurrentIndex(1)
+                _save_widget(app, window, f"ui-{theme_id}-batch-{mode}-{width}.png")
+                window._download_tabs.setCurrentIndex(0)
                 checks.append({
                     "theme": theme_id, "mode": mode, "size": [width, height],
+                    "actual_size": [window.width(), window.height()],
                     "menu_visible": not window.menuBar().isHidden(),
                     "font": window._url_input.font().family(),
+                    "resolved_font": QFontInfo(window._url_input.font()).family(),
+                    "font_pixels": QFontInfo(window._url_input.font()).pixelSize(),
                     "font_height": window._url_input.fontMetrics().height(),
                     "sidebar_width": window._sidebar.width(),
                     "option_card_heights": [card.height() for card in cards],
@@ -1182,7 +1358,14 @@ def _capture_ui_refresh(app, theme, window):
                     dialog._poll_timer.stop()
                     dialog._qr_status.setText("离线演示二维码，仅用于布局验收")
                     _save_widget(app, dialog, f"ui-{theme_id}-switch-qr-{mode}.png")
+                    dialog._tabs.setCurrentIndex(0)
+                    _save_widget(app, dialog, f"ui-{theme_id}-switch-cookie-{mode}.png")
                 dialog.deleteLater()
+            update = UpdateDialog(UpdateRelease(
+                "0.9.0", "v0.9.0", "2026-10-21T00:00:00Z", DEMO_RELEASE_NOTES, (),
+            ), window)
+            _save_widget(app, update, f"ui-{theme_id}-update-{mode}.png")
+            update.deleteLater()
             for sample, account in (
                 ("long-name", {"uname": "星海漫游的超长昵称" * 12, "mid": "123456789"}),
                 ("missing-avatar", {"uname": "星海漫游", "mid": "123456789"}),
@@ -1197,6 +1380,226 @@ def _capture_ui_refresh(app, theme, window):
         "scale_factor": os.environ.get("QT_SCALE_FACTOR", "system"),
         "physical_pixels": bool(app.property("capturePhysicalPixels")), "checks": checks,
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    _refresh_document_previews("ui-refresh")
+
+
+def _capture_interactions(app, theme, window):
+    """Actual row feedback, history menus and injected clipboard offers, offline."""
+    from PySide6.QtCore import QMimeData, QObject, Signal
+    from PySide6.QtTest import QTest
+
+    from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
+    from bilibili_downloader.gui.clipboard_controller import ClipboardController
+
+    class DemoClipboard(QObject):
+        dataChanged = Signal()
+
+        def __init__(self):
+            super().__init__()
+            self.mime = QMimeData()
+
+        def set(self, value):
+            self.mime.setText(value)
+            self.dataChanged.emit()
+
+        def mimeData(self):
+            return self.mime
+
+    _populate_main_window(window)
+    root = Path(app.property("docsTempRoot"))
+    _populate_live_page(window, root / "interaction-live")
+    clipboard = DemoClipboard()
+    controller = ClipboardController(window, clipboard=clipboard, foreground=lambda: True)
+    source = root / "interaction-contrast.png"
+    image = QImage(480, 320, QImage.Format_RGB32)
+    for y in range(320):
+        for x in range(480):
+            image.setPixelColor(x, y, QColor("#ffffff" if (x // 12 + y // 12) % 2 else "#080825"))
+    image.save(str(source))
+    custom = prepare_background(source)
+    window._background_store.install(custom)
+    checks = []
+
+    def capture(filename, popup=None):
+        _save_widget(app, window, filename, popup=popup)
+        window.show()
+        window.raise_()
+        window.activateWindow()
+        _flush_events(app)
+
+    def hover(view, index):
+        view.clearSelection()
+        _flush_events(app)
+        rect = view.visualRect(index)
+        QTest.mouseMove(view.viewport(), QPoint(30, rect.center().y()))
+        QTest.qWait(60)
+        _flush_events(app)
+        if not view._row_hover.matches(index):
+            raise AssertionError(f"Row hover did not follow actual mouse input: visible={view.isVisible()}, rect={rect}")
+
+    try:
+        for theme_id in ("star_trail", "bilibili_blue"):
+            theme.set_color_theme(theme_id)
+            window._settings.appearance.theme = theme_id
+            for dark in (False, True):
+                theme.apply_theme(dark)
+                mode = "dark" if dark else "light"
+                for width, height in ((900, 640), (1120, 760), (1320, 860)):
+                    clipboard.set("")
+                    controller.check()
+                    window.resize(width, height)
+                    window.show()
+                    _flush_events(app)
+                    for tab, name, view in ((0, "downloads", window._download_list),
+                                            (1, "recording", window._task_page.current),
+                                            (2, "history", window._task_page.history)):
+                        window._show_tasks(tab)
+                        view.clearSelection()
+                        QTest.mouseMove(window, QPoint(12, 80))
+                        capture(f"interaction-{theme_id}-{name}-default-{mode}-{width}.png")
+                        index = view.model().index(0, 0)
+                        hover(view, index)
+                        capture(f"interaction-{theme_id}-{name}-hover-{mode}-{width}.png")
+                        view.setCurrentIndex(index)
+                        capture(f"interaction-{theme_id}-{name}-selected-hover-{mode}-{width}.png")
+                    history = window._task_page.history
+                    history.expandAll()
+                    child = history.topLevelItem(0).child(0)
+                    hover(history, history.indexFromItem(child))
+                    capture(f"interaction-{theme_id}-history-child-hover-{mode}-{width}.png")
+                    history.setCurrentItem(child)
+                    menu = window._task_page.history_menu
+                    owner = window._task_page.history_more
+                    menu.popup(owner.mapToGlobal(QPoint(0, -menu.sizeHint().height())))
+                    capture(f"interaction-{theme_id}-history-menu-{mode}-{width}.png", popup=menu)
+                    menu.hide()
+                    window._show_workspace(0)
+                    window._download_tabs.setCurrentIndex(0)
+                    _flush_events(app)
+                    before = window._workspace_scroll.geometry()
+                    focus = QApplication.focusWidget()
+                    clipboard.set("【分享】BV1GJ411x7h7")
+                    controller.check()
+                    assert QApplication.focusWidget() is focus
+                    capture(f"interaction-{theme_id}-clipboard-{mode}-{width}.png")
+                    assert window._workspace_scroll.geometry() == before
+                    assert controller.prompt.geometry().right() < window._workspace_pages.width() - 14
+                    window._resolve_btn.setEnabled(False)
+                    controller.refresh_prompt()
+                    capture(f"interaction-{theme_id}-clipboard-busy-{mode}-{width}.png")
+                    window._resolve_btn.setEnabled(True)
+                    clipboard.set("ep123\nss456")
+                    controller.check()
+                    capture(f"interaction-{theme_id}-clipboard-batch-{mode}-{width}.png")
+                    clipboard.set("")
+                    controller.check()
+                    checks.append({"theme": theme_id, "dark": dark, "size": [width, height], "hover": True, "clipboard_layout_stable": True})
+                window._show_tasks(2)
+                assert window._live_controller.remove_history("demo-recording")
+                capture(f"interaction-{theme_id}-history-removed-{mode}.png")
+                assert window._live_controller.undo_remove_history()
+                capture(f"interaction-{theme_id}-history-restored-{mode}.png")
+                for kind, reference in (("builtin", BUILTIN_BACKGROUNDS[0].reference), ("contrast", custom.reference)):
+                    window.resize(1120, 760)
+                    window._settings.appearance.backgrounds.tasks = reference
+                    window._settings.appearance.backgrounds.download = reference
+                    window._show_tasks(0)
+                    hover(window._download_list, window._download_list.model().index(0, 0))
+                    capture(f"interaction-{theme_id}-hover-{kind}-{mode}.png")
+                    window._show_workspace(0)
+                    clipboard.set("av170001")
+                    controller.check()
+                    capture(f"interaction-{theme_id}-clipboard-{kind}-{mode}.png")
+                    clipboard.set("")
+                    controller.check()
+                window._settings.appearance.backgrounds.tasks = ""
+                window._settings.appearance.backgrounds.download = ""
+        (OUTPUT_DIR / "interaction-checks.json").write_text(json.dumps(checks, ensure_ascii=False, indent=2), encoding="utf-8")
+    finally:
+        controller.dispose()
+
+
+def _capture_native_chrome(app, theme, window):
+    """Capture the desktop compositor, including the native frame boundaries.
+
+    QWidget.grab() alone cannot catch a reappearing system titlebar or frame.
+    Use only offline fixtures, and record the actual desktop/backend/DPI.
+    """
+    from PySide6.QtTest import QTest
+
+    if app.platformName() not in ("windows", "cocoa"):
+        raise RuntimeError("Chrome checks require a native desktop backend")
+    checks = []
+    window.resize(900, 640)
+    window.move(window.screen().availableGeometry().topLeft() + QPoint(24, 40))
+    for dark in (False, True):
+        # Exercise the user-facing mode transition too: Qt's Windows caption
+        # layer follows styleHints().colorScheme(), not just the widget palette.
+        theme.set_mode("dark" if dark else "light")
+        mode = "dark" if dark else "light"
+        for name, transition in (
+            ("windowed", window.showNormal),
+            ("maximized", window.showMaximized),
+            ("restored", window.showNormal),
+        ):
+            transition()
+            window.raise_()
+            window.activateWindow()
+            QTest.qWait(250)
+            window._chrome._sync_native()
+            _flush_events(app)
+            if name != "maximized":
+                window.resize(900, 640)
+                QTest.qWait(100)
+            handle = window.windowHandle()
+            frame = window.frameGeometry()
+            screen = window.screen()
+            pixmap = screen.grabWindow(0, *frame.getRect())
+            if pixmap.isNull():
+                raise AssertionError("Native frame capture is unavailable")
+            filename = f"chrome-{mode}-{name}.png"
+            pixmap.save(str(OUTPUT_DIR / filename))
+            if sys.platform == "win32":
+                assert handle.flags() & Qt.FramelessWindowHint
+                assert not handle.flags() & Qt.ExpandedClientAreaHint
+                assert not handle.icon().isNull()
+                # The sidebar starts its brand below y=24. This previously
+                # empty strip contained the duplicate 16px caption icon.
+                origin = window.mapToGlobal(QPoint(12, 6)) - frame.topLeft()
+                dpr = pixmap.devicePixelRatio()
+                image = pixmap.toImage()
+                expected = theme_palette(dark, theme.theme_id).sidebar
+                sample = QColor(expected)
+                colors = [
+                    image.pixelColor(round((origin.x() + x) * dpr), round((origin.y() + y) * dpr))
+                    for x in range(48) for y in range(12)
+                ]
+                matching = sum(
+                    max(abs(color.red() - sample.red()), abs(color.green() - sample.green()),
+                        abs(color.blue() - sample.blue())) <= 3 for color in colors
+                )
+                assert matching / len(colors) >= 0.98, "Duplicate native caption is visible over the sidebar"
+                buttons = window.mapToGlobal(QPoint(window.width() - 144, 6)) - frame.topLeft()
+                glyph_pixels = sum(
+                    (image.pixelColor(round((buttons.x() + x) * dpr), round((buttons.y() + y) * dpr)).lightness() > 200)
+                    if dark else
+                    (image.pixelColor(round((buttons.x() + x) * dpr), round((buttons.y() + y) * dpr)).lightness() < 70)
+                    for x in range(136) for y in range(20)
+                )
+                assert glyph_pixels >= 8, "Caption buttons do not contrast with the selected appearance mode"
+            checks.append({
+                "mode": mode, "state": name, "image": filename,
+                "frame": frame.getRect(), "client": window.geometry().getRect(),
+                "qwidget_flags": int(window.windowFlags()), "qwindow_flags": int(handle.flags()),
+                "title": handle.title(), "icon_present": not handle.icon().isNull(),
+            })
+    (OUTPUT_DIR / "rendering-profile.json").write_text(json.dumps({
+        "platform": sys.platform, "backend": app.platformName(), "qt": qVersion(),
+        "logical_dpi": screen.logicalDotsPerInchY(), "dpr": screen.devicePixelRatio(),
+        "capture": "desktop compositor with client-painted Fluent caption controls",
+        "enum_inverted_title_hint": int(~Qt.WindowTitleHint), "checks": checks,
+    }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
 
 
 def _capture_glass(app, theme, window):
@@ -1243,6 +1646,8 @@ def _capture_glass(app, theme, window):
         "material": "Qt wallpaper glass: cached blur, refraction rim and highlights; native text remains separate",
         "matrix": "2 palettes x 2 modes x 2 wallpaper sources x 3 sizes x 3 states",
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    _refresh_document_previews("glass")
+
 
 
 def _capture_appearance_controls(app, theme, window):
@@ -1295,6 +1700,309 @@ def _capture_appearance_controls(app, theme, window):
         "blur_control":"appearance settings only; gallery uses the current draft for preview",
         "directories":"shared read-only picker for download and live",
     },ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+    _refresh_document_previews("appearance-controls")
+
+
+
+def _capture_download_management(app, theme, window, temp_root):
+    """Offline inventory and multi-selection evidence on both native platforms."""
+    window._settings.output_dir = str(temp_root / "downloads")
+    window._settings.multipart_path_template = "{title}/{page_padded} - {part}"
+    info = VideoInfo(bvid="BVmanagement", title="系统设计与项目管理完整课程", author="课程作者",
+                     collection_title="项目管理课程", cid=1,
+                     pages=[VideoPage(cid=i, page=i, part=f"第{i}课：从需求到实现") for i in range(1, 111)])
+    ids = []
+    for index, state in enumerate((TaskStatus.COMPLETED, TaskStatus.COMPLETED, TaskStatus.PAUSED,
+                                   TaskStatus.FAILED, TaskStatus.QUEUED, TaskStatus.PAUSED), 1):
+        item = DownloadItem(video_info=info.for_page(info.pages[index - 1]), output_dir=window._settings.output_dir,
+                            path_template=window._settings.multipart_path_template,
+                            output_mode=OutputMode.AUDIO if index == 2 else OutputMode.VIDEO)
+        task_id = window._task_repository.add(item, state)
+        ids.append(task_id)
+        output = Path(item.output_dir) / item.relative_output_path
+        warnings = ["字幕下载失败，主媒体已保存"] if index == 1 else []
+        if state == TaskStatus.COMPLETED:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_bytes(b"offline demonstration media")
+            outcome = DownloadOutcome(video_path=str(output), actual_quality=80 if index == 1 else None,
+                                      actual_video_codec=12 if index == 1 else None,
+                                      actual_audio_quality=30280, warnings=warnings)
+            if index == 2:
+                subtitle = output.with_suffix(".zh.srt")
+                subtitle.write_text("1\n00:00:00,000 --> 00:00:02,000\n离线演示字幕", encoding="utf-8")
+                outcome.subtitle_paths = [str(subtitle)]
+            window._library.record_download(item, outcome)
+            window._task_repository.update(task_id, output_path=str(output), outcome=outcome)
+        window._download_list.add_item(item, download_id=task_id, status=state,
+                                       progress=1 if state == TaskStatus.COMPLETED else .35,
+                                       output_path=str(output) if state == TaskStatus.COMPLETED else None,
+                                       warnings=warnings)
+    window._library_page.refresh()
+    for theme_id in ("star_trail", "bilibili_blue"):
+        window._settings.appearance.theme = theme_id
+        theme.set_color_theme(theme_id)
+        for mode in ("light", "dark"):
+            theme.set_mode(mode)
+            for width, height in ((900, 640), (1120, 760), (1320, 860)):
+                window.resize(width, height)
+                window._show_tasks(0)
+                window._download_list.select_visible()
+                window._task_page.refresh_downloads()
+                _save_widget(app, window, f"management-tasks-{theme_id}-{mode}-{width}.png")
+                window._show_tasks(3)
+                window._library_page.table.selectRow(0)
+                _save_widget(app, window, f"management-files-{theme_id}-{mode}-{width}.png")
+                page = window._library_page
+                assert page.tools.geometry().right() <= page.width()
+                assert page.table.viewport().height() >= 60
+                assert window._task_page.tabs.count() == 4
+            # Inspect concise feedback, attachments and large destructive-action lists.
+            window.resize(900, 640)
+            page.table.clearSelection()
+            page.table.selectRow(0)
+            page._selection()
+            page.attachments_toggle.setChecked(True)
+            window.show()
+            _flush_events(app)
+            if app.platformName() != "offscreen":
+                from PySide6.QtTest import QTest
+                window.raise_()
+                window.activateWindow()
+                QTest.qWaitForWindowExposed(window, 2000)
+                QTest.qWait(80)
+            # _save_widget hides its target after capture, so inspect visibility first.
+            visible_rect = page.files.viewport().visibleRegion().boundingRect()
+            row_rect = page.files.visualItemRect(page.files.topLevelItem(0))
+            assert visible_rect.top() <= row_rect.top() and row_rect.bottom() <= visible_rect.bottom(), f"Attachment row is clipped: {row_rect} / {visible_rect}"
+            _save_widget(app, window, f"management-attachments-{theme_id}-{mode}-900.png")
+            page.search.setText("无匹配的演示文件")
+            _save_widget(app, window, f"management-no-match-{theme_id}-{mode}-900.png")
+            page.clear_filters()
+            page.attachments_toggle.setChecked(False)
+            page._feedback("已回收 8 个文件，2 个未处理。", "warning", details="示例文件.srt：暂时无法访问，请检查磁盘连接。")
+            _save_widget(app, window, f"management-result-{theme_id}-{mode}-900.png")
+            page._feedback("")
+            from bilibili_downloader.gui.widgets.library_page import OperationDialog
+            dialog = OperationDialog("移入回收站？", "共 110 个文件，包含 55 个附件。\n可从系统回收站恢复。",
+                                     "\n".join(f"示例课程/{i:03d} - 第{i}课" + (".mp4" if i % 2 else ".zh.srt") for i in range(1, 111)), window, confirm="移入回收站")
+            _save_widget(app, dialog, f"management-confirm-{theme_id}-{mode}.png")
+            dialog.reject()
+            dialog.deleteLater()
+            window._show_settings_tab(SettingsSection.DOWNLOAD)
+            panel = window._settings_page
+            panel._templates_section.set_expanded(True)
+            for width, height in ((900, 640), (1320, 860)):
+                window.resize(width, height)
+                _flush_events(app)
+                panel.tabs.currentWidget().ensureWidgetVisible(panel._templates_section)
+                _save_widget(app, window, f"management-naming-{theme_id}-{mode}-{width}.png")
+            panel._templates_section.set_expanded(False)
+            panel.load_settings(window._settings)
+
+
+def _capture_archive(app, theme, window, temp_root):
+    """New archive workflow, using offline data in both modes and three sizes."""
+    from bilibili_downloader.gui.dialogs.page_selection import PageSelectionDialog
+    from bilibili_downloader.gui.threads.batch_worker import ImportReport
+    _populate_main_window(window)
+    for task_id, existing in window._download_list._items.items():
+        assigned = window._task_repository.add(existing, window._download_list._states[task_id])
+        assert assigned == task_id
+    demo = _demo_video()
+    items = [demo.model_copy(update={"bvid": f"BVarchive{i}", "title": title, "author": "演示作者"})
+             for i, title in enumerate(("系统设计入门", "数据整理入门", "进阶实践"), 1)]
+    window._batch_page._url_text.setPlainText("BVarchive1\nBVarchive2\nBVarchive3")
+    window._batch_page._on_report(ImportReport(items=items))
+    item = window._make_download_item(demo)
+    item.download_subtitle = True
+    task_id = window._task_repository.add(item, TaskStatus.COMPLETED)
+    outcome = DownloadOutcome(video_path=str(temp_root / "示例课程.mp4"), actual_quality=80,
+                              actual_video_codec=12, actual_audio_quality=30280,
+                              missing_artifacts=["subtitle"], warnings=["字幕暂未保存，可单独补全。"])
+    window._download_list.add_item(item, download_id=task_id)
+    window._download_list.mark_done(task_id, outcome)
+    window._task_repository.update(task_id, outcome=outcome, status=TaskStatus.COMPLETED)
+    for mode in ("light", "dark"):
+        theme.set_mode(mode)
+        for width, height in ((900, 640), (1120, 760), (1320, 860)):
+            window.resize(width, height)
+            window._show_workspace(0)
+            window._download_tabs.setCurrentIndex(0)
+            _save_widget(app, window, f"archive-options-{mode}-{width}.png")
+            window._download_tabs.setCurrentIndex(1)
+            window._batch_page.search.setText("入门")
+            _save_widget(app, window, f"archive-batch-{mode}-{width}.png")
+            window._show_tasks(0)
+            window._task_page.search.setText(demo.bvid)
+            window._download_list.selectRow(window._download_list._row_for(task_id))
+            _save_widget(app, window, f"archive-result-{mode}-{width}.png")
+        dialog = PageSelectionDialog(demo.pages, {p.cid for p in demo.pages}, window)
+        dialog.range.setText("1-2")
+        _save_widget(app, dialog, f"archive-pages-{mode}.png")
+        dialog.reject()
+        dialog.deleteLater()
+        window._show_settings_tab(SettingsSection.DOWNLOAD)
+        panel = window._settings_page
+        panel._templates_section.set_expanded(True)
+        window.resize(900, 640)
+        window.show()
+        _flush_events(app)
+        from bilibili_downloader.gui.dialogs.naming_fields import NamingFieldDialog
+        from bilibili_downloader.gui.dialogs.settings_dialog import NAMING_FIELDS
+        fields = NamingFieldDialog(NAMING_FIELDS, window)
+        fields.table.setCurrentCell(0, 0)
+        _save_widget(app, fields, f"naming-fields-{mode}.png")
+        fields.search.setText("分 P")
+        _save_widget(app, fields, f"naming-help-{mode}.png")
+        fields.reject()
+        fields.deleteLater()
+        panel._template_fields.set_expanded(False)
+        panel._templates_section.set_expanded(False)
+
+
+def _capture_workflow_polish(app, theme, window, temp_root):
+    """End-to-end presentation states, all backed by isolated demo records."""
+    import shutil
+
+    from bilibili_downloader.gui.dialogs.attachments import AttachmentDialog
+    from bilibili_downloader.gui.dialogs.relocate_directory import (
+        RelocateDirectoryDialog,
+    )
+    from bilibili_downloader.gui.dialogs.result_details import ResultDetailsDialog
+    _capture_archive(app, theme, window, temp_root)
+    window._retry_timer.stop()
+    record = max((record for record in window._task_repository.list_tasks() if record.outcome), key=lambda record: record.id)
+    item = record.item
+    directory = temp_root / "示例课程"
+    directory.mkdir(exist_ok=True)
+    media = directory / "星轨旅记_夜航篇.mp4"
+    media.write_bytes(b"offline UI fixture; not a real video")
+    cover = media.with_suffix(".jpg")
+    cover.write_bytes(b"offline cover fixture")
+    outcome = DownloadOutcome(video_path=str(media), cover_path=str(cover), actual_quality=80,
+                              actual_video_codec=12, actual_audio_quality=30280,
+                              missing_artifacts=["danmaku", "subtitle", "metadata"],
+                              warnings=["字幕来源暂时不可用，可单独重试；已有媒体和封面保留。"])
+    window._library.record_download(item, outcome)
+    window._task_repository.update(record.id, outcome=outcome, output_path=str(media))
+    window._download_list.mark_done(record.id, outcome)
+    page = window._library_page
+    page.refresh()
+    waiting = item.model_copy(deep=True)
+    waiting.video_info = item.video_info.model_copy(update={"bvid": "BVRETRYDEMO", "cid": 9999, "title": "网络恢复中的课程"})
+    waiting.retry_at = "2099-01-01T00:00:00+00:00"
+    waiting.retry_count = 1
+    retry_id = window._task_repository.add(waiting)
+    window._download_list.add_item(waiting, download_id=retry_id, status_text="30 秒后重试（1/3）")
+    new_directory = temp_root / "迁移后的课程"
+    new_directory.mkdir(exist_ok=True)
+    for file in (media, cover):
+        shutil.copy2(file, new_directory / file.name)
+    for mode in ("light", "dark"):
+        theme.set_mode(mode)
+        for width, height in ((900, 640), (1120, 760), (1320, 860)):
+            window.resize(width, height)
+            window._show_tasks(3)
+            page.clear_filters()
+            page.table.setCurrentCell(0, 0)
+            _save_widget(app, window, f"polish-files-{mode}-{width}.png")
+        dialog = AttachmentDialog(item, window, outcome=outcome)
+        _save_widget(app, dialog, f"polish-attachments-{mode}.png")
+        for choice in dialog.choices.values():
+            choice.setChecked(False)
+        _save_widget(app, dialog, f"polish-attachments-zero-{mode}.png")
+        dialog.reject()
+        dialog.deleteLater()
+        offline = outcome.model_copy(update={"video_path": str(temp_root / "未连接的磁盘" / media.name)})
+        dialog = AttachmentDialog(item, window, outcome=offline)
+        _save_widget(app, dialog, f"polish-attachments-offline-{mode}.png")
+        dialog.reject()
+        dialog.deleteLater()
+        details = ResultDetailsDialog("保存与处理详情", "\n".join(outcome.warnings), window, item=item, outcome=outcome)
+        _save_widget(app, details, f"polish-result-details-{mode}.png")
+        details.accept()
+        details.deleteLater()
+        relocate = RelocateDirectoryDialog(window._library, str(directory), window)
+        relocate.new.setText(str(new_directory))
+        relocate.preview()
+        while relocate._job is not None:
+            app.processEvents()
+        from PySide6.QtCore import QSignalBlocker
+        with QSignalBlocker(relocate.old), QSignalBlocker(relocate.new):
+            relocate.old.setText("~/BiliFlow-demo/示例课程")
+            relocate.new.setText("~/BiliFlow-demo/迁移后的课程")
+        for row in range(relocate.table.rowCount()):
+            for column in (0, 1):
+                cell = relocate.table.item(row, column)
+                cell.setText(cell.text().replace(str(temp_root), "~/BiliFlow-demo"))
+        _save_widget(app, relocate, f"polish-relocate-{mode}.png")
+        relocate.reject()
+        relocate.deleteLater()
+        window.resize(900, 640)
+        window._show_tasks(0)
+        window._task_page.search.setText("BVRETRYDEMO")
+        window._download_list.setCurrentCell(window._download_list._row_for(retry_id), 0)
+        window._task_page._download_selection()
+        _save_widget(app, window, f"polish-retry-{mode}.png")
+        window._show_tasks(3)
+        page.table.selectRow(0)
+        page.search.setText("无匹配的关键词")
+        _save_widget(app, window, f"polish-filtered-selection-{mode}.png")
+        page.selection_bar.review_button.click()
+        _save_widget(app, window, f"polish-selection-review-{mode}.png")
+        page.selection_bar.review_button.click()
+        page.clear_filters()
+        window._show_settings_tab(SettingsSection.DOWNLOAD)
+        panel = window._settings_page
+        panel._templates_section.set_expanded(True)
+        window.show()
+        _flush_events(app)
+        panel.tabs.currentWidget().ensureWidgetVisible(panel._templates_section.toggle, 0, 12)
+        _save_widget(app, window, f"polish-naming-{mode}.png")
+        panel._templates_section.set_expanded(False)
+
+
+def _capture_dialog_placement(app, theme, window):
+    """Exercise an embedded settings-page entry without manually moving dialogs."""
+    from PySide6.QtTest import QTest
+
+    from bilibili_downloader.gui.dialogs.naming_fields import NamingFieldDialog
+    from bilibili_downloader.gui.dialogs.settings_dialog import NAMING_FIELDS
+
+    rows = []
+    for dark in (False, True):
+        theme.apply_theme(dark)
+        mode = "dark" if dark else "light"
+        window.resize(900, 640)
+        window.move(window.screen().availableGeometry().topLeft() + QPoint(100, 80))
+        window._show_settings_tab(SettingsSection.DOWNLOAD)
+        window.show()
+        QTest.qWait(100)
+        dialog = NamingFieldDialog(NAMING_FIELDS, window._settings_page)
+        for reopening in (False, True):
+            if reopening:
+                window.move(window.pos() + QPoint(90, 40))
+                window.resize(1120, 760)
+                QTest.qWait(50)
+            dialog.show()
+            QTest.qWait(100)
+            owner_frame = window.frameGeometry()
+            frame = dialog.frameGeometry()
+            delta = frame.center() - owner_frame.center()
+            assert delta.manhattanLength() <= 2, (owner_frame, frame)
+            assert window.screen().availableGeometry().contains(frame)
+            suffix = "reopened" if reopening else "opened"
+            rows.append(dict(mode=mode, state=suffix, owner=owner_frame.getRect(),
+                             dialog=frame.getRect(), center_delta=(delta.x(), delta.y())))
+            _save_widget(app, window, f"dialog-placement-{mode}-{suffix}.png", popup=dialog)
+            dialog.hide()
+            window.show()
+        dialog.reject()
+        dialog.deleteLater()
+    (OUTPUT_DIR / "dialog-placement.json").write_text(
+        json.dumps(dict(backend=app.platformName(), qt=qVersion(), cases=rows), indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def main(argv=None) -> int:
@@ -1309,7 +2017,15 @@ def main(argv=None) -> int:
         help="Capture font and long-dropdown checks at all three sizes",
     )
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
+    parser.add_argument("--color-theme", choices=("star_trail", "bilibili_blue"), default="star_trail", help="Color theme for the complete workspace and dialog matrix")
     parser.add_argument("--ui-refresh-only", action="store_true", help="Capture navigation, download cards, modes and account states")
+    parser.add_argument("--interactions-only", action="store_true", help="Capture row hover, history removal and isolated clipboard prompts")
+    parser.add_argument("--download-management-only", action="store_true", help="Capture multipart queue and independent downloads library")
+    parser.add_argument("--workflow-polish-only", action="store_true", help="Capture the refined archive workflows and recovery dialogs")
+    parser.add_argument("--dialog-placement-only", action="store_true", help="Verify centered dialogs from embedded settings before and after moving the window")
+    parser.add_argument("--archive-only", action="store_true", help="Capture media results, queue search, batch filters and part selection")
+    parser.add_argument("--refinement-only", action="store_true", help="Capture audio, long-content, failure, draft and filtered-task states")
+    parser.add_argument("--chrome-only", action="store_true", help="Check native captions using desktop compositor captures")
     parser.add_argument("--glass-only", action="store_true", help="Capture glass wallpaper and complete download guidance in both modes")
     parser.add_argument("--appearance-controls-only", action="store_true", help="Capture centered account, five settings sections and blur controls")
     parser.add_argument("--physical-pixels", action="store_true", help="Preserve native pixels for typography review")
@@ -1325,8 +2041,14 @@ def main(argv=None) -> int:
     OUTPUT_DIR = args.output_dir.resolve()
     if args.native:
         os.environ.pop("QT_QPA_PLATFORM", None)
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            from scripts.configure_ui_test_display import main as configure_display
+
+            # Configure the ephemeral runner session before Qt reads its screen
+            # geometry, including when this scene is run separately.
+            configure_display()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="biliflow-docs-") as temp_dir:
+    with tempfile.TemporaryDirectory(prefix="biliflow-docs-") as temp_dir, ExitStack() as cleanup:
         temp_root = Path(temp_dir)
         if (
             not QApplication.instance()
@@ -1354,6 +2076,7 @@ def main(argv=None) -> int:
             )
             os.environ["QT_QPA_PLATFORM"] = f"offscreen:configfile={screen_config}"
         app = QApplication.instance() or QApplication(sys.argv)
+        app.setProperty("uiAnimationsEnabled", False)
         app.setApplicationName("BiliFlow Docs")
         app.setWindowIcon(QIcon(asset_path("app_icon.png")))
         theme = ThemeManager(app)
@@ -1364,6 +2087,33 @@ def main(argv=None) -> int:
             _capture_lifecycle(app, theme, temp_root)
             return 0
         window = _make_main_window(temp_root / "workspace")
+        window._settings.appearance.theme = args.color_theme
+        theme.set_color_theme(args.color_theme)
+        cleanup.callback(window._live_controller.shutdown)
+        if args.dialog_placement_only:
+            _capture_dialog_placement(app, theme, window)
+            window.request_quit(confirmed=True)
+            return 0
+        if args.workflow_polish_only:
+            _capture_workflow_polish(app, theme, window, temp_root)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
+        if args.archive_only:
+            _capture_archive(app, theme, window, temp_root)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
+        if args.download_management_only:
+            _capture_download_management(app, theme, window, temp_root)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
+        if args.chrome_only:
+            _capture_native_chrome(app, theme, window)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
         if args.appearance_controls_only:
             _capture_appearance_controls(app,theme,window)
             window._live_controller.shutdown()
@@ -1371,6 +2121,11 @@ def main(argv=None) -> int:
             return 0
         if args.glass_only:
             _capture_glass(app, theme, window)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
+        if args.interactions_only:
+            _capture_interactions(app, theme, window)
             window._live_controller.shutdown()
             window.request_quit(confirmed=True)
             return 0
@@ -1386,6 +2141,11 @@ def main(argv=None) -> int:
             return 0
         if args.mascot_only:
             _capture_mascot(app, theme, window)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
+        if args.refinement_only:
+            _capture_refinement(app, theme, window)
             window._live_controller.shutdown()
             window.request_quit(confirmed=True)
             return 0
@@ -1462,7 +2222,7 @@ def main(argv=None) -> int:
             theme.apply_theme(dark)
             dialog = UpdateDialog(UpdateRelease(
                 "0.9.0b1", "v0.9.0b1", "2026-10-14T00:00:00Z",
-                "更新说明（离线演示）\n\n新增启动自动检查与手动检查更新。\n支持正式版和包含 beta、rc 的最新版通道。\n立即更新将下载、校验、安装并重启。\n跳过版本只影响自动提醒，手动检查仍可更新。", (),
+                DEMO_RELEASE_NOTES, (),
             ), window)
             _save_widget(app, dialog, f"biliflow-dialog-update{'-light' if not dark else ''}.png")
             dialog.hide()

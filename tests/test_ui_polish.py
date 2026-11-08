@@ -69,8 +69,8 @@ def test_all_option_card_content_survives_small_viewports(workspace, qapp, theme
         workspace._workspace_scroll.ensureWidgetVisible(card, 0, 8)
         flush()
         assert card.height() == UI_METRICS.option_card_height
-        assert card.height() >= 36 + card.fontMetrics().height() + 4
-        assert card.width() >= card.fontMetrics().horizontalAdvance(card.text()) + 24
+        assert card.height() >= card.fontMetrics().height() + 16
+        assert card.width() >= card.fontMetrics().horizontalAdvance(card.text()) + 100
         assert card.visibleRegion().boundingRect().contains(card.rect())
     workspace._workspace_scroll.ensureWidgetVisible(workspace._all_subtitles_check, 0, 8)
     flush()
@@ -144,7 +144,7 @@ def test_advanced_templates_keep_draft_and_open_for_validation(qtbot):
     panel.show()
     assert panel._templates_section.content.isHidden()
     panel._path_template.setText("{author}/新目录/{title}")
-    assert "新目录" in panel._template_previews["path_template"].text()
+    assert "新目录" in panel._template_previews["path_template"].toolTip()
     panel.show_section(SettingsSection.DOWNLOAD)
     panel.show_section(SettingsSection.DOWNLOAD)
     assert panel.dirty

@@ -46,7 +46,7 @@ This README is available in English and Simplified Chinese. The current desktop 
   </picture>
 </p>
 
-**Quick navigation:** [Features](#features) · [Download and install](#download-and-install) · [Quick start](#quick-start) · [Screenshots](#screenshots) · [Supported sources](#supported-sources) · [Run from source](#run-from-source) · [FAQ](#faq) · [Documentation](#documentation) · [Contribute and support](#contribute-and-support)
+**Quick navigation:** [Features](#features) · [Download and install](#download-and-install) · [Quick start](#quick-start) · [Screenshots](#screenshots) · [Supported sources](#supported-sources) · [Run from source](#run-from-source) · [FAQ](#faq) · [Documentation](#documentation) · [Contribute and support](#contribute-and-support) · [Friend links](#friend-links)
 
 > BiliFlow does not bypass membership, payment, regional restrictions, DRM, or account permissions. Permission to watch does not automatically grant permission to keep, redistribute, or commercially use a copy. Read the [copyright and usage policy](docs/COPYRIGHT.md) before downloading.
 
@@ -59,23 +59,28 @@ This README is available in English and Simplified Chinese. The current desktop 
 | Local archives | Save MP4, M4A, or Hi-Res FLAC, plus ASS danmaku, SRT subtitles, covers, and JSON metadata |
 | Persistent task center | Manage downloads, active recordings, and history; apply bulk actions to filtered or all tasks, undo record removal, and resume interrupted downloads after restarting |
 | Live recording | Monitor rooms, record automatically or manually, reconnect, merge a session into one MP4 automatically or on demand, and use global or per-room directories; see the [live recording guide](docs/LIVE_RECORDING.md) |
-| Batch and multi-part downloads | Select individual or all parts, preview/filter batches, track or cancel metadata imports, retry failed entries, read paginated sources, deduplicate tasks, and run 1–8 concurrent downloads |
+| Batch and multi-part downloads | Search and check parts, add ranges, retain selections across filters, preview batches, track or cancel metadata imports, retry failed entries, read paginated sources, deduplicate tasks, and run 1–8 concurrent downloads |
 | Account login | Start with QR login or use the Cookie fallback; manage your account from the sidebar with username and avatar, retaining only allowed Cookie fields and preferring the system credential store |
 | Cross-platform desktop UI | A PySide6 interface with a responsive layout down to 900×640, manual light/dark modes, and automatic system theme switching |
 | Themes and backgrounds | Xinghe and Qinghai themes; twelve Xiao Liu wallpapers or custom images, with large previews, filters, drag-and-drop imports, and independent light/dark visibility per workspace |
+| Xiao Liu companion | Twelve pixel animations follow five local time periods, with a full action after 15–30 seconds of foreground idle time and time-aware captions; [animation previews](docs/MASCOT_DESIGN.md) |
 | Update checks and installation | Check at startup or manually, choose stable or beta channels, and verify/install/restart official macOS/Windows packages with recovery if startup fails |
 
 `v0.8.3` adds the [official download mirror](https://1008.si/download/) for update discovery and package downloads, with GitHub fallback on network failures. Versions up to v0.8.2 use fixed GitHub endpoints; install v0.8.3 from the website to enable the mirror for future updates.
 
 Automatic updates are available starting with `v0.8.1b1` and are currently a beta feature. First install a version that includes the updater manually. Check [Releases](https://github.com/itsVicOC/bilibili-downloader/releases) for stable and prerelease status.
 
-Stable `v0.8.5` adds the Xiao Liu pixel mascot and twelve wallpapers, clearer backgrounds, and a unified wallpaper browser. It also adds full-session live MP4 exports, fixes recording-directory inheritance, and improves macOS window closing and Windows tray behavior. See the [changelog](CHANGELOG.md#v085---2026-10-20) and [Xiao Liu wallpaper gallery](docs/BUILTIN_BACKGROUNDS.md) (Chinese).
+Stable `v0.8.10` combines three beta stages of download management, durable media reuse, independent attachment repair, selection across filters, and UI polish, with fixes for multi-part naming and missing audio tracks. The user has confirmed that device testing passed. [Fluent Design](docs/FLUENT_DESIGN.md), the pink/purple and blue themes, Xiao Liu, window restoration, and custom Windows caption controls remain available. [Download stable 0.8.10](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10) · [Changelog](CHANGELOG.md#v0810---2026-11-06) (Chinese).
 
-Downloads, live recording, and settings share consistent footer cards. Tabs and task tools retain readable surfaces over custom backgrounds, theme cards distinguish selection from keyboard focus, and record removal uses a quieter action style.
-
-Available quality, codecs, audio tracks, and subtitles depend on the source, your account permissions, and Bilibili's API response.
+Path actions now sit beside the download directory, task views highlight whole rows, and recording-history sessions can be removed with undo while keeping all media files. Foreground clipboard recognition is enabled by default and requires confirmation before parsing; it does not queue downloads automatically. Accounts, settings, wallpapers, tasks, and media remain compatible. See the [user guide](docs/USER_GUIDE.md), [window restoration validation](docs/FLUENT_V4_VALIDATION.md), and [interaction validation](docs/FLUENT_V5_VALIDATION.md) (Chinese).
 
 ## Download and install
+
+**Stable `v0.8.10`:** Reduces repeated hints, removes hover outlines and cell-edge lines, and moves secondary actions into a More menu when space is limited. Button labels and operation counts remain visible. Dialogs open centered on their owning application window and stay within screen boundaries. [Download stable release](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10) · [Native comparisons and validation record](docs/UI_FEEDBACK_VALIDATION.md). Both stable and beta update channels can upgrade to this release.
+
+Includes durable media reuse, independent attachment repair, strict media matching, queue and batch search, custom part ranges, automatic network retries, media inspection, and directory relinking. Existing settings and queued output snapshots remain compatible. Checked items persist across filters with hidden selection counts; results separate media, specifications, and attachments, and naming fields support Chinese search. [User guide](docs/USER_GUIDE.md#下载与归档优化) · [Workflow validation](docs/WORKFLOW_POLISH_VALIDATION.md), including native comparisons, paired performance results, and the scope of the beta-stage checks.
+
+![Batch search and selection counts](docs/images/ui-feedback/after/archive-batch-light-900.png)
 
 Visit the **[BiliFlow website · 1008.si](https://1008.si/)** or **[download the latest stable release from GitHub](https://github.com/itsVicOC/bilibili-downloader/releases/latest)**. To try beta features, browse [all releases](https://github.com/itsVicOC/bilibili-downloader/releases) and look for the `Pre-release` label.
 
@@ -144,6 +149,10 @@ See the [user guide](docs/USER_GUIDE.md) for task states, output templates, and 
 **Keep tasks running after closing the window:** On macOS, the red close button and `⌘W` close only the window; click the Dock icon to restore it, or use `⌘Q` / the app menu to quit. On Windows, closing offers Minimize to system tray or Quit, with an optional remembered choice. Change it in Settings → Appearance → Window (`设置 → 外观 → 窗口`). Click the tray icon to restore the window or use its context menu to quit. Downloads, live monitoring, recording, and exports continue while the window is closed or in the tray. Quitting confirms active tasks and waits for cleanup.
 
 ## Screenshots
+
+Xiao Liu follows five local time periods, playing a different action after 15–30 seconds of foreground idle time. Animations pause while the app is hidden, minimized, or inactive.
+
+![Twelve Xiao Liu animations](docs/images/mascot/actions/xiaoliu-actions.gif)
 
 Video downloads and live recording share one workspace. Adding downloads keeps the current page open; the task center brings together the download queue, active recordings, and recording history. Settings cover downloads, live recording, tools/storage, and software updates.
 
@@ -335,6 +344,10 @@ If BiliFlow helps you, give it a Star on [GitHub](https://github.com/itsVicOC/bi
 - **Report vulnerabilities:** follow the private reporting channel in the [security policy](SECURITY.md).
 
 Thanks to the contributors behind [PySide6 / Qt](https://doc.qt.io/qtforpython-6/), [FFmpeg](https://ffmpeg.org/), [Mesio / rust-srec](https://github.com/hua0512/rust-srec), and the other open-source dependencies. See [third-party notices](THIRD_PARTY_NOTICES.md) for artwork and licenses.
+
+## Friend links
+
+- [linux.do](https://linux.do/)
 
 ## Privacy and disclaimer
 

@@ -133,6 +133,10 @@ class ConfigManager:
         return self.data_dir / "tasks.sqlite3"
 
     @property
+    def library_database_path(self) -> Path:
+        return self.data_dir / "library.sqlite3"
+
+    @property
     def auth_cookies(self) -> dict[str, str]:
         return dict(self._auth_cookies)
 

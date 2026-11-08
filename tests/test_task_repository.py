@@ -176,7 +176,7 @@ def test_repository_migrates_v1_with_consistent_backup(tmp_path):
     assert record.fingerprint == item.fingerprint
     assert record.warnings == []
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == TASK_SCHEMA_VERSION
     with sqlite3.connect(tmp_path / "tasks.sqlite3.bak") as backup:
         assert backup.execute("PRAGMA user_version").fetchone()[0] == 1
         columns = {
@@ -209,7 +209,7 @@ def test_repository_quarantines_corrupt_database(tmp_path):
     assert repository.recovered_database_path.read_bytes() == b"not a sqlite database"
     assert repository.list_tasks() == []
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == TASK_SCHEMA_VERSION
 
 
 def test_repository_does_not_quarantine_schema_migration_failure(tmp_path):

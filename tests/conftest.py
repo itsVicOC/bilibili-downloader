@@ -1,5 +1,7 @@
 """Pytest fixtures and configuration."""
 
+import gc
+
 import pytest
 
 
@@ -13,6 +15,11 @@ def pytest_runtest_teardown(item):
         # pytest-qt closes widgets with deleteLater(), but processEvents() alone
         # does not deliver DeferredDelete outside the main event loop. Finish
         # destruction before another test changes the application's stylesheet.
+        app.sendPostedEvents(None, QEvent.DeferredDelete)
+        app.processEvents()
+        # Release Python-only widget/signal cycles at this safe boundary,
+        # rather than during a later QApplication stylesheet traversal.
+        gc.collect()
         app.sendPostedEvents(None, QEvent.DeferredDelete)
         app.processEvents()
 
