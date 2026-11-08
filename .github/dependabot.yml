@@ -5,9 +5,11 @@ updates:
     schedule:
       interval: weekly
     groups:
-      runtime-dependencies:
+      qt-runtime:
         patterns:
           - PySide6
+      runtime-dependencies:
+        patterns:
           - httpx
           - pydantic
           - qrcode
