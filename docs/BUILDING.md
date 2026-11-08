@@ -185,7 +185,11 @@ python scripts/build_app_icons.py
 
 - 用户于 2026-11-06 确认实机测试通过，并授权将 0.8.10 beta 相关分支合并至 `main` 后发布正式版；实机结论由用户确认，本节保留各 beta 阶段自动化验收的原始范围。
 - `codex/ui-feedback-boundaries` 已包含 `codex/archive-workflow-acceptance` 的全部提交；beta 1 已在 `main`。合并时保留完整提交历史，正式版应用功能相对 `v0.8.10b3` 仅更新版本号为 `0.8.10`，同步更新中英文首页、文档入口和正式版更新日志。
-- 从 `main` 的正式发布提交创建附注标签 `v0.8.10`，通过现有 Release 工作流重新构建 Windows／macOS full、lite ZIP 和 full EXE／DMG，并验证更新回滚、媒体样例、安装器、SBOM 及 SHA-256。发布后的 CI、附件和更新通道复核结论另行追加。
+- 正式发布提交为 `618f0f8ebbdec358190b24e691f7dea46a516084`，准备提交为 `19d03a9`；远端 `main` 与附注标签 `v0.8.10` 已核对指向该合并提交。应用源码相对 beta 3 只有版本元信息变化。
+- 本地完整回归 **1,314 项通过、6 项平台专项跳过**，Ruff、编译和差异检查通过，见[本地结果](validation/releases/0.8.10/local-tests.json)。[正式提交 CI 42150267290](https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150267290) **17/17 项成功**；[Release 42150673361](https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150673361) **5/5 项成功**，重新构建并验证 Windows／macOS full、lite ZIP 和 full EXE／DMG、原生交互、更新回滚、媒体样例、安装器、SBOM 及 SHA-256。原始结果见[CI](validation/releases/0.8.10/ci.json)和[发布任务](validation/releases/0.8.10/release-workflow.json)。
+- [v0.8.10](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10) 于 **2026-11-06 11:12（北京时间）**公开，非草稿、非预发布版，已成为 Latest。14 个公开附件全部下载并逐项核对大小及 GitHub SHA-256 digest，发布正文与标签中的更新日志一致；附注标签目标见[标签记录](validation/releases/0.8.10/tag-target.json)。
+- 公开发布包再次复核通过：4 个 ZIP／2956 个文件、4 份 SBOM／733 个组件、2 个原生安装器及 8563 个 FFmpeg 源码文件；安装验证报告绑定的安装器、ZIP 摘要及版本一致。公开元信息回放的 10 个更新选择场景通过：`0.8.9` 与 beta 1／2／3 的正式和最新通道均选择 `v0.8.10`，正式版本身不重复提示。见[发布审计](validation/releases/0.8.10/audit.json)。
+- 截至 **2026-11-06 11:20（北京时间）**，官方镜像索引尚未包含 `v0.8.10`；GitHub Latest 与全部公开附件已可用。镜像索引上次修改时间为 11:10，缓存有效期五分钟；镜像同步及真实网络更新入口尚未标记通过，见[镜像状态](validation/releases/0.8.10/mirror.json)。
 - 历史 beta 标签与附件保留；正式版使用「仅更新正式版」通道，beta 用户亦可升级。
 
 ### 0.8.10 beta 3 发布检查（2026-11-03）

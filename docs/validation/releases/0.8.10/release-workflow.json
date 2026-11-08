@@ -1,0 +1,58 @@
+{
+  "conclusion": "success",
+  "createdAt": "2026-11-06T02:29:45Z",
+  "event": "push",
+  "headBranch": "v0.8.10",
+  "headSha": "618f0f8ebbdec358190b24e691f7dea46a516084",
+  "jobs": [
+    {
+      "completedAt": "2026-11-06T02:30:32Z",
+      "conclusion": "success",
+      "databaseId": 127672892211,
+      "name": "Validate release request",
+      "startedAt": "2026-11-06T02:30:29Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150673361/job/127672892211"
+    },
+    {
+      "completedAt": "2026-11-06T03:10:41Z",
+      "conclusion": "success",
+      "databaseId": 127673165673,
+      "name": "Build Windows",
+      "startedAt": "2026-11-06T02:30:34Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150673361/job/127673165673"
+    },
+    {
+      "completedAt": "2026-11-06T02:55:39Z",
+      "conclusion": "success",
+      "databaseId": 127673165881,
+      "name": "Build macOS",
+      "startedAt": "2026-11-06T02:30:50Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150673361/job/127673165881"
+    },
+    {
+      "completedAt": "2026-11-06T03:11:41Z",
+      "conclusion": "success",
+      "databaseId": 127686662856,
+      "name": "Assemble and verify release bundle",
+      "startedAt": "2026-11-06T03:10:42Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150673361/job/127686662856"
+    },
+    {
+      "completedAt": "2026-11-06T03:12:18Z",
+      "conclusion": "success",
+      "databaseId": 127687003460,
+      "name": "Publish GitHub Release",
+      "startedAt": "2026-11-06T03:11:43Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150673361/job/127687003460"
+    }
+  ],
+  "name": "Release",
+  "status": "completed",
+  "updatedAt": "2026-11-06T03:12:18Z",
+  "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150673361"
+}

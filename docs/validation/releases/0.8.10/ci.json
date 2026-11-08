@@ -1,0 +1,166 @@
+{
+  "conclusion": "success",
+  "createdAt": "2026-11-06T02:25:50Z",
+  "event": "push",
+  "headBranch": "main",
+  "headSha": "618f0f8ebbdec358190b24e691f7dea46a516084",
+  "jobs": [
+    {
+      "completedAt": "2026-11-06T02:26:44Z",
+      "conclusion": "success",
+      "databaseId": 127671537353,
+      "name": "dependency-audit",
+      "startedAt": "2026-11-06T02:25:52Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150267290/job/127671537353"
+    },
+    {
+      "completedAt": "2026-11-06T02:30:23Z",
+      "conclusion": "success",
+      "databaseId": 127671537605,
+      "name": "Native recorder (macos-latest)",
+      "startedAt": "2026-11-06T02:25:54Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150267290/job/127671537605"
+    },
+    {
+      "completedAt": "2026-11-06T02:49:03Z",
+      "conclusion": "success",
+      "databaseId": 127671537665,
+      "name": "test (macos-latest, 3.12)",
+      "startedAt": "2026-11-06T02:25:54Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150267290/job/127671537665"
+    },
+    {
+      "completedAt": "2026-11-06T02:27:49Z",
+      "conclusion": "success",
+      "databaseId": 127671537676,
+      "name": "Windows caption (1.25x)",
+      "startedAt": "2026-11-06T02:25:53Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150267290/job/127671537676"
+    },
+    {
+      "completedAt": "2026-11-06T02:39:53Z",
+      "conclusion": "success",
+      "databaseId": 127671537696,
+      "name": "test (ubuntu-latest, 3.11)",
+      "startedAt": "2026-11-06T02:25:53Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150267290/job/127671537696"
+    },
+    {
+      "completedAt": "2026-11-06T02:29:18Z",
+      "conclusion": "success",
+      "databaseId": 127671537700,
+      "name": "Native recorder (ubuntu-latest)",
+      "startedAt": "2026-11-06T02:25:53Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150267290/job/127671537700"
+    },
+    {
+      "completedAt": "2026-11-06T02:31:27Z",
+      "conclusion": "success",
+      "databaseId": 127671537716,
+      "name": "Native recorder (windows-latest)",
+      "startedAt": "2026-11-06T02:25:53Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150267290/job/127671537716"
+    },
+    {
+      "completedAt": "2026-11-06T02:27:55Z",
+      "conclusion": "success",
+      "databaseId": 127671537729,
+      "name": "Native updater (Windows)",
+      "startedAt": "2026-11-06T02:25:53Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150267290/job/127671537729"
+    },
+    {
+      "completedAt": "2026-11-06T02:28:02Z",
+      "conclusion": "success",
+      "databaseId": 127671537763,
+      "name": "Native updater (macOS)",
+      "startedAt": "2026-11-06T02:25:55Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150267290/job/127671537763"
+    },
+    {
+      "completedAt": "2026-11-06T02:29:45Z",
+      "conclusion": "success",
+      "databaseId": 127671537789,
+      "name": "Archive performance (macos-latest)",
+      "startedAt": "2026-11-06T02:25:53Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150267290/job/127671537789"
+    },
+    {
+      "completedAt": "2026-11-06T02:42:16Z",
+      "conclusion": "success",
+      "databaseId": 127671537818,
+      "name": "test (windows-latest, 3.11)",
+      "startedAt": "2026-11-06T02:25:53Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150267290/job/127671537818"
+    },
+    {
+      "completedAt": "2026-11-06T02:27:59Z",
+      "conclusion": "success",
+      "databaseId": 127671537820,
+      "name": "Windows caption (1.5x)",
+      "startedAt": "2026-11-06T02:25:53Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150267290/job/127671537820"
+    },
+    {
+      "completedAt": "2026-11-06T02:28:17Z",
+      "conclusion": "success",
+      "databaseId": 127671537823,
+      "name": "Windows caption (2x)",
+      "startedAt": "2026-11-06T02:25:53Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150267290/job/127671537823"
+    },
+    {
+      "completedAt": "2026-11-06T02:40:32Z",
+      "conclusion": "success",
+      "databaseId": 127671537835,
+      "name": "Archive performance (windows-latest)",
+      "startedAt": "2026-11-06T02:25:53Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150267290/job/127671537835"
+    },
+    {
+      "completedAt": "2026-11-06T02:28:08Z",
+      "conclusion": "success",
+      "databaseId": 127671537850,
+      "name": "Windows caption (1x)",
+      "startedAt": "2026-11-06T02:25:53Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150267290/job/127671537850"
+    },
+    {
+      "completedAt": "2026-11-06T02:38:45Z",
+      "conclusion": "success",
+      "databaseId": 127671537851,
+      "name": "test (ubuntu-latest, 3.12)",
+      "startedAt": "2026-11-06T02:25:53Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150267290/job/127671537851"
+    },
+    {
+      "completedAt": "2026-11-06T02:57:56Z",
+      "conclusion": "success",
+      "databaseId": 127671537924,
+      "name": "test (windows-latest, 3.12)",
+      "startedAt": "2026-11-06T02:25:53Z",
+      "status": "completed",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150267290/job/127671537924"
+    }
+  ],
+  "name": "CI",
+  "status": "completed",
+  "updatedAt": "2026-11-06T02:57:57Z",
+  "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/42150267290"
+}
