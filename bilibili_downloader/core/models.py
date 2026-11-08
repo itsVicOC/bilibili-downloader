@@ -235,6 +235,12 @@ class DownloadItem(BaseModel):
     download_cover: bool = False
     download_metadata: bool = False
     selected_subtitle_lan: str = "zh-Hans"
+    strict_match: bool = False
+    force_new: bool = False
+    reuse_media_path: Optional[str] = None
+    retry_count: int = Field(default=0, ge=0)
+    retry_at: Optional[str] = None
+    error_category: str = ""
     status: TaskStatus = TaskStatus.QUEUED
     progress: float = 0.0
     status_text: str = ""
@@ -304,6 +310,10 @@ class DownloadItem(BaseModel):
                 self.selected_subtitle_lan,
             ]
         )
+        if self.strict_match:
+            fingerprint += ":strict"
+        if self.reuse_media_path:
+            fingerprint += f":supplement={self.reuse_media_path}"
         return f"{fingerprint}:dir={Path(self.output_dir).expanduser().resolve()}" if self.output_dir else fingerprint
 
     @property
@@ -326,6 +336,22 @@ class DownloadOutcome(BaseModel):
     actual_quality: Optional[int] = None
     actual_video_codec: Optional[int] = None
     actual_audio_quality: Optional[int] = None
+    spec_warnings: list[str] = Field(default_factory=list)
+    missing_artifacts: list[str] = Field(default_factory=list)
+    artifact_warnings: dict[str, list[str]] = Field(default_factory=dict)
+    subtitle_languages: dict[str, str] = Field(default_factory=dict)
+    subtitle_discovery_complete: bool = False
+    reused_media: bool = False
+    media_verification: dict = Field(default_factory=dict)
+    media_signature: Optional[str] = None
+
+    @property
+    def result_label(self) -> str:
+        if self.missing_artifacts:
+            return "媒体已保存 · 附件待补全"
+        if self.spec_warnings:
+            return "媒体已保存 · 规格回退"
+        return "部分完成" if self.warnings else "已复用已有媒体" if self.reused_media else "完成"
 
     @property
     def is_partial(self) -> bool:
@@ -438,6 +464,8 @@ class AppSettings(BaseModel):
     default_video_codec: int = 12  # HEVC
     default_audio_quality: int = 30280  # AAC 192kbps
     default_output_mode: OutputMode = OutputMode.VIDEO
+    strict_match: bool = False
+    auto_retry_downloads: bool = True
     path_template: str = "{title}{part_suffix}"
     multipart_path_template: str = "{title}/{page_padded} - {part}"
     bangumi_path_template: str = (

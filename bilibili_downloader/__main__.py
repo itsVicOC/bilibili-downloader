@@ -121,6 +121,8 @@ def main():
         help="Acknowledge the copyright notice in non-interactive environments",
     )
 
+    download_parser.add_argument("--strict-match", action="store_true", help="Require the exact requested media specifications")
+    download_parser.add_argument("--force-new", action="store_true", help="Save another media copy instead of reusing the library")
     args = parser.parse_args()
 
     if args.command and getattr(sys, "frozen", False):
@@ -308,6 +310,8 @@ def _cli_download(args: argparse.Namespace):
                 download_cover=getattr(args, "cover", False),
                 download_metadata=getattr(args, "metadata", False),
                 selected_subtitle_lan=args.subtitle_language,
+                strict_match=getattr(args, "strict_match", False) or settings.strict_match,
+                force_new=getattr(args, "force_new", False),
             )
             try:
                 outcome = service.download(item, progress)

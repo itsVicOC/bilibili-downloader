@@ -1,0 +1,174 @@
+{
+  "complete": true,
+  "platform": "win32",
+  "qt": "6.11.1",
+  "backend": "windows",
+  "version": "0.8.10b2",
+  "color_theme": "bilibili_blue",
+  "baseline": false,
+  "cases": [
+    {
+      "file": "feedback-output-light-420.png",
+      "requested_width": 420,
+      "actual_width": 420,
+      "height": 164,
+      "clipped_buttons": [],
+      "clipped_labels": []
+    },
+    {
+      "file": "feedback-selection-light-420.png",
+      "requested_width": 420,
+      "actual_width": 420,
+      "height": 256,
+      "clipped_buttons": [],
+      "clipped_labels": []
+    },
+    {
+      "file": "feedback-detail-light-420.png",
+      "requested_width": 420,
+      "actual_width": 420,
+      "height": 256,
+      "clipped_buttons": [],
+      "clipped_labels": []
+    },
+    {
+      "file": "feedback-output-light-560.png",
+      "requested_width": 560,
+      "actual_width": 560,
+      "height": 122,
+      "clipped_buttons": [],
+      "clipped_labels": []
+    },
+    {
+      "file": "feedback-selection-light-560.png",
+      "requested_width": 560,
+      "actual_width": 560,
+      "height": 64,
+      "clipped_buttons": [],
+      "clipped_labels": []
+    },
+    {
+      "file": "feedback-detail-light-560.png",
+      "requested_width": 560,
+      "actual_width": 560,
+      "height": 256,
+      "clipped_buttons": [],
+      "clipped_labels": []
+    },
+    {
+      "file": "feedback-output-light-780.png",
+      "requested_width": 780,
+      "actual_width": 780,
+      "height": 104,
+      "clipped_buttons": [],
+      "clipped_labels": []
+    },
+    {
+      "file": "feedback-selection-light-780.png",
+      "requested_width": 780,
+      "actual_width": 780,
+      "height": 64,
+      "clipped_buttons": [],
+      "clipped_labels": []
+    },
+    {
+      "file": "feedback-detail-light-780.png",
+      "requested_width": 780,
+      "actual_width": 780,
+      "height": 256,
+      "clipped_buttons": [],
+      "clipped_labels": []
+    },
+    {
+      "file": "feedback-output-light-font150.png",
+      "requested_width": 420,
+      "actual_width": 420,
+      "height": 172,
+      "clipped_buttons": [],
+      "clipped_labels": []
+    },
+    {
+      "file": "feedback-output-dark-420.png",
+      "requested_width": 420,
+      "actual_width": 420,
+      "height": 164,
+      "clipped_buttons": [],
+      "clipped_labels": []
+    },
+    {
+      "file": "feedback-selection-dark-420.png",
+      "requested_width": 420,
+      "actual_width": 420,
+      "height": 256,
+      "clipped_buttons": [],
+      "clipped_labels": []
+    },
+    {
+      "file": "feedback-detail-dark-420.png",
+      "requested_width": 420,
+      "actual_width": 420,
+      "height": 256,
+      "clipped_buttons": [],
+      "clipped_labels": []
+    },
+    {
+      "file": "feedback-output-dark-560.png",
+      "requested_width": 560,
+      "actual_width": 560,
+      "height": 122,
+      "clipped_buttons": [],
+      "clipped_labels": []
+    },
+    {
+      "file": "feedback-selection-dark-560.png",
+      "requested_width": 560,
+      "actual_width": 560,
+      "height": 64,
+      "clipped_buttons": [],
+      "clipped_labels": []
+    },
+    {
+      "file": "feedback-detail-dark-560.png",
+      "requested_width": 560,
+      "actual_width": 560,
+      "height": 256,
+      "clipped_buttons": [],
+      "clipped_labels": []
+    },
+    {
+      "file": "feedback-output-dark-780.png",
+      "requested_width": 780,
+      "actual_width": 780,
+      "height": 104,
+      "clipped_buttons": [],
+      "clipped_labels": []
+    },
+    {
+      "file": "feedback-selection-dark-780.png",
+      "requested_width": 780,
+      "actual_width": 780,
+      "height": 64,
+      "clipped_buttons": [],
+      "clipped_labels": []
+    },
+    {
+      "file": "feedback-detail-dark-780.png",
+      "requested_width": 780,
+      "actual_width": 780,
+      "height": 256,
+      "clipped_buttons": [],
+      "clipped_labels": []
+    },
+    {
+      "file": "feedback-output-dark-font150.png",
+      "requested_width": 420,
+      "actual_width": 420,
+      "height": 172,
+      "clipped_buttons": [],
+      "clipped_labels": []
+    }
+  ],
+  "input_method": "QTest cursor movement and Qt viewport input; hover fill and row hit asserted",
+  "revision": "d670dc0a0573d47f1b0c928b5d78d93d46d2574f",
+  "working_tree_dirty": false
+}

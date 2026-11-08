@@ -20,7 +20,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from PySide6.QtCore import QPoint, QRect, QSize, Qt, qVersion
+from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, qVersion
 from PySide6.QtGui import (
     QCloseEvent,
     QColor,
@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QSlider,
+    QToolTip,
 )
 
 from bilibili_downloader.core.appearance import prepare_background
@@ -131,6 +132,10 @@ def _save_widget(app: QApplication, widget, filename: str, popup=None) -> None:
             else:
                 entry.setPlainText(visible)
     _flush_events(app)
+    QToolTip.hideText()
+    # processEvents alone does not destroy replaced table cell widgets. Deliver
+    # deferred deletion as the normal event loop would, before capturing pixels.
+    app.sendPostedEvents(None, QEvent.DeferredDelete)
     output = OUTPUT_DIR / filename
     if isinstance(widget, LoginDialog) and widget._login_active and widget._tabs.currentIndex() == 1:
         if not widget._qr_label.visibleRegion().boundingRect().contains(widget._qr_label.rect()):
@@ -484,7 +489,7 @@ def _capture_dropdowns(app, theme, window):
             button = next(
                 button
                 for button in window._task_page.findChildren(QPushButton)
-                if button.menu()
+                if button.isVisible() and button.menu() and button.menu().actions()
             )
             menu = button.menu()
             button.showMenu()
@@ -1795,6 +1800,211 @@ def _capture_download_management(app, theme, window, temp_root):
             panel.load_settings(window._settings)
 
 
+def _capture_archive(app, theme, window, temp_root):
+    """New archive workflow, using offline data in both modes and three sizes."""
+    from bilibili_downloader.gui.dialogs.page_selection import PageSelectionDialog
+    from bilibili_downloader.gui.threads.batch_worker import ImportReport
+    _populate_main_window(window)
+    for task_id, existing in window._download_list._items.items():
+        assigned = window._task_repository.add(existing, window._download_list._states[task_id])
+        assert assigned == task_id
+    demo = _demo_video()
+    items = [demo.model_copy(update={"bvid": f"BVarchive{i}", "title": title, "author": "演示作者"})
+             for i, title in enumerate(("系统设计入门", "数据整理入门", "进阶实践"), 1)]
+    window._batch_page._url_text.setPlainText("BVarchive1\nBVarchive2\nBVarchive3")
+    window._batch_page._on_report(ImportReport(items=items))
+    item = window._make_download_item(demo)
+    item.download_subtitle = True
+    task_id = window._task_repository.add(item, TaskStatus.COMPLETED)
+    outcome = DownloadOutcome(video_path=str(temp_root / "示例课程.mp4"), actual_quality=80,
+                              actual_video_codec=12, actual_audio_quality=30280,
+                              missing_artifacts=["subtitle"], warnings=["字幕暂未保存，可单独补全。"])
+    window._download_list.add_item(item, download_id=task_id)
+    window._download_list.mark_done(task_id, outcome)
+    window._task_repository.update(task_id, outcome=outcome, status=TaskStatus.COMPLETED)
+    for mode in ("light", "dark"):
+        theme.set_mode(mode)
+        for width, height in ((900, 640), (1120, 760), (1320, 860)):
+            window.resize(width, height)
+            window._show_workspace(0)
+            window._download_tabs.setCurrentIndex(0)
+            _save_widget(app, window, f"archive-options-{mode}-{width}.png")
+            window._download_tabs.setCurrentIndex(1)
+            window._batch_page.search.setText("入门")
+            _save_widget(app, window, f"archive-batch-{mode}-{width}.png")
+            window._show_tasks(0)
+            window._task_page.search.setText(demo.bvid)
+            window._download_list.selectRow(window._download_list._row_for(task_id))
+            _save_widget(app, window, f"archive-result-{mode}-{width}.png")
+        dialog = PageSelectionDialog(demo.pages, {p.cid for p in demo.pages}, window)
+        dialog.range.setText("1-2")
+        _save_widget(app, dialog, f"archive-pages-{mode}.png")
+        dialog.reject()
+        dialog.deleteLater()
+        window._show_settings_tab(SettingsSection.DOWNLOAD)
+        panel = window._settings_page
+        panel._templates_section.set_expanded(True)
+        window.resize(900, 640)
+        window.show()
+        _flush_events(app)
+        from bilibili_downloader.gui.dialogs.naming_fields import NamingFieldDialog
+        from bilibili_downloader.gui.dialogs.settings_dialog import NAMING_FIELDS
+        fields = NamingFieldDialog(NAMING_FIELDS, window)
+        fields.table.setCurrentCell(0, 0)
+        _save_widget(app, fields, f"naming-fields-{mode}.png")
+        fields.search.setText("分 P")
+        _save_widget(app, fields, f"naming-help-{mode}.png")
+        fields.reject()
+        fields.deleteLater()
+        panel._template_fields.set_expanded(False)
+        panel._templates_section.set_expanded(False)
+
+
+def _capture_workflow_polish(app, theme, window, temp_root):
+    """End-to-end presentation states, all backed by isolated demo records."""
+    import shutil
+
+    from bilibili_downloader.gui.dialogs.attachments import AttachmentDialog
+    from bilibili_downloader.gui.dialogs.relocate_directory import (
+        RelocateDirectoryDialog,
+    )
+    from bilibili_downloader.gui.dialogs.result_details import ResultDetailsDialog
+    _capture_archive(app, theme, window, temp_root)
+    window._retry_timer.stop()
+    record = max((record for record in window._task_repository.list_tasks() if record.outcome), key=lambda record: record.id)
+    item = record.item
+    directory = temp_root / "示例课程"
+    directory.mkdir(exist_ok=True)
+    media = directory / "星轨旅记_夜航篇.mp4"
+    media.write_bytes(b"offline UI fixture; not a real video")
+    cover = media.with_suffix(".jpg")
+    cover.write_bytes(b"offline cover fixture")
+    outcome = DownloadOutcome(video_path=str(media), cover_path=str(cover), actual_quality=80,
+                              actual_video_codec=12, actual_audio_quality=30280,
+                              missing_artifacts=["danmaku", "subtitle", "metadata"],
+                              warnings=["字幕来源暂时不可用，可单独重试；已有媒体和封面保留。"])
+    window._library.record_download(item, outcome)
+    window._task_repository.update(record.id, outcome=outcome, output_path=str(media))
+    window._download_list.mark_done(record.id, outcome)
+    page = window._library_page
+    page.refresh()
+    waiting = item.model_copy(deep=True)
+    waiting.video_info = item.video_info.model_copy(update={"bvid": "BVRETRYDEMO", "cid": 9999, "title": "网络恢复中的课程"})
+    waiting.retry_at = "2099-01-01T00:00:00+00:00"
+    waiting.retry_count = 1
+    retry_id = window._task_repository.add(waiting)
+    window._download_list.add_item(waiting, download_id=retry_id, status_text="30 秒后重试（1/3）")
+    new_directory = temp_root / "迁移后的课程"
+    new_directory.mkdir(exist_ok=True)
+    for file in (media, cover):
+        shutil.copy2(file, new_directory / file.name)
+    for mode in ("light", "dark"):
+        theme.set_mode(mode)
+        for width, height in ((900, 640), (1120, 760), (1320, 860)):
+            window.resize(width, height)
+            window._show_tasks(3)
+            page.clear_filters()
+            page.table.setCurrentCell(0, 0)
+            _save_widget(app, window, f"polish-files-{mode}-{width}.png")
+        dialog = AttachmentDialog(item, window, outcome=outcome)
+        _save_widget(app, dialog, f"polish-attachments-{mode}.png")
+        for choice in dialog.choices.values():
+            choice.setChecked(False)
+        _save_widget(app, dialog, f"polish-attachments-zero-{mode}.png")
+        dialog.reject()
+        dialog.deleteLater()
+        offline = outcome.model_copy(update={"video_path": str(temp_root / "未连接的磁盘" / media.name)})
+        dialog = AttachmentDialog(item, window, outcome=offline)
+        _save_widget(app, dialog, f"polish-attachments-offline-{mode}.png")
+        dialog.reject()
+        dialog.deleteLater()
+        details = ResultDetailsDialog("保存与处理详情", "\n".join(outcome.warnings), window, item=item, outcome=outcome)
+        _save_widget(app, details, f"polish-result-details-{mode}.png")
+        details.accept()
+        details.deleteLater()
+        relocate = RelocateDirectoryDialog(window._library, str(directory), window)
+        relocate.new.setText(str(new_directory))
+        relocate.preview()
+        while relocate._job is not None:
+            app.processEvents()
+        from PySide6.QtCore import QSignalBlocker
+        with QSignalBlocker(relocate.old), QSignalBlocker(relocate.new):
+            relocate.old.setText("~/BiliFlow-demo/示例课程")
+            relocate.new.setText("~/BiliFlow-demo/迁移后的课程")
+        for row in range(relocate.table.rowCount()):
+            for column in (0, 1):
+                cell = relocate.table.item(row, column)
+                cell.setText(cell.text().replace(str(temp_root), "~/BiliFlow-demo"))
+        _save_widget(app, relocate, f"polish-relocate-{mode}.png")
+        relocate.reject()
+        relocate.deleteLater()
+        window.resize(900, 640)
+        window._show_tasks(0)
+        window._task_page.search.setText("BVRETRYDEMO")
+        window._download_list.setCurrentCell(window._download_list._row_for(retry_id), 0)
+        window._task_page._download_selection()
+        _save_widget(app, window, f"polish-retry-{mode}.png")
+        window._show_tasks(3)
+        page.table.selectRow(0)
+        page.search.setText("无匹配的关键词")
+        _save_widget(app, window, f"polish-filtered-selection-{mode}.png")
+        page.selection_bar.review_button.click()
+        _save_widget(app, window, f"polish-selection-review-{mode}.png")
+        page.selection_bar.review_button.click()
+        page.clear_filters()
+        window._show_settings_tab(SettingsSection.DOWNLOAD)
+        panel = window._settings_page
+        panel._templates_section.set_expanded(True)
+        window.show()
+        _flush_events(app)
+        panel.tabs.currentWidget().ensureWidgetVisible(panel._templates_section.toggle, 0, 12)
+        _save_widget(app, window, f"polish-naming-{mode}.png")
+        panel._templates_section.set_expanded(False)
+
+
+def _capture_dialog_placement(app, theme, window):
+    """Exercise an embedded settings-page entry without manually moving dialogs."""
+    from PySide6.QtTest import QTest
+
+    from bilibili_downloader.gui.dialogs.naming_fields import NamingFieldDialog
+    from bilibili_downloader.gui.dialogs.settings_dialog import NAMING_FIELDS
+
+    rows = []
+    for dark in (False, True):
+        theme.apply_theme(dark)
+        mode = "dark" if dark else "light"
+        window.resize(900, 640)
+        window.move(window.screen().availableGeometry().topLeft() + QPoint(100, 80))
+        window._show_settings_tab(SettingsSection.DOWNLOAD)
+        window.show()
+        QTest.qWait(100)
+        dialog = NamingFieldDialog(NAMING_FIELDS, window._settings_page)
+        for reopening in (False, True):
+            if reopening:
+                window.move(window.pos() + QPoint(90, 40))
+                window.resize(1120, 760)
+                QTest.qWait(50)
+            dialog.show()
+            QTest.qWait(100)
+            owner_frame = window.frameGeometry()
+            frame = dialog.frameGeometry()
+            delta = frame.center() - owner_frame.center()
+            assert delta.manhattanLength() <= 2, (owner_frame, frame)
+            assert window.screen().availableGeometry().contains(frame)
+            suffix = "reopened" if reopening else "opened"
+            rows.append(dict(mode=mode, state=suffix, owner=owner_frame.getRect(),
+                             dialog=frame.getRect(), center_delta=(delta.x(), delta.y())))
+            _save_widget(app, window, f"dialog-placement-{mode}-{suffix}.png", popup=dialog)
+            dialog.hide()
+            window.show()
+        dialog.reject()
+        dialog.deleteLater()
+    (OUTPUT_DIR / "dialog-placement.json").write_text(
+        json.dumps(dict(backend=app.platformName(), qt=qVersion(), cases=rows), indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
 def main(argv=None) -> int:
     global OUTPUT_DIR
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1811,6 +2021,9 @@ def main(argv=None) -> int:
     parser.add_argument("--ui-refresh-only", action="store_true", help="Capture navigation, download cards, modes and account states")
     parser.add_argument("--interactions-only", action="store_true", help="Capture row hover, history removal and isolated clipboard prompts")
     parser.add_argument("--download-management-only", action="store_true", help="Capture multipart queue and independent downloads library")
+    parser.add_argument("--workflow-polish-only", action="store_true", help="Capture the refined archive workflows and recovery dialogs")
+    parser.add_argument("--dialog-placement-only", action="store_true", help="Verify centered dialogs from embedded settings before and after moving the window")
+    parser.add_argument("--archive-only", action="store_true", help="Capture media results, queue search, batch filters and part selection")
     parser.add_argument("--refinement-only", action="store_true", help="Capture audio, long-content, failure, draft and filtered-task states")
     parser.add_argument("--chrome-only", action="store_true", help="Check native captions using desktop compositor captures")
     parser.add_argument("--glass-only", action="store_true", help="Capture glass wallpaper and complete download guidance in both modes")
@@ -1877,6 +2090,20 @@ def main(argv=None) -> int:
         window._settings.appearance.theme = args.color_theme
         theme.set_color_theme(args.color_theme)
         cleanup.callback(window._live_controller.shutdown)
+        if args.dialog_placement_only:
+            _capture_dialog_placement(app, theme, window)
+            window.request_quit(confirmed=True)
+            return 0
+        if args.workflow_polish_only:
+            _capture_workflow_polish(app, theme, window, temp_root)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
+        if args.archive_only:
+            _capture_archive(app, theme, window, temp_root)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
         if args.download_management_only:
             _capture_download_management(app, theme, window, temp_root)
             window._live_controller.shutdown()

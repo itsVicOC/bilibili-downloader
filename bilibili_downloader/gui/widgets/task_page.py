@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
@@ -29,6 +30,7 @@ from bilibili_downloader.gui.resources.styles import UI_METRICS
 from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
     ActionBar,
+    ActionButton,
     CommandBar,
     ElidedLabel,
     EmptyState,
@@ -36,6 +38,7 @@ from bilibili_downloader.gui.widgets.components import (
     Notice,
     PageHeader,
     PopupMenu,
+    ResponsiveActions,
     SectionCard,
     StatusBadge,
     TaskDetailPanel,
@@ -65,6 +68,9 @@ def _local_time(value):
         return value
 
 
+from bilibili_downloader.gui.widgets.selection import SelectionBar
+
+
 class TaskPage(QWidget):
     room_requested = Signal(int)
     download_requested = Signal()
@@ -77,6 +83,7 @@ class TaskPage(QWidget):
     remove_all_requested = Signal()
     pause_entire_requested = Signal()
     resume_entire_requested = Signal()
+    recovery_requested = Signal(int, str)
 
     def __init__(self, downloads, controller, parent=None):
         super().__init__(parent)
@@ -121,6 +128,12 @@ class TaskPage(QWidget):
         self._download_tools = CommandBar()
         toolbar = self._download_tools.filters
         actions = self._download_tools.actions
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("搜索标题、BV 号、作者或文件名")
+        self.search.setClearButtonEnabled(True)
+        self.search.setMinimumWidth(150)
+        self.search.textChanged.connect(self.refresh_downloads)
+        toolbar.addWidget(self.search)
         self.filter = ComboBox()
         for text, key in (
             ("全部任务", "all"),
@@ -136,13 +149,14 @@ class TaskPage(QWidget):
         self._download_count = QLabel("0 项")
         self._download_count.setObjectName("MetaLabel")
         toolbar.addWidget(self._download_count)
+        self._download_count.hide()
         toolbar.addStretch()
         self._bulk_buttons = []
         for text, signal in (
             ("暂停", self.pause_all_requested),
             ("继续", self.resume_all_requested),
         ):
-            button = QPushButton(text)
+            button = ActionButton(text)
             button.setObjectName("TableSubtleButton")
             button.clicked.connect(signal.emit)
             self._bulk_buttons.append(button)
@@ -152,7 +166,7 @@ class TaskPage(QWidget):
         more.setProperty("menuButton", True)
         menu = PopupMenu(more)
         self._select_all_action = menu.addAction("全选当前列表", self.downloads.select_visible)
-        self._deselect_action = menu.addAction("取消选择", self.downloads.clearSelection)
+        self._deselect_action = menu.addAction("取消选择", self.downloads.clear_checked)
         self._remove_selected_action = menu.addAction("移除所选", self.remove_selected_requested.emit)
         self._clear_completed_action = menu.addAction("移除完成", self.clear_completed_requested.emit)
         self._bulk_buttons.append(self._clear_completed_action)
@@ -167,6 +181,13 @@ class TaskPage(QWidget):
         more.setMenu(menu)
         actions.addWidget(more)
         layout.addWidget(self._download_tools)
+        self.selection_bar = SelectionBar()
+        self.selection_bar.select_visible.connect(self.downloads.select_visible)
+        self.selection_bar.clear_requested.connect(self.downloads.clear_checked)
+        self.selection_bar.review_requested.connect(self.downloads.selection.toggle_review)
+        self.downloads.selection.changed.connect(self._download_checked_changed)
+        self.downloads.selection.focus_changed.connect(self._download_selection)
+        layout.addWidget(self.selection_bar)
         self._download_stack = QStackedWidget()
         self._download_stack.addWidget(self.downloads)
         self._download_stack.addWidget(
@@ -178,17 +199,43 @@ class TaskPage(QWidget):
             )
         )
         self._download_stack.addWidget(
-            EmptyState("没有匹配的任务", "切换筛选条件，查看其他任务。")
+            EmptyState("没有匹配的任务", "已勾选的任务仍会保留。", "清除筛选", self.clear_download_filters)
         )
         layout.addWidget(self._download_stack, 1)
         self.download_detail = TaskDetailPanel()
         self.download_detail.hide()
         layout.addWidget(self.download_detail)
+        self.recovery_action = QPushButton()
+        self.recovery_action.setObjectName("TextButton")
+        self.recovery_action.clicked.connect(self._request_recovery)
+        self.recovery_action.hide()
+        layout.addWidget(self.recovery_action, alignment=Qt.AlignLeft)
         self.tabs.addTab(tab, "下载队列")
+
+    def clear_download_filters(self):
+        self.downloads.selection.state.reviewing = False
+        self.search.clear()
+        self.filter.setCurrentIndex(0)
+        self.refresh_downloads()
+
+    def _download_checked_changed(self):
+        selection = self.downloads.selection.state
+        if selection.reviewing or selection.reviewing != getattr(self, "_download_reviewing", False):
+            self.refresh_downloads()
+        else:
+            self.selection_bar.update_state(selection)
+            self._download_selection()
+            self._selection_actions()
 
     def refresh_downloads(self, *_args):
         key = self.filter.currentData()
+        query = self.search.text().strip().casefold()
         count = 0
+        visible_ids = []
+        selection = self.downloads.selection.state
+        self._download_reviewing = selection.reviewing
+        self.search.setEnabled(not selection.reviewing)
+        self.filter.setEnabled(not selection.reviewing)
         for task_id, state in self.downloads._states.items():
             row = self.downloads._row_for(task_id)
             if row is None:
@@ -206,20 +253,29 @@ class TaskPage(QWidget):
                 or (key == "completed" and state == TaskStatus.COMPLETED)
                 or (key == "attention" and (state == TaskStatus.FAILED or warning))
             )
+            item = self.downloads.get_item(task_id)
+            if query and item:
+                info = item.video_info
+                haystack = " ".join((item.display_title, info.bvid, info.author, info.owner_name,
+                                     info.collection_title, item.filename,
+                                     self.downloads._output_paths.get(task_id, ""))).casefold()
+                visible = visible and query in haystack
+            if selection.reviewing:
+                visible = task_id in selection.selected
             self.downloads.setRowHidden(row, not visible)
-            if not visible:
-                for column in range(self.downloads.columnCount()):
-                    if cell := self.downloads.item(row, column):
-                        cell.setSelected(False)
+            if visible:
+                visible_ids.append(task_id)
             count += bool(visible)
         total = len(self.downloads._states)
         self._download_stack.setCurrentIndex(1 if not total else 0 if count else 2)
+        self.downloads.selection.set_visible(visible_ids)
+        self.selection_bar.update_state(selection)
         self._download_selection()
         self._selection_actions()
 
     def _selection_actions(self):
         selected = self.downloads.selected_ids()
-        visible = sum(not self.downloads.isRowHidden(self.downloads._row_for(i)) for i in self.downloads._states)
+        visible = len(self.downloads.selection.state.visible)
         total = len(self.downloads._states)
         self._download_count.setText(f"已选 {len(selected)} 项" if selected else f"显示 {visible} / {total} 项")
         self._select_all_action.setEnabled(visible > 0)
@@ -252,10 +308,12 @@ class TaskPage(QWidget):
         return [task_id for task_id, state in self.downloads._states.items()
                 if state in states and task_id not in self.downloads.removing_ids
                 and (scope == "all" or (task_id in selected if selected else
-                     not self.downloads.isRowHidden(self.downloads._row_for(task_id))))]
+                     task_id in self.downloads.selection.state.visible))]
 
     def _download_selection(self):
-        selected = self.downloads.selected_ids()
+        self.recovery_action.hide()
+        focused = self.downloads.selection.state.focused
+        selected = [focused] if focused in self.downloads._states else self.downloads.selected_ids()
         if len(selected) != 1:
             self.download_detail.hide()
             return
@@ -274,13 +332,35 @@ class TaskPage(QWidget):
         progress = self.downloads._progress_at(row)
         state = status.text() if status else ""
         self.download_detail.set_details(
-            item.text(), f"{state} · {progress.value()}%" if progress else state,
+            item.text(), (progress.property("stageCaption") or state) if progress else state,
             specification.toolTip() if specification else "",
             self.downloads._output_paths.get(task_id, ""),
-            status.toolTip() if status and status.toolTip() != state else "",
+            state if progress and progress.property("stageCaption") else status.toolTip() if status and status.toolTip() != state else "",
             status.data(STATUS_TONE_ROLE) if status else "muted",
         )
+        outcome = self.downloads._outcomes.get(task_id)
+        task = self.downloads.get_item(task_id)
+        if outcome:
+            self.download_detail.set_result(task, outcome)
+            self.download_detail.status.setText("保存结果")
+            secondary = ("补全附件…", lambda: self.downloads.supplement_requested.emit(task_id)) if outcome.missing_artifacts else None
+            self.download_detail.set_actions(("打开文件夹", lambda: self.downloads.open_requested.emit(task_id)), secondary)
+        elif task and task.retry_at:
+            self.download_detail.set_actions(("立即重试", lambda: self.downloads.retry_requested.emit(task_id)),
+                                            ("停止等待", lambda: self.downloads._on_pause_clicked(task_id)), secondary_required=True)
         self.download_detail.show()
+        label = {"authentication": "登录后重试…", "permission": "核对权限后重试…", "storage": "更换目录并重试…", "rate_limit": "查看冷却说明"}.get(task.error_category if task else "")
+        if label and self.downloads._states.get(task_id) == TaskStatus.FAILED:
+            self.recovery_action.setText(label)
+            self.download_detail.set_actions((label, self._request_recovery))
+
+    def _request_recovery(self):
+        focused = self.downloads.selection.state.focused
+        selected = [focused] if focused in self.downloads._states else self.downloads.selected_ids()
+        if len(selected) == 1:
+            item = self.downloads.get_item(selected[0])
+            if item:
+                self.recovery_requested.emit(selected[0], item.error_category)
 
     def _current_tab(self):
         tab = QWidget()
@@ -517,11 +597,14 @@ class TaskPage(QWidget):
         self.history_detail.setParent(self.history_summary)
         self.history_summary.setToolTip("")
         self.history_actions = ActionBar()
-        footer = self.history_actions.row
-        self.open_button = QPushButton("打开目录")
+        self._history_action_strip = ResponsiveActions()
+        self.history_actions.row.addWidget(self._history_action_strip, 1)
+        footer = self._history_action_strip.row
+        self.open_button = ActionButton("打开目录")
+        self.open_button.setProperty("actionPriority", 50)
         self.open_button.clicked.connect(self._open)
         footer.addWidget(self.open_button)
-        self.copy_path_button = QPushButton("复制路径")
+        self.copy_path_button = ActionButton("复制路径")
         self.copy_path_button.clicked.connect(lambda: QApplication.clipboard().setText(str(self._selected_path() or "")))
         footer.addWidget(self.copy_path_button)
         self.history_more = QPushButton("更多")
@@ -540,14 +623,16 @@ class TaskPage(QWidget):
         self.history_more.setMenu(self.history_menu)
         footer.addWidget(self.history_more)
         footer.addStretch()
-        self.export_button = QPushButton("合并导出 MP4")
+        self.export_button = ActionButton("合并导出 MP4")
+        self.export_button.setProperty("alwaysVisible", True)
         self.export_button.setObjectName("PrimaryButton")
         self.export_button.clicked.connect(self._export_mp4)
-        self.export_play = QPushButton("打开 MP4")
+        self.export_play = ActionButton("打开 MP4")
+        self.export_play.setProperty("actionPriority", 30)
         self.export_play.clicked.connect(self._play_export)
         self.export_play.hide()
         footer.addWidget(self.export_play)
-        self.export_location = QPushButton("所在目录")
+        self.export_location = ActionButton("所在目录")
         self.export_location.setObjectName("TextButton")
         self.export_location.clicked.connect(self._open_export)
         self.export_location.hide()

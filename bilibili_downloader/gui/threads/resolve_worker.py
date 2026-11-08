@@ -26,10 +26,11 @@ class ResolveWorker(QObject):
     error = Signal(str)
     routed = Signal(str, str)
 
-    def __init__(self, client: BilibiliAPIClient, source: str):
+    def __init__(self, client: BilibiliAPIClient, source: str, *, video_info=None):
         super().__init__()
         self._client = client
         self._source = source
+        self.video_info = video_info
 
 
 class ResolveRunner(QRunnable):
@@ -51,7 +52,7 @@ class ResolveRunner(QRunnable):
                 self._worker.routed.emit("live", source)
                 return
             resolver = BatchResolver(self._worker._client)
-            info = resolver.resolve_one(source)
+            info = self._worker.video_info or resolver.resolve_one(source)
             # Try to fetch playurl for quality discovery (degraded on failure)
             video_streams = []
             audio_streams = []
