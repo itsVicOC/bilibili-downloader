@@ -143,13 +143,18 @@ class DownloadService:
             progress_callback(0.95, "正在下载字幕...")
             subtitles = self._select_subtitles(item, outcome)
             outcome.subtitle_discovery_complete = bool(subtitles) and item.download_all_subtitles
-            if not subtitles:
+            selection_discovered = (
+                not item.download_all_subtitles
+                and item.selected_subtitle_lan == "zh-en"
+                and outcome.subtitle_discovery_languages is not None
+            )
+            if not subtitles and not selection_discovered and "subtitle" not in outcome.missing_artifacts:
                 outcome.missing_artifacts.append("subtitle")
             for index, subtitle in enumerate(subtitles):
                 from bilibili_downloader.core.library import readable_file
                 if subtitle.lan in outcome.subtitle_languages and readable_file(outcome.subtitle_languages[subtitle.lan]):
                     continue
-                if item.download_all_subtitles:
+                if item.download_all_subtitles or item.selected_subtitle_lan == "zh-en":
                     language = sanitize_filename(
                         subtitle.lan or subtitle.lan_doc or str(index + 1)
                     )
@@ -252,6 +257,7 @@ class DownloadService:
         outcome: DownloadOutcome,
     ) -> list[SubtitleInfo]:
         tracks = []
+        outcome.subtitle_discovery_languages = None
         try:
             if item.video_info.bvid:
                 tracks = self._api_client.get_subtitle_tracks(
@@ -270,11 +276,12 @@ class DownloadService:
                 item.video_info.content_identity,
                 redact_sensitive_text(exc),
             )
-            tracks = item.video_info.subtitle_list
-            if not tracks:
-                outcome.warnings.append(f"字幕轨道查询失败：{exc}")
-                return []
+            # Metadata tracks are not bound to the selected page and must not
+            # replace a failed, page-specific subtitle lookup.
+            outcome.warnings.append(f"字幕轨道查询失败：{redact_sensitive_text(exc)}")
+            return []
 
+        outcome.subtitle_discovery_languages = list(dict.fromkeys(track.lan for track in tracks))
         if not tracks:
             outcome.warnings.append("该分 P 没有可下载的字幕")
             return []
@@ -285,6 +292,15 @@ class DownloadService:
                 identity = track.lan or track.url
                 unique.setdefault(identity, track)
             return list(unique.values())
+
+        if item.selected_subtitle_lan == "zh-en":
+            selected = {
+                track.lan: track for track in tracks
+                if track.lan.removeprefix("ai-").split("-")[0] in {"zh", "en"}
+            }
+            if not selected:
+                outcome.warnings.append("该分 P 没有可下载的中文或英文字幕（含 AI 字幕）")
+            return list(selected.values())
 
         for track in tracks:
             if track.lan == item.selected_subtitle_lan:

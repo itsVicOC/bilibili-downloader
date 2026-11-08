@@ -340,6 +340,7 @@ class DownloadOutcome(BaseModel):
     missing_artifacts: list[str] = Field(default_factory=list)
     artifact_warnings: dict[str, list[str]] = Field(default_factory=dict)
     subtitle_languages: dict[str, str] = Field(default_factory=dict)
+    subtitle_discovery_languages: Optional[list[str]] = None
     subtitle_discovery_complete: bool = False
     reused_media: bool = False
     media_verification: dict = Field(default_factory=dict)
