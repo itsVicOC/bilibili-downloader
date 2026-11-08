@@ -397,6 +397,20 @@ class LibraryRepository:
                     and not previous.download_all_subtitles
                 )
             )
+            if not item.download_all_subtitles and item.selected_subtitle_lan == "zh-en":
+                languages = {
+                    lan.removeprefix("ai-").split("-")[0]
+                    for lan in outcome.subtitle_languages
+                }
+                if outcome.subtitle_discovery_languages is None:
+                    # Legacy receipts have no evidence of which tracks exist.
+                    has_subtitles = {"zh", "en"} <= languages
+                else:
+                    expected = {
+                        lan for lan in outcome.subtitle_discovery_languages
+                        if lan.removeprefix("ai-").split("-")[0] in {"zh", "en"}
+                    }
+                    has_subtitles = expected <= outcome.subtitle_languages.keys()
             if wants_subtitles and (not has_subtitles or "subtitle" in outcome.missing_artifacts):
                 missing.append("subtitle")
             match = MediaMatch("missing_attachments" if missing else "saved", outcome, tuple(missing))

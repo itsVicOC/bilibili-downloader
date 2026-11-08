@@ -469,16 +469,19 @@ def test_failed_recycle_never_unlinks_media(tmp_path):
 def test_real_workers_stop_110_queued_downloads_before_removal(
     workspace, monkeypatch, qtbot
 ):
-    cancelled = threading.Event()
+    shutdown = threading.Event()
 
     class WaitingService:
         def __init__(self, *_args, **_kwargs):
-            self.cancelled = cancelled
+            # Each real download service has its own cancellation state. A
+            # shared event lets one pause cancel workers not yet paused.
+            self.cancelled = threading.Event()
 
         def download(self, _item, _progress):
             # Enqueuing 110 persistent UI rows can exceed ten seconds on a
             # hosted Windows runner. Only cancellation should end this fixture.
-            self.cancelled.wait()
+            while not self.cancelled.wait(0.05) and not shutdown.is_set():
+                pass
             raise RuntimeError("Download cancelled by user")
 
         def cancel(self):
@@ -517,7 +520,7 @@ def test_real_workers_stop_110_queued_downloads_before_removal(
             r.status == TaskStatus.PAUSED for r in workspace._task_repository.list_tasks()
         )
     finally:
-        cancelled.set()
+        shutdown.set()
         for worker in list(workspace._download_attempts.values()):
             worker.pause()
         workspace._download_pool.waitForDone(15000)

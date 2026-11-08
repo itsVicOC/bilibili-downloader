@@ -77,8 +77,8 @@ def main():
     )
     download_parser.add_argument(
         "--subtitle-language",
-        default="zh-Hans",
-        help="Preferred Bilibili subtitle language code (default: zh-Hans)",
+        default="zh-en",
+        help="Bilibili subtitle language code; zh-en downloads Chinese and English, including AI (default: zh-en)",
     )
     download_parser.add_argument(
         "--all-subtitles",

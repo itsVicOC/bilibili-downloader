@@ -28,6 +28,41 @@ class FakeAPI:
         return self.tracks
 
 
+def test_chinese_english_subtitles_include_ai_and_keep_separate_files(monkeypatch, tmp_path):
+    tracks = [SubtitleInfo(lan=lan, url=f"https://i0.hdslb.com/{lan}.json")
+              for lan in ("ai-ja", "ai-zh", "ai-en", "zh-Hans")]
+    service = DownloadService(FakeAPI(tracks), str(tmp_path))
+    video_path = tmp_path / "video.mp4"
+    service._downloader.last_video_stream = StreamInfo(id=80, codecid=12)
+    monkeypatch.setattr(service._downloader, "download", lambda *_: str(video_path))
+    converted = []
+    monkeypatch.setattr(
+        "bilibili_downloader.core.download_service.SubtitleDownloader.download_and_convert",
+        lambda url, path: converted.append(path.name),
+    )
+    item = DownloadItem(video_info=VideoInfo(bvid="BV1xx", cid=1),
+                        download_subtitle=True, selected_subtitle_lan="zh-en")
+    outcome = service.download(item, lambda *_: None)
+    assert converted == ["video.ai-zh.srt", "video.ai-en.srt", "video.zh-Hans.srt"]
+    assert set(outcome.subtitle_languages) == {"ai-zh", "ai-en", "zh-Hans"}
+    assert not outcome.subtitle_discovery_complete
+    assert not outcome.warnings
+
+
+def test_chinese_english_selection_uses_available_language_without_foreign_fallback(tmp_path):
+    service = DownloadService(FakeAPI([
+        SubtitleInfo(lan="ai-ja", url="https://i0.hdslb.com/ja.json"),
+        SubtitleInfo(lan="ai-zh", url="https://i0.hdslb.com/zh.json"),
+    ]), str(tmp_path))
+    item = DownloadItem(video_info=VideoInfo(bvid="BV1xx", cid=1),
+                        download_subtitle=True, selected_subtitle_lan="zh-en")
+    outcome = DownloadOutcome(video_path=str(tmp_path / "video.mp4"))
+    assert [track.lan for track in service._select_subtitles(item, outcome)] == ["ai-zh"]
+    assert outcome.subtitle_discovery_languages == ["ai-ja", "ai-zh"]
+    assert outcome.warnings == []
+    assert outcome.missing_artifacts == []
+
+
 def test_service_reports_quality_and_codec_fallback(monkeypatch, tmp_path):
     service = DownloadService(FakeAPI(), str(tmp_path))
 
@@ -119,6 +154,32 @@ def test_service_keeps_video_success_when_companion_fails(monkeypatch, tmp_path)
     assert outcome.video_path.endswith("video.mp4")
     assert outcome.is_partial
     assert "弹幕下载失败" in outcome.warnings[0]
+
+
+def test_subtitle_discovery_failure_does_not_use_unverified_metadata_tracks(monkeypatch, tmp_path):
+    api = FakeAPI()
+    monkeypatch.setattr(
+        api, "get_subtitle_tracks",
+        lambda *_: (_ for _ in ()).throw(httpx.ReadTimeout("subtitle discovery failed")),
+    )
+    service = DownloadService(api, str(tmp_path))
+    monkeypatch.setattr(service._downloader, "download", lambda *_: str(tmp_path / "video.mp4"))
+    converted = []
+    monkeypatch.setattr(
+        "bilibili_downloader.core.download_service.SubtitleDownloader.download_and_convert",
+        lambda *args: converted.append(args),
+    )
+    item = DownloadItem(
+        video_info=VideoInfo(bvid="BV1xx", cid=22, subtitle_list=[
+            SubtitleInfo(lan="ai-zh", url="https://i0.hdslb.com/unverified.json"),
+        ]),
+        download_subtitle=True,
+    )
+    outcome = service.download(item, lambda *_: None)
+    assert converted == []
+    assert outcome.subtitle_paths == []
+    assert outcome.video_path.endswith("video.mp4")
+    assert any("字幕轨道查询失败" in warning for warning in outcome.warnings)
 
 
 def test_service_exposes_companion_conversion_warnings_and_keeps_artifacts(monkeypatch, tmp_path):
