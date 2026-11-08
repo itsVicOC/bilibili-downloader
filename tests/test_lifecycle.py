@@ -470,6 +470,7 @@ window = MainWindow(config, live_controller=controller, desktop_platform=sys.arg
 lifecycle = ApplicationLifecycle(app, window, desktop_platform=sys.argv[2], tray_factory=TrayStub)
 window._settings.windows_close_action = WindowCloseAction.TRAY
 window.show()
+QTimer.singleShot(0, lambda: (Path(sys.argv[1]) / "event-loop-ready").touch())
 # Let the platform deliver its startup activation before simulating a close.
 QTimer.singleShot(100, window.close)
 def quit_after_hide():
@@ -487,18 +488,30 @@ assert code == 0 and window._shutdown_complete
 assert not lifecycle.tray or not lifecycle.tray.visible
 print("shutdown-complete")
 '''
-    process = subprocess.Popen(
-        [sys.executable, "-c", source, str(tmp_path), platform, reason],
-        env={**os.environ, "QT_QPA_PLATFORM": qapp.platformName()},
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-    )
-    try:
-        # Cocoa activation can require the launching GUI to service events.
-        # Blocking the parent with subprocess.run() deadlocks that handshake.
-        qtbot.waitUntil(lambda: process.poll() is not None, timeout=10000)
-    finally:
-        if process.poll() is None:
-            process.kill()
-        stdout, stderr = process.communicate(timeout=2)
+    from pytestqt.exceptions import TimeoutError as QtWaitTimeout
+    stdout_path, stderr_path = tmp_path / "stdout.log", tmp_path / "stderr.log"
+    failure, phase = "", "startup"
+    # Files also prevent a verbose Qt plugin from filling a Windows pipe and
+    # blocking the child while the parent services the desktop event loop.
+    with stdout_path.open("w", encoding="utf-8") as out, stderr_path.open("w", encoding="utf-8") as err:
+        process = subprocess.Popen(
+            [sys.executable, "-c", source, str(tmp_path), platform, reason],
+            env={**os.environ, "QT_QPA_PLATFORM": qapp.platformName()},
+            stdout=out, stderr=err, text=True,
+        )
+        try:
+            # Cold Python/Qt imports are separate from the exit contract. The
+            # child's three-second shutdown watchdog and assertions stay intact.
+            qtbot.waitUntil(lambda: (tmp_path / "event-loop-ready").exists() or process.poll() is not None, timeout=30000)
+            phase = "shutdown"
+            qtbot.waitUntil(lambda: process.poll() is not None, timeout=10000)
+        except QtWaitTimeout:
+            failure = f"Lifecycle child timed out during {phase}."
+        finally:
+            if process.poll() is None:
+                process.kill()
+            process.wait(timeout=2)
+    stdout, stderr = stdout_path.read_text(encoding="utf-8", errors="replace"), stderr_path.read_text(encoding="utf-8", errors="replace")
+    assert not failure, failure + "\n" + stdout + stderr
     assert process.returncode == 0, stdout + stderr
     assert "shutdown-complete" in stdout

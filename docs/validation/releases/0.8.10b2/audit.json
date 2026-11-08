@@ -1,0 +1,162 @@
+{
+  "tag": "v0.8.10b2",
+  "source_sha": "6cd1b46494d32d8a9d37a2d5590ad62307c955a6",
+  "url": "https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10b2",
+  "published_at": "2026-11-02T16:35:36Z",
+  "prerelease": true,
+  "draft": false,
+  "stable_latest": "v0.8.9",
+  "release_notes_match": true,
+  "assets_verified": [
+    {
+      "name": "BilibiliDownloader-macOS-full-v0.8.10b2.cdx.json",
+      "bytes": 234939,
+      "sha256": "f11ab18002845512242ad29e9c90f08c63c16774a106512b370e83fcf3d282bd",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/releases/download/v0.8.10b2/BilibiliDownloader-macOS-full-v0.8.10b2.cdx.json"
+    },
+    {
+      "name": "BilibiliDownloader-macOS-full-v0.8.10b2.dmg",
+      "bytes": 81114642,
+      "sha256": "17041d94d22c5b078696f95c7aa72f83d866d72f6284e63fea7d5441ec46c00c",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/releases/download/v0.8.10b2/BilibiliDownloader-macOS-full-v0.8.10b2.dmg"
+    },
+    {
+      "name": "BilibiliDownloader-macOS-full-v0.8.10b2.verification.json",
+      "bytes": 594,
+      "sha256": "9b171defafde093623e420c2cedcebeb17395c08d8b757928ed872d55fe90599",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/releases/download/v0.8.10b2/BilibiliDownloader-macOS-full-v0.8.10b2.verification.json"
+    },
+    {
+      "name": "BilibiliDownloader-macOS-full-v0.8.10b2.zip",
+      "bytes": 75433024,
+      "sha256": "8fe71ef11dbade4d6af21944ccf606203c9455e2594afc87afec9fc1286e93a9",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/releases/download/v0.8.10b2/BilibiliDownloader-macOS-full-v0.8.10b2.zip"
+    },
+    {
+      "name": "BilibiliDownloader-macOS-lite-v0.8.10b2.cdx.json",
+      "bytes": 94415,
+      "sha256": "e5573f2c4225ed34de11662438b34386c10b5594e6df938a5682a66ef75f09c0",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/releases/download/v0.8.10b2/BilibiliDownloader-macOS-lite-v0.8.10b2.cdx.json"
+    },
+    {
+      "name": "BilibiliDownloader-macOS-lite-v0.8.10b2.zip",
+      "bytes": 70308351,
+      "sha256": "b19be038dfae545f59afab523c0dd8aae2261c77127338f8959549c15af542c5",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/releases/download/v0.8.10b2/BilibiliDownloader-macOS-lite-v0.8.10b2.zip"
+    },
+    {
+      "name": "BilibiliDownloader-Windows-full-v0.8.10b2-setup.exe",
+      "bytes": 71416435,
+      "sha256": "009c7049f59ae0bd1dbe00346fda5d29b8d6f4e09f95dccaeeb1b9c651f64159",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/releases/download/v0.8.10b2/BilibiliDownloader-Windows-full-v0.8.10b2-setup.exe"
+    },
+    {
+      "name": "BilibiliDownloader-Windows-full-v0.8.10b2-setup.verification.json",
+      "bytes": 663,
+      "sha256": "67655bdb098f860580d999c70e6f8237b10a9db9bff85031bed1b8785fe1e674",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/releases/download/v0.8.10b2/BilibiliDownloader-Windows-full-v0.8.10b2-setup.verification.json"
+    },
+    {
+      "name": "BilibiliDownloader-Windows-full-v0.8.10b2.cdx.json",
+      "bytes": 250885,
+      "sha256": "61a94724ab136d9f4ea589935ae6d1a640022682b82c47d9e422ef2f15c998b1",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/releases/download/v0.8.10b2/BilibiliDownloader-Windows-full-v0.8.10b2.cdx.json"
+    },
+    {
+      "name": "BilibiliDownloader-Windows-full-v0.8.10b2.zip",
+      "bytes": 95246019,
+      "sha256": "52fb9c0d19da6dc37515762653d47e0c95ca96bc625cfcc3a1239de007c67846",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/releases/download/v0.8.10b2/BilibiliDownloader-Windows-full-v0.8.10b2.zip"
+    },
+    {
+      "name": "BilibiliDownloader-Windows-lite-v0.8.10b2.cdx.json",
+      "bytes": 107326,
+      "sha256": "aa9e207ca5985d71cb6aedd4ca0f6a3c99763114db85500d712d6d55db352ba7",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/releases/download/v0.8.10b2/BilibiliDownloader-Windows-lite-v0.8.10b2.cdx.json"
+    },
+    {
+      "name": "BilibiliDownloader-Windows-lite-v0.8.10b2.zip",
+      "bytes": 89483941,
+      "sha256": "6f32f1caabd58e42e6f8b5e40018c5bba58dbd9e0a9ffaa46d81955ef479b753",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/releases/download/v0.8.10b2/BilibiliDownloader-Windows-lite-v0.8.10b2.zip"
+    },
+    {
+      "name": "FFmpeg-7.1-source.tar.gz",
+      "bytes": 15900622,
+      "sha256": "02fa6d9827da3b6786e4df821218cc036db2b4481e7f48267c2dcda695633afc",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/releases/download/v0.8.10b2/FFmpeg-7.1-source.tar.gz"
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "bytes": 1483,
+      "sha256": "ab01aac717fd30532390feebc96d98992865875a2f256f319fa77dd40ef7d6ee",
+      "url": "https://github.com/itsVicOC/bilibili-downloader/releases/download/v0.8.10b2/SHA256SUMS.txt"
+    }
+  ],
+  "bundle_counts": {
+    "archives": 4,
+    "archive_members": 2956,
+    "sboms": 4,
+    "components": 733,
+    "source_files": 8563,
+    "installers": 2
+  },
+  "local_macos_recheck": {
+    "passed": true,
+    "files": 526,
+    "checks": [
+      "mount",
+      "applications-link",
+      "copy",
+      "signature",
+      "payload",
+      "cli"
+    ],
+    "scope": "Read-only DMG mount, temporary copy, exact payload/signature/CLI check; no user installation"
+  },
+  "update_channel_replay": [
+    {
+      "current": "0.8.10b1",
+      "channel": "latest",
+      "offered": "v0.8.10b2",
+      "passed": true
+    },
+    {
+      "current": "0.8.10b1",
+      "channel": "stable",
+      "offered": null,
+      "passed": true
+    },
+    {
+      "current": "0.8.10b2",
+      "channel": "latest",
+      "offered": null,
+      "passed": true
+    },
+    {
+      "current": "0.8.10b2",
+      "channel": "stable",
+      "offered": null,
+      "passed": true
+    },
+    {
+      "current": "0.8.9",
+      "channel": "latest",
+      "offered": "v0.8.10b2",
+      "passed": true
+    },
+    {
+      "current": "0.8.9",
+      "channel": "stable",
+      "offered": null,
+      "passed": true
+    },
+    {
+      "current": "0.8.8",
+      "channel": "stable",
+      "offered": "v0.8.9",
+      "passed": true
+    }
+  ],
+  "scope": "Public GitHub metadata and downloaded assets; no user-data installation or live-recording/device checks"
+}

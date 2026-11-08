@@ -172,6 +172,45 @@ jobs:
         if: runner.os == 'Windows'
         run: choco install ffmpeg --yes --no-progress
 
+      - name: Verify download regressions and native file management
+        timeout-minutes: 10
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
+        run: |
+          python -m scripts.configure_ui_test_display
+          python -X faulthandler -m pytest -q tests/test_download_management.py tests/test_issue_regressions.py tests/test_archive_workflow.py tests/test_workflow_polish.py tests/test_ui_feedback.py tests/test_dialog_placement.py
+
+      - name: Capture download workflow native evidence
+        timeout-minutes: 20
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
+        run: |
+          python -m scripts.capture_docs_screenshots --native --physical-pixels --download-management-only --output-dir "build/release-management-ui"
+          python -m scripts.capture_docs_screenshots --native --physical-pixels --dialog-placement-only --output-dir "build/release-management-ui/dialog-placement"
+          for color in star_trail bilibili_blue; do
+            python -m scripts.capture_docs_screenshots --native --physical-pixels --color-theme "$color" --workflow-polish-only --output-dir "build/release-management-ui/workflow/$color"
+            python -m scripts.capture_ui_feedback --native --color-theme "$color" --output-dir "build/release-management-ui/feedback/$color"
+          done
+
+      - name: Measure packaged workflow performance
+        timeout-minutes: 5
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          QT_QPA_PLATFORM=offscreen python -m scripts.benchmark_archive --output build/release-management-ui/archive-benchmark.json
+
+      - name: Upload download management native evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: BiliFlow-${{ matrix.label }}-management-ui-${{ env.RELEASE_ID }}
+          path: build/release-management-ui
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Verify recorder fixtures and bundled MP4 export
         shell: bash
         run: |

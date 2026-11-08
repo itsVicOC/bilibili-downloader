@@ -2,7 +2,7 @@
 
 import pytest
 from PySide6.QtCore import QPoint, QRect, Qt
-from PySide6.QtWidgets import QApplication, QBoxLayout, QPushButton
+from PySide6.QtWidgets import QApplication, QBoxLayout, QMessageBox, QPushButton
 
 from bilibili_downloader.core.models import (
     DownloadItem,
@@ -39,7 +39,7 @@ def test_resolved_download_is_complete_in_standard_window(workspace, qapp, theme
     assert workspace._hero.height() < 90
     assert workspace._video_info.height() < 170
     assert workspace._workspace_scroll.verticalScrollBar().maximum() == 0
-    for control in (workspace._video_info, workspace._page_combo, workspace._quality_combo,
+    for control in (workspace._video_info, workspace._choose_pages_btn, workspace._quality_combo,
                     workspace._codec_combo, workspace._output_summary,
                     workspace._danmaku_check, workspace._subtitle_check,
                     workspace._all_subtitles_check, workspace._cover_check,
@@ -87,12 +87,37 @@ def test_directory_follows_extras_in_keyboard_order(workspace, qtbot, mode):
     QApplication.setActiveWindow(workspace)
     codec.setFocus()
     qtbot.keyClick(codec, Qt.Key_Tab)
+    assert QApplication.focusWidget() is workspace._match_policy
+    qtbot.keyClick(workspace._match_policy, Qt.Key_Tab)
     assert QApplication.focusWidget() is workspace._danmaku_check
     workspace._metadata_check.setFocus()
     qtbot.keyClick(workspace._metadata_check, Qt.Key_Tab)
     assert QApplication.focusWidget() is workspace._output_summary
     qtbot.keyClick(workspace._output_summary, Qt.Key_Tab)
     assert QApplication.focusWidget() is workspace._download_actions.directory_button
+
+
+def test_policy_keyboard_route_with_text_only_system_tabs(workspace, qtbot, qapp):
+    hints = qapp.styleHints()
+    original = hints.tabFocusBehavior()
+    try:
+        hints.setTabFocusBehavior(Qt.TabFocusTextControls)
+        resolve(workspace)
+        workspace.show()
+        flush()
+        QApplication.setActiveWindow(workspace)
+        codec = workspace._codec_stack.currentWidget()
+        codec.setFocus()
+        qtbot.keyClick(codec, Qt.Key_Tab)
+        assert QApplication.focusWidget() is workspace._match_policy
+        qtbot.keyClick(workspace._match_policy, Qt.Key_Tab)
+        assert QApplication.focusWidget() is workspace._danmaku_check
+        qtbot.keyClick(workspace._danmaku_check, Qt.Key_Backtab)
+        assert QApplication.focusWidget() is workspace._match_policy
+        qtbot.keyClick(workspace._match_policy, Qt.Key_Backtab)
+        assert QApplication.focusWidget() is codec
+    finally:
+        hints.setTabFocusBehavior(original)
 
 
 def test_settings_bar_stays_compact_and_actions_remain_visible(workspace):
@@ -130,7 +155,8 @@ def test_row_menu_retains_task_identity_after_row_removal(qtbot):
     assert retried == deleted == [20]
 
 
-def test_bulk_more_action_keeps_current_filter_scope_and_toolbar_can_wrap(workspace):
+def test_bulk_more_action_keeps_current_filter_scope_and_toolbar_can_wrap(workspace, monkeypatch):
+    monkeypatch.setattr(QMessageBox, "exec", lambda _: QMessageBox.Yes)
     page = workspace._task_page
     for task_id, state in ((1, TaskStatus.COMPLETED), (2, TaskStatus.PAUSED)):
         workspace._download_list.add_item(DownloadItem(video_info=VideoInfo(bvid=f"BV{task_id}")),
@@ -138,7 +164,7 @@ def test_bulk_more_action_keeps_current_filter_scope_and_toolbar_can_wrap(worksp
     page.filter.setCurrentIndex(page.filter.findData("paused"))
     page.refresh_downloads()
     assert not page._clear_completed_action.isEnabled()
-    page.scope.setCurrentIndex(page.scope.findData("all"))
+    page.filter.setCurrentIndex(page.filter.findData("all"))
     assert page._clear_completed_action.isEnabled()
     called = []
     page.clear_completed_requested.connect(lambda: called.append(True))
@@ -156,5 +182,7 @@ def test_bulk_more_action_keeps_current_filter_scope_and_toolbar_can_wrap(worksp
     assert bar.wrapped
     assert bar._actions.y() > bar._filters.y()
     for button in bar.findChildren(QPushButton):
+        if not button.isVisible():
+            continue
         rect = QRect(button.mapTo(bar, QPoint()), button.size())
-        assert bar.rect().contains(rect)
+        assert bar.rect().contains(rect), (button.text(), rect, bar.rect())

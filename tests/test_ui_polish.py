@@ -144,7 +144,7 @@ def test_advanced_templates_keep_draft_and_open_for_validation(qtbot):
     panel.show()
     assert panel._templates_section.content.isHidden()
     panel._path_template.setText("{author}/新目录/{title}")
-    assert "新目录" in panel._template_previews["path_template"].text()
+    assert "新目录" in panel._template_previews["path_template"].toolTip()
     panel.show_section(SettingsSection.DOWNLOAD)
     panel.show_section(SettingsSection.DOWNLOAD)
     assert panel.dirty

@@ -40,8 +40,9 @@ def test_cli_download_handles_collection_results_and_forwards_options(
             pass
 
     class FakeService:
-        def __init__(self, client, output_dir, ffmpeg_path=None):
+        def __init__(self, client, output_dir, ffmpeg_path=None, library_repository=None):
             assert output_dir == str(tmp_path)
+            assert library_repository is not None
 
         def download(self, item, callback):
             captured.append(item)
@@ -65,6 +66,7 @@ def test_cli_download_handles_collection_results_and_forwards_options(
             output_dir=str(tmp_path), copyright_notice_version=1
         ),
     )
+    monkeypatch.setattr("bilibili_downloader.utils.config.ConfigManager.library_database_path", property(lambda self: tmp_path / "library.sqlite3"))
     args = argparse.Namespace(
         source="BV1GJ411x7h7",
         quality=80,

@@ -1,0 +1,871 @@
+{
+  "attempt": 1,
+  "conclusion": "success",
+  "createdAt": "2026-11-03T02:58:40Z",
+  "databaseId": 41569374432,
+  "event": "workflow_dispatch",
+  "headBranch": "codex/ui-feedback-boundaries",
+  "headSha": "d670dc0a0573d47f1b0c928b5d78d93d46d2574f",
+  "jobs": [
+    {
+      "completedAt": "2026-11-03T02:58:55Z",
+      "conclusion": "success",
+      "databaseId": 125698501040,
+      "name": "Validate release request",
+      "startedAt": "2026-11-03T02:58:51Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-03T02:58:52Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-03T02:58:52Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T02:58:52Z",
+          "conclusion": "skipped",
+          "name": "Reject publishing from a branch",
+          "number": 2,
+          "startedAt": "2026-11-03T02:58:52Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T02:58:52Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 3,
+          "startedAt": "2026-11-03T02:58:52Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/41569374432/job/125698501040"
+    },
+    {
+      "completedAt": "2026-11-03T03:20:49Z",
+      "conclusion": "success",
+      "databaseId": 125698528760,
+      "name": "Build macOS",
+      "startedAt": "2026-11-03T02:59:07Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-03T02:59:09Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-03T02:59:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T02:59:31Z",
+          "conclusion": "success",
+          "name": "Checkout",
+          "number": 2,
+          "startedAt": "2026-11-03T02:59:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T02:59:32Z",
+          "conclusion": "success",
+          "name": "Set up Python",
+          "number": 3,
+          "startedAt": "2026-11-03T02:59:31Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T02:59:32Z",
+          "conclusion": "skipped",
+          "name": "Set up MSYS2 FFmpeg toolchain",
+          "number": 4,
+          "startedAt": "2026-11-03T02:59:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:00:05Z",
+          "conclusion": "success",
+          "name": "Install dependencies",
+          "number": 5,
+          "startedAt": "2026-11-03T02:59:32Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:00:05Z",
+          "conclusion": "skipped",
+          "name": "Verify tag matches package version",
+          "number": 6,
+          "startedAt": "2026-11-03T03:00:05Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:10:26Z",
+          "conclusion": "success",
+          "name": "Run tests",
+          "number": 7,
+          "startedAt": "2026-11-03T03:00:05Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:10:26Z",
+          "conclusion": "skipped",
+          "name": "Capture Windows native typography at four scales",
+          "number": 8,
+          "startedAt": "2026-11-03T03:10:26Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:10:26Z",
+          "conclusion": "skipped",
+          "name": "Upload Windows native visual checks",
+          "number": 9,
+          "startedAt": "2026-11-03T03:10:26Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:10:34Z",
+          "conclusion": "success",
+          "name": "Set up pinned Rust toolchain",
+          "number": 10,
+          "startedAt": "2026-11-03T03:10:26Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:13:04Z",
+          "conclusion": "success",
+          "name": "Build production recorder",
+          "number": 11,
+          "startedAt": "2026-11-03T03:10:34Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:13:31Z",
+          "conclusion": "success",
+          "name": "Build application",
+          "number": 12,
+          "startedAt": "2026-11-03T03:13:04Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:13:39Z",
+          "conclusion": "success",
+          "name": "Build standalone updater",
+          "number": 13,
+          "startedAt": "2026-11-03T03:13:31Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:13:39Z",
+          "conclusion": "success",
+          "name": "Verify frozen CLI",
+          "number": 14,
+          "startedAt": "2026-11-03T03:13:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:13:42Z",
+          "conclusion": "success",
+          "name": "Download pinned FFmpeg source",
+          "number": 15,
+          "startedAt": "2026-11-03T03:13:39Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:14:28Z",
+          "conclusion": "success",
+          "name": "Build minimal FFmpeg on macOS",
+          "number": 16,
+          "startedAt": "2026-11-03T03:13:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:14:28Z",
+          "conclusion": "skipped",
+          "name": "Build minimal FFmpeg on Windows",
+          "number": 17,
+          "startedAt": "2026-11-03T03:14:28Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:14:33Z",
+          "conclusion": "success",
+          "name": "Generate base dependency SBOM",
+          "number": 18,
+          "startedAt": "2026-11-03T03:14:28Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:14:58Z",
+          "conclusion": "success",
+          "name": "Install fixture FFmpeg on macOS",
+          "number": 19,
+          "startedAt": "2026-11-03T03:14:33Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:14:58Z",
+          "conclusion": "skipped",
+          "name": "Install fixture FFmpeg on Windows",
+          "number": 20,
+          "startedAt": "2026-11-03T03:14:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:16:11Z",
+          "conclusion": "success",
+          "name": "Verify download regressions and native file management",
+          "number": 21,
+          "startedAt": "2026-11-03T03:14:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:17:09Z",
+          "conclusion": "success",
+          "name": "Capture download workflow native evidence",
+          "number": 22,
+          "startedAt": "2026-11-03T03:16:11Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:17:21Z",
+          "conclusion": "success",
+          "name": "Measure packaged workflow performance",
+          "number": 23,
+          "startedAt": "2026-11-03T03:17:09Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:17:24Z",
+          "conclusion": "success",
+          "name": "Upload download management native evidence",
+          "number": 24,
+          "startedAt": "2026-11-03T03:17:21Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:19:41Z",
+          "conclusion": "success",
+          "name": "Verify recorder fixtures and bundled MP4 export",
+          "number": 25,
+          "startedAt": "2026-11-03T03:17:24Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:19:41Z",
+          "conclusion": "success",
+          "name": "Prepare FFmpeg notice and variant SBOMs",
+          "number": 26,
+          "startedAt": "2026-11-03T03:19:41Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:19:42Z",
+          "conclusion": "success",
+          "name": "Prepare recorder notice and Rust dependency SBOM",
+          "number": 27,
+          "startedAt": "2026-11-03T03:19:41Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:19:42Z",
+          "conclusion": "success",
+          "name": "Prepare macOS variants",
+          "number": 28,
+          "startedAt": "2026-11-03T03:19:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:19:42Z",
+          "conclusion": "skipped",
+          "name": "Prepare Windows variants",
+          "number": 29,
+          "startedAt": "2026-11-03T03:19:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:19:42Z",
+          "conclusion": "skipped",
+          "name": "Verify bundled Windows FFmpeg is self-contained",
+          "number": 30,
+          "startedAt": "2026-11-03T03:19:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:19:42Z",
+          "conclusion": "success",
+          "name": "Embed updater and build descriptors",
+          "number": 31,
+          "startedAt": "2026-11-03T03:19:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:19:44Z",
+          "conclusion": "success",
+          "name": "Verify standalone updater",
+          "number": 32,
+          "startedAt": "2026-11-03T03:19:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:20:00Z",
+          "conclusion": "success",
+          "name": "Verify frozen update installation and rollback",
+          "number": 33,
+          "startedAt": "2026-11-03T03:19:44Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:20:21Z",
+          "conclusion": "success",
+          "name": "Sign and notarize macOS variants",
+          "number": 34,
+          "startedAt": "2026-11-03T03:20:00Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:20:30Z",
+          "conclusion": "success",
+          "name": "Package macOS variants",
+          "number": 35,
+          "startedAt": "2026-11-03T03:20:21Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:20:30Z",
+          "conclusion": "skipped",
+          "name": "Package Windows variants",
+          "number": 36,
+          "startedAt": "2026-11-03T03:20:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:20:30Z",
+          "conclusion": "skipped",
+          "name": "Install pinned Inno Setup and build Windows installer",
+          "number": 37,
+          "startedAt": "2026-11-03T03:20:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:20:38Z",
+          "conclusion": "success",
+          "name": "Verify native full installer against ZIP",
+          "number": 38,
+          "startedAt": "2026-11-03T03:20:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:20:46Z",
+          "conclusion": "success",
+          "name": "Upload build artifact",
+          "number": 39,
+          "startedAt": "2026-11-03T03:20:38Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:20:46Z",
+          "conclusion": "success",
+          "name": "Post Set up Python",
+          "number": 77,
+          "startedAt": "2026-11-03T03:20:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:20:46Z",
+          "conclusion": "success",
+          "name": "Post Checkout",
+          "number": 78,
+          "startedAt": "2026-11-03T03:20:46Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:20:48Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 79,
+          "startedAt": "2026-11-03T03:20:46Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/41569374432/job/125698528760"
+    },
+    {
+      "completedAt": "2026-11-03T03:44:01Z",
+      "conclusion": "success",
+      "databaseId": 125698528789,
+      "name": "Build Windows",
+      "startedAt": "2026-11-03T02:58:57Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-03T02:59:01Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-03T02:58:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T02:59:35Z",
+          "conclusion": "success",
+          "name": "Checkout",
+          "number": 2,
+          "startedAt": "2026-11-03T02:59:01Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T02:59:35Z",
+          "conclusion": "success",
+          "name": "Set up Python",
+          "number": 3,
+          "startedAt": "2026-11-03T02:59:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:00:51Z",
+          "conclusion": "success",
+          "name": "Set up MSYS2 FFmpeg toolchain",
+          "number": 4,
+          "startedAt": "2026-11-03T02:59:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:02:08Z",
+          "conclusion": "success",
+          "name": "Install dependencies",
+          "number": 5,
+          "startedAt": "2026-11-03T03:00:51Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:02:08Z",
+          "conclusion": "skipped",
+          "name": "Verify tag matches package version",
+          "number": 6,
+          "startedAt": "2026-11-03T03:02:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:21:51Z",
+          "conclusion": "success",
+          "name": "Run tests",
+          "number": 7,
+          "startedAt": "2026-11-03T03:02:08Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:23:43Z",
+          "conclusion": "success",
+          "name": "Capture Windows native typography at four scales",
+          "number": 8,
+          "startedAt": "2026-11-03T03:21:51Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:23:47Z",
+          "conclusion": "success",
+          "name": "Upload Windows native visual checks",
+          "number": 9,
+          "startedAt": "2026-11-03T03:23:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:23:57Z",
+          "conclusion": "success",
+          "name": "Set up pinned Rust toolchain",
+          "number": 10,
+          "startedAt": "2026-11-03T03:23:47Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:29:01Z",
+          "conclusion": "success",
+          "name": "Build production recorder",
+          "number": 11,
+          "startedAt": "2026-11-03T03:23:57Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:30:01Z",
+          "conclusion": "success",
+          "name": "Build application",
+          "number": 12,
+          "startedAt": "2026-11-03T03:29:01Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:30:10Z",
+          "conclusion": "success",
+          "name": "Build standalone updater",
+          "number": 13,
+          "startedAt": "2026-11-03T03:30:01Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:30:11Z",
+          "conclusion": "success",
+          "name": "Verify frozen CLI",
+          "number": 14,
+          "startedAt": "2026-11-03T03:30:10Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:30:15Z",
+          "conclusion": "success",
+          "name": "Download pinned FFmpeg source",
+          "number": 15,
+          "startedAt": "2026-11-03T03:30:11Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:30:15Z",
+          "conclusion": "skipped",
+          "name": "Build minimal FFmpeg on macOS",
+          "number": 16,
+          "startedAt": "2026-11-03T03:30:15Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:32:51Z",
+          "conclusion": "success",
+          "name": "Build minimal FFmpeg on Windows",
+          "number": 17,
+          "startedAt": "2026-11-03T03:30:15Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:33:00Z",
+          "conclusion": "success",
+          "name": "Generate base dependency SBOM",
+          "number": 18,
+          "startedAt": "2026-11-03T03:32:51Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:33:00Z",
+          "conclusion": "skipped",
+          "name": "Install fixture FFmpeg on macOS",
+          "number": 19,
+          "startedAt": "2026-11-03T03:33:00Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:33:21Z",
+          "conclusion": "success",
+          "name": "Install fixture FFmpeg on Windows",
+          "number": 20,
+          "startedAt": "2026-11-03T03:33:00Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:36:26Z",
+          "conclusion": "success",
+          "name": "Verify download regressions and native file management",
+          "number": 21,
+          "startedAt": "2026-11-03T03:33:21Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:38:03Z",
+          "conclusion": "success",
+          "name": "Capture download workflow native evidence",
+          "number": 22,
+          "startedAt": "2026-11-03T03:36:26Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:39:11Z",
+          "conclusion": "success",
+          "name": "Measure packaged workflow performance",
+          "number": 23,
+          "startedAt": "2026-11-03T03:38:03Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:39:14Z",
+          "conclusion": "success",
+          "name": "Upload download management native evidence",
+          "number": 24,
+          "startedAt": "2026-11-03T03:39:11Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:41:53Z",
+          "conclusion": "success",
+          "name": "Verify recorder fixtures and bundled MP4 export",
+          "number": 25,
+          "startedAt": "2026-11-03T03:39:14Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:41:53Z",
+          "conclusion": "success",
+          "name": "Prepare FFmpeg notice and variant SBOMs",
+          "number": 26,
+          "startedAt": "2026-11-03T03:41:53Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:41:55Z",
+          "conclusion": "success",
+          "name": "Prepare recorder notice and Rust dependency SBOM",
+          "number": 27,
+          "startedAt": "2026-11-03T03:41:53Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:41:55Z",
+          "conclusion": "skipped",
+          "name": "Prepare macOS variants",
+          "number": 28,
+          "startedAt": "2026-11-03T03:41:55Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:41:57Z",
+          "conclusion": "success",
+          "name": "Prepare Windows variants",
+          "number": 29,
+          "startedAt": "2026-11-03T03:41:55Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:41:58Z",
+          "conclusion": "success",
+          "name": "Verify bundled Windows FFmpeg is self-contained",
+          "number": 30,
+          "startedAt": "2026-11-03T03:41:57Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:42:00Z",
+          "conclusion": "success",
+          "name": "Embed updater and build descriptors",
+          "number": 31,
+          "startedAt": "2026-11-03T03:41:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:42:01Z",
+          "conclusion": "success",
+          "name": "Verify standalone updater",
+          "number": 32,
+          "startedAt": "2026-11-03T03:42:00Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:42:27Z",
+          "conclusion": "success",
+          "name": "Verify frozen update installation and rollback",
+          "number": 33,
+          "startedAt": "2026-11-03T03:42:01Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:42:27Z",
+          "conclusion": "skipped",
+          "name": "Sign and notarize macOS variants",
+          "number": 34,
+          "startedAt": "2026-11-03T03:42:27Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:42:27Z",
+          "conclusion": "skipped",
+          "name": "Package macOS variants",
+          "number": 35,
+          "startedAt": "2026-11-03T03:42:27Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:42:38Z",
+          "conclusion": "success",
+          "name": "Package Windows variants",
+          "number": 36,
+          "startedAt": "2026-11-03T03:42:27Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:43:17Z",
+          "conclusion": "success",
+          "name": "Install pinned Inno Setup and build Windows installer",
+          "number": 37,
+          "startedAt": "2026-11-03T03:42:38Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:43:43Z",
+          "conclusion": "success",
+          "name": "Verify native full installer against ZIP",
+          "number": 38,
+          "startedAt": "2026-11-03T03:43:17Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:43:53Z",
+          "conclusion": "success",
+          "name": "Upload build artifact",
+          "number": 39,
+          "startedAt": "2026-11-03T03:43:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:43:53Z",
+          "conclusion": "success",
+          "name": "Post Set up Python",
+          "number": 77,
+          "startedAt": "2026-11-03T03:43:53Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:43:56Z",
+          "conclusion": "success",
+          "name": "Post Checkout",
+          "number": 78,
+          "startedAt": "2026-11-03T03:43:53Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:43:56Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 79,
+          "startedAt": "2026-11-03T03:43:56Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/41569374432/job/125698528789"
+    },
+    {
+      "completedAt": "2026-11-03T03:45:02Z",
+      "conclusion": "success",
+      "databaseId": 125713010249,
+      "name": "Assemble and verify release bundle",
+      "startedAt": "2026-11-03T03:44:04Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-11-03T03:44:06Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-11-03T03:44:04Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:44:19Z",
+          "conclusion": "success",
+          "name": "Checkout",
+          "number": 2,
+          "startedAt": "2026-11-03T03:44:06Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:44:19Z",
+          "conclusion": "success",
+          "name": "Set up Python for bundle verification",
+          "number": 3,
+          "startedAt": "2026-11-03T03:44:19Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:44:22Z",
+          "conclusion": "success",
+          "name": "Install bundle verification dependency",
+          "number": 4,
+          "startedAt": "2026-11-03T03:44:19Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:44:35Z",
+          "conclusion": "success",
+          "name": "Download build artifacts",
+          "number": 5,
+          "startedAt": "2026-11-03T03:44:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:44:35Z",
+          "conclusion": "success",
+          "name": "Prepare release notes",
+          "number": 6,
+          "startedAt": "2026-11-03T03:44:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:44:38Z",
+          "conclusion": "success",
+          "name": "Add pinned FFmpeg source",
+          "number": 7,
+          "startedAt": "2026-11-03T03:44:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:44:40Z",
+          "conclusion": "success",
+          "name": "Generate SHA-256 checksums",
+          "number": 8,
+          "startedAt": "2026-11-03T03:44:38Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:44:42Z",
+          "conclusion": "success",
+          "name": "Verify release bundle",
+          "number": 9,
+          "startedAt": "2026-11-03T03:44:40Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:44:59Z",
+          "conclusion": "success",
+          "name": "Upload verified release bundle",
+          "number": 10,
+          "startedAt": "2026-11-03T03:44:42Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:44:59Z",
+          "conclusion": "success",
+          "name": "Post Set up Python for bundle verification",
+          "number": 19,
+          "startedAt": "2026-11-03T03:44:59Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:44:59Z",
+          "conclusion": "success",
+          "name": "Post Checkout",
+          "number": 20,
+          "startedAt": "2026-11-03T03:44:59Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-11-03T03:44:59Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 21,
+          "startedAt": "2026-11-03T03:44:59Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/41569374432/job/125713010249"
+    },
+    {
+      "completedAt": "2026-11-03T03:45:02Z",
+      "conclusion": "skipped",
+      "databaseId": 125713316874,
+      "name": "Publish GitHub Release",
+      "startedAt": "2026-11-03T03:45:03Z",
+      "status": "completed",
+      "steps": [],
+      "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/41569374432/job/125713316874"
+    }
+  ],
+  "number": 69,
+  "startedAt": "2026-11-03T02:58:40Z",
+  "status": "completed",
+  "updatedAt": "2026-11-03T03:45:03Z",
+  "url": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/41569374432",
+  "workflowName": "Release"
+}

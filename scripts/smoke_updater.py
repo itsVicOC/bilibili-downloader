@@ -17,6 +17,8 @@ from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
 
+from bilibili_downloader.core.library import LibraryRepository
+from bilibili_downloader.core.models import DownloadItem, DownloadOutcome, VideoInfo
 from bilibili_downloader.core.update_protocol import (
     BUILD_INFO_FILENAME,
     BuildInfo,
@@ -51,6 +53,10 @@ if transaction:
         (data / "backgrounds" / "new.png").write_bytes(b"failed migration image")
         with closing(sqlite3.connect(data / "tasks.sqlite3")) as db, db:
             db.execute("UPDATE fixture SET value='failed migration'")
+        with closing(sqlite3.connect(data / "library.sqlite3")) as db, db:
+            db.execute("UPDATE assets SET hidden=1")
+        (data / "library-pending" / "original.json").unlink()
+        (data / "library-pending" / "new.json").write_text('{"failed": true}')
         raise SystemExit(3)
     atomic_json(path.parent / "startup-ready.json", {"token": value["token"], "version": value["build"]["version"]})
     while not (path.parent / "commit.json").is_file() or not lease.acquire():
@@ -108,6 +114,13 @@ def exercise(directory, executable, helper, system, variant, fail):
         db.execute("INSERT INTO fixture VALUES ('original')")
     media = directory / "saved-media.mp4"
     media.write_bytes(b"preserve media")
+    library = LibraryRepository(data / "library.sqlite3")
+    item = DownloadItem(video_info=VideoInfo(bvid="BVsmoke", cid=1), output_dir=str(directory))
+    outcome = DownloadOutcome(video_path=str(media), actual_quality=80,
+                              actual_video_codec=12, actual_audio_quality=30280)
+    library.record_download(item, outcome)
+    original_receipt = {"item": item.model_dump(mode="json"), "outcome": outcome.model_dump(mode="json")}
+    atomic_json(library.pending_dir / "original.json", original_receipt)
     build = BuildInfo(
         "0.8.0", system, normalize_arch(__import__("platform").machine()), variant
     )
@@ -215,6 +228,11 @@ def exercise(directory, executable, helper, system, variant, fail):
         with closing(sqlite3.connect(data / "tasks.sqlite3")) as db:
             assert db.execute("SELECT value FROM fixture").fetchone()[0] == "original"
         assert media.read_bytes() == b"preserve media"
+        assets = library.list_assets(include_hidden=True)
+        assert len(assets) == 1 and not assets[0]["hidden"]
+        assert assets[0]["outcome"] == outcome
+        assert json.loads((library.pending_dir / "original.json").read_text("utf-8")) == original_receipt
+        assert not (library.pending_dir / "new.json").exists()
         if system == "macOS":
             assert (target / build.resource_dir / "metadata-alias").is_symlink()
         print(

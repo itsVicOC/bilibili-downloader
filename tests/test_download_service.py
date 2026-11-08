@@ -65,7 +65,7 @@ def test_service_reports_audio_quality_fallback(monkeypatch, tmp_path):
 
     assert outcome.actual_audio_quality == 30216
     assert outcome.warnings == [
-        "请求的音频规格不可用，实际使用音频代码 30216"
+        "请求 AAC 192kbps，实际为 AAC 64kbps"
     ]
 
 

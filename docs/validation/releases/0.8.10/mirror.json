@@ -1,0 +1,13 @@
+{
+  "ready": false,
+  "url": "https://dl.1008.si/releases/index.json",
+  "tag": "v0.8.10",
+  "checked_at": "2026-11-06T03:20:23Z",
+  "status": "awaiting_automatic_mirror_sync",
+  "release_present_in_index": false,
+  "last_observed_index_modified_at": "2026-11-06T03:10:31Z",
+  "cache_control": "public, max-age=300",
+  "github_latest": "v0.8.10",
+  "github_assets_verified": 14,
+  "scope": "Read-only public metadata; mirror synchronization and live update discovery are not marked as passed"
+}

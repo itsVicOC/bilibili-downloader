@@ -2,7 +2,9 @@
 
 import argparse
 import logging
+import sqlite3
 import sys
+from pathlib import Path
 
 from bilibili_downloader.core.models import AUDIO_CODEC_MAP, VideoQuality
 
@@ -119,6 +121,8 @@ def main():
         help="Acknowledge the copyright notice in non-interactive environments",
     )
 
+    download_parser.add_argument("--strict-match", action="store_true", help="Require the exact requested media specifications")
+    download_parser.add_argument("--force-new", action="store_true", help="Save another media copy instead of reusing the library")
     args = parser.parse_args()
 
     if args.command and getattr(sys, "frozen", False):
@@ -205,7 +209,7 @@ def _cli_download(args: argparse.Namespace):
             raise SystemExit(2)
         settings.copyright_notice_version = COPYRIGHT_NOTICE_VERSION
         config.save(settings)
-    output_dir = args.output or settings.output_dir
+    output_dir = str(Path(args.output or settings.output_dir).expanduser().resolve())
 
     print(f"Downloading {args.source} at {quality.label}...")
 
@@ -260,8 +264,17 @@ def _cli_download(args: argparse.Namespace):
             bar = "=" * filled + "-" * (bar_len - filled)
             print(f"\r[{bar}] {pct * 100:5.1f}%  {text}", end="", flush=True)
 
+        from bilibili_downloader.core.library import LibraryRepository
+        try:
+            library = LibraryRepository(config.library_database_path)
+            if library.replay_pending():
+                print("Warning: 有文件记录待恢复，可在下载文件页面重试")
+        except (OSError, ValueError, sqlite3.Error) as exc:
+            library = LibraryRepository(config.library_database_path, initialize=False)
+            logger.warning("媒体库暂不可用：%s", exc)
         service = DownloadService(
             client, output_dir, ffmpeg_path=settings.ffmpeg_path or None,
+            library_repository=library,
         )
         codec = args.codec or settings.default_video_codec
         failures = Counter()
@@ -286,18 +299,19 @@ def _cli_download(args: argparse.Namespace):
                 path_template=(
                     getattr(args, "path_template", None)
                     or (
-                        settings.bangumi_path_template
-                        if page_info.episode_id
-                        else settings.path_template
+                        settings.template_for(page_info)
                     )
                 ),
                 output_path=output_dir,
+                output_dir=output_dir,
                 download_danmaku=args.danmaku,
                 download_subtitle=args.subtitle or getattr(args, "all_subtitles", False),
                 download_all_subtitles=getattr(args, "all_subtitles", False),
                 download_cover=getattr(args, "cover", False),
                 download_metadata=getattr(args, "metadata", False),
                 selected_subtitle_lan=args.subtitle_language,
+                strict_match=getattr(args, "strict_match", False) or settings.strict_match,
+                force_new=getattr(args, "force_new", False),
             )
             try:
                 outcome = service.download(item, progress)
