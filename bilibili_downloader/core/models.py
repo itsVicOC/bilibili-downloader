@@ -3,7 +3,7 @@
 import re
 from enum import Enum, IntEnum
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -117,6 +117,7 @@ class SubtitleInfo(BaseModel):
     lan: str = ""
     lan_doc: str = ""
     url: str = ""
+    track_id: str = ""
 
 
 class VideoPage(BaseModel):
@@ -235,6 +236,7 @@ class DownloadItem(BaseModel):
     download_cover: bool = False
     download_metadata: bool = False
     selected_subtitle_lan: str = "zh-Hans"
+    display_aspect_ratio: Literal["original", "4:3"] = "original"
     strict_match: bool = False
     force_new: bool = False
     reuse_media_path: Optional[str] = None
@@ -284,7 +286,8 @@ class DownloadItem(BaseModel):
                 ),
             },
         )
-        return stem.with_name(f"{stem.name}{suffix}")
+        aspect_suffix = ".4x3" if self.output_mode == OutputMode.VIDEO and self.display_aspect_ratio == "4:3" else ""
+        return stem.with_name(f"{stem.name}{aspect_suffix}{suffix}")
 
     @property
     def fingerprint(self) -> str:
@@ -312,6 +315,8 @@ class DownloadItem(BaseModel):
         )
         if self.strict_match:
             fingerprint += ":strict"
+        if self.output_mode == OutputMode.VIDEO and self.display_aspect_ratio != "original":
+            fingerprint += f":aspect={self.display_aspect_ratio}"
         if self.reuse_media_path:
             fingerprint += f":supplement={self.reuse_media_path}"
         return f"{fingerprint}:dir={Path(self.output_dir).expanduser().resolve()}" if self.output_dir else fingerprint
@@ -322,6 +327,14 @@ class DownloadItem(BaseModel):
         if self.video_info.is_multi_part and page:
             return f"{page.page:03d} - {page.part or f'P{page.page}'} · {self.video_info.title}"
         return self.video_info.title
+
+
+class SubtitleProvenance(BaseModel):
+    content_identity: str
+    cid: int
+    track_id: str
+    protocol_version: int = 1
+    sha256: str
 
 
 class DownloadOutcome(BaseModel):
@@ -342,6 +355,11 @@ class DownloadOutcome(BaseModel):
     subtitle_languages: dict[str, str] = Field(default_factory=dict)
     subtitle_discovery_languages: Optional[list[str]] = None
     subtitle_discovery_complete: bool = False
+    subtitle_provenance: dict[str, SubtitleProvenance] = Field(default_factory=dict)
+    subtitle_discovery_identity: str = ""
+    subtitle_discovery_version: int = 0
+    applied_display_aspect_ratio: Literal["original", "4:3"] = "original"
+    actual_display_aspect_ratio: Optional[str] = None
     reused_media: bool = False
     media_verification: dict = Field(default_factory=dict)
     media_signature: Optional[str] = None

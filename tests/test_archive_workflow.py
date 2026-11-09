@@ -100,7 +100,7 @@ def test_attachment_failure_is_independently_recoverable(tmp_path, monkeypatch):
 
 def test_requesting_all_subtitles_extends_a_previously_single_language_download(tmp_path, monkeypatch):
     library, item, original = stored(tmp_path)
-    tracks = [SubtitleInfo(lan="zh-Hans", url="https://example.test/zh"), SubtitleInfo(lan="en", url="https://example.test/en")]
+    tracks = [SubtitleInfo(track_id="fixture-track", lan="zh-Hans", url="https://example.test/zh"), SubtitleInfo(track_id="fixture-track", lan="en", url="https://example.test/en")]
     api = SimpleNamespace(get_subtitle_tracks=lambda *_: tracks)
     service = DownloadService(api, str(tmp_path), library_repository=library)
     no_transfer(monkeypatch, service)
@@ -128,7 +128,7 @@ def test_requesting_all_subtitles_extends_a_previously_single_language_download(
 
 def test_chinese_english_ai_subtitles_extend_and_reuse_existing_media(tmp_path, monkeypatch):
     library, item, original = stored(tmp_path)
-    tracks = [SubtitleInfo(lan=lan, url=f"https://example.test/{lan}")
+    tracks = [SubtitleInfo(track_id="fixture-track", lan=lan, url=f"https://example.test/{lan}")
               for lan in ("ai-zh", "ai-en", "ai-ja")]
     service = DownloadService(SimpleNamespace(get_subtitle_tracks=lambda *_: tracks),
                               str(tmp_path), library_repository=library)
@@ -171,7 +171,7 @@ def test_gui_subtitle_download_requests_chinese_and_english(workspace):
 ])
 def test_available_subtitle_selection_is_complete_and_reused(tmp_path, monkeypatch, languages):
     library, item, _ = stored(tmp_path)
-    tracks = [SubtitleInfo(lan=lan, url=f"https://example.test/{lan}") for lan in languages]
+    tracks = [SubtitleInfo(track_id="fixture-track", lan=lan, url=f"https://example.test/{lan}") for lan in languages]
     calls = []
 
     def discover(*_):
@@ -203,7 +203,7 @@ def test_available_subtitle_selection_is_complete_and_reused(tmp_path, monkeypat
 
 def test_available_subtitle_failure_and_deleted_file_remain_recoverable(tmp_path, monkeypatch):
     library, item, _ = stored(tmp_path)
-    tracks = [SubtitleInfo(lan=lan, url=f"https://example.test/{lan}") for lan in ("ai-zh", "ai-en")]
+    tracks = [SubtitleInfo(track_id="fixture-track", lan=lan, url=f"https://example.test/{lan}") for lan in ("ai-zh", "ai-en")]
     service = DownloadService(SimpleNamespace(get_subtitle_tracks=lambda *_: tracks),
                               str(tmp_path), library_repository=library)
     no_transfer(monkeypatch, service)

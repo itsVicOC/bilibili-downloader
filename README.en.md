@@ -72,6 +72,8 @@ Automatic updates are available starting with `v0.8.1b1` and are currently a bet
 
 Stable `v0.8.10` combines three beta stages of download management, durable media reuse, independent attachment repair, selection across filters, and UI polish, with fixes for multi-part naming and missing audio tracks. The user has confirmed that device testing passed. [Fluent Design](docs/FLUENT_DESIGN.md), the pink/purple and blue themes, Xiao Liu, window restoration, and custom Windows caption controls remain available. [Download stable 0.8.10](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10) · [Changelog](CHANGELOG.md#v0810---2026-11-06) (Chinese).
 
+Prerelease `v0.8.11b1` adds subtitle identity and file-hash checks, refreshing of unverified legacy subtitles, and lossless 4:3 display copies. Select the beta update channel to try it; use attachment repair to refresh old subtitles. [Download Beta 1](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.11b1) · [Validation scope](docs/SUBTITLE_ASPECT_VALIDATION.md) (Chinese).
+
 Path actions now sit beside the download directory, task views highlight whole rows, and recording-history sessions can be removed with undo while keeping all media files. Foreground clipboard recognition is enabled by default and requires confirmation before parsing; it does not queue downloads automatically. Accounts, settings, wallpapers, tasks, and media remain compatible. See the [user guide](docs/USER_GUIDE.md), [window restoration validation](docs/FLUENT_V4_VALIDATION.md), and [interaction validation](docs/FLUENT_V5_VALIDATION.md) (Chinese).
 
 ## Download and install
@@ -234,6 +236,9 @@ python -m bilibili_downloader test BV1GJ411x7h7
 # Save available Chinese and English tracks (including AI) as separate SRT files; use --all-subtitles for every language.
 python -m bilibili_downloader download BV1GJ411x7h7 \
   --quality 80 --danmaku --subtitle
+
+# Display the complete picture at 4:3 without cropping or re-encoding
+python -m bilibili_downloader download BV1Syxv6JEa6 --aspect-ratio 4:3 --all-subtitles
 
 # Save audio only
 python -m bilibili_downloader download BV1GJ411x7h7 --audio-only

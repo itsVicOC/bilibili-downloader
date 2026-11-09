@@ -40,7 +40,7 @@ def test_resolved_download_is_complete_in_standard_window(workspace, qapp, theme
     assert workspace._video_info.height() < 170
     assert workspace._workspace_scroll.verticalScrollBar().maximum() == 0
     for control in (workspace._video_info, workspace._choose_pages_btn, workspace._quality_combo,
-                    workspace._codec_combo, workspace._output_summary,
+                    workspace._codec_combo, workspace._aspect_combo, workspace._output_summary,
                     workspace._danmaku_check, workspace._subtitle_check,
                     workspace._all_subtitles_check, workspace._cover_check,
                     workspace._metadata_check, workspace._download_btn):
@@ -87,6 +87,9 @@ def test_directory_follows_extras_in_keyboard_order(workspace, qtbot, mode):
     QApplication.setActiveWindow(workspace)
     codec.setFocus()
     qtbot.keyClick(codec, Qt.Key_Tab)
+    if mode == OutputMode.VIDEO:
+        assert QApplication.focusWidget() is workspace._aspect_combo
+        qtbot.keyClick(workspace._aspect_combo, Qt.Key_Tab)
     assert QApplication.focusWidget() is workspace._match_policy
     qtbot.keyClick(workspace._match_policy, Qt.Key_Tab)
     assert QApplication.focusWidget() is workspace._danmaku_check
@@ -109,12 +112,16 @@ def test_policy_keyboard_route_with_text_only_system_tabs(workspace, qtbot, qapp
         codec = workspace._codec_stack.currentWidget()
         codec.setFocus()
         qtbot.keyClick(codec, Qt.Key_Tab)
+        assert QApplication.focusWidget() is workspace._aspect_combo
+        qtbot.keyClick(workspace._aspect_combo, Qt.Key_Tab)
         assert QApplication.focusWidget() is workspace._match_policy
         qtbot.keyClick(workspace._match_policy, Qt.Key_Tab)
         assert QApplication.focusWidget() is workspace._danmaku_check
         qtbot.keyClick(workspace._danmaku_check, Qt.Key_Backtab)
         assert QApplication.focusWidget() is workspace._match_policy
         qtbot.keyClick(workspace._match_policy, Qt.Key_Backtab)
+        assert QApplication.focusWidget() is workspace._aspect_combo
+        qtbot.keyClick(workspace._aspect_combo, Qt.Key_Backtab)
         assert QApplication.focusWidget() is codec
     finally:
         hints.setTabFocusBehavior(original)

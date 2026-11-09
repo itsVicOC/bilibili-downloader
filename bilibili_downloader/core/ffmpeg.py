@@ -151,7 +151,18 @@ class FFmpegManager:
         video = any("Stream #" in line and "Video:" in line and "attached pic" not in line for line in info.splitlines())
         audio = bool(re.search(r"Stream #.*Audio:", info))
         valid = audio and (video or output_mode == OutputMode.AUDIO) and duration > 0
+        video_line = next((line for line in info.splitlines() if "Stream #" in line and "Video:" in line and "attached pic" not in line), "")
+        # FFmpeg prints the coded-frame ratio first, followed by a container
+        # override when -c copy -aspect was used. The final DAR is effective.
+        ratios = re.findall(r"DAR\s+(\d+):(\d+)", video_line)
+        dar = ratios[-1] if ratios else None
+        display_aspect_ratio = None
+        if dar and int(dar[1]):
+            from fractions import Fraction
+            ratio = Fraction(int(dar[0]), int(dar[1]))
+            display_aspect_ratio = f"{ratio.numerator}:{ratio.denominator}"
         return {"valid": valid, "duration": duration, "has_video": video, "has_audio": audio,
+                "display_aspect_ratio": display_aspect_ratio,
                 "message": "轨道与时长可解析；未执行逐帧解码校验。" if valid else "媒体轨道或时长异常，请检查或重新下载。"}
 
     @staticmethod
@@ -376,6 +387,7 @@ class FFmpegManager:
         cancel_checker: Optional[Callable[[], bool]] = None,
         progress_callback=None,
         duration_seconds=0,
+        display_aspect_ratio="original",
     ) -> tuple[bool, str]:
         """Execute FFmpeg to merge video and audio streams.
 
@@ -391,10 +403,28 @@ class FFmpegManager:
         if exe is None:
             return False, "FFmpeg not found"
 
-        cmd = cls.build_merge_command(video_path, audio_path, output_path, executable=str(exe))
+        if display_aspect_ratio not in {"original", "4:3"}:
+            return False, "不支持的显示比例"
+        extra_args = ["-aspect:v:0", "4:3"] if display_aspect_ratio == "4:3" else None
+        cmd = cls.build_merge_command(video_path, audio_path, output_path, executable=str(exe), extra_args=extra_args)
         return cls._execute_command(cmd, output_path, cancel_checker, timeout_seconds=None,
                                     progress_callback=progress_callback, duration_seconds=duration_seconds,
                                     stall_timeout_seconds=600)
+
+    @classmethod
+    def remux_aspect(cls, source, output, custom_path=None, cancel_checker=None):
+        if cancel_checker and cancel_checker():
+            return False, "已取消"
+        exe = cls.find_executable(custom_path)
+        if exe is None:
+            return False, "未找到 FFmpeg，请检查工具与存储设置"
+        source, output = Path(source), Path(output)
+        if source.resolve() == output.resolve():
+            return False, "4:3 副本不能覆盖原始媒体"
+        cmd = [str(exe), "-nostdin", "-hide_banner", "-y", "-protocol_whitelist", "file",
+               "-i", str(source.resolve()), "-map", "0:v:0", "-map", "0:a:0?", "-c", "copy",
+               "-aspect:v:0", "4:3", "-movflags", "+faststart", str(output.resolve())]
+        return cls._execute_command(cmd, output, cancel_checker, timeout_seconds=None, stall_timeout_seconds=600)
 
     @classmethod
     def remux_audio(

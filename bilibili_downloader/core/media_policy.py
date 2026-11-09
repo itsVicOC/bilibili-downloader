@@ -35,7 +35,11 @@ def specification_warnings(item, outcome):
 def specifications_match(item, outcome):
     # Exact matching is deliberate: HDR, frame rate and bitrate variants are
     # not interchangeable merely because their numeric quality code is higher.
-    return outcome.actual_audio_quality is not None and not specification_warnings(item, outcome)
+    aspect_matches = (item.output_mode == OutputMode.AUDIO or (
+        item.display_aspect_ratio == outcome.applied_display_aspect_ratio
+        and (item.display_aspect_ratio == "original" or outcome.actual_display_aspect_ratio == "4:3")
+    ))
+    return aspect_matches and outcome.actual_audio_quality is not None and not specification_warnings(item, outcome)
 
 
 class SpecificationMismatchError(ValueError):

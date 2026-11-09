@@ -1,6 +1,7 @@
 """Shared end-to-end download workflow for GUI and CLI callers."""
 
 import logging
+import shutil
 from contextlib import nullcontext
 from pathlib import Path
 from typing import Callable, Optional
@@ -17,6 +18,14 @@ from bilibili_downloader.core.models import (
     SubtitleInfo,
 )
 from bilibili_downloader.core.subtitle import SubtitleDownloader
+from bilibili_downloader.core.subtitle_provenance import (
+    SUBTITLE_PROTOCOL_VERSION,
+    publish_subtitle,
+    subtitle_identity,
+    subtitle_path_key,
+    subtitle_proof,
+    subtitle_verified,
+)
 from bilibili_downloader.core.timed_text import ConversionReport
 from bilibili_downloader.utils.validators import sanitize_filename
 
@@ -67,6 +76,8 @@ class DownloadService:
             return self._download_impl(item, progress_callback)
 
     def _download_impl(self, item, progress_callback):
+        if item.output_mode.value == "audio" and item.display_aspect_ratio != "original":
+            raise ValueError("显示比例仅适用于视频输出")
         if item.output_dir and Path(item.output_dir).expanduser().resolve() != self._output_dir:
             self._output_dir = Path(item.output_dir).expanduser().resolve()
             self._downloader = StreamDownloader(self._api_client, str(self._output_dir), ffmpeg_path=self._ffmpeg_path)
@@ -85,7 +96,14 @@ class DownloadService:
             except Exception as exc:  # Preserve downloads when the inventory is unavailable.
                 logger.warning("Media lookup failed: %s", redact_sensitive_text(exc))
                 lookup_warning = "文件记录暂不可用，本次未能检查已有媒体。"
-        if item.reuse_media_path and (match is None or match.outcome is None):
+        aspect_source = None
+        if (self._library is not None and not item.force_new and item.output_mode.value == "video"
+                and item.display_aspect_ratio == "4:3" and (match is None or match.outcome is None)):
+            original = item.model_copy(update={"display_aspect_ratio": "original"})
+            candidate = self._library.match_media(original)
+            if candidate.outcome is not None:
+                aspect_source = candidate.outcome
+        if item.reuse_media_path and (match is None or match.outcome is None) and aspect_source is None:
             raise ValueError("已有媒体无法访问或未通过核验，请重新定位或检查文件；未重新下载媒体。")
         if match is not None and match.outcome is not None:
             outcome = match.outcome.model_copy(deep=True)
@@ -95,10 +113,18 @@ class DownloadService:
             outcome.missing_artifacts = []
             needed = set(match.missing)
             progress_callback(0.88, "已复用已有媒体，正在检查附件…")
+        elif aspect_source is not None:
+            outcome = self._aspect_copy(item, aspect_source, progress_callback)
+            video_path = outcome.video_path
+            needed = {"subtitle", "metadata"} | {
+                kind for kind in ("danmaku", "cover") if not getattr(outcome, f"{kind}_path")
+            }
         else:
             self._downloader.media_ready_callback = lambda path: self._record_outcome(item, self._media_outcome(path))
             video_path = self._downloader.download(item, video_progress)
             outcome = self._media_outcome(video_path)
+            if item.output_mode.value == "video" and item.display_aspect_ratio == "4:3":
+                self._verify_aspect(outcome)
             needed = {"danmaku", "subtitle", "cover", "metadata"}
         outcome.spec_warnings = specification_warnings(item, outcome)
         outcome.warnings.extend(outcome.spec_warnings)
@@ -151,10 +177,12 @@ class DownloadService:
             if not subtitles and not selection_discovered and "subtitle" not in outcome.missing_artifacts:
                 outcome.missing_artifacts.append("subtitle")
             for index, subtitle in enumerate(subtitles):
-                from bilibili_downloader.core.library import readable_file
-                if subtitle.lan in outcome.subtitle_languages and readable_file(outcome.subtitle_languages[subtitle.lan]):
+                existing = outcome.subtitle_languages.get(subtitle.lan)
+                if existing and subtitle_verified(item.video_info, outcome, existing, subtitle.track_id):
                     continue
-                if item.download_all_subtitles or item.selected_subtitle_lan == "zh-en":
+                if existing and Path(existing).parent == Path(video_path).parent:
+                    subtitle_path = Path(existing)
+                elif item.download_all_subtitles or item.selected_subtitle_lan == "zh-en":
                     language = sanitize_filename(
                         subtitle.lan or subtitle.lan_doc or str(index + 1)
                     )
@@ -166,10 +194,13 @@ class DownloadService:
                     if outcome.subtitle_paths and str(subtitle_path) in outcome.subtitle_paths:
                         subtitle_path = Path(video_path).with_name(f"{Path(video_path).stem}.{sanitize_filename(subtitle.lan or str(index + 1))}.srt")
                 try:
-                    report = SubtitleDownloader.download_and_convert(subtitle.url, subtitle_path)
+                    report, proof = publish_subtitle(
+                        item.video_info, subtitle, subtitle_path, SubtitleDownloader.download_and_convert,
+                    )
                     if str(subtitle_path) not in outcome.subtitle_paths:
                         outcome.subtitle_paths.append(str(subtitle_path))
                     outcome.subtitle_languages[subtitle.lan] = str(subtitle_path)
+                    outcome.subtitle_provenance[subtitle_path_key(subtitle_path)] = proof
                     if isinstance(report, ConversionReport):
                         label = subtitle.lan_doc or subtitle.lan or str(index + 1)
                         outcome.artifact_warnings[f"subtitle:{subtitle.lan}"] = report.warnings(f"字幕 {label}")
@@ -181,7 +212,7 @@ class DownloadService:
                         redact_sensitive_text(exc),
                     )
                     label = subtitle.lan_doc or subtitle.lan or str(index + 1)
-                    outcome.warnings.append(f"字幕 {label} 下载失败：{exc}")
+                    outcome.warnings.append(f"字幕 {label} 下载失败：{redact_sensitive_text(exc)}")
                     outcome.subtitle_discovery_complete = False
                     if "subtitle" not in outcome.missing_artifacts:
                         outcome.missing_artifacts.append("subtitle")
@@ -239,6 +270,69 @@ class DownloadService:
                                actual_video_codec=video.codecid if video else None,
                                actual_audio_quality=audio.id if audio else None)
 
+    def _verify_aspect(self, outcome):
+        from bilibili_downloader.core.ffmpeg import FFmpegManager
+        from bilibili_downloader.core.models import OutputMode
+        verification = FFmpegManager.inspect_media(Path(outcome.video_path), OutputMode.VIDEO, self._ffmpeg_path)
+        if not verification.get("valid") or verification.get("display_aspect_ratio") != "4:3":
+            raise ValueError("无法确认输出为 4:3，原始媒体已保留；请检查 FFmpeg 后重试。")
+        outcome.applied_display_aspect_ratio = "4:3"
+        outcome.actual_display_aspect_ratio = "4:3"
+        outcome.media_verification = verification
+
+    def _aspect_copy(self, item, original, progress_callback):
+        from bilibili_downloader.core.downloader import _reserved_output_path
+        from bilibili_downloader.core.ffmpeg import FFmpegManager
+        progress_callback(0.82, "正在从已有媒体无损另存 4:3…")
+        with _reserved_output_path(self._output_dir / item.relative_output_path) as destination:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            success, message = FFmpegManager.remux_aspect(
+                Path(original.video_path), destination, custom_path=self._ffmpeg_path,
+                cancel_checker=lambda: self._cancelled,
+            )
+            if not success:
+                raise RuntimeError(f"4:3 另存失败：{message}")
+            outcome = original.model_copy(deep=True)
+            outcome.video_path = str(destination)
+            outcome.media_signature = None
+            outcome.warnings = []
+            outcome.missing_artifacts = []
+            outcome.reused_media = True
+            outcome.subtitle_paths = []
+            outcome.subtitle_languages = {}
+            outcome.subtitle_provenance = {}
+            outcome.subtitle_discovery_complete = False
+            outcome.subtitle_discovery_languages = None
+            outcome.subtitle_discovery_identity = ""
+            outcome.subtitle_discovery_version = 0
+            outcome.artifact_warnings = {}
+            outcome.metadata_path = None
+            self._verify_aspect(outcome)
+            self._record_outcome(item, outcome)
+            # Copy only verified attachments, with the new media's basename.
+            for language, source in original.subtitle_languages.items():
+                if subtitle_verified(item.video_info, original, source):
+                    target = destination.with_name(f"{destination.stem}.{sanitize_filename(language)}.srt")
+                    proof = subtitle_proof(original, source)
+                    track = SubtitleInfo(track_id=proof.track_id)
+                    _, copied_proof = publish_subtitle(
+                        item.video_info, track, target, lambda _url, path: shutil.copyfile(source, path),
+                        expected_sha256=proof.sha256,
+                    )
+                    outcome.subtitle_paths.append(str(target))
+                    outcome.subtitle_languages[language] = str(target)
+                    outcome.subtitle_provenance[subtitle_path_key(target)] = copied_proof
+            for kind in ("danmaku", "cover"):
+                source = getattr(original, f"{kind}_path")
+                if source and Path(source).is_file():
+                    target = destination.with_suffix(Path(source).suffix)
+                    with _reserved_output_path(target) as target:
+                        shutil.copyfile(source, target)
+                    setattr(outcome, f"{kind}_path", str(target))
+                else:
+                    setattr(outcome, f"{kind}_path", None)
+            return outcome
+
     def _record_outcome(self, item, outcome):
         if self._library is not None:
             try:
@@ -258,6 +352,8 @@ class DownloadService:
     ) -> list[SubtitleInfo]:
         tracks = []
         outcome.subtitle_discovery_languages = None
+        outcome.subtitle_discovery_identity = ""
+        outcome.subtitle_discovery_version = 0
         try:
             if item.video_info.bvid:
                 tracks = self._api_client.get_subtitle_tracks(
@@ -282,6 +378,11 @@ class DownloadService:
             return []
 
         outcome.subtitle_discovery_languages = list(dict.fromkeys(track.lan for track in tracks))
+        outcome.subtitle_discovery_identity = subtitle_identity(item.video_info)
+        outcome.subtitle_discovery_version = SUBTITLE_PROTOCOL_VERSION
+        logger.info("Subtitle discovery page=%s cid=%s tracks=%s protocol=%s",
+                    item.video_info.content_identity, item.video_info.cid,
+                    [(track.lan, track.track_id) for track in tracks], SUBTITLE_PROTOCOL_VERSION)
         if not tracks:
             outcome.warnings.append("该分 P 没有可下载的字幕")
             return []

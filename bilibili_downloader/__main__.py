@@ -17,6 +17,9 @@ def main():
         level=logging.INFO,
         format="%(name)s: %(message)s",
     )
+    # HTTP client INFO logs contain complete request URLs, including CDN tokens.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
     parser = argparse.ArgumentParser(
         prog="bilibili-downloader",
@@ -91,6 +94,10 @@ def main():
         help="Save only audio (M4A, or FLAC for Hi-Res)",
     )
     download_parser.add_argument(
+        "--aspect-ratio", choices=["original", "4:3"], default="original",
+        help="Display aspect ratio; 4:3 preserves all pixels without re-encoding (default: original)",
+    )
+    download_parser.add_argument(
         "--audio-quality",
         type=int,
         choices=list(AUDIO_CODEC_MAP),
@@ -124,6 +131,8 @@ def main():
     download_parser.add_argument("--strict-match", action="store_true", help="Require the exact requested media specifications")
     download_parser.add_argument("--force-new", action="store_true", help="Save another media copy instead of reusing the library")
     args = parser.parse_args()
+    if getattr(args, "audio_only", False) and getattr(args, "aspect_ratio", "original") != "original":
+        parser.error("--aspect-ratio 4:3 requires video output")
 
     if args.command and getattr(sys, "frozen", False):
         from bilibili_downloader.core.installation import WindowsInstallationGuard
@@ -310,6 +319,7 @@ def _cli_download(args: argparse.Namespace):
                 download_cover=getattr(args, "cover", False),
                 download_metadata=getattr(args, "metadata", False),
                 selected_subtitle_lan=args.subtitle_language,
+                display_aspect_ratio=getattr(args, "aspect_ratio", "original"),
                 strict_match=getattr(args, "strict_match", False) or settings.strict_match,
                 force_new=getattr(args, "force_new", False),
             )

@@ -256,6 +256,7 @@ class StreamDownloader:
                     cancel_checker=lambda: self._cancelled,
                     progress_callback=mux_progress,
                     duration_seconds=info.duration,
+                    **({"display_aspect_ratio": item.display_aspect_ratio} if item.display_aspect_ratio != "original" else {}),
                 )
             else:
                 progress_callback(0.88, "正在封装音频...")

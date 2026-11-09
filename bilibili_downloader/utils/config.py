@@ -18,6 +18,9 @@ LEGACY_CONFIG_PATH = Path.home() / ".bilibili-downloader" / "config.json"
 
 
 def _default_config_path() -> Path:
+    override = os.environ.get("BILIFLOW_DATA_DIR")
+    if override:
+        return Path(override).expanduser().resolve() / "config.json"
     if sys.platform == "darwin":
         return Path.home() / "Library" / "Application Support" / "BiliFlow" / "config.json"
     if sys.platform == "win32":
@@ -119,7 +122,7 @@ class ConfigManager:
 
     def __init__(self, config_path: Optional[Path] = None):
         self._config_path = config_path or DEFAULT_CONFIG_PATH
-        self._uses_default_path = config_path is None
+        self._uses_default_path = config_path is None and not os.environ.get("BILIFLOW_DATA_DIR")
         self._settings: Optional[AppSettings] = None
         self._auth_cookies: dict[str, str] = {}
         self._credentials_persistent = False

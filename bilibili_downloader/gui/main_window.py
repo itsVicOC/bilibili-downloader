@@ -493,7 +493,7 @@ class MainWindow(QMainWindow):
         self._download_tabs.currentChanged.connect(
             lambda index: self._download_actions.setVisible(index == 0)
         )
-        for combo in (self._page_combo, self._quality_combo, self._codec_combo, self._audio_combo, self._output_mode_combo):
+        for combo in (self._page_combo, self._quality_combo, self._codec_combo, self._audio_combo, self._output_mode_combo, self._aspect_combo):
             combo.currentIndexChanged.connect(self._refresh_download_summary)
         for check in (self._danmaku_check, self._subtitle_check, self._cover_check, self._metadata_check, self._strict_match_check):
             check.toggled.connect(self._refresh_download_summary)
@@ -506,6 +506,7 @@ class MainWindow(QMainWindow):
         self._output_card = controls
         controls.body.setSpacing(8)
         fields = ResponsiveFields(column_width=UI_METRICS.download_field_column_width)
+        fields.layout().setVerticalSpacing(8)
         self._download_fields = fields
         controls.body.addWidget(fields)
         self._page_combo = ComboBox()
@@ -542,6 +543,11 @@ class MainWindow(QMainWindow):
         codec_row = FieldRow("视频编码", self._codec_stack, stacked=True)
         self._codec_label = codec_row.label
         fields.add_field(codec_row)
+        self._aspect_combo = ComboBox()
+        self._aspect_combo.addItem("保持原始", "original")
+        self._aspect_combo.addItem("4:3 · 完整画面", "4:3")
+        self._aspect_combo.setToolTip("只修改显示比例，不裁剪、不重新编码；像素尺寸保持不变。适合恢复被横向拉宽的老录像。")
+        fields.add_field(FieldRow("显示比例", self._aspect_combo, stacked=True))
         self._strict_match_check = QCheckBox("严格匹配规格")
         self._strict_match_check.setChecked(self._settings.strict_match)
         self._strict_match_check.setToolTip("画质、编码或音质不满足目标时停止该项，不自动回退")
@@ -627,6 +633,8 @@ class MainWindow(QMainWindow):
             count = len(self._selected_pages)
             pages = f"自选 {count}P"
         specs = f"{self._audio_combo.currentText()} · 仅音频 · {pages}" if audio else f"视频 · {quality} · {codec} · {self._audio_combo.currentText()} · MP4 · {pages}"
+        if not audio and self._aspect_combo.currentData() == "4:3":
+            specs += " · 显示 4:3"
         extras = [name for name, check in (("弹幕", self._danmaku_check), ("字幕", self._subtitle_check),
                                            ("封面", self._cover_check), ("元数据", self._metadata_check)) if check.isChecked()]
         if extras:
@@ -915,7 +923,10 @@ class MainWindow(QMainWindow):
         # Keep the explicit specification → policy → extras route reachable.
         if hasattr(self, "_match_policy"):
             codec = self._codec_stack.currentWidget()
-            chain = [codec, self._match_policy, self._danmaku_check]
+            chain = [codec]
+            if self._aspect_combo.isEnabled():
+                chain.append(self._aspect_combo)
+            chain.extend([self._match_policy, self._danmaku_check])
             focused = QApplication.focusWidget()
             if focused in chain:
                 index = chain.index(focused) + (1 if forward else -1)
@@ -929,13 +940,16 @@ class MainWindow(QMainWindow):
     def _sync_output_mode_controls(self):
         video_mode = self._output_mode_combo.currentData() == OutputMode.VIDEO
         self._quality_combo.setEnabled(video_mode)
+        self._aspect_combo.setEnabled(video_mode)
         self._codec_label.setText("视频编码" if video_mode else "音频质量")
         self._codec_stack.setCurrentWidget(
             self._codec_combo if video_mode else self._audio_combo
         )
         self._codec_stack.setFocusProxy(self._codec_stack.currentWidget())
         if hasattr(self, "_output_summary") and self._output_summary.window() is self._metadata_check.window():
-            QWidget.setTabOrder(self._codec_stack.currentWidget(), self._match_policy)
+            QWidget.setTabOrder(self._codec_stack.currentWidget(), self._aspect_combo if video_mode else self._match_policy)
+            if video_mode:
+                QWidget.setTabOrder(self._aspect_combo, self._match_policy)
             QWidget.setTabOrder(self._match_policy, self._danmaku_check)
             QWidget.setTabOrder(self._metadata_check, self._output_summary)
             QWidget.setTabOrder(self._output_summary, self._download_actions.directory_button)
@@ -1683,6 +1697,10 @@ class MainWindow(QMainWindow):
             self._live_page.source.setFocus()
 
     def _on_resolve_success(self, info, video_streams, audio_streams, playurl_ok):
+        identity = getattr(info, "content_identity", "")
+        if getattr(self, "_aspect_source_identity", identity) != identity:
+            self._aspect_combo.setCurrentIndex(0)
+        self._aspect_source_identity = identity
         """Handle successful URL resolution."""
         self._resolve_btn.setEnabled(True)
         self._clipboard_resolve_source = None
@@ -1865,6 +1883,7 @@ class MainWindow(QMainWindow):
             download_subtitle=self._subtitle_check.isChecked(),
             download_all_subtitles=all_subtitles,
             selected_subtitle_lan="zh-en",
+            display_aspect_ratio=(self._aspect_combo.currentData() if self._output_mode_combo.currentData() == OutputMode.VIDEO else "original"),
             download_cover=self._cover_check.isChecked(),
             download_metadata=self._metadata_check.isChecked(),
             strict_match=self._strict_match_check.isChecked(),

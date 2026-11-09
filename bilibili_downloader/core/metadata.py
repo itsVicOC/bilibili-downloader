@@ -115,6 +115,10 @@ def write_metadata(
             "actual_video_codec": outcome.actual_video_codec,
             "requested_audio_quality": item.selected_audio_quality,
             "actual_audio_quality": outcome.actual_audio_quality,
+            "requested_display_aspect_ratio": item.display_aspect_ratio,
+            "applied_display_aspect_ratio": outcome.applied_display_aspect_ratio,
+            "actual_display_aspect_ratio": outcome.actual_display_aspect_ratio,
+            "subtitle_provenance": {Path(path).name: proof.model_dump() for path, proof in outcome.subtitle_provenance.items()},
             "danmaku": _artifact_name(outcome.danmaku_path),
             "subtitles": [
                 _artifact_name(path) for path in outcome.subtitle_paths

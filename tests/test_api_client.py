@@ -34,8 +34,9 @@ def test_subtitle_discovery_uses_signed_player_wbi_for_selected_page(monkeypatch
         assert request.url.params["w_rid"] == "signed"
         assert request.url.params["bvid" if bvid else "aid"] == str(bvid or aid)
         return httpx.Response(200, json={"code": 0, "data": {
+            "bvid": bvid, "aid": aid, "cid": 43245178148,
             "subtitle": {"subtitles": [{
-                "lan": "ai-zh", "lan_doc": "中文（自动生成）",
+                "id_str": "fixture-track", "lan": "ai-zh", "lan_doc": "中文（自动生成）",
                 "subtitle_url": "https://i0.hdslb.com/correct-page.json",
             }]},
         }})

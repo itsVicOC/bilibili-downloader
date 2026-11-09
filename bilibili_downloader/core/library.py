@@ -15,6 +15,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from bilibili_downloader.core.models import DownloadItem, DownloadOutcome, TaskStatus
+from bilibili_downloader.core.subtitle_provenance import (
+    discovery_verified,
+    subtitle_verified,
+    verified_languages,
+)
 from bilibili_downloader.core.update_protocol import atomic_json
 
 LIBRARY_SCHEMA_VERSION = 1
@@ -369,7 +374,11 @@ class LibraryRepository:
             if outcome.media_verification.get("valid") is False:
                 state = "unavailable"
                 continue
-            if not item.reuse_media_path and not specifications_match(item, outcome):
+            aspect_mismatch = (item.output_mode.value == "video" and (
+                item.display_aspect_ratio != outcome.applied_display_aspect_ratio
+                or (item.display_aspect_ratio == "4:3" and outcome.actual_display_aspect_ratio != "4:3")
+            ))
+            if aspect_mismatch or (not item.reuse_media_path and not specifications_match(item, outcome)):
                 state = "specification_mismatch"
                 continue
             outcome.video_path = media["path"]
@@ -388,29 +397,24 @@ class LibraryRepository:
                 if getattr(item, f"download_{kind}") and not paths.get(kind):
                     missing.append(kind)
             wants_subtitles = item.download_subtitle or item.download_all_subtitles
+            verified = verified_languages(info, outcome)
             has_subtitles = (
                 bool(subs) and outcome.subtitle_discovery_complete
+                and discovery_verified(info, outcome)
+                and all(subtitle_verified(info, outcome, path) for path in subs)
                 if item.download_all_subtitles else
-                item.selected_subtitle_lan in outcome.subtitle_languages or (
-                    bool(subs) and not outcome.subtitle_languages
-                    and previous.selected_subtitle_lan == item.selected_subtitle_lan
-                    and not previous.download_all_subtitles
-                )
+                item.selected_subtitle_lan in verified
             )
             if not item.download_all_subtitles and item.selected_subtitle_lan == "zh-en":
-                languages = {
-                    lan.removeprefix("ai-").split("-")[0]
-                    for lan in outcome.subtitle_languages
-                }
-                if outcome.subtitle_discovery_languages is None:
+                if outcome.subtitle_discovery_languages is None or not discovery_verified(info, outcome):
                     # Legacy receipts have no evidence of which tracks exist.
-                    has_subtitles = {"zh", "en"} <= languages
+                    has_subtitles = False
                 else:
                     expected = {
                         lan for lan in outcome.subtitle_discovery_languages
                         if lan.removeprefix("ai-").split("-")[0] in {"zh", "en"}
                     }
-                    has_subtitles = expected <= outcome.subtitle_languages.keys()
+                    has_subtitles = expected <= verified.keys()
             if wants_subtitles and (not has_subtitles or "subtitle" in outcome.missing_artifacts):
                 missing.append("subtitle")
             match = MediaMatch("missing_attachments" if missing else "saved", outcome, tuple(missing))
@@ -587,6 +591,8 @@ class LibraryRepository:
                 setattr(outcome, "video_path" if kind == "media" else f"{kind}_path", entry["path"])
         outcome.subtitle_paths = [f["path"] for f in files if f["kind"] == "subtitle"]
         outcome.subtitle_languages = {lan: (mapping or {}).get(absolute_path(path), absolute_path(path)) for lan, path in outcome.subtitle_languages.items()}
+        outcome.subtitle_provenance = {(mapping or {}).get(absolute_path(path), absolute_path(path)): proof
+                                       for path, proof in outcome.subtitle_provenance.items()}
         outcome.media_verification = {}
         outcome.media_signature = LibraryRepository._signature(Path(outcome.video_path).stat()) if readable_file(outcome.video_path) else None
         db.execute("UPDATE assets SET outcome_json=? WHERE id=?", (outcome.model_dump_json(), asset_id))

@@ -29,7 +29,7 @@ class FakeAPI:
 
 
 def test_chinese_english_subtitles_include_ai_and_keep_separate_files(monkeypatch, tmp_path):
-    tracks = [SubtitleInfo(lan=lan, url=f"https://i0.hdslb.com/{lan}.json")
+    tracks = [SubtitleInfo(track_id="fixture-track", lan=lan, url=f"https://i0.hdslb.com/{lan}.json")
               for lan in ("ai-ja", "ai-zh", "ai-en", "zh-Hans")]
     service = DownloadService(FakeAPI(tracks), str(tmp_path))
     video_path = tmp_path / "video.mp4"
@@ -38,7 +38,7 @@ def test_chinese_english_subtitles_include_ai_and_keep_separate_files(monkeypatc
     converted = []
     monkeypatch.setattr(
         "bilibili_downloader.core.download_service.SubtitleDownloader.download_and_convert",
-        lambda url, path: converted.append(path.name),
+        lambda url, path: (path.write_text("subtitle"), converted.append(path.name))[1],
     )
     item = DownloadItem(video_info=VideoInfo(bvid="BV1xx", cid=1),
                         download_subtitle=True, selected_subtitle_lan="zh-en")
@@ -51,8 +51,8 @@ def test_chinese_english_subtitles_include_ai_and_keep_separate_files(monkeypatc
 
 def test_chinese_english_selection_uses_available_language_without_foreign_fallback(tmp_path):
     service = DownloadService(FakeAPI([
-        SubtitleInfo(lan="ai-ja", url="https://i0.hdslb.com/ja.json"),
-        SubtitleInfo(lan="ai-zh", url="https://i0.hdslb.com/zh.json"),
+        SubtitleInfo(track_id="fixture-track", lan="ai-ja", url="https://i0.hdslb.com/ja.json"),
+        SubtitleInfo(track_id="fixture-track", lan="ai-zh", url="https://i0.hdslb.com/zh.json"),
     ]), str(tmp_path))
     item = DownloadItem(video_info=VideoInfo(bvid="BV1xx", cid=1),
                         download_subtitle=True, selected_subtitle_lan="zh-en")
@@ -105,7 +105,7 @@ def test_service_reports_audio_quality_fallback(monkeypatch, tmp_path):
 
 
 def test_service_discovers_subtitle_for_selected_page(monkeypatch, tmp_path):
-    api = FakeAPI([SubtitleInfo(lan="zh-Hans", url="https://i0.hdslb.com/sub.json")])
+    api = FakeAPI([SubtitleInfo(track_id="fixture-track", lan="zh-Hans", url="https://i0.hdslb.com/sub.json")])
     service = DownloadService(api, str(tmp_path))
     video_path = tmp_path / "video.mp4"
 
@@ -117,7 +117,7 @@ def test_service_discovers_subtitle_for_selected_page(monkeypatch, tmp_path):
     converted = []
     monkeypatch.setattr(
         "bilibili_downloader.core.download_service.SubtitleDownloader.download_and_convert",
-        lambda url, path: converted.append((url, path)),
+        lambda url, path: (path.write_text("subtitle"), converted.append((url, path.name)))[1],
     )
     item = DownloadItem(
         video_info=VideoInfo(bvid="BV1xx", cid=22),
@@ -127,7 +127,7 @@ def test_service_discovers_subtitle_for_selected_page(monkeypatch, tmp_path):
     outcome = service.download(item, lambda _progress, _text: None)
 
     assert api.subtitle_calls == [("BV1xx", 22)]
-    assert converted == [("https://i0.hdslb.com/sub.json", video_path.with_suffix(".srt"))]
+    assert converted == [("https://i0.hdslb.com/sub.json", "video.srt")]
     assert outcome.subtitle_paths == [str(video_path.with_suffix(".srt"))]
     assert outcome.warnings == []
 
@@ -171,7 +171,7 @@ def test_subtitle_discovery_failure_does_not_use_unverified_metadata_tracks(monk
     )
     item = DownloadItem(
         video_info=VideoInfo(bvid="BV1xx", cid=22, subtitle_list=[
-            SubtitleInfo(lan="ai-zh", url="https://i0.hdslb.com/unverified.json"),
+            SubtitleInfo(track_id="fixture-track", lan="ai-zh", url="https://i0.hdslb.com/unverified.json"),
         ]),
         download_subtitle=True,
     )
@@ -185,7 +185,7 @@ def test_subtitle_discovery_failure_does_not_use_unverified_metadata_tracks(monk
 def test_service_exposes_companion_conversion_warnings_and_keeps_artifacts(monkeypatch, tmp_path):
     from bilibili_downloader.core.timed_text import ConversionReport
 
-    tracks = [SubtitleInfo(lan="zh-Hans", lan_doc="中文", url="https://i0.hdslb.com/sub.json")]
+    tracks = [SubtitleInfo(track_id="fixture-track", lan="zh-Hans", lan_doc="中文", url="https://i0.hdslb.com/sub.json")]
     service = DownloadService(FakeAPI(tracks), str(tmp_path))
 
     def fake_download(item, callback):
@@ -199,7 +199,7 @@ def test_service_exposes_companion_conversion_warnings_and_keeps_artifacts(monke
     )
     monkeypatch.setattr(
         "bilibili_downloader.core.download_service.SubtitleDownloader.download_and_convert",
-        lambda *_args: ConversionReport(exported=2, invalid=1),
+        lambda _url, path: (path.write_text("subtitle"), ConversionReport(exported=2, invalid=1))[1],
     )
     item = DownloadItem(
         video_info=VideoInfo(bvid="BV1xx", cid=1),
@@ -245,9 +245,9 @@ def test_service_exports_valid_danmaku_and_reports_actual_skipped_entries(monkey
 
 def test_service_downloads_all_unique_subtitle_languages(monkeypatch, tmp_path):
     tracks = [
-        SubtitleInfo(lan="zh-Hans", lan_doc="中文", url="https://i0.hdslb.com/a"),
-        SubtitleInfo(lan="en-US", lan_doc="English", url="https://i0.hdslb.com/b"),
-        SubtitleInfo(lan="zh-Hans", lan_doc="中文", url="https://i0.hdslb.com/c"),
+        SubtitleInfo(track_id="fixture-track", lan="zh-Hans", lan_doc="中文", url="https://i0.hdslb.com/a"),
+        SubtitleInfo(track_id="fixture-track", lan="en-US", lan_doc="English", url="https://i0.hdslb.com/b"),
+        SubtitleInfo(track_id="fixture-track", lan="zh-Hans", lan_doc="中文", url="https://i0.hdslb.com/c"),
     ]
     service = DownloadService(FakeAPI(tracks), str(tmp_path))
     video_path = tmp_path / "video.mp4"
@@ -260,7 +260,7 @@ def test_service_downloads_all_unique_subtitle_languages(monkeypatch, tmp_path):
     monkeypatch.setattr(service._downloader, "download", fake_download)
     monkeypatch.setattr(
         "bilibili_downloader.core.download_service.SubtitleDownloader.download_and_convert",
-        lambda url, path: converted.append((url, path.name)),
+        lambda url, path: (path.write_text("subtitle"), converted.append((url, path.name)))[1],
     )
     item = DownloadItem(
         video_info=VideoInfo(bvid="BV1xx", cid=22),

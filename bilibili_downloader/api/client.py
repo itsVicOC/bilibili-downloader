@@ -582,12 +582,20 @@ class BilibiliAPIClient:
             return self._parse_response(resp)
 
         data = self._retry_on_wbi_error(_fetch)
+        # A successful HTTP/API response is not evidence of the requested page.
+        if (data.get("cid") != cid or (bvid and data.get("bvid") != bvid)
+                or (not bvid and data.get("aid") != aid)):
+            raise ValueError("字幕接口返回的视频身份不符，已停止保存字幕；请重新解析后重试。")
         subtitles = (data.get("subtitle") or {}).get("subtitles") or []
+        if any(isinstance(entry, dict) and entry.get("subtitle_url")
+               and not (entry.get("id_str") or entry.get("id")) for entry in subtitles):
+            raise ValueError("字幕接口缺少轨道标识，已停止保存字幕；请稍后重试。")
         return [
             SubtitleInfo(
                 lan=entry.get("lan", ""),
                 lan_doc=entry.get("lan_doc", ""),
                 url=entry.get("subtitle_url", ""),
+                track_id=str(entry.get("id_str") or entry.get("id") or ""),
             )
             for entry in subtitles
             if isinstance(entry, dict) and entry.get("subtitle_url")

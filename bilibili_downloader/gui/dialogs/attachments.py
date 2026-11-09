@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel
 
 from bilibili_downloader.core.library import readable_file
 from bilibili_downloader.core.media_policy import ARTIFACT_LABELS
+from bilibili_downloader.core.subtitle_provenance import subtitle_verified
 from bilibili_downloader.gui.dialogs.workflow import WorkflowDialog
 from bilibili_downloader.gui.widgets.components import (
     ReadOnlyPath,
@@ -21,6 +22,8 @@ def companion_status(item, outcome, kind):
         return "待确认", False, False
     paths = outcome.subtitle_paths if kind == "subtitle" else [getattr(outcome, f"{kind}_path")]
     available = [p for p in paths if p and readable_file(p)]
+    if kind == "subtitle" and any(not subtitle_verified(item.video_info, outcome, p) for p in available):
+        return "待重新获取（旧字幕未核验）", False, True
     incomplete = kind in outcome.missing_artifacts or (kind == "subtitle" and item.download_all_subtitles and not outcome.subtitle_discovery_complete)
     if available and not incomplete:
         return (f"已保存 {len(available)} 种语言" if kind == "subtitle" else "已保存"), True, False

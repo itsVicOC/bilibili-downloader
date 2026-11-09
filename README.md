@@ -70,6 +70,8 @@
 
 `v0.8.10` 正式版汇总三个 beta 阶段的下载管理、媒体复用、独立附件补全、跨筛选选择与界面精修，修复多分 P 命名和音轨封装问题。用户已确认实机测试通过；保留 [Fluent Design](docs/FLUENT_DESIGN.md)、粉紫／青蓝、小流、窗口记忆及 Windows 自绘窗口按钮。[下载 0.8.10 正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10) · [更新日志](CHANGELOG.md#v0810---2026-11-06)。
 
+`v0.8.11b1` 预发布版增加字幕来源与文件哈希核验、旧字幕重新获取，以及无损 4:3 显示副本。体验 beta 请使用「更新最新版」通道；旧字幕在「补全附件」中重新获取。[下载 Beta 1](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.11b1) · [验收范围](docs/SUBTITLE_ASPECT_VALIDATION.md)。
+
 下载目录按钮紧随路径，任务中心采用整行悬停，录制历史支持整场移除与撤销；默认开启的前台剪贴板识别需确认后才解析，不自动加入队列。账号、配置、背景选择、任务和媒体文件保持兼容。操作说明与截图见[用户指南](docs/USER_GUIDE.md)、[窗口记忆验收](docs/FLUENT_V4_VALIDATION.md)和[交互验收](docs/FLUENT_V5_VALIDATION.md)。
 
 ## 下载与安装
@@ -230,6 +232,9 @@ python -m bilibili_downloader test BV1GJ411x7h7
 # 默认下载中文和英文字幕（含 AI 字幕），各语言保存为独立 SRT；使用 --all-subtitles 下载全部语言。
 python -m bilibili_downloader download BV1GJ411x7h7 \
   --quality 80 --danmaku --subtitle
+
+# 完整画面按 4:3 显示，不裁剪、不重新编码
+python -m bilibili_downloader download BV1Syxv6JEa6 --aspect-ratio 4:3 --all-subtitles
 
 # 仅保存音频
 python -m bilibili_downloader download BV1GJ411x7h7 --audio-only
