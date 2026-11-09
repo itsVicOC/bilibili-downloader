@@ -42,6 +42,7 @@ H.264 和 HEVC 合成样本分别验证：
 - 完整 pytest：**1342 passed，6 skipped，9 warnings**，耗时 291.41 秒。跳过项属于当前 offscreen/macOS 环境不适用的原生桌面场景；警告为现有 Qt API 弃用提示。
 - Ruff、Python compileall、`git diff --check` 通过。
 - 日间、夜间及 900×640 界面检查通过；新增比例选项可见，音频模式禁用，键盘顺序和常规窗口布局回归通过。原生已登录应用启动及本地文件打开已检查。
+- 发布前的 Ubuntu CI 发现标准窗口多出 14 像素滚动区域。将显示比例与规格策略排在同一行，并增加 1320×840 的四种主题／配色检查；该新增检查在修复前可复现溢出，修复后通过。
 - PyInstaller 构建通过；full 包包含 FFmpeg、生产录制引擎和更新助手。应用、CLI 帮助、录制引擎 `--check`、更新助手 `--help` 均通过。
 - 本地 ad-hoc 签名通过 `codesign --verify --deep --strict`；FFmpeg 和录制引擎公告中的二进制 SHA-256 已在签名后校对。这是本机测试包，未做正式发布或公证。
 - 使用真实任务库前已备份配置、任务库和媒体归档库到工程 `build/validation/private/backup-*`；正式应用保留。交付包不含这些备份、账号凭据、用户数据库、真实字幕或视频。

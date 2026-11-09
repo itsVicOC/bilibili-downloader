@@ -29,10 +29,11 @@ def resolve(window, title="城市夜航"):
 
 @pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])
 @pytest.mark.parametrize("dark", [False, True])
-def test_resolved_download_is_complete_in_standard_window(workspace, qapp, theme_id, dark):
+@pytest.mark.parametrize("height", [840, 860])
+def test_resolved_download_is_complete_in_standard_window(workspace, qapp, theme_id, dark, height):
     theme = ThemeManager(qapp, theme_id, "dark" if dark else "light")
     resolve(workspace)
-    workspace.resize(1320, 860)
+    workspace.resize(1320, height)
     workspace.show()
     flush()
     assert workspace._resolve_btn.text() == "重新解析"

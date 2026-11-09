@@ -558,7 +558,7 @@ class MainWindow(QMainWindow):
         self._match_policy.setCurrentIndex(int(self._settings.strict_match))
         self._match_policy.currentIndexChanged.connect(lambda _: self._strict_match_check.setChecked(self._match_policy.currentData()))
         self._strict_match_check.toggled.connect(lambda checked: self._match_policy.setCurrentIndex(int(checked)))
-        controls.body.addWidget(FieldRow("规格不满足时", self._match_policy))
+        fields.add_field(FieldRow("规格不满足时", self._match_policy, stacked=True))
         self._match_policy.setToolTip("请求的画质、编码或音质不可用时，允许回退或停止该项。")
         self._match_policy.setAccessibleDescription(self._match_policy.toolTip())
         self._danmaku_check = DownloadOptionCard("下载弹幕", "ASS", "star")
