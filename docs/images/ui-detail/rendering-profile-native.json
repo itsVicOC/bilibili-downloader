@@ -1,0 +1,299 @@
+{
+  "platform": "darwin",
+  "backend": "cocoa",
+  "qt": "6.11.2",
+  "logical_dpi": 72.0,
+  "dpr": 2.0,
+  "scale_factor": "system",
+  "physical_pixels": true,
+  "checks": [
+    {
+      "theme": "star_trail",
+      "mode": "light",
+      "size": [
+        900,
+        640
+      ],
+      "actual_size": [
+        900,
+        640
+      ],
+      "menu_visible": false,
+      "font": "PingFang SC",
+      "resolved_font": "PingFang SC",
+      "font_pixels": 14,
+      "font_height": 20,
+      "sidebar_width": 72,
+      "option_card_heights": [
+        40,
+        40,
+        40,
+        40
+      ]
+    },
+    {
+      "theme": "star_trail",
+      "mode": "light",
+      "size": [
+        1120,
+        760
+      ],
+      "actual_size": [
+        1120,
+        760
+      ],
+      "menu_visible": false,
+      "font": "PingFang SC",
+      "resolved_font": "PingFang SC",
+      "font_pixels": 14,
+      "font_height": 20,
+      "sidebar_width": 208,
+      "option_card_heights": [
+        40,
+        40,
+        40,
+        40
+      ]
+    },
+    {
+      "theme": "star_trail",
+      "mode": "light",
+      "size": [
+        1320,
+        860
+      ],
+      "actual_size": [
+        1320,
+        860
+      ],
+      "menu_visible": false,
+      "font": "PingFang SC",
+      "resolved_font": "PingFang SC",
+      "font_pixels": 14,
+      "font_height": 20,
+      "sidebar_width": 208,
+      "option_card_heights": [
+        40,
+        40,
+        40,
+        40
+      ]
+    },
+    {
+      "theme": "star_trail",
+      "mode": "dark",
+      "size": [
+        900,
+        640
+      ],
+      "actual_size": [
+        900,
+        640
+      ],
+      "menu_visible": false,
+      "font": "PingFang SC",
+      "resolved_font": "PingFang SC",
+      "font_pixels": 14,
+      "font_height": 20,
+      "sidebar_width": 72,
+      "option_card_heights": [
+        40,
+        40,
+        40,
+        40
+      ]
+    },
+    {
+      "theme": "star_trail",
+      "mode": "dark",
+      "size": [
+        1120,
+        760
+      ],
+      "actual_size": [
+        1120,
+        760
+      ],
+      "menu_visible": false,
+      "font": "PingFang SC",
+      "resolved_font": "PingFang SC",
+      "font_pixels": 14,
+      "font_height": 20,
+      "sidebar_width": 208,
+      "option_card_heights": [
+        40,
+        40,
+        40,
+        40
+      ]
+    },
+    {
+      "theme": "star_trail",
+      "mode": "dark",
+      "size": [
+        1320,
+        860
+      ],
+      "actual_size": [
+        1320,
+        860
+      ],
+      "menu_visible": false,
+      "font": "PingFang SC",
+      "resolved_font": "PingFang SC",
+      "font_pixels": 14,
+      "font_height": 20,
+      "sidebar_width": 208,
+      "option_card_heights": [
+        40,
+        40,
+        40,
+        40
+      ]
+    },
+    {
+      "theme": "bilibili_blue",
+      "mode": "light",
+      "size": [
+        900,
+        640
+      ],
+      "actual_size": [
+        900,
+        640
+      ],
+      "menu_visible": false,
+      "font": "PingFang SC",
+      "resolved_font": "PingFang SC",
+      "font_pixels": 14,
+      "font_height": 20,
+      "sidebar_width": 72,
+      "option_card_heights": [
+        40,
+        40,
+        40,
+        40
+      ]
+    },
+    {
+      "theme": "bilibili_blue",
+      "mode": "light",
+      "size": [
+        1120,
+        760
+      ],
+      "actual_size": [
+        1120,
+        760
+      ],
+      "menu_visible": false,
+      "font": "PingFang SC",
+      "resolved_font": "PingFang SC",
+      "font_pixels": 14,
+      "font_height": 20,
+      "sidebar_width": 208,
+      "option_card_heights": [
+        40,
+        40,
+        40,
+        40
+      ]
+    },
+    {
+      "theme": "bilibili_blue",
+      "mode": "light",
+      "size": [
+        1320,
+        860
+      ],
+      "actual_size": [
+        1320,
+        860
+      ],
+      "menu_visible": false,
+      "font": "PingFang SC",
+      "resolved_font": "PingFang SC",
+      "font_pixels": 14,
+      "font_height": 20,
+      "sidebar_width": 208,
+      "option_card_heights": [
+        40,
+        40,
+        40,
+        40
+      ]
+    },
+    {
+      "theme": "bilibili_blue",
+      "mode": "dark",
+      "size": [
+        900,
+        640
+      ],
+      "actual_size": [
+        900,
+        640
+      ],
+      "menu_visible": false,
+      "font": "PingFang SC",
+      "resolved_font": "PingFang SC",
+      "font_pixels": 14,
+      "font_height": 20,
+      "sidebar_width": 72,
+      "option_card_heights": [
+        40,
+        40,
+        40,
+        40
+      ]
+    },
+    {
+      "theme": "bilibili_blue",
+      "mode": "dark",
+      "size": [
+        1120,
+        760
+      ],
+      "actual_size": [
+        1120,
+        760
+      ],
+      "menu_visible": false,
+      "font": "PingFang SC",
+      "resolved_font": "PingFang SC",
+      "font_pixels": 14,
+      "font_height": 20,
+      "sidebar_width": 208,
+      "option_card_heights": [
+        40,
+        40,
+        40,
+        40
+      ]
+    },
+    {
+      "theme": "bilibili_blue",
+      "mode": "dark",
+      "size": [
+        1320,
+        860
+      ],
+      "actual_size": [
+        1320,
+        860
+      ],
+      "menu_visible": false,
+      "font": "PingFang SC",
+      "resolved_font": "PingFang SC",
+      "font_pixels": 14,
+      "font_height": 20,
+      "sidebar_width": 208,
+      "option_card_heights": [
+        40,
+        40,
+        40,
+        40
+      ]
+    }
+  ]
+}

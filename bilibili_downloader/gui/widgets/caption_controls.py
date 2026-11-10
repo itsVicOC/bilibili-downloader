@@ -28,6 +28,7 @@ class CaptionButton(QAbstractButton):
         super().__init__(parent)
         self.action, self.hovered, self.restore = action, False, False
         self.setFocusPolicy(Qt.TabFocus)
+        self.setProperty("ownFocusRing", True)
         self.setFixedSize(UI_METRICS.caption_width, UI_METRICS.caption_height)
         self.setAccessibleName(CAPTION_LABELS[action])
         self.setToolTip(CAPTION_LABELS[action])

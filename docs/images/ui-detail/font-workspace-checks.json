@@ -1,0 +1,442 @@
+[
+  {
+    "theme": "star_trail",
+    "mode": "light",
+    "font_scale": 1.25,
+    "workspace": "download",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": 0
+  },
+  {
+    "theme": "star_trail",
+    "mode": "light",
+    "font_scale": 1.25,
+    "workspace": "batch",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": 0
+  },
+  {
+    "theme": "star_trail",
+    "mode": "light",
+    "font_scale": 1.25,
+    "workspace": "live",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "star_trail",
+    "mode": "light",
+    "font_scale": 1.25,
+    "workspace": "tasks",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "star_trail",
+    "mode": "light",
+    "font_scale": 1.25,
+    "workspace": "settings",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "star_trail",
+    "mode": "light",
+    "font_scale": 1.5,
+    "workspace": "download",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": 0
+  },
+  {
+    "theme": "star_trail",
+    "mode": "light",
+    "font_scale": 1.5,
+    "workspace": "batch",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": 0
+  },
+  {
+    "theme": "star_trail",
+    "mode": "light",
+    "font_scale": 1.5,
+    "workspace": "live",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "star_trail",
+    "mode": "light",
+    "font_scale": 1.5,
+    "workspace": "tasks",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "star_trail",
+    "mode": "light",
+    "font_scale": 1.5,
+    "workspace": "settings",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "star_trail",
+    "mode": "dark",
+    "font_scale": 1.25,
+    "workspace": "download",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": 0
+  },
+  {
+    "theme": "star_trail",
+    "mode": "dark",
+    "font_scale": 1.25,
+    "workspace": "batch",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": 0
+  },
+  {
+    "theme": "star_trail",
+    "mode": "dark",
+    "font_scale": 1.25,
+    "workspace": "live",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "star_trail",
+    "mode": "dark",
+    "font_scale": 1.25,
+    "workspace": "tasks",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "star_trail",
+    "mode": "dark",
+    "font_scale": 1.25,
+    "workspace": "settings",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "star_trail",
+    "mode": "dark",
+    "font_scale": 1.5,
+    "workspace": "download",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": 0
+  },
+  {
+    "theme": "star_trail",
+    "mode": "dark",
+    "font_scale": 1.5,
+    "workspace": "batch",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": 0
+  },
+  {
+    "theme": "star_trail",
+    "mode": "dark",
+    "font_scale": 1.5,
+    "workspace": "live",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "star_trail",
+    "mode": "dark",
+    "font_scale": 1.5,
+    "workspace": "tasks",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "star_trail",
+    "mode": "dark",
+    "font_scale": 1.5,
+    "workspace": "settings",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "font_scale": 1.25,
+    "workspace": "download",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": 0
+  },
+  {
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "font_scale": 1.25,
+    "workspace": "batch",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": 0
+  },
+  {
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "font_scale": 1.25,
+    "workspace": "live",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "font_scale": 1.25,
+    "workspace": "tasks",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "font_scale": 1.25,
+    "workspace": "settings",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "font_scale": 1.5,
+    "workspace": "download",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": 0
+  },
+  {
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "font_scale": 1.5,
+    "workspace": "batch",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": 0
+  },
+  {
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "font_scale": 1.5,
+    "workspace": "live",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "font_scale": 1.5,
+    "workspace": "tasks",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "font_scale": 1.5,
+    "workspace": "settings",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "font_scale": 1.25,
+    "workspace": "download",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": 0
+  },
+  {
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "font_scale": 1.25,
+    "workspace": "batch",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": 0
+  },
+  {
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "font_scale": 1.25,
+    "workspace": "live",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "font_scale": 1.25,
+    "workspace": "tasks",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "font_scale": 1.25,
+    "workspace": "settings",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "font_scale": 1.5,
+    "workspace": "download",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": 0
+  },
+  {
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "font_scale": 1.5,
+    "workspace": "batch",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": 0
+  },
+  {
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "font_scale": 1.5,
+    "workspace": "live",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "font_scale": 1.5,
+    "workspace": "tasks",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  },
+  {
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "font_scale": 1.5,
+    "workspace": "settings",
+    "size": [
+      900,
+      640
+    ],
+    "horizontal_scroll": null
+  }
+]

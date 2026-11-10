@@ -1,14 +1,12 @@
 """Theme selection cards and faithful, isolated wallpaper effect previews."""
 
-from PySide6.QtCore import QEvent, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
+from PySide6.QtCore import QEvent, QPointF, QRectF, QSize, Qt
+from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QAbstractButton, QApplication, QSizePolicy, QWidget
 
 from bilibili_downloader.core.models import DEFAULT_GLASS_BLUR, BackgroundVisibility
 from bilibili_downloader.gui.layout_policy import (
     density_for_height,
-    field_columns,
-    output_side_by_side,
     path_preferred_width,
 )
 from bilibili_downloader.gui.resources.styles import (
@@ -40,20 +38,23 @@ class ThemePreviewButton(QAbstractButton):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setMinimumHeight(140)
         self.setFocusPolicy(Qt.StrongFocus)
+        self.setProperty("focusRadius", UI_METRICS.card_radius - 2)
         self.setCursor(Qt.PointingHandCursor)
         self.toggled.connect(self._describe_selection)
         self._describe_selection(False)
 
     def _describe_selection(self, selected):
         self.setAccessibleDescription(
-            "已选中，保存设置后应用" if selected else "按空格选择此主题，保存设置后应用"
+            "已选，保存设置后应用" if selected else "空格选择，保存设置后应用"
         )
 
     def sizeHint(self):
-        return QSize(260, 140)
+        return QSize(260, max(140, 90 + self.fontMetrics().height() * 2 + 16))
 
     def event(self, event):
-        if event.type() == QEvent.StyleChange:
+        if event.type() in (QEvent.StyleChange, QEvent.FontChange) and hasattr(self, "description"):
+            self.setMinimumHeight(self.sizeHint().height())
+            self.updateGeometry()
             self.update()
         return super().event(event)
 
@@ -65,12 +66,12 @@ class ThemePreviewButton(QAbstractButton):
         selected = self.isChecked()
         painter.setPen(QPen(QColor(palette().focus if selected else palette().card_border), 2 if selected else 1))
         painter.setBrush(QColor(p.surface))
-        painter.drawRoundedRect(QRectF(self.rect()).adjusted(5, 5, -5, -5), UI_METRICS.card_radius, UI_METRICS.card_radius)
-        if self.hasFocus() and self.property("keyboardFocus"):
-            painter.setBrush(Qt.NoBrush)
-            painter.setPen(QPen(QColor(palette().focus), 1.5, Qt.DashLine))
-            painter.drawRoundedRect(QRectF(self.rect()).adjusted(1, 1, -1, -1), 13, 13)
+        painter.drawRoundedRect(QRectF(self.rect()).adjusted(1, 1, -1, -1), UI_METRICS.card_radius, UI_METRICS.card_radius)
         canvas = QRectF(12, 12, self.width() - 24, 74)
+        painter.save()
+        clip = QPainterPath()
+        clip.addRoundedRect(canvas, UI_METRICS.small_radius, UI_METRICS.small_radius)
+        painter.setClipPath(clip)
         painter.fillRect(canvas, QColor(p.background))
         painter.fillRect(QRectF(12, 12, 28, 74), QColor(p.sidebar))
         painter.fillRect(QRectF(18, 32, 16, 5), QColor(p.accent))
@@ -81,14 +82,20 @@ class ThemePreviewButton(QAbstractButton):
         painter.fillRect(
             QRectF(self.width() - 73, 51, 58, 26), QColor(p.primary or p.accent)
         )
+        painter.restore()
+        line = self.fontMetrics().height()
+        selected_width = self.fontMetrics().horizontalAdvance("✓ 已选") + 12 if selected else 0
+        name = QRectF(14, 90, self.width() - 28 - selected_width, line)
+        detail = QRectF(14, 94 + line, self.width() - 28, line)
         painter.setPen(QColor(p.text))
-        painter.drawText(14, 107, self.name)
+        painter.drawText(name, Qt.AlignLeft | Qt.AlignVCenter, self.name)
         painter.setPen(QColor(p.muted))
-        painter.drawText(14, 128, self.description)
+        painter.drawText(detail, Qt.AlignLeft | Qt.AlignVCenter,
+                         painter.fontMetrics().elidedText(self.description, Qt.ElideRight, int(detail.width())))
         if self.isChecked():
             painter.setPen(QColor(palette().active_text))
             painter.drawText(
-                QRectF(self.width() - 90, 90, 72, 26),
+                QRectF(self.width() - 14 - selected_width, 90, selected_width, line),
                 Qt.AlignRight | Qt.AlignVCenter,
                 "✓ 已选",
             )
@@ -127,15 +134,17 @@ class BackgroundThumbnail(QAbstractButton):
             painter.setPen(QColor(p.muted))
             painter.drawText(self.rect(), Qt.AlignCenter, self.text())
         else:
-            scaled = self._pixmap.scaled(
-                156, 86, Qt.KeepAspectRatioByExpanding,
-                Qt.FastTransformation if self.pixel_art else Qt.SmoothTransformation,
-            )
-            painter.setClipRect(self.rect().adjusted(2, 2, -2, -2))
+            clip = QPainterPath()
+            clip.addRoundedRect(QRectF(self.rect()).adjusted(2, 2, -2, -2), 7, 7)
+            painter.setClipPath(clip)
+            dpr = self.devicePixelRatioF()
+            scaled = self._pixmap.scaled(QSize(round((self.width() - 4) * dpr), round((self.height() - 4) * dpr)),
+                                         Qt.KeepAspectRatioByExpanding,
+                                         Qt.FastTransformation if self.pixel_art else Qt.SmoothTransformation)
+            scaled.setDevicePixelRatio(dpr)
+            size = scaled.deviceIndependentSize()
             painter.drawPixmap(
-                (self.width() - scaled.width()) // 2,
-                (self.height() - scaled.height()) // 2,
-                scaled,
+                QPointF((self.width() - size.width()) / 2, (self.height() - size.height()) / 2), scaled,
             )
         painter.end()
 
@@ -229,20 +238,20 @@ class WorkspacePreview(QWidget):
             if not solid and not self.pixmap.isNull():
                 surface.setAlpha(background_reading_alpha(p.surface, p.text, p.muted, p.active_text))
             painter.setBrush(surface)
-            painter.setPen(QPen(QColor(p.divider), 1))
-            painter.drawRoundedRect(rect, 14, 14)
+            painter.setPen(QPen(QColor(p.card_border), 1))
+            painter.drawRoundedRect(rect, UI_METRICS.card_radius, UI_METRICS.card_radius)
 
         def control(rect, value, primary=False):
-            painter.setPen(QPen(QColor(p.border), 1))
-            painter.setBrush(QColor((p.primary or p.accent) if primary else p.surface))
-            painter.drawRoundedRect(rect, 8, 8)
+            painter.setPen(QPen(QColor((p.primary or p.accent) if primary else p.control_border), 1))
+            painter.setBrush(QColor((p.primary or p.accent) if primary else p.control_fill))
+            painter.drawRoundedRect(rect, UI_METRICS.radius, UI_METRICS.radius)
             painter.setPen(QColor((p.primary_text or p.accent_text) if primary else p.text))
             painter.drawText(rect.adjusted(12, 0, -8, 0), Qt.AlignVCenter, value)
 
         def table(rect, headers, rows):
             card(rect)
             cell = rect.width() / len(headers)
-            painter.fillRect(QRectF(rect.left(), rect.top(), rect.width(), 40), QColor(p.surface_raised))
+            painter.fillRect(QRectF(rect.left(), rect.top(), rect.width(), 40), QColor(p.table_header))
             for column, label in enumerate(headers):
                 text(QRectF(rect.left() + column * cell + 12, rect.top(), cell - 24, 40), label, muted=True, protected=False)
             for row, values in enumerate(rows):
@@ -260,7 +269,7 @@ class WorkspacePreview(QWidget):
         for i, name in enumerate(names):
             rect = QRectF(12, 130 + i * 56, sidebar - 24, 42)
             if keys[i] == self.workspace:
-                painter.fillRect(rect, QColor(p.selection))
+                painter.fillRect(rect, QColor(p.subtle_selection))
             text(rect.adjusted(12, 0, -2, 0), name if sidebar > 100 else name[:2], protected=False)
         if sidebar > 100:
             text(QRectF(24, 48, sidebar - 40, 36), "BiliFlow", protected=False, bold=True)
@@ -273,54 +282,42 @@ class WorkspacePreview(QWidget):
         painter.save()
         painter.setClipRect(QRectF(inner.left(), top, inner.width(), max(0, footer.top() - top - gap)))
         if self.workspace == "download":
-            text(QRectF(inner.left(), top, inner.width(), 32), "单个解析       批量导入", bold=True)
-            top += 40
-            hero = QRectF(inner.left(), top, inner.width(), UI_METRICS.source_resolved_height)
-            card(hero)
-            control(QRectF(hero.left() + padding, top + 12, hero.width() - 144 - padding, 44), "BV1DEMO2026A")
-            control(QRectF(hero.right() - 120, top + 12, 108, 44), "重新解析", True)
-            top = hero.bottom() + gap
-            summary = QRectF(inner.left(), top, inner.width(), density.cover_height + padding * 2)
-            card(summary)
-            cover = QRectF(summary.left() + padding, top + padding, density.cover_width, density.cover_height)
+            wide = inner.width() >= UI_METRICS.output_split_width
+            source_width = inner.width() - 336 - gap if wide else inner.width()
+            source_height = max(400, footer.top() - top - gap) if wide else 260
+            source = QRectF(inner.left(), top, source_width, source_height)
+            card(source)
+            text(QRectF(source.left() + padding, top + 8, source.width() - padding * 2, 28), "单个解析       批量导入", bold=True)
+            control(QRectF(source.left() + padding, top + 48, source.width() - 140 - padding, 40), "BV1DEMO2026A")
+            control(QRectF(source.right() - 116, top + 48, 100, 40), "重新解析", True)
+            large = wide and not density.compact
+            cover_width = min(520, source.width() - padding * 2) if large else 128
+            cover_height = cover_width * 9 / 16
+            cover = QRectF(source.left() + padding, top + 112, cover_width, cover_height)
             control(cover, "视频封面")
-            x = cover.right() + gap
-            text(QRectF(x, top + padding, summary.right() - x - 16, 28), "星轨旅记：城市夜航", bold=True)
-            text(QRectF(x, top + padding + 32, summary.right() - x - 16, 22), "UP 主 · 小流    已解析", muted=True)
-            text(QRectF(x, top + padding + 56, summary.right() - x - 16, 22), "12:34 · BV1DEMO2026A", muted=True)
-            top = summary.bottom() + gap
-            wide = output_side_by_side(inner.width())
-            spec_width = (inner.width() - gap) * .6 if wide else inner.width()
-            columns = field_columns(spec_width - 2 * padding)
-            field_height = 40 if density.compact else 68
-            specs = QRectF(inner.left(), top, spec_width, padding * 2 + 28 + gap + 2 * field_height + 12)
-            if columns == 1:
-                specs.setHeight(specs.height() + 2 * (field_height + 12))
-            card(specs)
-            text(QRectF(specs.left() + padding, top + padding, specs.width() - 2 * padding, 28), "输出规格", bold=True)
-            field_width = (specs.width() - 2 * padding - (columns - 1) * 12) / columns
-            for i, (label, value) in enumerate((("分 P 范围", "当前视频"), ("输出类型", "视频 / MP4"), ("画面质量", "1080P"), ("视频编码", "AVC"))):
-                x = specs.left() + padding + i % columns * (field_width + 12)
-                y = specs.top() + padding + 28 + gap + i // columns * (field_height + 12)
-                if density.compact:
-                    text(QRectF(x, y, 76, 40), label)
-                    control(QRectF(x + 84, y, max(40, field_width - 84), 40), value)
-                else:
-                    text(QRectF(x, y, field_width, 20), label)
-                    control(QRectF(x, y + 28, field_width, 40), value)
-            extras = QRectF(specs.right() + gap if wide else inner.left(), top if wide else specs.bottom() + gap,
-                            inner.width() - spec_width - gap if wide else inner.width(), padding * 2 + 28 + gap + 4 * 40 + 28)
-            card(extras)
-            text(QRectF(extras.left() + padding, extras.top() + padding, extras.width() - padding * 2, 28), "附加内容", bold=True)
-            for i, label in enumerate(("✓  下载弹幕 · ASS", "✓  下载字幕 · SRT", "✓  保存封面 · 图片", "✓  保存元数据 · JSON")):
-                y = extras.top() + padding + 28 + gap + i * 40 + (28 if i > 1 else 0)
-                text(QRectF(extras.left() + padding, y, extras.width() - padding * 2, 40), label)
-                if i == 1:
-                    text(QRectF(extras.left() + padding + 24, y + 40, extras.width() - padding * 2 - 24, 28), "□  全部字幕", muted=True)
+            x = source.left() + padding if large else cover.right() + gap
+            y = cover.bottom() + 12 if large else cover.top()
+            text(QRectF(x, y, source.right() - x - padding, 32), "星轨旅记：城市夜航", bold=True)
+            text(QRectF(x, y + 40, source.right() - x - padding, 24), "UP 主 · 小流", muted=True)
+            text(QRectF(x, y + 72, source.right() - x - padding, 24), "12:34 · BV1DEMO2026A", muted=True)
+            settings = QRectF(source.right() + gap if wide else inner.left(), top if wide else source.bottom() + gap,
+                              336 if wide else inner.width(), 552 if wide else 340)
+            card(settings)
+            text(QRectF(settings.left() + padding, settings.top() + padding, settings.width() - padding * 2, 28), "下载设置", bold=True)
+            for i, (label, value) in enumerate((("分 P", "全部 2 P"), ("输出类型", "视频 / MP4"), ("画质", "1080P"))):
+                y = settings.top() + padding + 36 + i * 48
+                text(QRectF(settings.left() + padding, y, 76, 40), label, muted=True)
+                control(QRectF(settings.left() + padding + 84, y, settings.width() - padding * 2 - 84, 40), value)
+            y = settings.top() + padding + 188
+            text(QRectF(settings.left() + padding, y, settings.width() - padding * 2, 28), "一起保存", bold=True)
+            for i, label in enumerate(("✓ 弹幕 · ASS", "✓ 字幕 · SRT", "✓ 封面 · 图片", "✓ 元数据 · JSON")):
+                text(QRectF(settings.left() + padding, y + 36 + i * 44, settings.width() - padding * 2, 40), label)
+            text(QRectF(settings.left() + padding, y + 224, settings.width() - padding * 2, 28), "高级设置    展开", bold=True)
+            text(QRectF(settings.left() + padding, y + 256, settings.width() - padding * 2, 24), "HEVC · AAC 192kbps", muted=True)
         elif self.workspace == "live":
             hero = QRectF(inner.left(), top, inner.width(), 96)
             card(hero)
-            text(QRectF(hero.left() + padding, top + 8, hero.width() - 2 * padding, 28), "添加直播间 · 开播自动录制", bold=True)
+            text(QRectF(hero.left() + padding, top + 8, hero.width() - 2 * padding, 28), "添加直播间 · 应用运行时开播自动录制", bold=True)
             control(QRectF(hero.left() + padding, top + 44, hero.width() - 152, 40), "直播间链接或房间号")
             control(QRectF(hero.right() - 128, top + 44, 112, 40), "添加并监控", True)
             top = hero.bottom() + gap
@@ -341,20 +338,23 @@ class WorkspacePreview(QWidget):
             table(QRectF(inner.left(), top + 100, inner.width(), max(200, inner.height() - 224)), ("作品", "规格", "进度", "状态", "操作"), (("城市夜航", "4K · HEVC", "68%", "下载中", "暂停"), ("晨光抵达", "1080P · AVC", "32%", "已暂停", "继续"), ("创作幕后", "FLAC", "100%", "完成", "打开目录")))
         else:
             text(QRectF(inner.left(), top, inner.width(), 36), "下载    直播    外观    工具与存储    关于与更新", bold=True)
+            form = QRectF(inner.left(), top + 44, inner.width(), 3 * (116 + gap))
+            card(form)
             for i, (heading, value) in enumerate((("显示模式 · 立即生效", "跟随系统      日间      夜间"), ("应用配色 · 保存后生效", "星河 · 粉紫星空       晴海 · 晴空青蓝"), ("工作区背景", "视频下载      直播录制      任务中心      设置"))):
                 panel = QRectF(inner.left(), top + 44 + i * (116 + gap), inner.width(), 116)
-                card(panel)
+                painter.setPen(QPen(QColor(p.card_border), 1))
+                painter.drawLine(panel.topLeft(), panel.topRight())
                 text(QRectF(panel.left() + padding, panel.top() + padding, panel.width() - 2 * padding, 28), heading, bold=True)
                 control(QRectF(panel.left() + padding, panel.top() + 56, panel.width() - 2 * padding, 40), value)
         painter.restore()
         if self.workspace != "tasks":
             card(footer, True)
-            text(footer.adjusted(16, 0, -156, -20 if self.workspace == "download" else 0), "所有修改已保存" if self.workspace == "settings" else "已选 1 项 · 当前输出设置", protected=False)
+            text(footer.adjusted(16, 0, -156, -20 if self.workspace == "download" else 0), "已保存" if self.workspace == "settings" else "已选 2 个任务", protected=False)
             if self.workspace == "download":
                 path = "保存至 ~/Downloads/BiliFlow"
                 path_width = min(path_preferred_width(painter.fontMetrics(), path), max(32, footer.width() - 300))
                 text(QRectF(footer.left() + 16, footer.top() + 36, path_width, 24), path, muted=True, protected=False)
                 text(QRectF(footer.left() + 16 + path_width + 8, footer.top() + 36, 80, 24), "修改目录", muted=True, protected=False)
             button_height = 32 if self.workspace == "settings" else 44
-            control(QRectF(footer.right() - 144, footer.center().y() - button_height / 2, 128, button_height), "保存设置" if self.workspace == "settings" else "停止本场" if self.workspace == "live" else "加入下载队列", True)
+            control(QRectF(footer.right() - 144, footer.center().y() - button_height / 2, 128, button_height), "保存设置" if self.workspace == "settings" else "停止本场" if self.workspace == "live" else "加入队列", True)
         painter.end()

@@ -1,0 +1,4082 @@
+[
+  {
+    "id": "input:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "normal",
+    "image": "component-star_trail-input-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "input:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "hover",
+    "image": "component-star_trail-input-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "input:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "pressed",
+    "image": "component-star_trail-input-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "input:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "focus",
+    "image": "component-star_trail-input-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "input:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "disabled",
+    "image": "component-star_trail-input-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "input:error",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "error",
+    "image": "component-star_trail-input-light-error-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "multiline:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "normal",
+    "image": "component-star_trail-multiline-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "multiline:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "hover",
+    "image": "component-star_trail-multiline-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "multiline:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "pressed",
+    "image": "component-star_trail-multiline-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "multiline:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "focus",
+    "image": "component-star_trail-multiline-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "multiline:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "disabled",
+    "image": "component-star_trail-multiline-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "multiline:error",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "error",
+    "image": "component-star_trail-multiline-light-error-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "readonly:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ReadOnlyPath",
+    "state": "normal",
+    "image": "component-star_trail-readonly-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      271,
+      27
+    ]
+  },
+  {
+    "id": "readonly:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ReadOnlyPath",
+    "state": "hover",
+    "image": "component-star_trail-readonly-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      271,
+      27
+    ]
+  },
+  {
+    "id": "readonly:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ReadOnlyPath",
+    "state": "pressed",
+    "image": "component-star_trail-readonly-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      271,
+      27
+    ]
+  },
+  {
+    "id": "readonly:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ReadOnlyPath",
+    "state": "focus",
+    "image": "component-star_trail-readonly-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      271,
+      27
+    ]
+  },
+  {
+    "id": "readonly:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ReadOnlyPath",
+    "state": "disabled",
+    "image": "component-star_trail-readonly-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      271,
+      27
+    ]
+  },
+  {
+    "id": "password:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "normal",
+    "image": "component-star_trail-password-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "password:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "hover",
+    "image": "component-star_trail-password-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "password:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "pressed",
+    "image": "component-star_trail-password-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "password:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "focus",
+    "image": "component-star_trail-password-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "password:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "disabled",
+    "image": "component-star_trail-password-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "password:error",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "error",
+    "image": "component-star_trail-password-light-error-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "normal",
+    "image": "component-star_trail-combo-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "hover",
+    "image": "component-star_trail-combo-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "pressed",
+    "image": "component-star_trail-combo-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "focus",
+    "image": "component-star_trail-combo-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "disabled",
+    "image": "component-star_trail-combo-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:error",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "error",
+    "image": "component-star_trail-combo-light-error-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "checkbox:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "normal",
+    "image": "component-star_trail-checkbox-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "hover",
+    "image": "component-star_trail-checkbox-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "pressed",
+    "image": "component-star_trail-checkbox-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "focus",
+    "image": "component-star_trail-checkbox-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "disabled",
+    "image": "component-star_trail-checkbox-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:checked",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "checked",
+    "image": "component-star_trail-checkbox-light-checked-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:partial",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "partial",
+    "image": "component-star_trail-checkbox-light-partial-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "card:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "normal",
+    "image": "component-star_trail-card-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "hover",
+    "image": "component-star_trail-card-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "pressed",
+    "image": "component-star_trail-card-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "focus",
+    "image": "component-star_trail-card-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "disabled",
+    "image": "component-star_trail-card-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:checked",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "checked",
+    "image": "component-star_trail-card-light-checked-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "primary:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-star_trail-primary-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-star_trail-primary-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-star_trail-primary-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-star_trail-primary-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-star_trail-primary-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "secondary:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-star_trail-secondary-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "secondary:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-star_trail-secondary-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "secondary:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-star_trail-secondary-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "secondary:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-star_trail-secondary-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "secondary:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-star_trail-secondary-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "danger:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-star_trail-danger-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "danger:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-star_trail-danger-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "danger:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-star_trail-danger-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "danger:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-star_trail-danger-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "danger:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-star_trail-danger-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "normal",
+    "image": "component-star_trail-stepper-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "hover",
+    "image": "component-star_trail-stepper-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "pressed",
+    "image": "component-star_trail-stepper-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "focus",
+    "image": "component-star_trail-stepper-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "disabled",
+    "image": "component-star_trail-stepper-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:error",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "error",
+    "image": "component-star_trail-stepper-light-error-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "slider:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QSlider",
+    "state": "normal",
+    "image": "component-star_trail-slider-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QSlider",
+    "state": "hover",
+    "image": "component-star_trail-slider-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QSlider",
+    "state": "pressed",
+    "image": "component-star_trail-slider-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QSlider",
+    "state": "focus",
+    "image": "component-star_trail-slider-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QSlider",
+    "state": "disabled",
+    "image": "component-star_trail-slider-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "input:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "normal",
+    "image": "component-star_trail-input-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "input:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "hover",
+    "image": "component-star_trail-input-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "input:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "pressed",
+    "image": "component-star_trail-input-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "input:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "focus",
+    "image": "component-star_trail-input-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "input:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "disabled",
+    "image": "component-star_trail-input-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "input:error",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "error",
+    "image": "component-star_trail-input-dark-error-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "multiline:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "normal",
+    "image": "component-star_trail-multiline-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "multiline:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "hover",
+    "image": "component-star_trail-multiline-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "multiline:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "pressed",
+    "image": "component-star_trail-multiline-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "multiline:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "focus",
+    "image": "component-star_trail-multiline-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "multiline:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "disabled",
+    "image": "component-star_trail-multiline-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "multiline:error",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "error",
+    "image": "component-star_trail-multiline-dark-error-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "readonly:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ReadOnlyPath",
+    "state": "normal",
+    "image": "component-star_trail-readonly-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      271,
+      27
+    ]
+  },
+  {
+    "id": "readonly:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ReadOnlyPath",
+    "state": "hover",
+    "image": "component-star_trail-readonly-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      271,
+      27
+    ]
+  },
+  {
+    "id": "readonly:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ReadOnlyPath",
+    "state": "pressed",
+    "image": "component-star_trail-readonly-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      271,
+      27
+    ]
+  },
+  {
+    "id": "readonly:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ReadOnlyPath",
+    "state": "focus",
+    "image": "component-star_trail-readonly-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      271,
+      27
+    ]
+  },
+  {
+    "id": "readonly:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ReadOnlyPath",
+    "state": "disabled",
+    "image": "component-star_trail-readonly-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      271,
+      27
+    ]
+  },
+  {
+    "id": "password:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "normal",
+    "image": "component-star_trail-password-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "password:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "hover",
+    "image": "component-star_trail-password-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "password:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "pressed",
+    "image": "component-star_trail-password-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "password:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "focus",
+    "image": "component-star_trail-password-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "password:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "disabled",
+    "image": "component-star_trail-password-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "password:error",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "error",
+    "image": "component-star_trail-password-dark-error-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "normal",
+    "image": "component-star_trail-combo-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "hover",
+    "image": "component-star_trail-combo-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "pressed",
+    "image": "component-star_trail-combo-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "focus",
+    "image": "component-star_trail-combo-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "disabled",
+    "image": "component-star_trail-combo-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:error",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "error",
+    "image": "component-star_trail-combo-dark-error-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "checkbox:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "normal",
+    "image": "component-star_trail-checkbox-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "hover",
+    "image": "component-star_trail-checkbox-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "pressed",
+    "image": "component-star_trail-checkbox-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "focus",
+    "image": "component-star_trail-checkbox-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "disabled",
+    "image": "component-star_trail-checkbox-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:checked",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "checked",
+    "image": "component-star_trail-checkbox-dark-checked-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:partial",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "partial",
+    "image": "component-star_trail-checkbox-dark-partial-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "card:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "normal",
+    "image": "component-star_trail-card-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "hover",
+    "image": "component-star_trail-card-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "pressed",
+    "image": "component-star_trail-card-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "focus",
+    "image": "component-star_trail-card-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "disabled",
+    "image": "component-star_trail-card-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:checked",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "checked",
+    "image": "component-star_trail-card-dark-checked-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "primary:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-star_trail-primary-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-star_trail-primary-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-star_trail-primary-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-star_trail-primary-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-star_trail-primary-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "secondary:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-star_trail-secondary-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "secondary:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-star_trail-secondary-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "secondary:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-star_trail-secondary-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "secondary:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-star_trail-secondary-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "secondary:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-star_trail-secondary-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "danger:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-star_trail-danger-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "danger:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-star_trail-danger-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "danger:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-star_trail-danger-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "danger:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-star_trail-danger-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "danger:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-star_trail-danger-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "normal",
+    "image": "component-star_trail-stepper-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "hover",
+    "image": "component-star_trail-stepper-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "pressed",
+    "image": "component-star_trail-stepper-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "focus",
+    "image": "component-star_trail-stepper-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "disabled",
+    "image": "component-star_trail-stepper-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:error",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "error",
+    "image": "component-star_trail-stepper-dark-error-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "slider:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QSlider",
+    "state": "normal",
+    "image": "component-star_trail-slider-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QSlider",
+    "state": "hover",
+    "image": "component-star_trail-slider-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QSlider",
+    "state": "pressed",
+    "image": "component-star_trail-slider-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QSlider",
+    "state": "focus",
+    "image": "component-star_trail-slider-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QSlider",
+    "state": "disabled",
+    "image": "component-star_trail-slider-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "input:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "normal",
+    "image": "component-bilibili_blue-input-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "input:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "hover",
+    "image": "component-bilibili_blue-input-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "input:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "pressed",
+    "image": "component-bilibili_blue-input-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "input:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "focus",
+    "image": "component-bilibili_blue-input-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "input:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "disabled",
+    "image": "component-bilibili_blue-input-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "input:error",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "error",
+    "image": "component-bilibili_blue-input-light-error-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "multiline:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "normal",
+    "image": "component-bilibili_blue-multiline-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "multiline:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "hover",
+    "image": "component-bilibili_blue-multiline-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "multiline:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "pressed",
+    "image": "component-bilibili_blue-multiline-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "multiline:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "focus",
+    "image": "component-bilibili_blue-multiline-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "multiline:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "disabled",
+    "image": "component-bilibili_blue-multiline-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "multiline:error",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "error",
+    "image": "component-bilibili_blue-multiline-light-error-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "readonly:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ReadOnlyPath",
+    "state": "normal",
+    "image": "component-bilibili_blue-readonly-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      271,
+      27
+    ]
+  },
+  {
+    "id": "readonly:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ReadOnlyPath",
+    "state": "hover",
+    "image": "component-bilibili_blue-readonly-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      271,
+      27
+    ]
+  },
+  {
+    "id": "readonly:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ReadOnlyPath",
+    "state": "pressed",
+    "image": "component-bilibili_blue-readonly-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      271,
+      27
+    ]
+  },
+  {
+    "id": "readonly:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ReadOnlyPath",
+    "state": "focus",
+    "image": "component-bilibili_blue-readonly-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      271,
+      27
+    ]
+  },
+  {
+    "id": "readonly:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ReadOnlyPath",
+    "state": "disabled",
+    "image": "component-bilibili_blue-readonly-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      271,
+      27
+    ]
+  },
+  {
+    "id": "password:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "normal",
+    "image": "component-bilibili_blue-password-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "password:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "hover",
+    "image": "component-bilibili_blue-password-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "password:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "pressed",
+    "image": "component-bilibili_blue-password-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "password:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "focus",
+    "image": "component-bilibili_blue-password-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "password:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "disabled",
+    "image": "component-bilibili_blue-password-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "password:error",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "error",
+    "image": "component-bilibili_blue-password-light-error-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "normal",
+    "image": "component-bilibili_blue-combo-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "hover",
+    "image": "component-bilibili_blue-combo-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "pressed",
+    "image": "component-bilibili_blue-combo-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "focus",
+    "image": "component-bilibili_blue-combo-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "disabled",
+    "image": "component-bilibili_blue-combo-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:error",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "error",
+    "image": "component-bilibili_blue-combo-light-error-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "checkbox:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "normal",
+    "image": "component-bilibili_blue-checkbox-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "hover",
+    "image": "component-bilibili_blue-checkbox-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "pressed",
+    "image": "component-bilibili_blue-checkbox-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "focus",
+    "image": "component-bilibili_blue-checkbox-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "disabled",
+    "image": "component-bilibili_blue-checkbox-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:checked",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "checked",
+    "image": "component-bilibili_blue-checkbox-light-checked-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:partial",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "partial",
+    "image": "component-bilibili_blue-checkbox-light-partial-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "card:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "normal",
+    "image": "component-bilibili_blue-card-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "hover",
+    "image": "component-bilibili_blue-card-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "pressed",
+    "image": "component-bilibili_blue-card-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "focus",
+    "image": "component-bilibili_blue-card-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "disabled",
+    "image": "component-bilibili_blue-card-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:checked",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "checked",
+    "image": "component-bilibili_blue-card-light-checked-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "primary:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-bilibili_blue-primary-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-bilibili_blue-primary-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-bilibili_blue-primary-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-bilibili_blue-primary-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-bilibili_blue-primary-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "secondary:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-bilibili_blue-secondary-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "secondary:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-bilibili_blue-secondary-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "secondary:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-bilibili_blue-secondary-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "secondary:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-bilibili_blue-secondary-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "secondary:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-bilibili_blue-secondary-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "danger:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-bilibili_blue-danger-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "danger:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-bilibili_blue-danger-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "danger:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-bilibili_blue-danger-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "danger:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-bilibili_blue-danger-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "danger:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-bilibili_blue-danger-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "normal",
+    "image": "component-bilibili_blue-stepper-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "hover",
+    "image": "component-bilibili_blue-stepper-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "pressed",
+    "image": "component-bilibili_blue-stepper-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "focus",
+    "image": "component-bilibili_blue-stepper-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "disabled",
+    "image": "component-bilibili_blue-stepper-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:error",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "error",
+    "image": "component-bilibili_blue-stepper-light-error-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "slider:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QSlider",
+    "state": "normal",
+    "image": "component-bilibili_blue-slider-light-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QSlider",
+    "state": "hover",
+    "image": "component-bilibili_blue-slider-light-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QSlider",
+    "state": "pressed",
+    "image": "component-bilibili_blue-slider-light-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QSlider",
+    "state": "focus",
+    "image": "component-bilibili_blue-slider-light-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QSlider",
+    "state": "disabled",
+    "image": "component-bilibili_blue-slider-light-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "input:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "normal",
+    "image": "component-bilibili_blue-input-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "input:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "hover",
+    "image": "component-bilibili_blue-input-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "input:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "pressed",
+    "image": "component-bilibili_blue-input-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "input:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "focus",
+    "image": "component-bilibili_blue-input-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "input:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "disabled",
+    "image": "component-bilibili_blue-input-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "input:error",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "error",
+    "image": "component-bilibili_blue-input-dark-error-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "multiline:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "normal",
+    "image": "component-bilibili_blue-multiline-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "multiline:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "hover",
+    "image": "component-bilibili_blue-multiline-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "multiline:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "pressed",
+    "image": "component-bilibili_blue-multiline-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "multiline:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "focus",
+    "image": "component-bilibili_blue-multiline-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "multiline:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "disabled",
+    "image": "component-bilibili_blue-multiline-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "multiline:error",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "error",
+    "image": "component-bilibili_blue-multiline-dark-error-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      94
+    ]
+  },
+  {
+    "id": "readonly:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ReadOnlyPath",
+    "state": "normal",
+    "image": "component-bilibili_blue-readonly-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      271,
+      27
+    ]
+  },
+  {
+    "id": "readonly:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ReadOnlyPath",
+    "state": "hover",
+    "image": "component-bilibili_blue-readonly-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      271,
+      27
+    ]
+  },
+  {
+    "id": "readonly:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ReadOnlyPath",
+    "state": "pressed",
+    "image": "component-bilibili_blue-readonly-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      271,
+      27
+    ]
+  },
+  {
+    "id": "readonly:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ReadOnlyPath",
+    "state": "focus",
+    "image": "component-bilibili_blue-readonly-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      271,
+      27
+    ]
+  },
+  {
+    "id": "readonly:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ReadOnlyPath",
+    "state": "disabled",
+    "image": "component-bilibili_blue-readonly-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      271,
+      27
+    ]
+  },
+  {
+    "id": "password:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "normal",
+    "image": "component-bilibili_blue-password-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "password:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "hover",
+    "image": "component-bilibili_blue-password-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "password:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "pressed",
+    "image": "component-bilibili_blue-password-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "password:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "focus",
+    "image": "component-bilibili_blue-password-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "password:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "disabled",
+    "image": "component-bilibili_blue-password-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "password:error",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "error",
+    "image": "component-bilibili_blue-password-dark-error-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "normal",
+    "image": "component-bilibili_blue-combo-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "hover",
+    "image": "component-bilibili_blue-combo-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "pressed",
+    "image": "component-bilibili_blue-combo-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "focus",
+    "image": "component-bilibili_blue-combo-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "disabled",
+    "image": "component-bilibili_blue-combo-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "combo:error",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "error",
+    "image": "component-bilibili_blue-combo-dark-error-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "checkbox:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "normal",
+    "image": "component-bilibili_blue-checkbox-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "hover",
+    "image": "component-bilibili_blue-checkbox-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "pressed",
+    "image": "component-bilibili_blue-checkbox-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "focus",
+    "image": "component-bilibili_blue-checkbox-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "disabled",
+    "image": "component-bilibili_blue-checkbox-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:checked",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "checked",
+    "image": "component-bilibili_blue-checkbox-dark-checked-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "checkbox:partial",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "partial",
+    "image": "component-bilibili_blue-checkbox-dark-partial-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      33
+    ]
+  },
+  {
+    "id": "card:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "normal",
+    "image": "component-bilibili_blue-card-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "hover",
+    "image": "component-bilibili_blue-card-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "pressed",
+    "image": "component-bilibili_blue-card-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "focus",
+    "image": "component-bilibili_blue-card-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "disabled",
+    "image": "component-bilibili_blue-card-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:checked",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "checked",
+    "image": "component-bilibili_blue-card-dark-checked-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "primary:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-bilibili_blue-primary-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-bilibili_blue-primary-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-bilibili_blue-primary-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-bilibili_blue-primary-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-bilibili_blue-primary-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "secondary:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-bilibili_blue-secondary-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "secondary:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-bilibili_blue-secondary-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "secondary:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-bilibili_blue-secondary-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "secondary:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-bilibili_blue-secondary-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "secondary:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-bilibili_blue-secondary-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "danger:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-bilibili_blue-danger-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "danger:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-bilibili_blue-danger-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "danger:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-bilibili_blue-danger-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "danger:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-bilibili_blue-danger-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "danger:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-bilibili_blue-danger-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "normal",
+    "image": "component-bilibili_blue-stepper-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "hover",
+    "image": "component-bilibili_blue-stepper-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "pressed",
+    "image": "component-bilibili_blue-stepper-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "focus",
+    "image": "component-bilibili_blue-stepper-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "disabled",
+    "image": "component-bilibili_blue-stepper-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "stepper:error",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "error",
+    "image": "component-bilibili_blue-stepper-dark-error-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      41
+    ]
+  },
+  {
+    "id": "slider:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QSlider",
+    "state": "normal",
+    "image": "component-bilibili_blue-slider-dark-normal-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QSlider",
+    "state": "hover",
+    "image": "component-bilibili_blue-slider-dark-hover-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QSlider",
+    "state": "pressed",
+    "image": "component-bilibili_blue-slider-dark-pressed-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QSlider",
+    "state": "focus",
+    "image": "component-bilibili_blue-slider-dark-focus-font125.png",
+    "font_scale": 1.25,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QSlider",
+    "state": "disabled",
+    "image": "component-bilibili_blue-slider-dark-disabled-font125.png",
+    "font_scale": 1.25,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      32
+    ]
+  }
+]

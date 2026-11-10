@@ -1,0 +1,532 @@
+[
+  {
+    "id": "dialog-account",
+    "title": "账号",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-account.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-account-expired",
+    "title": "账号过期",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-account-expired.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-attachments",
+    "title": "附件补全",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-attachments.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-attachments-unavailable",
+    "title": "附件不可用",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-attachments-unavailable.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-background-gallery",
+    "title": "背景图库",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-background-gallery.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-batch",
+    "title": "独立批量导入",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-batch.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-close",
+    "title": "关闭窗口",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-close.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-close-no-tray",
+    "title": "无托盘时关闭",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-close-no-tray.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-copyright",
+    "title": "版权确认",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-copyright.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-file-directory",
+    "title": "选择目录",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-file-directory.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-file-open-file",
+    "title": "选择文件",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-file-open-file.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-file-operation",
+    "title": "文件操作",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-file-operation.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-file-save-file",
+    "title": "保存文件",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-file-save-file.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-login-cookie",
+    "title": "Cookie 登录",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-login-cookie.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-login-qr",
+    "title": "二维码登录",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-login-qr.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-login-qr-expired",
+    "title": "二维码过期",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-login-qr-expired.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-media-copy",
+    "title": "另存媒体",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-media-copy.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-naming-fields",
+    "title": "命名字段",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-naming-fields.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-output-review",
+    "title": "下载配置复核",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-output-review.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-pages",
+    "title": "分 P 选择",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-pages.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-relocate",
+    "title": "目录迁移",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-relocate.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-result",
+    "title": "保存结果",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-result.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-room-settings",
+    "title": "直播间设置",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-room-settings.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-settings-about",
+    "title": "关于",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-settings-about.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-settings-appearance",
+    "title": "外观设置",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-settings-appearance.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-settings-download",
+    "title": "下载设置",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-settings-download.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-settings-live",
+    "title": "直播设置",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-settings-live.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-settings-tools",
+    "title": "工具设置",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-settings-tools.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-source-errors",
+    "title": "来源解析详情",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-source-errors.png",
+    "entry": null
+  },
+  {
+    "id": "dialog-update",
+    "title": "更新",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-dialog-update.png",
+    "entry": null
+  },
+  {
+    "id": "message-batch_dialog-accept-868",
+    "title": "批量导入",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-message-batch_dialog-accept-868.png",
+    "entry": {
+      "id": "message-batch_dialog-accept-868",
+      "source": "bilibili_downloader/gui/dialogs/batch_dialog.py",
+      "line": 868,
+      "entry": "accept",
+      "title": "批量导入",
+      "text": "请先解析并预览来源",
+      "tone": "warning",
+      "dynamic_sample": false
+    }
+  },
+  {
+    "id": "message-batch_dialog-accept-873",
+    "title": "批量导入",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-message-batch_dialog-accept-873.png",
+    "entry": {
+      "id": "message-batch_dialog-accept-873",
+      "source": "bilibili_downloader/gui/dialogs/batch_dialog.py",
+      "line": 873,
+      "entry": "accept",
+      "title": "批量导入",
+      "text": "请至少选一个作品",
+      "tone": "warning",
+      "dynamic_sample": false
+    }
+  },
+  {
+    "id": "message-batch_dialog-show_reason-832",
+    "title": "来源解析详情",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-message-batch_dialog-show_reason-832.png",
+    "entry": {
+      "id": "message-batch_dialog-show_reason-832",
+      "source": "bilibili_downloader/gui/dialogs/batch_dialog.py",
+      "line": 832,
+      "entry": "show_reason",
+      "title": "来源解析详情",
+      "text": "12\n12\n12",
+      "tone": "info",
+      "dynamic_sample": true
+    }
+  },
+  {
+    "id": "message-login_dialog-logout-647",
+    "title": "退出登录",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-message-login_dialog-logout-647.png",
+    "entry": {
+      "id": "message-login_dialog-logout-647",
+      "source": "bilibili_downloader/gui/dialogs/login_dialog.py",
+      "line": 647,
+      "entry": "_logout",
+      "title": "退出登录",
+      "text": "清除本机凭据库和配置中的 B 站登录信息？",
+      "tone": "warning",
+      "dynamic_sample": false
+    }
+  },
+  {
+    "id": "message-login_dialog-on_cookie_validate_error-687",
+    "title": "验证",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-message-login_dialog-on_cookie_validate_error-687.png",
+    "entry": {
+      "id": "message-login_dialog-on_cookie_validate_error-687",
+      "source": "bilibili_downloader/gui/dialogs/login_dialog.py",
+      "line": 687,
+      "entry": "_on_cookie_validate_error",
+      "title": "验证",
+      "text": "验证失败：12",
+      "tone": "danger",
+      "dynamic_sample": true
+    }
+  },
+  {
+    "id": "message-login_dialog-on_cookie_validated-671",
+    "title": "验证",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-message-login_dialog-on_cookie_validated-671.png",
+    "entry": {
+      "id": "message-login_dialog-on_cookie_validated-671",
+      "source": "bilibili_downloader/gui/dialogs/login_dialog.py",
+      "line": 671,
+      "entry": "_on_cookie_validated",
+      "title": "验证",
+      "text": "Cookie 有效",
+      "tone": "success",
+      "dynamic_sample": false
+    }
+  },
+  {
+    "id": "message-login_dialog-on_cookie_validated-679",
+    "title": "验证",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-message-login_dialog-on_cookie_validated-679.png",
+    "entry": {
+      "id": "message-login_dialog-on_cookie_validated-679",
+      "source": "bilibili_downloader/gui/dialogs/login_dialog.py",
+      "line": 679,
+      "entry": "_on_cookie_validated",
+      "title": "验证",
+      "text": "Cookie 无效或已过期",
+      "tone": "warning",
+      "dynamic_sample": false
+    }
+  },
+  {
+    "id": "message-login_dialog-on_qr_status_result-589",
+    "title": "登录",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-message-login_dialog-on_qr_status_result-589.png",
+    "entry": {
+      "id": "message-login_dialog-on_qr_status_result-589",
+      "source": "bilibili_downloader/gui/dialogs/login_dialog.py",
+      "line": 589,
+      "entry": "_on_qr_status_result",
+      "title": "登录",
+      "text": "登录成功但未获取 SESSDATA，请手动输入 Cookie。",
+      "tone": "warning",
+      "dynamic_sample": false
+    }
+  },
+  {
+    "id": "message-login_dialog-validate_cookie-619",
+    "title": "验证",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-message-login_dialog-validate_cookie-619.png",
+    "entry": {
+      "id": "message-login_dialog-validate_cookie-619",
+      "source": "bilibili_downloader/gui/dialogs/login_dialog.py",
+      "line": 619,
+      "entry": "_validate_cookie",
+      "title": "验证",
+      "text": "请输入 SESSDATA 值",
+      "tone": "warning",
+      "dynamic_sample": false
+    }
+  },
+  {
+    "id": "message-main_window-can_leave_settings-970",
+    "title": "保存设置修改",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-message-main_window-can_leave_settings-970.png",
+    "entry": {
+      "id": "message-main_window-can_leave_settings-970",
+      "source": "bilibili_downloader/gui/main_window.py",
+      "line": 970,
+      "entry": "_can_leave_settings",
+      "title": "保存设置修改",
+      "text": "设置中有未保存的修改。",
+      "tone": "info",
+      "dynamic_sample": false
+    }
+  },
+  {
+    "id": "message-main_window-confirm_copyright_acknowledgement-2674",
+    "title": "下载与版权提示",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-message-main_window-confirm_copyright_acknowledgement-2674.png",
+    "entry": {
+      "id": "message-main_window-confirm_copyright_acknowledgement-2674",
+      "source": "bilibili_downloader/gui/main_window.py",
+      "line": 2674,
+      "entry": "_confirm_copyright_acknowledgement",
+      "title": "下载与版权提示",
+      "text": "离线演示：目录暂时无法访问，请检查磁盘连接及目录权限后重试。\n已有文件将保留。",
+      "tone": "warning",
+      "dynamic_sample": true
+    }
+  },
+  {
+    "id": "message-main_window-on_clear_cache-2443",
+    "title": "清理断点缓存",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-message-main_window-on_clear_cache-2443.png",
+    "entry": {
+      "id": "message-main_window-on_clear_cache-2443",
+      "source": "bilibili_downloader/gui/main_window.py",
+      "line": 2443,
+      "entry": "_on_clear_cache",
+      "title": "清理断点缓存",
+      "text": "将删除 12 个断点文件（12）。\n删除后未完成任务需要重新下载，确认继续吗？",
+      "tone": "warning",
+      "dynamic_sample": true
+    }
+  },
+  {
+    "id": "message-main_window-on_login_triggered-2582",
+    "title": "登录仅在本次运行有效",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-message-main_window-on_login_triggered-2582.png",
+    "entry": {
+      "id": "message-main_window-on_login_triggered-2582",
+      "source": "bilibili_downloader/gui/main_window.py",
+      "line": 2582,
+      "entry": "_on_login_triggered",
+      "title": "登录仅在本次运行有效",
+      "text": "系统凭据库不可用，Cookie 仅保存在当前进程内存中；重启 BiliFlow 后需要重新登录。",
+      "tone": "warning",
+      "dynamic_sample": false
+    }
+  },
+  {
+    "id": "message-main_window-on_update_failed-1423",
+    "title": "更新未完成",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-message-main_window-on_update_failed-1423.png",
+    "entry": {
+      "id": "message-main_window-on_update_failed-1423",
+      "source": "bilibili_downloader/gui/main_window.py",
+      "line": 1423,
+      "entry": "_on_update_failed",
+      "title": "更新未完成",
+      "text": "离线演示：目录暂时无法访问，请检查磁盘连接及目录权限后重试。\n已有文件将保留。",
+      "tone": "warning",
+      "dynamic_sample": true
+    }
+  },
+  {
+    "id": "message-main_window-on_update_prepared-1440",
+    "title": "更新已准备好",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-message-main_window-on_update_prepared-1440.png",
+    "entry": {
+      "id": "message-main_window-on_update_prepared-1440",
+      "source": "bilibili_downloader/gui/main_window.py",
+      "line": 1440,
+      "entry": "_on_update_prepared",
+      "title": "更新已准备好",
+      "text": "安装更新需要重启：下载将暂停并保留断点，直播录制将停止并保留文件，正在导出的任务将取消。",
+      "tone": "warning",
+      "dynamic_sample": false
+    }
+  },
+  {
+    "id": "message-main_window-request_quit-2837",
+    "title": "退出 BiliFlow",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-message-main_window-request_quit-2837.png",
+    "entry": {
+      "id": "message-main_window-request_quit-2837",
+      "source": "bilibili_downloader/gui/main_window.py",
+      "line": 2837,
+      "entry": "request_quit",
+      "title": "退出 BiliFlow",
+      "text": "仍有下载、直播监控、录制或导出任务。退出会暂停下载并保留断点，停止监控和录制并保留文件，中止导出。直播离线期间无法补录。",
+      "tone": "warning",
+      "dynamic_sample": false
+    }
+  },
+  {
+    "id": "message-main_window-request_remove_tasks-2303",
+    "title": "移除1212 项任务？",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-message-main_window-request_remove_tasks-2303.png",
+    "entry": {
+      "id": "message-main_window-request_remove_tasks-2303",
+      "source": "bilibili_downloader/gui/main_window.py",
+      "line": 2303,
+      "entry": "_request_remove_tasks",
+      "title": "移除1212 项任务？",
+      "text": "先停止 12 项下载，已下载文件保留。",
+      "tone": "info",
+      "dynamic_sample": true
+    }
+  },
+  {
+    "id": "message-main_window-show_error-2786",
+    "title": "任务出现问题",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-message-main_window-show_error-2786.png",
+    "entry": {
+      "id": "message-main_window-show_error-2786",
+      "source": "bilibili_downloader/gui/main_window.py",
+      "line": 2786,
+      "entry": "_show_error",
+      "title": "任务出现问题",
+      "text": "离线演示：目录暂时无法访问，请检查磁盘连接及目录权限后重试。\n已有文件将保留。",
+      "tone": "danger",
+      "dynamic_sample": true
+    }
+  },
+  {
+    "id": "message-main_window-show_info-2789",
+    "title": "运行信息",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-message-main_window-show_info-2789.png",
+    "entry": {
+      "id": "message-main_window-show_info-2789",
+      "source": "bilibili_downloader/gui/main_window.py",
+      "line": 2789,
+      "entry": "_show_info",
+      "title": "运行信息",
+      "text": "离线演示：目录暂时无法访问，请检查磁盘连接及目录权限后重试。\n已有文件将保留。",
+      "tone": "info",
+      "dynamic_sample": true
+    }
+  },
+  {
+    "id": "message-task_page-history_tab-567",
+    "title": "录制提示",
+    "cases": 20,
+    "example": "detail-star_trail-light-900-message-task_page-history_tab-567.png",
+    "entry": {
+      "id": "message-task_page-history_tab-567",
+      "source": "bilibili_downloader/gui/widgets/task_page.py",
+      "line": 567,
+      "entry": "_history_tab",
+      "title": "录制提示",
+      "text": "离线演示：目录暂时无法访问，请检查磁盘连接及目录权限后重试。\n已有文件将保留。",
+      "tone": "warning",
+      "dynamic_sample": true
+    }
+  }
+]

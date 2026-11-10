@@ -1,8 +1,11 @@
 """Shared presentation primitives; no service or persistence ownership."""
 
+import weakref
+
 from PySide6.QtCore import (
     QByteArray,
     QEvent,
+    QObject,
     QPointF,
     QRectF,
     QSize,
@@ -15,35 +18,39 @@ from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication,
     QBoxLayout,
+    QComboBox,
     QDialogButtonBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMenu,
     QMessageBox,
     QPushButton,
     QScrollArea,
     QSizePolicy,
     QSpinBox,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from bilibili_downloader.gui.layout_policy import path_preferred_width
 from bilibili_downloader.gui.resources.styles import UI_METRICS, theme_palette
+from bilibili_downloader.gui.widgets.dialog_shell import prepare_dialog, remember_focus
 from bilibili_downloader.gui.widgets.glass_surface import GlassFrame
 from bilibili_downloader.gui.widgets.header_backdrop import (
     HEADER_HEIGHT,
     paint_header_backdrop,
 )
 from bilibili_downloader.gui.widgets.motion import StateTransition
+from bilibili_downloader.gui.widgets.popup_menu import PopupMenu as PopupMenu
 from bilibili_downloader.gui.widgets.responsive_actions import (
     ActionButton,
     FlowLayout,
     ResponsiveActions,
 )
+from bilibili_downloader.gui.widgets.text_menu import text_context_menu
 
 _ICON_PATHS = {
     "appearance": '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z"/>',
@@ -74,7 +81,7 @@ def line_icon(name, color=None, size=24):
     color = color or palette().muted
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
-        f'fill="none" stroke="{color}" stroke-width="1.7" stroke-linecap="round" '
+        f'fill="none" stroke="{color}" stroke-width="{UI_METRICS.icon_stroke}" stroke-linecap="round" '
         f'stroke-linejoin="round">{_ICON_PATHS[name]}</svg>'
     )
     pixmap = QPixmap(size * 2, size * 2)
@@ -91,14 +98,6 @@ def repolish(widget):
     widget.style().unpolish(widget)
     widget.style().polish(widget)
     widget.update()
-
-
-class PopupMenu(QMenu):
-    """Allow the shared menu's rounded corners to stay transparent."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setAttribute(Qt.WA_TranslucentBackground, True)
 
 
 class IconButton(QPushButton):
@@ -241,7 +240,7 @@ class ActionBar(GlassFrame):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._layout_queued = False
         self.row = QBoxLayout(QBoxLayout.LeftToRight, self)
-        self.row.setContentsMargins(16, 6 if compact else 12, 16, 6 if compact else 12)
+        self.row.setContentsMargins(16, 8 if compact else 12, 16, 8 if compact else 12)
         self.row.setSpacing(16)
 
     def _reflow(self):
@@ -249,7 +248,7 @@ class ActionBar(GlassFrame):
         margins = self.row.contentsMargins()
         required += margins.left() + margins.right() + self.row.spacing() * max(0, self.row.count() - 1)
         self.row.setDirection(QBoxLayout.TopToBottom if required > self.width() else QBoxLayout.LeftToRight)
-        self.setFixedHeight(max(self._base_height, self.row.sizeHint().height()))
+        self.setFixedHeight(max(self._base_height, self.row.sizeHint().height() + self.frameWidth() * 2))
 
     def _schedule_layout(self):
         if not self._layout_queued:
@@ -268,6 +267,28 @@ class ActionBar(GlassFrame):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._schedule_layout()
+
+
+class ActionBarStack(QStackedWidget):
+    """Size the shell from the active bar, not a hidden bar's old viewport."""
+
+    def _bar_height(self):
+        bar = self.currentWidget()
+        return bar.minimumHeight() if bar is not None else 0
+
+    def sizeHint(self):
+        hint = self.currentWidget().sizeHint() if self.currentWidget() else QSize()
+        return QSize(hint.width(), self._bar_height())
+
+    def minimumSizeHint(self):
+        hint = self.currentWidget().minimumSizeHint() if self.currentWidget() else QSize()
+        return QSize(hint.width(), self._bar_height())
+
+    def hasHeightForWidth(self):
+        return False
+
+    def heightForWidth(self, width):
+        return self._bar_height()
 
 
 class ReadOnlyPath(QLineEdit):
@@ -311,10 +332,11 @@ class ReadOnlyPath(QLineEdit):
     def minimumSizeHint(self):
         return QSize(0, max(22, self.fontMetrics().height() + 2))
 
+    def createStandardContextMenu(self):
+        return text_context_menu(self)
+
     def contextMenuEvent(self, event):
         menu = self.createStandardContextMenu()
-        menu.addSeparator()
-        menu.addAction("复制完整路径", lambda: QApplication.clipboard().setText(self._copy_value))
         menu.exec(event.globalPos())
         menu.deleteLater()
 
@@ -348,7 +370,8 @@ class OutputActionBar(ActionBar):
         heading.addWidget(self.status)
         self.specs = ElidedLabel()
         self.specs.setObjectName("MetaLabel")
-        self.specs.full_text_changed.connect(lambda text: self.specs.setVisible(bool(text)))
+        self._compact_output = False
+        self.specs.full_text_changed.connect(lambda text: self.specs.setVisible(bool(text) and not self._compact_output))
         self.specs.hide()
         heading.addWidget(self.specs, 1)
         copy.addLayout(heading)
@@ -382,7 +405,7 @@ class OutputActionBar(ActionBar):
         self.edit_button.setFocusPolicy(Qt.StrongFocus)
         self.edit_button.clicked.connect(self.edit_requested.emit)
         self.actions.addWidget(self.edit_button)
-        self.primary_button = ActionButton("加入下载队列")
+        self.primary_button = ActionButton("加入队列")
         self.primary_button.setProperty("alwaysVisible", True)
         self.primary_button.setObjectName("OutputPrimaryButton")
         self.primary_button.setFixedHeight(44)
@@ -394,9 +417,22 @@ class OutputActionBar(ActionBar):
         self.primary_button.clicked.connect(self.submit_requested.emit)
         self.actions.addWidget(self.primary_button)
 
+    def set_compact_output(self):
+        self._compact_output = True
+        self.specs.hide()
+        self.edit_button.hide()
+        self.review_button.hide()
+        self.action_strip.schedule()
+
     def _reflow(self):
         if not hasattr(self, "action_strip"):
             return
+        # Reserve the common count label in both empty and ready workspaces.
+        # Recompute with the actual font so system text scaling keeps them aligned.
+        self.primary_button.ensurePolished()
+        self.primary_button.setMinimumWidth(max(
+            128, self.primary_button.fontMetrics().horizontalAdvance("加入队列（99 项）") + 32,
+        ))
         margins = self.row.contentsMargins()
         available = self.width() - margins.left() - margins.right()
         status_width = self.status.fontMetrics().horizontalAdvance(self.status.text()) + 8
@@ -601,6 +637,8 @@ class ResponsiveFields(QWidget):
         super().__init__(parent)
         self._column_width = column_width
         self._rows = []
+        self._hidden_rows = set()
+        self._visible_rows = ()
         self._columns = 0
         self._grid = QGridLayout(self)
         self._grid.setContentsMargins(0, 0, 0, 0)
@@ -610,13 +648,24 @@ class ResponsiveFields(QWidget):
         self._rows.append(field)
         self._reflow()
 
+    def set_field_visible(self, field, visible):
+        if visible:
+            self._hidden_rows.discard(field)
+        else:
+            self._hidden_rows.add(field)
+        field.setVisible(visible)
+        self._reflow()
+
     def _reflow(self):
         columns = 2 if self.width() >= self._column_width * 2 else 1
-        if columns == self._columns and self._grid.count() == len(self._rows):
+        visible = tuple(field for field in self._rows if field not in self._hidden_rows)
+        if columns == self._columns and visible == self._visible_rows:
             return
         self._columns = columns
-        for index, field in enumerate(self._rows):
+        self._visible_rows = visible
+        for field in self._rows:
             self._grid.removeWidget(field)
+        for index, field in enumerate(visible):
             alignment = Qt.AlignTop
             if field.maximumWidth() < 16777215:
                 alignment |= Qt.AlignLeft
@@ -748,7 +797,7 @@ class TaskDetailPanel(SectionCard):
         self.status.set_tone(tone)
         self.specs.set_full_text(specs.replace("\n", " · "))
         self.specs.setVisible(bool(specs))
-        self.path.set_full_text(f"保存位置：{path}" if path else "保存位置尚未生成")
+        self.path.set_full_text(f"保存位置：{path}" if path else "保存位置未生成")
         self.diagnostics.set_full_text(diagnostics.replace("\n", " · "))
         self.diagnostics.setVisible(bool(diagnostics))
         self.diagnostics.setProperty("tone", tone if tone in ("warning", "danger") else "muted")
@@ -774,11 +823,12 @@ class MessageBox(QMessageBox):
     ):
         super().__init__(parent)
         self._tone = tone
+        remember_focus(self, parent)
         self.setWindowTitle(title)
         self.setTextFormat(Qt.RichText if rich_text else Qt.PlainText)
         self.setText(title)
-        if len(text) > 700 or text.count("\n") > 12:
-            self.setInformativeText("完整信息可在下方选择、复制。")
+        if len(text) > (700 if rich_text else 180) or text.count("\n") > 12:
+            self.setInformativeText("可在下方选择、复制完整信息。")
             from PySide6.QtWidgets import QTextEdit
             self.setDetailedText(text)
             self.reading_area = self.findChild(QTextEdit)
@@ -789,7 +839,8 @@ class MessageBox(QMessageBox):
         else:
             self.setInformativeText(text)
         self.setTextInteractionFlags(
-            Qt.TextSelectableByMouse | Qt.LinksAccessibleByMouse
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+            | Qt.LinksAccessibleByMouse | Qt.LinksAccessibleByKeyboard
         )
         heading = self.findChild(QLabel, "qt_msgbox_label")
         heading.setObjectName("DialogTitle")
@@ -818,6 +869,7 @@ class MessageBox(QMessageBox):
 
     def showEvent(self, event):
         # Standard buttons may have been polished before callers assign a role.
+        prepare_dialog(self)
         for button in self.buttons():
             repolish(button)
         super().showEvent(event)
@@ -975,6 +1027,14 @@ class FieldRow(QWidget):
     def __init__(self, label, control, parent=None, *, stacked=False):
         super().__init__(parent)
         self.control = control
+        focus = control.focusProxy()
+        if focus is None and control.focusPolicy() == Qt.NoFocus:
+            focus = next((child for child in control.findChildren(QWidget)
+                          if isinstance(child, (QLineEdit, QComboBox, QSpinBox))), None)
+            if focus is not None:
+                control.setFocusProxy(focus)
+        self._error_control = focus or control
+        self._field_description = self._error_control.accessibleDescription()
         column = QVBoxLayout(self)
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(4)
@@ -984,9 +1044,17 @@ class FieldRow(QWidget):
         self.label = QLabel(label)
         self.label.setWordWrap(True)
         self.label.setObjectName("FieldLabel")
-        self.label.setBuddy(control)
+        self.label.setBuddy(self._error_control)
         if not control.accessibleName():
             control.setAccessibleName(label)
+        if not self._error_control.accessibleName():
+            self._error_control.setAccessibleName(label)
+        if isinstance(self._error_control, QSpinBox):
+            for button in control.findChildren(QPushButton):
+                if button.objectName() == "StepperButton":
+                    action = "减少" if button.text() == "−" else "增加"
+                    button.setAccessibleName(action + label)
+                    button.setToolTip(action + label)
         if not stacked:
             self.label.setFixedWidth(92)
         row.addWidget(self.label)
@@ -1016,6 +1084,10 @@ class FieldRow(QWidget):
         self._error_row.setVisible(bool(message))
         self.control.setProperty("invalid", bool(message))
         repolish(self.control)
+        if self._error_control is not self.control:
+            self._error_control.setProperty("invalid", bool(message))
+            repolish(self._error_control)
+        self._error_control.setAccessibleDescription("\n".join(filter(None, (self._field_description, message))))
 
 
 def scroll_area(body):
@@ -1026,6 +1098,76 @@ def scroll_area(body):
     scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
     scroll.setWidget(body)
     return scroll
+
+
+class _FieldReveal(QObject):
+    """Keep a newly revealed error visible through font/disclosure layout changes."""
+
+    def __init__(self, scroll, field, margin):
+        super().__init__(field)
+        self.scroll, self.field = weakref.ref(scroll), weakref.ref(field)
+        self.margin, self.queued, self.active = margin, False, True
+        self.target = weakref.ref(field.control.focusProxy() or field.control)
+        for widget in (field, scroll.widget(), scroll.viewport(), self.target()):
+            widget.installEventFilter(self)
+        scroll.verticalScrollBar().sliderPressed.connect(self.cancel)
+        scroll.verticalScrollBar().rangeChanged.connect(self.schedule)
+        scroll.verticalScrollBar().valueChanged.connect(self.schedule)
+        self.schedule()
+
+    def cancel(self):
+        self.active = False
+
+    def schedule(self, *_args):
+        if self.active and not self.queued:
+            self.queued = True
+            QTimer.singleShot(0, self, self.locate)
+
+    def locate(self):
+        from shiboken6 import isValid
+        self.queued = False
+        scroll, field = self.scroll(), self.field()
+        if not self.active or scroll is None or field is None or not isValid(scroll) or not isValid(field):
+            return
+        if not field.error.text():
+            self.cancel()
+            return
+        ancestors = []
+        current = field
+        while current is not None and current is not scroll:
+            ancestors.append(current)
+            current = current.parentWidget()
+        # Nested disclosure bodies can initially have zero height. Resolve
+        # their hints bottom-up, then allocate geometry from the outer layout.
+        for current in ancestors:
+            if current.layout():
+                current.layout().activate()
+        for current in reversed(ancestors):
+            if current.layout():
+                current.layout().activate()
+        center = field.mapTo(scroll.widget(), field.rect().center())
+        scroll.ensureVisible(center.x(), center.y(), field.width() // 2, field.height() // 2 + self.margin)
+
+    def eventFilter(self, watched, event):
+        user_focus_out = watched is self.target() and event.type() == QEvent.FocusOut and event.reason() in (
+            Qt.TabFocusReason, Qt.BacktabFocusReason, Qt.MouseFocusReason, Qt.PopupFocusReason,
+        )
+        if event.type() in (QEvent.Wheel, QEvent.MouseButtonPress) or user_focus_out:
+            self.cancel()
+        elif event.type() in (QEvent.LayoutRequest, QEvent.Resize, QEvent.Show):
+            self.schedule()
+        return False
+
+
+def reveal_field(scroll, field, margin=16):
+    """Reveal the whole field and its error, independently of its focus child."""
+    previous = getattr(scroll, "_field_reveal", None)
+    if previous is not None:
+        from shiboken6 import isValid
+        if isValid(previous):
+            previous.cancel()
+            previous.deleteLater()
+    scroll._field_reveal = _FieldReveal(scroll, field, margin)
 
 
 def stepper(spin: QSpinBox):

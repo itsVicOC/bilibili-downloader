@@ -61,6 +61,10 @@ class ThemeManager(QObject):
     def __init__(self, app, theme_id="star_trail", mode="system"):
         super().__init__(app)
         self._app = app
+        from bilibili_downloader.gui.widgets.control_polish import (
+            install_control_polish,
+        )
+        install_control_polish(app)
         self._is_dark = False
         self._theme_id = theme_id
         self._mode = "system"

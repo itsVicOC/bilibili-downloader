@@ -1,0 +1,4082 @@
+[
+  {
+    "id": "input:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "normal",
+    "image": "component-star_trail-input-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "input:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "hover",
+    "image": "component-star_trail-input-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "input:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "pressed",
+    "image": "component-star_trail-input-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "input:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "focus",
+    "image": "component-star_trail-input-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "input:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "disabled",
+    "image": "component-star_trail-input-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "input:error",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "error",
+    "image": "component-star_trail-input-light-error.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "multiline:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "normal",
+    "image": "component-star_trail-multiline-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "multiline:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "hover",
+    "image": "component-star_trail-multiline-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "multiline:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "pressed",
+    "image": "component-star_trail-multiline-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "multiline:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "focus",
+    "image": "component-star_trail-multiline-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "multiline:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "disabled",
+    "image": "component-star_trail-multiline-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "multiline:error",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "error",
+    "image": "component-star_trail-multiline-light-error.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "readonly:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ReadOnlyPath",
+    "state": "normal",
+    "image": "component-star_trail-readonly-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      213,
+      22
+    ]
+  },
+  {
+    "id": "readonly:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ReadOnlyPath",
+    "state": "hover",
+    "image": "component-star_trail-readonly-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      213,
+      22
+    ]
+  },
+  {
+    "id": "readonly:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ReadOnlyPath",
+    "state": "pressed",
+    "image": "component-star_trail-readonly-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      213,
+      22
+    ]
+  },
+  {
+    "id": "readonly:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ReadOnlyPath",
+    "state": "focus",
+    "image": "component-star_trail-readonly-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      213,
+      22
+    ]
+  },
+  {
+    "id": "readonly:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ReadOnlyPath",
+    "state": "disabled",
+    "image": "component-star_trail-readonly-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      213,
+      22
+    ]
+  },
+  {
+    "id": "password:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "normal",
+    "image": "component-star_trail-password-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "password:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "hover",
+    "image": "component-star_trail-password-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "password:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "pressed",
+    "image": "component-star_trail-password-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "password:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "focus",
+    "image": "component-star_trail-password-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "password:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "disabled",
+    "image": "component-star_trail-password-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "password:error",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "error",
+    "image": "component-star_trail-password-light-error.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "normal",
+    "image": "component-star_trail-combo-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "hover",
+    "image": "component-star_trail-combo-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "pressed",
+    "image": "component-star_trail-combo-light-pressed.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "focus",
+    "image": "component-star_trail-combo-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "disabled",
+    "image": "component-star_trail-combo-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:error",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "error",
+    "image": "component-star_trail-combo-light-error.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "checkbox:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "normal",
+    "image": "component-star_trail-checkbox-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "hover",
+    "image": "component-star_trail-checkbox-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "pressed",
+    "image": "component-star_trail-checkbox-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "focus",
+    "image": "component-star_trail-checkbox-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "disabled",
+    "image": "component-star_trail-checkbox-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:checked",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "checked",
+    "image": "component-star_trail-checkbox-light-checked.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:partial",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "partial",
+    "image": "component-star_trail-checkbox-light-partial.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "card:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "normal",
+    "image": "component-star_trail-card-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "hover",
+    "image": "component-star_trail-card-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "pressed",
+    "image": "component-star_trail-card-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "focus",
+    "image": "component-star_trail-card-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "disabled",
+    "image": "component-star_trail-card-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:checked",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "checked",
+    "image": "component-star_trail-card-light-checked.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "primary:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-star_trail-primary-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-star_trail-primary-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-star_trail-primary-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-star_trail-primary-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-star_trail-primary-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "secondary:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-star_trail-secondary-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "secondary:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-star_trail-secondary-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "secondary:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-star_trail-secondary-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "secondary:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-star_trail-secondary-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "secondary:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-star_trail-secondary-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "danger:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-star_trail-danger-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "danger:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-star_trail-danger-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "danger:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-star_trail-danger-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "danger:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-star_trail-danger-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "danger:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-star_trail-danger-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "normal",
+    "image": "component-star_trail-stepper-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "hover",
+    "image": "component-star_trail-stepper-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "pressed",
+    "image": "component-star_trail-stepper-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "focus",
+    "image": "component-star_trail-stepper-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "disabled",
+    "image": "component-star_trail-stepper-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:error",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "error",
+    "image": "component-star_trail-stepper-light-error.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "slider:normal",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QSlider",
+    "state": "normal",
+    "image": "component-star_trail-slider-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:hover",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QSlider",
+    "state": "hover",
+    "image": "component-star_trail-slider-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:pressed",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QSlider",
+    "state": "pressed",
+    "image": "component-star_trail-slider-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:focus",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QSlider",
+    "state": "focus",
+    "image": "component-star_trail-slider-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:disabled",
+    "theme": "star_trail",
+    "mode": "light",
+    "class": "QSlider",
+    "state": "disabled",
+    "image": "component-star_trail-slider-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "input:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "normal",
+    "image": "component-star_trail-input-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "input:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "hover",
+    "image": "component-star_trail-input-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "input:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "pressed",
+    "image": "component-star_trail-input-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "input:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "focus",
+    "image": "component-star_trail-input-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "input:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "disabled",
+    "image": "component-star_trail-input-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "input:error",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "error",
+    "image": "component-star_trail-input-dark-error.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "multiline:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "normal",
+    "image": "component-star_trail-multiline-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "multiline:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "hover",
+    "image": "component-star_trail-multiline-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "multiline:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "pressed",
+    "image": "component-star_trail-multiline-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "multiline:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "focus",
+    "image": "component-star_trail-multiline-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "multiline:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "disabled",
+    "image": "component-star_trail-multiline-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "multiline:error",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "error",
+    "image": "component-star_trail-multiline-dark-error.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "readonly:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ReadOnlyPath",
+    "state": "normal",
+    "image": "component-star_trail-readonly-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      213,
+      22
+    ]
+  },
+  {
+    "id": "readonly:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ReadOnlyPath",
+    "state": "hover",
+    "image": "component-star_trail-readonly-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      213,
+      22
+    ]
+  },
+  {
+    "id": "readonly:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ReadOnlyPath",
+    "state": "pressed",
+    "image": "component-star_trail-readonly-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      213,
+      22
+    ]
+  },
+  {
+    "id": "readonly:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ReadOnlyPath",
+    "state": "focus",
+    "image": "component-star_trail-readonly-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      213,
+      22
+    ]
+  },
+  {
+    "id": "readonly:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ReadOnlyPath",
+    "state": "disabled",
+    "image": "component-star_trail-readonly-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      213,
+      22
+    ]
+  },
+  {
+    "id": "password:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "normal",
+    "image": "component-star_trail-password-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "password:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "hover",
+    "image": "component-star_trail-password-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "password:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "pressed",
+    "image": "component-star_trail-password-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "password:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "focus",
+    "image": "component-star_trail-password-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "password:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "disabled",
+    "image": "component-star_trail-password-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "password:error",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "error",
+    "image": "component-star_trail-password-dark-error.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "normal",
+    "image": "component-star_trail-combo-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "hover",
+    "image": "component-star_trail-combo-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "pressed",
+    "image": "component-star_trail-combo-dark-pressed.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "focus",
+    "image": "component-star_trail-combo-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "disabled",
+    "image": "component-star_trail-combo-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:error",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "error",
+    "image": "component-star_trail-combo-dark-error.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "checkbox:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "normal",
+    "image": "component-star_trail-checkbox-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "hover",
+    "image": "component-star_trail-checkbox-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "pressed",
+    "image": "component-star_trail-checkbox-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "focus",
+    "image": "component-star_trail-checkbox-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "disabled",
+    "image": "component-star_trail-checkbox-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:checked",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "checked",
+    "image": "component-star_trail-checkbox-dark-checked.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:partial",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "partial",
+    "image": "component-star_trail-checkbox-dark-partial.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "card:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "normal",
+    "image": "component-star_trail-card-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "hover",
+    "image": "component-star_trail-card-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "pressed",
+    "image": "component-star_trail-card-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "focus",
+    "image": "component-star_trail-card-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "disabled",
+    "image": "component-star_trail-card-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:checked",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "checked",
+    "image": "component-star_trail-card-dark-checked.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "primary:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-star_trail-primary-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-star_trail-primary-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-star_trail-primary-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-star_trail-primary-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-star_trail-primary-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "secondary:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-star_trail-secondary-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "secondary:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-star_trail-secondary-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "secondary:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-star_trail-secondary-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "secondary:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-star_trail-secondary-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "secondary:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-star_trail-secondary-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "danger:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-star_trail-danger-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "danger:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-star_trail-danger-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "danger:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-star_trail-danger-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "danger:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-star_trail-danger-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "danger:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-star_trail-danger-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "normal",
+    "image": "component-star_trail-stepper-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "hover",
+    "image": "component-star_trail-stepper-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "pressed",
+    "image": "component-star_trail-stepper-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "focus",
+    "image": "component-star_trail-stepper-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "disabled",
+    "image": "component-star_trail-stepper-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:error",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "error",
+    "image": "component-star_trail-stepper-dark-error.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "slider:normal",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QSlider",
+    "state": "normal",
+    "image": "component-star_trail-slider-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:hover",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QSlider",
+    "state": "hover",
+    "image": "component-star_trail-slider-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:pressed",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QSlider",
+    "state": "pressed",
+    "image": "component-star_trail-slider-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:focus",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QSlider",
+    "state": "focus",
+    "image": "component-star_trail-slider-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:disabled",
+    "theme": "star_trail",
+    "mode": "dark",
+    "class": "QSlider",
+    "state": "disabled",
+    "image": "component-star_trail-slider-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "input:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "normal",
+    "image": "component-bilibili_blue-input-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "input:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "hover",
+    "image": "component-bilibili_blue-input-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "input:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "pressed",
+    "image": "component-bilibili_blue-input-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "input:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "focus",
+    "image": "component-bilibili_blue-input-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "input:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "disabled",
+    "image": "component-bilibili_blue-input-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "input:error",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "error",
+    "image": "component-bilibili_blue-input-light-error.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "multiline:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "normal",
+    "image": "component-bilibili_blue-multiline-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "multiline:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "hover",
+    "image": "component-bilibili_blue-multiline-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "multiline:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "pressed",
+    "image": "component-bilibili_blue-multiline-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "multiline:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "focus",
+    "image": "component-bilibili_blue-multiline-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "multiline:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "disabled",
+    "image": "component-bilibili_blue-multiline-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "multiline:error",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPlainTextEdit",
+    "state": "error",
+    "image": "component-bilibili_blue-multiline-light-error.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "readonly:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ReadOnlyPath",
+    "state": "normal",
+    "image": "component-bilibili_blue-readonly-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      213,
+      22
+    ]
+  },
+  {
+    "id": "readonly:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ReadOnlyPath",
+    "state": "hover",
+    "image": "component-bilibili_blue-readonly-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      213,
+      22
+    ]
+  },
+  {
+    "id": "readonly:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ReadOnlyPath",
+    "state": "pressed",
+    "image": "component-bilibili_blue-readonly-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      213,
+      22
+    ]
+  },
+  {
+    "id": "readonly:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ReadOnlyPath",
+    "state": "focus",
+    "image": "component-bilibili_blue-readonly-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      213,
+      22
+    ]
+  },
+  {
+    "id": "readonly:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ReadOnlyPath",
+    "state": "disabled",
+    "image": "component-bilibili_blue-readonly-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      213,
+      22
+    ]
+  },
+  {
+    "id": "password:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "normal",
+    "image": "component-bilibili_blue-password-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "password:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "hover",
+    "image": "component-bilibili_blue-password-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "password:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "pressed",
+    "image": "component-bilibili_blue-password-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "password:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "focus",
+    "image": "component-bilibili_blue-password-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "password:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "disabled",
+    "image": "component-bilibili_blue-password-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "password:error",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ChineseLineEdit",
+    "state": "error",
+    "image": "component-bilibili_blue-password-light-error.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "normal",
+    "image": "component-bilibili_blue-combo-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "hover",
+    "image": "component-bilibili_blue-combo-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "pressed",
+    "image": "component-bilibili_blue-combo-light-pressed.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "focus",
+    "image": "component-bilibili_blue-combo-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "disabled",
+    "image": "component-bilibili_blue-combo-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:error",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "ComboBox",
+    "state": "error",
+    "image": "component-bilibili_blue-combo-light-error.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "checkbox:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "normal",
+    "image": "component-bilibili_blue-checkbox-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "hover",
+    "image": "component-bilibili_blue-checkbox-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "pressed",
+    "image": "component-bilibili_blue-checkbox-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "focus",
+    "image": "component-bilibili_blue-checkbox-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "disabled",
+    "image": "component-bilibili_blue-checkbox-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:checked",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "checked",
+    "image": "component-bilibili_blue-checkbox-light-checked.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:partial",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "CheckBox",
+    "state": "partial",
+    "image": "component-bilibili_blue-checkbox-light-partial.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "card:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "normal",
+    "image": "component-bilibili_blue-card-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "hover",
+    "image": "component-bilibili_blue-card-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "pressed",
+    "image": "component-bilibili_blue-card-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "focus",
+    "image": "component-bilibili_blue-card-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "disabled",
+    "image": "component-bilibili_blue-card-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:checked",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "DownloadOptionCard",
+    "state": "checked",
+    "image": "component-bilibili_blue-card-light-checked.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "primary:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-bilibili_blue-primary-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-bilibili_blue-primary-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-bilibili_blue-primary-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-bilibili_blue-primary-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-bilibili_blue-primary-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "secondary:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-bilibili_blue-secondary-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "secondary:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-bilibili_blue-secondary-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "secondary:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-bilibili_blue-secondary-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "secondary:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-bilibili_blue-secondary-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "secondary:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-bilibili_blue-secondary-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "danger:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-bilibili_blue-danger-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "danger:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-bilibili_blue-danger-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "danger:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-bilibili_blue-danger-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "danger:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-bilibili_blue-danger-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "danger:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-bilibili_blue-danger-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "normal",
+    "image": "component-bilibili_blue-stepper-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "hover",
+    "image": "component-bilibili_blue-stepper-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "pressed",
+    "image": "component-bilibili_blue-stepper-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "focus",
+    "image": "component-bilibili_blue-stepper-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "disabled",
+    "image": "component-bilibili_blue-stepper-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:error",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QWidget",
+    "state": "error",
+    "image": "component-bilibili_blue-stepper-light-error.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "slider:normal",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QSlider",
+    "state": "normal",
+    "image": "component-bilibili_blue-slider-light-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:hover",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QSlider",
+    "state": "hover",
+    "image": "component-bilibili_blue-slider-light-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:pressed",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QSlider",
+    "state": "pressed",
+    "image": "component-bilibili_blue-slider-light-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:focus",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QSlider",
+    "state": "focus",
+    "image": "component-bilibili_blue-slider-light-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:disabled",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "class": "QSlider",
+    "state": "disabled",
+    "image": "component-bilibili_blue-slider-light-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "input:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "normal",
+    "image": "component-bilibili_blue-input-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "input:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "hover",
+    "image": "component-bilibili_blue-input-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "input:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "pressed",
+    "image": "component-bilibili_blue-input-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "input:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "focus",
+    "image": "component-bilibili_blue-input-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "input:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "disabled",
+    "image": "component-bilibili_blue-input-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "input:error",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "error",
+    "image": "component-bilibili_blue-input-dark-error.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "multiline:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "normal",
+    "image": "component-bilibili_blue-multiline-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "multiline:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "hover",
+    "image": "component-bilibili_blue-multiline-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "multiline:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "pressed",
+    "image": "component-bilibili_blue-multiline-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "multiline:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "focus",
+    "image": "component-bilibili_blue-multiline-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "multiline:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "disabled",
+    "image": "component-bilibili_blue-multiline-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "multiline:error",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPlainTextEdit",
+    "state": "error",
+    "image": "component-bilibili_blue-multiline-dark-error.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      102
+    ]
+  },
+  {
+    "id": "readonly:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ReadOnlyPath",
+    "state": "normal",
+    "image": "component-bilibili_blue-readonly-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      213,
+      22
+    ]
+  },
+  {
+    "id": "readonly:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ReadOnlyPath",
+    "state": "hover",
+    "image": "component-bilibili_blue-readonly-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      213,
+      22
+    ]
+  },
+  {
+    "id": "readonly:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ReadOnlyPath",
+    "state": "pressed",
+    "image": "component-bilibili_blue-readonly-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      213,
+      22
+    ]
+  },
+  {
+    "id": "readonly:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ReadOnlyPath",
+    "state": "focus",
+    "image": "component-bilibili_blue-readonly-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      213,
+      22
+    ]
+  },
+  {
+    "id": "readonly:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ReadOnlyPath",
+    "state": "disabled",
+    "image": "component-bilibili_blue-readonly-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      213,
+      22
+    ]
+  },
+  {
+    "id": "password:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "normal",
+    "image": "component-bilibili_blue-password-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "password:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "hover",
+    "image": "component-bilibili_blue-password-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "password:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "pressed",
+    "image": "component-bilibili_blue-password-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "password:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "focus",
+    "image": "component-bilibili_blue-password-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "password:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "disabled",
+    "image": "component-bilibili_blue-password-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "password:error",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ChineseLineEdit",
+    "state": "error",
+    "image": "component-bilibili_blue-password-dark-error.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "normal",
+    "image": "component-bilibili_blue-combo-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "hover",
+    "image": "component-bilibili_blue-combo-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "pressed",
+    "image": "component-bilibili_blue-combo-dark-pressed.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "focus",
+    "image": "component-bilibili_blue-combo-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "disabled",
+    "image": "component-bilibili_blue-combo-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "combo:error",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "ComboBox",
+    "state": "error",
+    "image": "component-bilibili_blue-combo-dark-error.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "checkbox:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "normal",
+    "image": "component-bilibili_blue-checkbox-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "hover",
+    "image": "component-bilibili_blue-checkbox-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "pressed",
+    "image": "component-bilibili_blue-checkbox-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "focus",
+    "image": "component-bilibili_blue-checkbox-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "disabled",
+    "image": "component-bilibili_blue-checkbox-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:checked",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "checked",
+    "image": "component-bilibili_blue-checkbox-dark-checked.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "checkbox:partial",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "CheckBox",
+    "state": "partial",
+    "image": "component-bilibili_blue-checkbox-dark-partial.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "card:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "normal",
+    "image": "component-bilibili_blue-card-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "hover",
+    "image": "component-bilibili_blue-card-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "pressed",
+    "image": "component-bilibili_blue-card-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "focus",
+    "image": "component-bilibili_blue-card-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "disabled",
+    "image": "component-bilibili_blue-card-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "card:checked",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "DownloadOptionCard",
+    "state": "checked",
+    "image": "component-bilibili_blue-card-dark-checked.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "primary:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-bilibili_blue-primary-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-bilibili_blue-primary-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-bilibili_blue-primary-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-bilibili_blue-primary-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "primary:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-bilibili_blue-primary-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      44
+    ]
+  },
+  {
+    "id": "secondary:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-bilibili_blue-secondary-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "secondary:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-bilibili_blue-secondary-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "secondary:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-bilibili_blue-secondary-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "secondary:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-bilibili_blue-secondary-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "secondary:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-bilibili_blue-secondary-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "danger:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "normal",
+    "image": "component-bilibili_blue-danger-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "danger:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "hover",
+    "image": "component-bilibili_blue-danger-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "danger:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "pressed",
+    "image": "component-bilibili_blue-danger-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "danger:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "focus",
+    "image": "component-bilibili_blue-danger-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "danger:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QPushButton",
+    "state": "disabled",
+    "image": "component-bilibili_blue-danger-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "normal",
+    "image": "component-bilibili_blue-stepper-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "hover",
+    "image": "component-bilibili_blue-stepper-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "pressed",
+    "image": "component-bilibili_blue-stepper-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "focus",
+    "image": "component-bilibili_blue-stepper-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "disabled",
+    "image": "component-bilibili_blue-stepper-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "stepper:error",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QWidget",
+    "state": "error",
+    "image": "component-bilibili_blue-stepper-dark-error.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      40
+    ]
+  },
+  {
+    "id": "slider:normal",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QSlider",
+    "state": "normal",
+    "image": "component-bilibili_blue-slider-dark-normal.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:hover",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QSlider",
+    "state": "hover",
+    "image": "component-bilibili_blue-slider-dark-hover.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:pressed",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QSlider",
+    "state": "pressed",
+    "image": "component-bilibili_blue-slider-dark-pressed.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:focus",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QSlider",
+    "state": "focus",
+    "image": "component-bilibili_blue-slider-dark-focus.png",
+    "font_scale": 1,
+    "focused": true,
+    "enabled": true,
+    "size": [
+      412,
+      32
+    ]
+  },
+  {
+    "id": "slider:disabled",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "class": "QSlider",
+    "state": "disabled",
+    "image": "component-bilibili_blue-slider-dark-disabled.png",
+    "font_scale": 1,
+    "focused": false,
+    "enabled": false,
+    "size": [
+      412,
+      32
+    ]
+  }
+]

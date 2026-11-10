@@ -154,6 +154,7 @@ def test_advanced_templates_keep_draft_and_open_for_validation(qtbot):
     flush()
     assert not panel._templates_section.content.isHidden()
     assert panel._field_rows["path_template"].error.text()
+    qtbot.waitUntil(lambda: panel._path_template.visibleRegion().boundingRect().contains(panel._path_template.rect()), timeout=1000)
     assert panel._path_template.visibleRegion().boundingRect().contains(panel._path_template.rect())
 
 

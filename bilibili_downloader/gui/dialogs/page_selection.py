@@ -47,6 +47,7 @@ class PageSelectionDialog(WorkflowDialog):
         self.selection_bar = SelectionBar()
         self.body.addWidget(self.selection_bar)
         self.list = RowHoverTable(len(pages), 2)
+        self.list.setAccessibleName("分 P 列表")
         self.list.setHorizontalHeaderLabels(["分 P", "时长"])
         self.list.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.list.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
@@ -69,7 +70,7 @@ class PageSelectionDialog(WorkflowDialog):
         self.selection.reset()
         self.results = QStackedWidget()
         self.results.addWidget(self.list)
-        self.results.addWidget(EmptyState("没有匹配的分 P", "已勾选的分 P 仍会保留，可清除搜索或查看已选。", "清除搜索", self.search.clear))
+        self.results.addWidget(EmptyState("没有匹配的分 P", "保留已选分 P，可清除搜索或查看已选。", "清除搜索", self.search.clear))
         # An inactive empty state must not push the range control below the fold.
         self.results.widget(1).setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
         self.body.addWidget(self.results, 1)
@@ -108,7 +109,7 @@ class PageSelectionDialog(WorkflowDialog):
         self.selection_bar.update_state(state)
         self.confirm_button.setEnabled(bool(state.selected))
         self.confirm_button.setText(f"确认选择（{len(state.selected)} P）")
-        self.footer_hint.setText("勾选仅在确认后生效")
+        self.footer_hint.setText("勾选确认后生效")
 
     def apply_range(self):
         try:

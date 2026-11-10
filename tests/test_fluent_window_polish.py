@@ -26,12 +26,21 @@ def test_compact_download_keeps_core_specs_and_confirmation_visible(workspace, s
     flush()
     assert workspace._density.compact
     controls = [workspace._choose_pages_btn, workspace._output_mode_combo, workspace._quality_combo,
-                workspace._codec_combo, workspace._download_btn, workspace._output_summary]
+                workspace._download_btn, workspace._output_summary]
     if size[0] == 1120:
         controls += [workspace._metadata_check, workspace._all_subtitles_check]
-        assert workspace._workspace_scroll.verticalScrollBar().maximum() == 0
+        assert workspace._workspace_scroll.horizontalScrollBar().maximum() == 0
     for control in controls:
+        if workspace._configuration.isAncestorOf(control):
+            workspace._workspace_scroll.ensureWidgetVisible(control, 0, 12)
+            flush()
         assert control.visibleRegion().boundingRect().contains(control.rect())
+    assert not workspace._codec_combo.isVisible()
+    workspace._configuration.advanced.set_expanded(True)
+    flush()
+    workspace._workspace_scroll.ensureWidgetVisible(workspace._codec_combo, 0, 12)
+    flush()
+    assert workspace._codec_combo.visibleRegion().boundingRect().contains(workspace._codec_combo.rect())
     assert workspace._video_info._cover_label.size().width() == 128
     assert workspace._download_actions.height() == 72
 

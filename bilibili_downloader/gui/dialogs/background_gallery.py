@@ -25,7 +25,6 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QAbstractButton,
     QButtonGroup,
-    QDialog,
     QDialogButtonBox,
     QGridLayout,
     QHBoxLayout,
@@ -50,6 +49,7 @@ from bilibili_downloader.gui.resources.styles import readable_fill_text
 from bilibili_downloader.gui.widgets.background_effects import BackgroundEffects
 from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import palette
+from bilibili_downloader.gui.widgets.dialog_shell import AppDialog
 from bilibili_downloader.gui.widgets.workspace_background import background_pixmap
 
 
@@ -94,7 +94,14 @@ class WallpaperCard(QAbstractButton):
         self.set_card_width(144)
 
     def set_card_width(self, width):
-        self.setFixedSize(width, round((width - 12) * 9 / 16) + 48)
+        self._card_width = width
+        self.setFixedSize(width, round((width - 12) * 9 / 16) + self.fontMetrics().height() * 2 + 24)
+        self.setProperty("focusRadius", 10)
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() in (QEvent.FontChange, QEvent.StyleChange) and hasattr(self, "_card_width"):
+            self.set_card_width(self._card_width)
 
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down):
@@ -110,11 +117,7 @@ class WallpaperCard(QAbstractButton):
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setPen(QPen(QColor(colors.focus if self.isChecked() else colors.divider), 2 if self.isChecked() else 1))
         painter.setBrush(QColor(colors.selection if self.isChecked() else colors.surface_raised if self.underMouse() else colors.surface))
-        painter.drawRoundedRect(QRectF(self.rect()).adjusted(2, 2, -2, -2), 9, 9)
-        if self.hasFocus():
-            painter.setBrush(Qt.NoBrush)
-            painter.setPen(QPen(QColor(colors.focus), 1, Qt.DashLine))
-            painter.drawRoundedRect(QRectF(self.rect()).adjusted(.5, .5, -.5, -.5), 11, 11)
+        painter.drawRoundedRect(QRectF(self.rect()).adjusted(1, 1, -1, -1), 12, 12)
         thumb = QRectF(6, 6, self.width() - 12, (self.width() - 12) * 9 / 16)
         painter.save()
         clip = QPainterPath()
@@ -145,13 +148,14 @@ class WallpaperCard(QAbstractButton):
             painter.drawLine(x, 20, x + 4, 24)
             painter.drawLine(x + 4, 24, x + 11, 16)
         painter.setPen(QColor(colors.text))
-        painter.drawText(QRectF(9, thumb.bottom() + 4, self.width() - 18, 22), Qt.AlignVCenter,
+        line = self.fontMetrics().height()
+        painter.drawText(QRectF(9, thumb.bottom() + 8, self.width() - 18, line + 2), Qt.AlignVCenter,
                          painter.fontMetrics().elidedText(self.entry.title, Qt.ElideRight, self.width() - 18))
         font = painter.font()
         font.setPointSizeF(font.pointSizeF() * .78)
         painter.setFont(font)
         painter.setPen(QColor(colors.muted))
-        painter.drawText(QRectF(9, thumb.bottom() + 24, self.width() - 18, 16), Qt.AlignVCenter,
+        painter.drawText(QRectF(9, thumb.bottom() + line + 12, self.width() - 18, line), Qt.AlignVCenter,
                          f"{STYLE_TITLES[self.entry.style]} · {WORKSPACE_TITLES[self.entry.workspace]}")
         painter.end()
 
@@ -170,6 +174,7 @@ class ImageDropArea(QAbstractButton):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setProperty("focusRadius", 10)
         self.setAcceptDrops(True)
         self.setMinimumHeight(196)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -217,11 +222,11 @@ class ImageDropArea(QAbstractButton):
         painter.drawText(title, Qt.AlignHCenter | Qt.AlignBottom,
                          "更换图片" if not self.image.isNull() else "拖放图片到这里")
         painter.setPen(QColor(p.muted))
-        painter.drawText(caption, Qt.AlignHCenter | Qt.AlignBottom, "或点击选择本地图片")
+        painter.drawText(caption, Qt.AlignHCenter | Qt.AlignBottom, "或点击选本地图片")
         painter.end()
 
 
-class BackgroundGallery(QDialog):
+class BackgroundGallery(AppDialog):
     def __init__(self, picker):
         super().__init__(picker)
         self.setWindowTitle(f"选择{picker._title}背景")
@@ -417,7 +422,7 @@ class BackgroundGallery(QDialog):
                 self.grid.addWidget(card, index // self._columns, index % self._columns)
                 self._visible_cards.append(card)
         hidden = self.reference and builtin_background(self.reference) and not any(c.isChecked() for c in self._visible_cards)
-        self.filter_status.setText("当前选择不在此筛选中" if hidden else f"{len(self._visible_cards)} 幅作品")
+        self.filter_status.setText("当前选择不在筛选中" if hidden else f"{len(self._visible_cards)} 幅作品")
 
     def eventFilter(self, watched, event):
         if watched is self.scroll.viewport() and event.type() == QEvent.Resize:
@@ -501,7 +506,7 @@ class BackgroundGallery(QDialog):
         if self.busy:
             self.selection_label.setText(self.selection_label.text() + " · 正在读取…")
         elif not self._selection_valid:
-            self.selection_label.setText("背景丢失或损坏，请选择其他图片")
+            self.selection_label.setText("背景丢失或损坏，请换图")
         self.drop_area.image = self._selected_image if self.reference and not entry else QPixmap()
         self.drop_area.update()
         self.apply_button.setEnabled(self._selection_valid and not self.busy)

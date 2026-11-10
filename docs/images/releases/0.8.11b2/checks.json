@@ -1,0 +1,118 @@
+{
+  "version": "0.8.11b2",
+  "backend": "cocoa",
+  "checks": [
+    {
+      "theme": "star_trail",
+      "mode": "light",
+      "requested": [
+        480,
+        360
+      ],
+      "actual": [
+        480,
+        360
+      ],
+      "horizontal_scroll": 0,
+      "image": "notes-star_trail-light-480.png"
+    },
+    {
+      "theme": "star_trail",
+      "mode": "light",
+      "requested": [
+        680,
+        520
+      ],
+      "actual": [
+        680,
+        520
+      ],
+      "horizontal_scroll": 0,
+      "image": "notes-star_trail-light-680.png"
+    },
+    {
+      "theme": "star_trail",
+      "mode": "dark",
+      "requested": [
+        480,
+        360
+      ],
+      "actual": [
+        480,
+        360
+      ],
+      "horizontal_scroll": 0,
+      "image": "notes-star_trail-dark-480.png"
+    },
+    {
+      "theme": "star_trail",
+      "mode": "dark",
+      "requested": [
+        680,
+        520
+      ],
+      "actual": [
+        680,
+        520
+      ],
+      "horizontal_scroll": 0,
+      "image": "notes-star_trail-dark-680.png"
+    },
+    {
+      "theme": "bilibili_blue",
+      "mode": "light",
+      "requested": [
+        480,
+        360
+      ],
+      "actual": [
+        480,
+        360
+      ],
+      "horizontal_scroll": 0,
+      "image": "notes-bilibili_blue-light-480.png"
+    },
+    {
+      "theme": "bilibili_blue",
+      "mode": "light",
+      "requested": [
+        680,
+        520
+      ],
+      "actual": [
+        680,
+        520
+      ],
+      "horizontal_scroll": 0,
+      "image": "notes-bilibili_blue-light-680.png"
+    },
+    {
+      "theme": "bilibili_blue",
+      "mode": "dark",
+      "requested": [
+        480,
+        360
+      ],
+      "actual": [
+        480,
+        360
+      ],
+      "horizontal_scroll": 0,
+      "image": "notes-bilibili_blue-dark-480.png"
+    },
+    {
+      "theme": "bilibili_blue",
+      "mode": "dark",
+      "requested": [
+        680,
+        520
+      ],
+      "actual": [
+        680,
+        520
+      ],
+      "horizontal_scroll": 0,
+      "image": "notes-bilibili_blue-dark-680.png"
+    }
+  ]
+}

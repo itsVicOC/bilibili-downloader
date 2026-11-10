@@ -1,5 +1,6 @@
 """Fixed status feedback with a single optional contextual action."""
 
+from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QPushButton, QStatusBar
 
 
@@ -36,3 +37,9 @@ class FeedbackBar(QStatusBar):
         callback = self._callback
         if callback:
             callback()
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() in (QEvent.FontChange, QEvent.StyleChange) and hasattr(self, "action"):
+            self.setFixedHeight(max(36, self.fontMetrics().height() + 16))
+            self.action.setFixedHeight(max(32, self.action.fontMetrics().height() + 12))

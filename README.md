@@ -70,7 +70,7 @@
 
 `v0.8.10` 正式版汇总三个 beta 阶段的下载管理、媒体复用、独立附件补全、跨筛选选择与界面精修，修复多分 P 命名和音轨封装问题。用户已确认实机测试通过；保留 [Fluent Design](docs/FLUENT_DESIGN.md)、粉紫／青蓝、小流、窗口记忆及 Windows 自绘窗口按钮。[下载 0.8.10 正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10) · [更新日志](CHANGELOG.md#v0810---2026-11-06)。
 
-`v0.8.11b1` 预发布版增加字幕来源与文件哈希核验、旧字幕重新获取，以及无损 4:3 显示副本。体验 beta 请使用「更新最新版」通道；旧字幕在「补全附件」中重新获取。[下载 Beta 1](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.11b1) · [验收范围](docs/SUBTITLE_ASPECT_VALIDATION.md)。
+`v0.8.11b2` 预发布版重做收藏工作台、共享下载设置与温暖短句，并统一控件、焦点和弹窗；保留字幕来源核验及无损 4:3 显示副本。体验 beta 请使用「更新最新版」通道。[下载 Beta 2](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.11b2) · [界面验收](docs/UI_DETAIL_POLISH.md) · [字幕与显示比例](docs/SUBTITLE_ASPECT_VALIDATION.md)。
 
 下载目录按钮紧随路径，任务中心采用整行悬停，录制历史支持整场移除与撤销；默认开启的前台剪贴板识别需确认后才解析，不自动加入队列。账号、配置、背景选择、任务和媒体文件保持兼容。操作说明与截图见[用户指南](docs/USER_GUIDE.md)、[窗口记忆验收](docs/FLUENT_V4_VALIDATION.md)和[交互验收](docs/FLUENT_V5_VALIDATION.md)。
 
@@ -132,9 +132,9 @@ Release 还包含 FFmpeg 固定源码归档、各安装包的 CycloneDX SBOM 和
 ## 五分钟上手
 
 1. 启动 BiliFlow；使用 lite 包或源码运行时，先确认 FFmpeg 可用。
-2. 在首页粘贴 BV/AV/ep 号、视频或番剧单集 URL、b23.tv 短链，然后点击“开始解析”。
+2. 在首页粘贴 BV/AV/ep 号、视频或番剧单集 URL、b23.tv 短链，然后点击“解析”。
 3. 选择分 P、画质、编码、视频/音频输出和需要的归档附加项。
-4. 点击“加入下载队列”，在任务中心查看进度或执行暂停、继续与打开文件。
+4. 点击“加入队列”，在任务中心查看进度或执行暂停、继续与打开文件。
 5. 对于合集、收藏夹或番剧 `ss/md` 页面，打开“批量导入”，先解析预览，再筛选要加入的作品。
 6. 第一次真正创建下载任务时阅读版权提示；确认后才会建立任务和媒体临时文件。
 
@@ -147,6 +147,8 @@ Release 还包含 FFmpeg 固定源码归档、各安装包的 CycloneDX SBOM 和
 **关闭窗口后继续运行：** macOS 点击红色关闭按钮或按 `⌘W` 仅关闭窗口，点击 Dock 图标可恢复；`⌘Q` 或应用菜单可彻底退出。Windows 点击关闭按钮时可选择最小化到系统托盘或彻底退出，并可记住选择；在「设置 → 外观 → 窗口」修改。托盘图标可恢复窗口，右键菜单可退出。关闭窗口或进入托盘后下载、直播监控、录制和导出继续运行；真正退出时会确认正在运行的任务并完成收尾。
 
 ## 界面预览
+
+当前开发分支重做了下载布局与共享配置，并恢复温暖的入口和空状态短句。下方主要截图对应开发中的界面；[查看最新细节对照与状态图册](docs/images/ui-detail/index.html)及[验证范围](docs/UI_DETAIL_POLISH.md)。
 
 小流会按本地时间切换清晨、上午、午后、傍晚和深夜状态；前台待机每隔 15～30 秒轮换动作，隐藏、最小化或转入后台时暂停。
 

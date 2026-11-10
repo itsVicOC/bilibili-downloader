@@ -3,12 +3,13 @@
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel
+from PySide6.QtWidgets import QHBoxLayout, QLabel
 
 from bilibili_downloader.core.library import readable_file
 from bilibili_downloader.core.media_policy import ARTIFACT_LABELS
 from bilibili_downloader.core.subtitle_provenance import subtitle_verified
 from bilibili_downloader.gui.dialogs.workflow import WorkflowDialog
+from bilibili_downloader.gui.widgets.check_box import CheckBox
 from bilibili_downloader.gui.widgets.components import (
     ReadOnlyPath,
     SectionCard,
@@ -34,7 +35,7 @@ def companion_status(item, outcome, kind):
 
 class AttachmentDialog(WorkflowDialog):
     def __init__(self, item, parent=None, *, outcome=None):
-        super().__init__("补全附件", "仅补全所选附件，保留已有媒体和附件。", parent, confirm="开始补全")
+        super().__init__("补全附件", "仅补全所选附件，保留已有媒体与附件。", parent, confirm="开始补全")
         self.item = item
         self.choices = {}
         title = QLabel(item.display_title)
@@ -51,7 +52,7 @@ class AttachmentDialog(WorkflowDialog):
         formats = {"danmaku": "ASS", "subtitle": "SRT", "cover": "图片", "metadata": "JSON"}
         for kind, label in ARTIFACT_LABELS.items():
             row = QHBoxLayout()
-            check = QCheckBox(f"{label} · {formats[kind]}")
+            check = CheckBox(f"{label} · {formats[kind]}")
             state, saved, missing = companion_status(item, outcome, kind)
             check.setEnabled(not saved and self.media_available)
             check.setChecked(missing and self.media_available)
@@ -62,16 +63,16 @@ class AttachmentDialog(WorkflowDialog):
             group.body.addLayout(row)
             check.toggled.connect(self._update)
         self.body.addWidget(group)
-        self.all_subtitles = QCheckBox("补全全部可用字幕语言")
+        self.all_subtitles = CheckBox("补全全部可用字幕")
         self.all_subtitles.setChecked(item.download_all_subtitles)
         self.all_subtitles.setEnabled(self.choices["subtitle"].isEnabled() and self.choices["subtitle"].isChecked())
         self.body.addWidget(self.all_subtitles)
         self.choices["subtitle"].toggled.connect(lambda checked: self.all_subtitles.setEnabled(checked))
-        self.all_subtitles.setToolTip("未勾选时沿用原字幕语言；无可用字幕时保留媒体并记录原因。")
+        self.all_subtitles.setToolTip("未勾选沿用原字幕语言；无可用字幕时保留媒体并记录原因。")
         self.all_subtitles.setAccessibleDescription(self.all_subtitles.toolTip())
         self.body.addStretch()
         if not self.media_available:
-            self.notice.set_message("已有媒体无法访问，请先在下载文件中重新定位或检查磁盘连接。", "warning")
+            self.notice.set_message("无法访问已有媒体，请在下载文件中重新定位或检查磁盘连接。", "warning")
         self._update()
         self.resize(640, 520)
 
@@ -92,13 +93,13 @@ def choose_attachments(item, parent=None, *, outcome=None):
 
 
 def confirm_media_copy(item, parent=None):
-    dialog = WorkflowDialog("另存一份媒体", "将重新下载媒体，生成新的副本。原有文件会保留。", parent, confirm="另存并下载")
+    dialog = WorkflowDialog("另存一份媒体", "重新下载为新副本，保留原有文件。", parent, confirm="另存并下载")
     dialog.body.addWidget(help_text(item.display_title))
     dialog.body.addWidget(help_text(f"目标：{item.selected_quality.label} · 输出 {item.output_mode.value.upper()}"))
     path = ReadOnlyPath()
     path.set_full_text(str(Path(item.output_dir or ".") / item.relative_output_path))
     dialog.body.addWidget(path)
-    dialog.body.addWidget(help_text("以上为预计路径；存在同名文件时，下载服务会选择新的副本文件名。"))
+    dialog.body.addWidget(help_text("以上为预计路径；同名文件存在时将使用新的副本文件名。"))
     dialog.body.addStretch()
     dialog.resize(640, 360)
     return bool(dialog.exec())

@@ -2,16 +2,21 @@
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QCheckBox,
-    QDialog,
-    QHBoxLayout,
     QLabel,
-    QPushButton,
     QVBoxLayout,
+    QWidget,
+)
+
+from bilibili_downloader.gui.widgets.check_box import CheckBox
+from bilibili_downloader.gui.widgets.components import scroll_area
+from bilibili_downloader.gui.widgets.dialog_shell import AppDialog
+from bilibili_downloader.gui.widgets.responsive_actions import (
+    ActionButton,
+    ResponsiveActions,
 )
 
 
-class CloseWindowDialog(QDialog):
+class CloseWindowDialog(AppDialog):
     CANCEL = 0
     TRAY = 1
     QUIT = 2
@@ -24,35 +29,41 @@ class CloseWindowDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
-        title = QLabel("要退出 BiliFlow 吗？")
+        title = QLabel("退出 BiliFlow？")
         title.setObjectName("DialogTitle")
         title.setWordWrap(True)
         layout.addWidget(title)
+        content = QWidget()
+        body = QVBoxLayout(content)
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(12)
         description = QLabel(
-            "最小化到托盘可让任务继续运行。\n"
+            "最小化到托盘，任务继续运行。\n"
             "退出将暂停下载，停止直播监控、录制和导出。"
         )
         description.setTextFormat(Qt.PlainText)
         description.setWordWrap(True)
-        layout.addWidget(description)
+        body.addWidget(description)
         self.unavailable = QLabel("系统托盘暂不可用。")
         self.unavailable.setObjectName("FieldError")
         self.unavailable.setWordWrap(True)
         self.unavailable.setVisible(not tray_available)
-        layout.addWidget(self.unavailable)
-        self.remember = QCheckBox("记住我的选择")
+        body.addWidget(self.unavailable)
+        self.remember = CheckBox("记住选择")
         self.remember.setChecked(False)
-        layout.addWidget(self.remember)
+        body.addWidget(self.remember)
         hint = QLabel("可在设置中更改。")
         hint.setObjectName("MetaLabel")
         hint.setWordWrap(True)
-        layout.addWidget(hint)
-        layout.addStretch()
-        footer = QHBoxLayout()
-        footer.setSpacing(8)
-        self.cancel_button = QPushButton("取消")
-        self.quit_button = QPushButton("停止并退出" if active else "退出软件")
-        self.tray_button = QPushButton("最小化到托盘")
+        body.addWidget(hint)
+        body.addStretch()
+        self.scroller = scroll_area(content)
+        layout.addWidget(self.scroller, 1)
+        self.actions = ResponsiveActions()
+        footer = self.actions.row
+        self.cancel_button = ActionButton("取消")
+        self.quit_button = ActionButton("停止并退出" if active else "退出")
+        self.tray_button = ActionButton("最小化到托盘")
         for button, role, result in (
             (self.cancel_button, "SubtleButton", self.CANCEL),
             (self.quit_button, "DangerButton", self.QUIT),
@@ -60,10 +71,11 @@ class CloseWindowDialog(QDialog):
         ):
             button.setObjectName(role)
             button.setAutoDefault(False)
+            button.setProperty("alwaysVisible", True)
             button.clicked.connect(lambda _checked=False, value=result: self.done(value))
             footer.addWidget(button)
         self.tray_button.setEnabled(tray_available)
         default = self.tray_button if tray_available else self.cancel_button
         default.setDefault(True)
         default.setFocus()
-        layout.addLayout(footer)
+        layout.addWidget(self.actions)

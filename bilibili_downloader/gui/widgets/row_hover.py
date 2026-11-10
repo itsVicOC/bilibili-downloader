@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 from shiboken6 import isValid
 
+from bilibili_downloader.gui.resources.styles import UI_METRICS
 from bilibili_downloader.gui.widgets.components import palette
 
 
@@ -133,7 +134,7 @@ class RowHover(QObject):
             return
         painter = QPainter(view.viewport())
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(QPen(QColor(palette().focus), 1))
+        painter.setPen(QPen(QColor(palette().focus), UI_METRICS.focus_width))
         painter.setBrush(Qt.NoBrush)
         painter.drawRoundedRect(rect, 5, 5)
 

@@ -301,6 +301,7 @@ class DownloadListWidget(RowHoverTable):
         self.selection.changed.connect(self.itemSelectionChanged.emit)
 
     def _setup_ui(self):
+        self.setAccessibleName("下载任务列表")
         self.setColumnCount(5)
         self.setHorizontalHeaderLabels(["作品", "规格", "处理阶段", "任务状态", "操作"])
         self.horizontalHeaderItem(3).setTextAlignment(Qt.AlignCenter)

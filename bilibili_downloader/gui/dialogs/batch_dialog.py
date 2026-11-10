@@ -6,7 +6,6 @@ from PySide6.QtCore import QObject, Qt, QThreadPool, QTimer, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
-    QDialog,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -38,6 +37,7 @@ from bilibili_downloader.gui.widgets.components import (
     OutputActionBar,
     SectionCard,
 )
+from bilibili_downloader.gui.widgets.dialog_shell import AppDialog
 from bilibili_downloader.gui.widgets.row_hover import RowHoverTable
 from bilibili_downloader.gui.widgets.selection import SelectionBar, TableSelection
 
@@ -63,7 +63,7 @@ class _ItemSelector(QObject):
         self.item.setToolTip(text)
 
 
-class BatchDialog(QDialog):
+class BatchDialog(AppDialog):
     """Reusable import content, also available in a standalone dialog."""
 
     enqueue_requested = Signal(list)
@@ -149,6 +149,7 @@ class BatchDialog(QDialog):
         self._input_card.header.insertWidget(1, self._source_summary, 1)
         self._input_card.header.setStretch(2, 0)
         self._url_text = QPlainTextEdit()
+        self._url_text.setAccessibleName("批量导入链接")
         self._url_text.setFixedHeight(96)
         self._url_text.setPlaceholderText(
             "每行一个视频、番剧 ep/ss/md、合集、收藏夹或 b23.tv 短链"
@@ -196,6 +197,7 @@ class BatchDialog(QDialog):
         self._available_label.hide()
         self._preview_card.header.insertWidget(1, self._available_label)
         self._preview = RowHoverTable(0, 5)
+        self._preview.setAccessibleName("批量导入作品列表")
         self._preview.setObjectName("BatchPreview")
         self._preview.setHorizontalHeaderLabels(["", "作品", "UP 主", "来源", "保存情况"])
         header = self._preview.horizontalHeader()
@@ -235,12 +237,12 @@ class BatchDialog(QDialog):
         self.select_unsaved.clicked.connect(self._select_unsaved)
         filters.addWidget(self.select_unsaved)
         self._preview_card.body.insertLayout(1, filters)
-        self._preview_stack.addWidget(EmptyState("没有匹配的作品", "已勾选的作品仍会保留，可清除搜索或查看已选。", "清除搜索", self.search.clear))
+        self._preview_stack.addWidget(EmptyState("没有匹配的作品", "保留已选作品，可清除搜索或查看已选。", "清除搜索", self.search.clear))
         self._path_preview = ElidedLabel(elide_mode=Qt.ElideMiddle)
         self._path_preview.setObjectName("MetaLabel")
         self._preview_card.body.addWidget(self._path_preview)
         self._path_preview.hide()
-        self._result_label = QLabel("解析后可在此筛选要加入的作品")
+        self._result_label = QLabel("解析后可筛选要加入的作品")
         self._result_label.setObjectName("MetaLabel")
         self._result_label.setTextFormat(Qt.PlainText)
         self._result_label.setWordWrap(True)
@@ -313,6 +315,7 @@ class BatchDialog(QDialog):
         self._path_preview.setToolTip(full)
         self._output_directory.set_full_text(f"预计：{first}" if full else getattr(self, "_default_directory", ""), copy_value=full or getattr(self, "_default_directory", ""))
         self._selected_label.setText(f"{count} 个任务")
+        self._add_btn.setText(f"加入队列（{count} 项）" if count else "加入队列")
 
     def _toggle_input(self, collapsed):
         self._url_text.setVisible(not collapsed)
@@ -328,11 +331,8 @@ class BatchDialog(QDialog):
             self._empty_space.setVisible(not visible)
 
     def resizeEvent(self, event):
-        if self._resolved_items and event.size().height() < 540:
-            self._collapse_btn.setChecked(True)
-        elif self._resolved_items:
-            self._preview_card.show()
-            self._empty_space.hide()
+        if self._resolved_items:
+            self._toggle_input(self._collapse_btn.isChecked())
         header = self._preview.horizontalHeader()
         header.resizeSection(2, 112 if self.width() < 900 else 152)
         header.resizeSection(3, 148 if self.width() < 900 else 180)
@@ -341,7 +341,9 @@ class BatchDialog(QDialog):
     def _selection_updated(self):
         count = len(self.get_video_infos())
         valid = self._resolved_source == self._url_text.toPlainText()
-        self._selected_label.setText(f"{sum(len(info.pages) if info.is_multi_part else 1 for info in self.get_video_infos())} 个任务")
+        task_count = sum(len(info.pages) if info.is_multi_part else 1 for info in self.get_video_infos())
+        self._selected_label.setText(f"{task_count} 个任务")
+        self._add_btn.setText(f"加入队列（{task_count} 项）" if task_count else "加入队列")
         self._add_btn.setEnabled(count > 0 and valid and not self._busy)
         self.update_path_previews()
         if self._inventory_results:
@@ -422,8 +424,8 @@ class BatchDialog(QDialog):
         self._add_btn.setEnabled(False)
         self._resolve_btn.setEnabled(False)
         self._compact_resolve.setEnabled(False)
-        self._resolve_btn.setText("解析中...")
-        self._result_label.setText("正在读取来源内容和分页，请稍候...")
+        self._resolve_btn.setText("解析中…")
+        self._result_label.setText("正在读取来源内容与分页…")
         self._progress_area.show()
         self._progress_bar.setRange(0, 0)
         self._progress_label.setText("正在准备解析…")
@@ -467,7 +469,7 @@ class BatchDialog(QDialog):
         if self._busy and self._resolve_worker:
             self._resolve_worker.cancel.set()
             self._cancel_btn.setEnabled(False)
-            self._progress_label.setText("正在结束当前请求，已解析作品会保留…")
+            self._progress_label.setText("正在结束请求，保留已解析作品…")
 
     def reject(self):
         self.cancel_resolution()
@@ -694,7 +696,7 @@ class BatchDialog(QDialog):
                 self.schedule_inventory()
                 return
             if isinstance(result, Exception):
-                self._notice.set_message("已有文件暂未核对，可继续加入任务；下载时会再次确认。", "warning")
+                self._notice.set_message("已有文件待核对，可继续加入任务；下载时将再次确认。", "warning")
                 self._result_label.clear()
                 self._result_label.hide()
                 for row in range(self._preview.rowCount()):
@@ -712,7 +714,7 @@ class BatchDialog(QDialog):
 
     def _select_unsaved(self):
         if not self._inventory_results:
-            self._notice.set_message("正在核对已有文件，请稍候。")
+            self._notice.set_message("正在核对已有文件…")
             self.schedule_inventory()
             return
         for row, (info, group) in enumerate(zip(self._resolved_items, self._inventory_results)):
@@ -730,14 +732,14 @@ class BatchDialog(QDialog):
         self._issue_btn.setToolTip(self._report_summary())
         if self._resolved_source != self._url_text.toPlainText():
             self._issue_btn.hide()
-            self._notice.set_message("来源已修改，请重新解析后加入任务。", "warning")
+            self._notice.set_message("来源已改，请重新解析后加入任务。", "warning")
             self._notice.action.setVisible(bool(self._errors))
         elif self._errors and not items:
             self._notice.set_message(self._report_summary(), "warning")
             self._notice.action.show()
         else:
             self._notice.set_message(
-                ("已取消解析，保留已解析结果。" if items else "解析已取消。") if self._report.cancelled else ""
+                ("解析已取消，保留已有结果。" if items else "解析已取消。") if self._report.cancelled else ""
             )
             self._notice.action.hide()
 
@@ -778,11 +780,11 @@ class BatchDialog(QDialog):
             self._begin_resolve(sources, retry=True)
 
     def _show_errors(self):
-        dialog = QDialog(self)
-        dialog.setWindowTitle("来源解析详情")
+        from bilibili_downloader.gui.dialogs.workflow import WorkflowDialog
+        dialog = WorkflowDialog("来源解析详情", "查看失败原因，复制链接或重试失败项。", self,
+                                confirm="重试失败项", width=760)
         dialog.resize(760, 440)
-        layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(24, 24, 24, 24)
+        dialog.cancel_button.setText("关闭")
         detail = RowHoverTable(len(self._report.issues), 3)
         detail.setHorizontalHeaderLabels(["内容", "原因", "链接"])
         detail.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -817,9 +819,10 @@ class BatchDialog(QDialog):
         detail.resizeRowsToContents()
         if self._report.issues:
             detail.selectRow(0)
-        layout.addWidget(detail)
-        actions = QHBoxLayout()
-        full_reason = QPushButton("选中项的完整原因")
+        detail.setMinimumHeight(140)
+        dialog.body.addWidget(detail, 1)
+        actions = dialog.footer_actions.row
+        full_reason = ActionButton("所选项完整原因")
         full_reason.setObjectName("TextButton")
         full_reason.setEnabled(bool(self._report.issues))
         def show_reason():
@@ -828,15 +831,15 @@ class BatchDialog(QDialog):
             issue = self._report.issues[detail.currentRow()]
             MessageBox("来源解析详情", f"{issue.title or issue.source}\n{issue.message}\n{issue.url or issue.source}", dialog).exec()
         full_reason.clicked.connect(show_reason)
-        actions.addWidget(full_reason)
-        copy = QPushButton("复制失败链接")
+        actions.insertWidget(0, full_reason)
+        copy = ActionButton("复制失败链接")
         copy.setEnabled(bool(self._failed_urls()))
         copy.clicked.connect(
             lambda: QApplication.clipboard().setText("\n".join(self._failed_urls()))
         )
-        actions.addWidget(copy)
-        retry = QPushButton("重试失败项")
-        retry.setObjectName("PrimaryButton")
+        actions.insertWidget(1, copy)
+        retry = dialog.confirm_button
+        retry.clicked.disconnect()
         retry.setEnabled(
             bool(self._failed_urls())
             and self._api_client is not None
@@ -849,12 +852,6 @@ class BatchDialog(QDialog):
             self._retry_failed()
 
         retry.clicked.connect(retry_failed)
-        actions.addWidget(retry)
-        actions.addStretch()
-        close = QPushButton("关闭")
-        close.clicked.connect(dialog.reject)
-        actions.addWidget(close)
-        layout.addLayout(actions)
         dialog.exec()
 
     def _set_all_checked(self, checked: bool):
@@ -865,15 +862,15 @@ class BatchDialog(QDialog):
 
     def accept(self):
         if self._resolved_source != self._url_text.toPlainText():
-            self._notice.set_message("请先重新解析已修改的来源", "warning")
+            self._notice.set_message("来源已改，请先重新解析", "warning")
             return
         if not self._resolved_items:
             MessageBox(
-                "批量导入", "请先解析来源并预览内容", self, tone="warning"
+                "批量导入", "请先解析并预览来源", self, tone="warning"
             ).exec()
             return
         if not self.get_video_infos():
-            MessageBox("批量导入", "请至少选择一个作品", self, tone="warning").exec()
+            MessageBox("批量导入", "请至少选一个作品", self, tone="warning").exec()
             return
         if self._embedded:
             self.enqueue_requested.emit(self.get_video_infos())

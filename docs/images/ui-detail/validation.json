@@ -1,0 +1,681 @@
+{
+  "date": "2026-11-10",
+  "profiles": {
+    "offscreen": {
+      "rendering": {
+        "platform": "darwin",
+        "backend": "offscreen",
+        "qt": "6.11.2",
+        "logical_dpi": 96.0,
+        "dpr": 1.0,
+        "scale_factor": "system",
+        "physical_pixels": false,
+        "checks": [
+          {
+            "theme": "star_trail",
+            "mode": "light",
+            "size": [
+              900,
+              640
+            ],
+            "actual_size": [
+              900,
+              640
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 72,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "star_trail",
+            "mode": "light",
+            "size": [
+              1120,
+              760
+            ],
+            "actual_size": [
+              1120,
+              760
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 208,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "star_trail",
+            "mode": "light",
+            "size": [
+              1320,
+              860
+            ],
+            "actual_size": [
+              1320,
+              860
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 208,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "star_trail",
+            "mode": "dark",
+            "size": [
+              900,
+              640
+            ],
+            "actual_size": [
+              900,
+              640
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 72,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "star_trail",
+            "mode": "dark",
+            "size": [
+              1120,
+              760
+            ],
+            "actual_size": [
+              1120,
+              760
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 208,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "star_trail",
+            "mode": "dark",
+            "size": [
+              1320,
+              860
+            ],
+            "actual_size": [
+              1320,
+              860
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 208,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "bilibili_blue",
+            "mode": "light",
+            "size": [
+              900,
+              640
+            ],
+            "actual_size": [
+              900,
+              640
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 72,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "bilibili_blue",
+            "mode": "light",
+            "size": [
+              1120,
+              760
+            ],
+            "actual_size": [
+              1120,
+              760
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 208,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "bilibili_blue",
+            "mode": "light",
+            "size": [
+              1320,
+              860
+            ],
+            "actual_size": [
+              1320,
+              860
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 208,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "bilibili_blue",
+            "mode": "dark",
+            "size": [
+              900,
+              640
+            ],
+            "actual_size": [
+              900,
+              640
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 72,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "bilibili_blue",
+            "mode": "dark",
+            "size": [
+              1120,
+              760
+            ],
+            "actual_size": [
+              1120,
+              760
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 208,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "bilibili_blue",
+            "mode": "dark",
+            "size": [
+              1320,
+              860
+            ],
+            "actual_size": [
+              1320,
+              860
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 208,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          }
+        ]
+      },
+      "screenshots": 2381,
+      "cases": 1538,
+      "controls": 2618,
+      "components": 816,
+      "popups": 8,
+      "outside_scroll_clipping": 0,
+      "warm_checks": 12,
+      "long_content_checks": 60,
+      "font_workspace_checks": 40,
+      "component_state_geometry": "stable",
+      "advanced_error": {
+        "backend": "offscreen",
+        "advanced_opened": true,
+        "actual_control_focused": true,
+        "fixed_primary_visible": true,
+        "invalid_selection_not_enqueued": true
+      }
+    },
+    "macOS": {
+      "rendering": {
+        "platform": "darwin",
+        "backend": "cocoa",
+        "qt": "6.11.2",
+        "logical_dpi": 72.0,
+        "dpr": 2.0,
+        "scale_factor": "system",
+        "physical_pixels": true,
+        "checks": [
+          {
+            "theme": "star_trail",
+            "mode": "light",
+            "size": [
+              900,
+              640
+            ],
+            "actual_size": [
+              900,
+              640
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 72,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "star_trail",
+            "mode": "light",
+            "size": [
+              1120,
+              760
+            ],
+            "actual_size": [
+              1120,
+              760
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 208,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "star_trail",
+            "mode": "light",
+            "size": [
+              1320,
+              860
+            ],
+            "actual_size": [
+              1320,
+              860
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 208,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "star_trail",
+            "mode": "dark",
+            "size": [
+              900,
+              640
+            ],
+            "actual_size": [
+              900,
+              640
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 72,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "star_trail",
+            "mode": "dark",
+            "size": [
+              1120,
+              760
+            ],
+            "actual_size": [
+              1120,
+              760
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 208,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "star_trail",
+            "mode": "dark",
+            "size": [
+              1320,
+              860
+            ],
+            "actual_size": [
+              1320,
+              860
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 208,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "bilibili_blue",
+            "mode": "light",
+            "size": [
+              900,
+              640
+            ],
+            "actual_size": [
+              900,
+              640
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 72,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "bilibili_blue",
+            "mode": "light",
+            "size": [
+              1120,
+              760
+            ],
+            "actual_size": [
+              1120,
+              760
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 208,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "bilibili_blue",
+            "mode": "light",
+            "size": [
+              1320,
+              860
+            ],
+            "actual_size": [
+              1320,
+              860
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 208,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "bilibili_blue",
+            "mode": "dark",
+            "size": [
+              900,
+              640
+            ],
+            "actual_size": [
+              900,
+              640
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 72,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "bilibili_blue",
+            "mode": "dark",
+            "size": [
+              1120,
+              760
+            ],
+            "actual_size": [
+              1120,
+              760
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 208,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          },
+          {
+            "theme": "bilibili_blue",
+            "mode": "dark",
+            "size": [
+              1320,
+              860
+            ],
+            "actual_size": [
+              1320,
+              860
+            ],
+            "menu_visible": false,
+            "font": "PingFang SC",
+            "resolved_font": "PingFang SC",
+            "font_pixels": 14,
+            "font_height": 20,
+            "sidebar_width": 208,
+            "option_card_heights": [
+              40,
+              40,
+              40,
+              40
+            ]
+          }
+        ]
+      },
+      "screenshots": 2381,
+      "cases": 1538,
+      "controls": 2618,
+      "components": 816,
+      "popups": 8,
+      "outside_scroll_clipping": 0,
+      "warm_checks": 12,
+      "long_content_checks": 60,
+      "font_workspace_checks": 40,
+      "component_state_geometry": "stable",
+      "advanced_error": {
+        "backend": "cocoa",
+        "advanced_opened": true,
+        "actual_control_focused": true,
+        "fixed_primary_visible": true,
+        "invalid_selection_not_enqueued": true
+      }
+    }
+  },
+  "tests": {
+    "offscreen": {
+      "passed": 1383,
+      "skipped": 6,
+      "warnings": 9,
+      "seconds": 457.06,
+      "log": "build/ui-detail/pytest-delivery.log"
+    },
+    "macOS": {
+      "passed": 323,
+      "warnings": 4,
+      "seconds": 203.57,
+      "log": "build/ui-detail/pytest-native-delivery.log"
+    }
+  },
+  "static_checks": [
+    {
+      "name": "Ruff",
+      "passed": true
+    },
+    {
+      "name": "compileall",
+      "passed": true
+    },
+    {
+      "name": "git diff --check",
+      "passed": true
+    }
+  ],
+  "catalog": {
+    "images": 2381,
+    "comparisons": 483,
+    "controls": 2618
+  },
+  "Windows_native": "未验证：无对应桌面环境",
+  "notes": [
+    "消息模板中的动态参数为离线演示值，真实业务入口由行为回归另行验证。",
+    "QWidget 截图不包含系统合成的窗口装饰；浮层合成为逻辑像素。",
+    "正文标签与容器随所属页面绘制检查，不计入交互控件路径数量。"
+  ]
+}

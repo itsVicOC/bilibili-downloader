@@ -33,7 +33,7 @@ def result_summary(item, outcome):
 
 class ResultDetailsDialog(WorkflowDialog):
     def __init__(self, title, text, parent=None, *, item=None, outcome=None):
-        super().__init__(title, "查看保存结果、目标与实际规格，以及逐项附加内容。", parent, confirm="关闭")
+        super().__init__(title, "查看保存结果、目标与实际规格、逐项附加内容。", parent, confirm="关闭")
         self.cancel_button.hide()
         self.confirm_button.clicked.disconnect()
         self.confirm_button.clicked.connect(self.accept)

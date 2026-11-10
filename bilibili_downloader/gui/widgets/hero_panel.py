@@ -1,7 +1,7 @@
 """Plain, readable source input card used by the download workspace."""
 
 from PySide6.QtCore import QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from bilibili_downloader.gui.resources.styles import UI_METRICS
@@ -51,7 +51,13 @@ class HeroPanel(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         surface = QColor(colors.surface)
-        painter.setBrush(surface)
-        painter.setPen(QPen(QColor(colors.card_border), 1))
+        if self.property("welcome"):
+            glow = QLinearGradient(0, 0, self.width(), self.height())
+            glow.setColorAt(0, surface)
+            glow.setColorAt(1, QColor(colors.subtle_selection))
+            painter.setBrush(glow)
+        else:
+            painter.setBrush(surface)
+        painter.setPen(Qt.NoPen if self.property("welcome") is not None else QPen(QColor(colors.card_border), 1))
         painter.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), UI_METRICS.card_radius, UI_METRICS.card_radius)
         painter.end()

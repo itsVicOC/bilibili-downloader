@@ -94,7 +94,7 @@ class TaskPage(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
-        self.header = PageHeader("任务中心", "下载进度、正在录制与本地历史，一处查看")
+        self.header = PageHeader("任务中心", "查看下载、录制与历史")
         layout.addWidget(self.header)
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs, 1)
@@ -192,14 +192,14 @@ class TaskPage(QWidget):
         self._download_stack.addWidget(self.downloads)
         self._download_stack.addWidget(
             EmptyState(
-                "收藏，从这里开始",
-                "解析喜欢的作品，将它加入下载队列。",
-                "去解析作品",
+                "收藏，从这里开始。",
+                "解析作品，加入下载队列。",
+                "去解析",
                 self.download_requested.emit,
             )
         )
         self._download_stack.addWidget(
-            EmptyState("没有匹配的任务", "已勾选的任务仍会保留。", "清除筛选", self.clear_download_filters)
+            EmptyState("没有匹配的任务", "保留已选任务。", "清除筛选", self.clear_download_filters)
         )
         layout.addWidget(self._download_stack, 1)
         self.download_detail = TaskDetailPanel()
@@ -368,6 +368,7 @@ class TaskPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
         self.current = RowHoverTable(0, 5)
+        self.current.setAccessibleName("当前录制列表")
         self.current.setHorizontalHeaderLabels(
             ["直播间", "状态", "时长", "大小 / 速度", "操作"]
         )
@@ -388,7 +389,7 @@ class TaskPage(QWidget):
         self._current_stack = QStackedWidget()
         self._current_stack.addWidget(self.current)
         self._current_stack.addWidget(
-            EmptyState("星轨正在待命", "开播录制、重连和收尾状态会在这里同步显示。")
+            EmptyState("等待下一场星光", "这里显示开播录制、重连与收尾状态。")
         )
         layout.addWidget(self._current_stack, 1)
         self.current_detail = TaskDetailPanel()
@@ -466,7 +467,7 @@ class TaskPage(QWidget):
                 "重新获取直播地址并尝试录制" if retry
                 else "停止当前场次，保留监控，下次开播自动录制"
             )
-            view.setToolTip("在直播录制页面查看房间与完整状态")
+            view.setToolTip("在直播页查看房间与完整状态")
             stop.setEnabled(
                 row["state"] != "finalizing"
                 and (
@@ -530,6 +531,7 @@ class TaskPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
         self.history = RowHoverTree()
+        self.history.setAccessibleName("录制历史列表")
         self.history.setHeaderLabels(["场次 / 文件", "状态 / 时长", "大小"])
         self.history.header().setSectionResizeMode(0, QHeaderView.Stretch)
         self.history.header().setSectionResizeMode(1, QHeaderView.Fixed)
@@ -545,7 +547,7 @@ class TaskPage(QWidget):
         self.history.setMinimumHeight(120)
         self._history_stack.addWidget(self.history)
         self._history_stack.addWidget(
-            EmptyState("留住每一场相遇", "录制场次及已封口片段会保存在这里。")
+            EmptyState("留住每一场相遇", "这里保存录制场次与已封口片段。")
         )
         layout.addWidget(self._history_stack, 1)
         self._history_sessions = {}
@@ -770,7 +772,7 @@ class TaskPage(QWidget):
             self.history_status.setText(text)
             self.history_status.set_tone(tone)
             self.history_progress.setVisible(bool(export and export.status == "running"))
-            message = "收尾后可合并导出，原始分段会保留。" if session.status == "recording" else ""
+            message = "收尾后可合并导出，保留原始分段。" if session.status == "recording" else ""
             if export:
                 message = export.error if export.status == "failed" else export.progress
                 if export.error:
@@ -778,7 +780,7 @@ class TaskPage(QWidget):
                 if export.status == "completed":
                     self.history_path.set_full_text(f"MP4：{export.path}")
             if not message and (session.gaps or session.warnings):
-                message = "录制存在缺口或提示，合并仅衔接已保存的内容。详情见场次提示。"
+                message = "录制有缺口或提示，合并仅衔接已保存内容。详情见场次提示。"
             failed = bool(export and export.status == "failed")
             self.history_stage.set_full_text(message if not failed else "")
             self.history_stage.setVisible(bool(message) and not failed)
@@ -799,7 +801,7 @@ class TaskPage(QWidget):
         try:
             return self.controller.history_removal_reason(session.id)
         except (OSError, ValueError, sqlite3.Error):
-            return "暂时无法读取录制历史，请稍后重试。"
+            return "暂无法读取录制历史，请稍后重试。"
 
     def _prepare_history_menu(self):
         session = self._selected_session()

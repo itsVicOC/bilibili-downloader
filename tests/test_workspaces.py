@@ -9,7 +9,6 @@ from PySide6.QtCore import QPoint, QRect, Qt
 from PySide6.QtGui import QFont, QPalette
 from PySide6.QtWidgets import (
     QApplication,
-    QDialogButtonBox,
     QLineEdit,
     QMessageBox,
     QPushButton,
@@ -160,7 +159,7 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
         batch._url_text.setPlainText("BV1GJ411x7h7")
         batch._on_resolved([VideoInfo(bvid="BV1GJ411x7h7", title="作品")], [])
         flush()
-        assert contained(batch._add_btn, batch)
+        assert contained(batch._add_btn, window._download_footers)
         assert not batch._input_card.geometry().intersects(
             batch._preview_card.geometry()
         )
@@ -179,7 +178,7 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
             flush()
             assert batch._url_text.isVisible()
             assert batch._preview_card.isHidden()
-            assert contained(batch._add_btn, batch)
+            assert contained(batch._add_btn, window._download_footers)
         window._show_workspace(1)
         flush()
         assert contained(window._live_page.start_stop, window._live_page)
@@ -231,7 +230,7 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
         window._show_settings_tab(SettingsSection.DOWNLOAD)
         flush()
         assert contained(window._settings_page._save_btn, window._settings_page)
-        assert window._settings_page._action_bar.height() == 56
+        assert window._settings_page._action_bar.height() == 64
         assert window._settings_page._save_btn.height() == window._download_btn.height()
         assert (
             window._settings_page.tabs.currentWidget().horizontalScrollBar().maximum()
@@ -307,7 +306,7 @@ def test_batch_source_edits_invalidate_preview_and_inflight_results(qtbot):
     panel._request_source = first
     panel._on_resolved([VideoInfo(bvid=first)], [])
     assert not panel._add_btn.isEnabled()
-    assert "修改" in panel._notice.label.text()
+    assert "已改" in panel._notice.label.text()
 
 
 def test_batch_partial_failure_fits_the_small_workspace(workspace):
@@ -503,18 +502,18 @@ def test_room_settings_rechecks_recording_state_before_save(workspace, qtbot):
     controller.refresh()
     dialog = workspace._live_page._build_room_settings_dialog(controller.rows[0])
     qtbot.addWidget(dialog)
-    buttons = dialog.findChild(QDialogButtonBox)
+    save = dialog.confirm_button
     controller.service.rows[0].update(state="recording", active=True)
     controller.refresh()
-    buttons.button(QDialogButtonBox.Save).click()
+    save.click()
     assert not dialog.result()
     controller.service.rows[0].update(state="waiting", active=False)
     controller.refresh()
     dialog.directory.clear()
-    buttons.button(QDialogButtonBox.Save).click()
+    save.click()
     assert not dialog.result()
     dialog.directory.setText("/tmp/demo")
-    buttons.button(QDialogButtonBox.Save).click()
+    save.click()
     assert dialog.result()
 
 
@@ -835,9 +834,9 @@ def test_output_cards_allow_preconfiguration_and_keep_available_choices(workspac
     flush()
     assert not window._download_btn.isEnabled()
     assert window._edit_output_btn.isEnabled()
-    window._edit_output_btn.click()
+    window._configuration.edit.click()
     flush()
-    assert window._content_section.isVisible() and window._video_info.isHidden()
+    assert window._configuration.content.isVisible() and window._content_section.isHidden()
     window._quality_combo.setCurrentIndex(window._quality_combo.findData(VideoQuality.Q720P))
     window._codec_combo.setCurrentIndex(window._codec_combo.findData(7))
     window._subtitle_check.setChecked(True)
@@ -860,9 +859,10 @@ def test_output_cards_allow_preconfiguration_and_keep_available_choices(workspac
     assert window._codec_combo.currentData() == 12
     window._download_tabs.setCurrentIndex(1)
     batch = window._batch_page
-    batch._action_bar.edit_button.click()
-    assert window._download_tabs.currentIndex() == 0
-    assert window._content_section.isVisible()
+    window._show_output_options()
+    assert window._download_tabs.currentIndex() == 1
+    assert window._configuration.content.isVisible()
+    assert window._download_footers.currentWidget() is batch._action_bar
 
 
 @pytest.mark.parametrize("source, target", [
@@ -979,8 +979,8 @@ def test_theme_cards_are_drafts_and_background_grid_adapts(workspace, qapp):
     flush()
     assert first.hasFocus() and not first.isChecked()
     assert selected.isChecked()
-    assert "按空格" in first.accessibleDescription()
-    assert "已选中" in selected.accessibleDescription()
+    assert "空格选择" in first.accessibleDescription()
+    assert selected.accessibleDescription() == "已选，保存设置后应用"
     window.resize(900, 640)
     flush()
     assert panel._appearance_columns == 1
@@ -1043,7 +1043,7 @@ def test_large_favorite_import_prioritizes_results_and_preserves_edits(workspace
     assert panel._preview.viewport().height() // panel._preview.rowHeight(0) >= min_rows
     assert panel._notice.isHidden() and panel._issue_btn.isVisible()
     assert "28" in panel._issue_btn.text()
-    assert contained(panel._action_bar, panel)
+    assert contained(panel._action_bar, window._download_footers)
     assert contained(panel._add_btn, panel._action_bar)
     panel._selectors[0].setChecked(False)
     panel._collapse_btn.setChecked(False)

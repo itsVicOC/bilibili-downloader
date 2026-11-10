@@ -38,10 +38,10 @@ def test_resolved_download_is_complete_in_standard_window(workspace, qapp, theme
     flush()
     assert workspace._resolve_btn.text() == "重新解析"
     assert workspace._hero.height() < 90
-    assert workspace._video_info.height() < 170
+    assert workspace._video_info._cover_label.width() >= 240
     assert workspace._workspace_scroll.verticalScrollBar().maximum() == 0
     for control in (workspace._video_info, workspace._choose_pages_btn, workspace._quality_combo,
-                    workspace._codec_combo, workspace._aspect_combo, workspace._output_summary,
+                    workspace._output_summary,
                     workspace._danmaku_check, workspace._subtitle_check,
                     workspace._all_subtitles_check, workspace._cover_check,
                     workspace._metadata_check, workspace._download_btn):
@@ -62,12 +62,12 @@ def test_reflow_uses_viewport_and_preserves_controls_selection_and_audio_mode(wo
         workspace.resize(*size)
         flush()
         split = workspace._output_sections
-        wide = split.width() >= UI_METRICS.output_split_width
+        wide = split.width() >= 920
         assert split.row.direction() == (QBoxLayout.LeftToRight if wide else QBoxLayout.TopToBottom)
-        assert workspace._download_fields._columns == (2 if workspace._download_fields.width() >= 440 else 1)
+        assert workspace._download_fields._columns == (2 if workspace._download_fields.width() >= 560 else 1)
         assert tuple(workspace._download_fields._rows) == original
         assert workspace._output_summary.selectedText() == selected
-        assert workspace._codec_stack.currentWidget() is workspace._audio_combo
+        assert workspace._audio_combo.parentWidget() is workspace._audio_common_host
         assert not workspace._quality_combo.isEnabled()
         assert workspace._danmaku_check.isChecked()
         assert workspace._workspace_scroll.horizontalScrollBar().maximum() == 0
@@ -82,23 +82,20 @@ def test_reflow_uses_viewport_and_preserves_controls_selection_and_audio_mode(wo
 def test_directory_follows_extras_in_keyboard_order(workspace, qtbot, mode):
     resolve(workspace)
     workspace._output_mode_combo.setCurrentIndex(workspace._output_mode_combo.findData(mode))
+    workspace._configuration.advanced.set_expanded(True)
     workspace.show()
     flush()
-    codec = workspace._codec_stack.currentWidget()
     QApplication.setActiveWindow(workspace)
-    codec.setFocus()
-    qtbot.keyClick(codec, Qt.Key_Tab)
-    if mode == OutputMode.VIDEO:
-        assert QApplication.focusWidget() is workspace._aspect_combo
-        qtbot.keyClick(workspace._aspect_combo, Qt.Key_Tab)
-    assert QApplication.focusWidget() is workspace._match_policy
-    qtbot.keyClick(workspace._match_policy, Qt.Key_Tab)
-    assert QApplication.focusWidget() is workspace._danmaku_check
     workspace._metadata_check.setFocus()
     qtbot.keyClick(workspace._metadata_check, Qt.Key_Tab)
-    assert QApplication.focusWidget() is workspace._output_summary
-    qtbot.keyClick(workspace._output_summary, Qt.Key_Tab)
-    assert QApplication.focusWidget() is workspace._download_actions.directory_button
+    assert QApplication.focusWidget() is workspace._configuration.advanced.toggle
+    sequence = ([workspace._codec_combo, workspace._audio_combo, workspace._aspect_combo]
+                if mode == OutputMode.VIDEO else [])
+    sequence += [workspace._match_policy, workspace._configuration_review,
+                 workspace._output_summary, workspace._download_actions.directory_button]
+    for control in sequence:
+        qtbot.keyClick(QApplication.focusWidget(), Qt.Key_Tab)
+        assert QApplication.focusWidget() is control
 
 
 def test_policy_keyboard_route_with_text_only_system_tabs(workspace, qtbot, qapp):
@@ -107,23 +104,21 @@ def test_policy_keyboard_route_with_text_only_system_tabs(workspace, qtbot, qapp
     try:
         hints.setTabFocusBehavior(Qt.TabFocusTextControls)
         resolve(workspace)
+        workspace._configuration.advanced.set_expanded(True)
         workspace.show()
         flush()
         QApplication.setActiveWindow(workspace)
-        codec = workspace._codec_stack.currentWidget()
-        codec.setFocus()
-        qtbot.keyClick(codec, Qt.Key_Tab)
-        assert QApplication.focusWidget() is workspace._aspect_combo
-        qtbot.keyClick(workspace._aspect_combo, Qt.Key_Tab)
-        assert QApplication.focusWidget() is workspace._match_policy
-        qtbot.keyClick(workspace._match_policy, Qt.Key_Tab)
-        assert QApplication.focusWidget() is workspace._danmaku_check
-        qtbot.keyClick(workspace._danmaku_check, Qt.Key_Backtab)
-        assert QApplication.focusWidget() is workspace._match_policy
-        qtbot.keyClick(workspace._match_policy, Qt.Key_Backtab)
-        assert QApplication.focusWidget() is workspace._aspect_combo
-        qtbot.keyClick(workspace._aspect_combo, Qt.Key_Backtab)
-        assert QApplication.focusWidget() is codec
+        workspace._configuration.advanced.toggle.setFocus()
+        sequence = [workspace._codec_combo, workspace._audio_combo,
+                    workspace._aspect_combo, workspace._match_policy]
+        for control in sequence:
+            qtbot.keyClick(QApplication.focusWidget(), Qt.Key_Tab)
+            assert QApplication.focusWidget() is control
+        for control in [workspace._aspect_combo, workspace._audio_combo,
+                        workspace._codec_combo, workspace._configuration.advanced.toggle,
+                        workspace._metadata_check]:
+            qtbot.keyClick(QApplication.focusWidget(), Qt.Key_Backtab)
+            assert QApplication.focusWidget() is control
     finally:
         hints.setTabFocusBehavior(original)
 

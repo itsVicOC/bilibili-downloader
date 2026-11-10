@@ -20,7 +20,6 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
-    QCheckBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -31,7 +30,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QStackedWidget,
-    QTabWidget,
     QTextEdit,
     QToolBar,
     QVBoxLayout,
@@ -90,10 +88,12 @@ from bilibili_downloader.gui.threads.login_status_worker import (
 )
 from bilibili_downloader.gui.threads.resolve_worker import ResolveRunner, ResolveWorker
 from bilibili_downloader.gui.update_controller import UpdateController
+from bilibili_downloader.gui.widgets.check_box import CheckBox
 from bilibili_downloader.gui.widgets.chinese_input import ChineseLineEdit
 from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
     AccountButton,
+    ActionBarStack,
     FieldRow,
     IconButton,
     InlineNotice,
@@ -103,12 +103,16 @@ from bilibili_downloader.gui.widgets.components import (
     PageHeader,
     PopupMenu,
     ResponsiveFields,
-    ResponsiveSplit,
     SectionCard,
     WindowDragSurface,
     help_text,
     repolish,
     scroll_area,
+)
+from bilibili_downloader.gui.widgets.download_configuration import (
+    DownloadConfiguration,
+    DownloadWorkspace,
+    SourceTabs,
 )
 from bilibili_downloader.gui.widgets.download_list import DownloadListWidget
 from bilibili_downloader.gui.widgets.download_options import (
@@ -389,7 +393,7 @@ class MainWindow(QMainWindow):
         settings_layout = QVBoxLayout(settings_page)
         settings_layout.setContentsMargins(24, 24, 24, 24)
         settings_layout.setSpacing(16)
-        settings_header = PageHeader("设置", "统一管理下载偏好、直播录制与媒体工具")
+        settings_header = PageHeader("设置", "下载偏好、直播与工具")
         settings_layout.addWidget(settings_header)
         self._settings_page = SettingsDialog(
             self._settings, embedded=True, background_store=self._background_store,
@@ -422,10 +426,9 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
-        self._download_header = PageHeader("视频下载", "把喜欢的作品，带回自己的收藏空间")
+        self._download_header = PageHeader("视频下载", "收藏喜欢的作品")
         layout.addWidget(self._download_header)
-        self._download_tabs = QTabWidget()
-        layout.addWidget(self._download_tabs, 1)
+        self._download_tabs = SourceTabs()
         body = QWidget()
         self._workspace_layout = QVBoxLayout(body)
         self._workspace_layout.setContentsMargins(0, 0, 4, 0)
@@ -435,18 +438,20 @@ class MainWindow(QMainWindow):
         self._hero_layout = QVBoxLayout(self._hero)
         self._hero_layout.setContentsMargins(16, 16, 16, 16)
         self._hero_layout.setSpacing(10)
-        self._hero_title = QLabel("喜欢的这一集，现在就带回本地。")
-        self._hero_title.setObjectName("HeroTitle")
+        self._hero_title = QLabel("喜欢的这一集，留在身边。")
+        self._hero_title.setWordWrap(True)
+        self._hero_title.setObjectName("WelcomeTitle")
+        self._hero.setProperty("welcome", True)
         self._hero_layout.addWidget(self._hero_title)
         row = QHBoxLayout()
         row.setSpacing(12)
         self._url_input = ChineseLineEdit()
-        self._url_input.setPlaceholderText("B 站链接、BV / AV / ep 号或 b23.tv 短链")
+        self._url_input.setPlaceholderText("粘贴 B 站链接、BV / AV / ep 号或 b23.tv 短链")
         self._url_input.setAccessibleName("视频链接或作品编号")
         self._url_input.returnPressed.connect(self._on_resolve_clicked)
         self._url_input.textChanged.connect(self._source_changed)
         row.addWidget(self._url_input, 1)
-        self._resolve_btn = QPushButton("开始解析")
+        self._resolve_btn = QPushButton("解析")
         self._resolve_btn.setObjectName("PrimaryButton")
         self._resolve_btn.clicked.connect(self._on_resolve_clicked)
         row.addWidget(self._resolve_btn)
@@ -457,11 +462,11 @@ class MainWindow(QMainWindow):
         self._empty_download = QWidget()
         empty_layout = QHBoxLayout(self._empty_download)
         empty_layout.setContentsMargins(0, 0, 0, 0)
-        empty_hint = QLabel("粘贴作品链接或 BV / AV / ep 号，解析后选择画质、分 P 与保存位置。")
+        empty_hint = QLabel("解析后，选好画质和分 P，就能带回本地。")
         empty_hint.setWordWrap(True)
         empty_hint.setObjectName("MetaLabel")
         empty_layout.addWidget(empty_hint, 1)
-        import_collection = QPushButton("导入收藏夹或合集 →")
+        import_collection = QPushButton("导入收藏夹 / 合集 →")
         import_collection.setObjectName("TextButton")
         import_collection.clicked.connect(self._on_batch_clicked)
         empty_layout.addWidget(import_collection)
@@ -471,13 +476,13 @@ class MainWindow(QMainWindow):
         self._content_layout.setContentsMargins(0, 0, 0, 0)
         self._content_layout.setSpacing(16)
         self._video_info = VideoInfoWidget()
+        self._video_info.set_featured(True)
         self._content_layout.addWidget(self._video_info)
         self._build_output_card()
         self._workspace_layout.addWidget(self._content_section)
         self._content_section.hide()
         self._workspace_layout.addStretch()
-        self._workspace_scroll = scroll_area(body)
-        self._download_tabs.addTab(self._workspace_scroll, "单个解析")
+        self._download_tabs.addTab(body, "单个解析")
         self._batch_page = BatchDialog(
             api_client=self._api_client,
             existing_content_identities=self._task_repository.known_content_identities(),
@@ -488,27 +493,45 @@ class MainWindow(QMainWindow):
         self._batch_page._action_bar.edit_requested.connect(self._show_output_options)
         self._batch_page._action_bar.directory_requested.connect(lambda: self._show_settings_tab(SettingsSection.DOWNLOAD))
         self._download_tabs.addTab(self._batch_page, "批量导入")
-        layout.addWidget(self._download_actions)
+        self._source_surface = SectionCard()
+        self._source_surface.setObjectName("DownloadSource")
+        self._source_surface.body.setContentsMargins(0, 0, 0, 0)
+        self._source_surface.body.addWidget(self._download_tabs)
+        self._output_sections = DownloadWorkspace(self._source_surface, self._configuration)
+        self._workspace_scroll = scroll_area(self._output_sections)
+        layout.addWidget(self._workspace_scroll, 1)
+        self._download_footers = ActionBarStack()
+        self._download_footers.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._batch_page.layout().removeWidget(self._batch_page._action_bar)
+        for bar in (self._download_actions, self._batch_page._action_bar):
+            bar.set_compact_output()
+            self._download_footers.addWidget(bar)
+        layout.addWidget(self._download_footers)
+        for card in (self._batch_page._input_card, self._batch_page._preview_card):
+            card.setProperty("sectionStyle", "plain")
+        self._batch_page.selection.changed.connect(self._sync_download_presentation)
         self._sync_output_mode_controls()
-        self._download_tabs.currentChanged.connect(
-            lambda index: self._download_actions.setVisible(index == 0)
-        )
+        self._download_tabs.currentChanged.connect(self._sync_download_presentation)
         for combo in (self._page_combo, self._quality_combo, self._codec_combo, self._audio_combo, self._output_mode_combo, self._aspect_combo):
             combo.currentIndexChanged.connect(self._refresh_download_summary)
+        for combo in (self._quality_combo, self._codec_combo, self._audio_combo, self._output_mode_combo, self._aspect_combo, self._match_policy):
+            combo.currentIndexChanged.connect(self._configuration.clear_error)
         for check in (self._danmaku_check, self._subtitle_check, self._cover_check, self._metadata_check, self._strict_match_check):
             check.toggled.connect(self._refresh_download_summary)
         self._refresh_download_summary()
         self._workspace_pages.addWidget(page)
 
     def _build_output_card(self):
-        controls = SectionCard("输出规格")
-        controls.setObjectName("ControlPanel")
+        controls = DownloadConfiguration()
+        self._configuration = controls
+        controls.opened.connect(self._sync_download_presentation)
         self._output_card = controls
         controls.body.setSpacing(8)
-        fields = ResponsiveFields(column_width=UI_METRICS.download_field_column_width)
-        fields.layout().setVerticalSpacing(8)
+        fields = controls.fields
         self._download_fields = fields
-        controls.body.addWidget(fields)
+        advanced = ResponsiveFields(column_width=280)
+        self._advanced_fields = advanced
+        controls.advanced.body.addWidget(advanced)
         self._page_combo = ComboBox()
         self._page_combo.addItem("当前视频", "current")
         self._page_combo.hide()
@@ -517,7 +540,11 @@ class MainWindow(QMainWindow):
         self._choose_pages_btn.clicked.connect(self._choose_pages)
         self._choose_pages_btn.setText("解析后选择分 P")
         self._choose_pages_btn.setEnabled(False)
-        fields.add_field(FieldRow("分 P 范围", self._choose_pages_btn, stacked=True))
+        self._parts_row = FieldRow("分 P", self._choose_pages_btn, stacked=False)
+        fields.add_field(self._parts_row)
+        self._batch_parts = help_text("各作品全部分 P")
+        self._batch_parts.hide()
+        controls.fields_layout.addWidget(self._batch_parts)
         self._page_combo.currentIndexChanged.connect(self._on_page_changed)
         self._output_mode_combo = ComboBox()
         self._output_mode_combo.addItem("视频 / MP4", OutputMode.VIDEO)
@@ -528,27 +555,38 @@ class MainWindow(QMainWindow):
         self._output_mode_combo.currentIndexChanged.connect(
             self._sync_output_mode_controls
         )
-        fields.add_field(FieldRow("输出类型", self._output_mode_combo, stacked=True))
+        self._output_mode_row = FieldRow("输出类型", self._output_mode_combo, stacked=False)
+        fields.add_field(self._output_mode_row)
         self._quality_combo = ComboBox()
         self._populate_quality_combo()
         self._quality_combo.currentIndexChanged.connect(self._refresh_codec_options)
-        fields.add_field(FieldRow("画面质量", self._quality_combo, stacked=True))
-        self._codec_stack = QStackedWidget()
+        self._quality_row = FieldRow("画质", self._quality_combo, stacked=False)
+        fields.add_field(self._quality_row)
         self._codec_combo = ComboBox()
         self._populate_codec_combo()
         self._audio_combo = ComboBox()
         self._populate_audio_combo()
-        self._codec_stack.addWidget(self._codec_combo)
-        self._codec_stack.addWidget(self._audio_combo)
-        codec_row = FieldRow("视频编码", self._codec_stack, stacked=True)
-        self._codec_label = codec_row.label
-        fields.add_field(codec_row)
+        self._codec_row = FieldRow("视频编码", self._codec_combo, stacked=False)
+        self._codec_label = self._codec_row.label
+        advanced.add_field(self._codec_row)
+        self._audio_common_host = QWidget()
+        self._audio_common_layout = QVBoxLayout(self._audio_common_host)
+        self._audio_common_layout.setContentsMargins(0, 0, 0, 0)
+        self._audio_row = FieldRow("音质", self._audio_common_host, stacked=False)
+        controls.fields_layout.addWidget(self._audio_row)
+        self._audio_advanced_host = QWidget()
+        self._audio_advanced_layout = QVBoxLayout(self._audio_advanced_host)
+        self._audio_advanced_layout.setContentsMargins(0, 0, 0, 0)
+        self._audio_advanced_layout.addWidget(self._audio_combo)
+        self._advanced_audio_row = FieldRow("音质", self._audio_advanced_host, stacked=False)
+        advanced.add_field(self._advanced_audio_row)
         self._aspect_combo = ComboBox()
         self._aspect_combo.addItem("保持原始", "original")
         self._aspect_combo.addItem("4:3 · 完整画面", "4:3")
-        self._aspect_combo.setToolTip("只修改显示比例，不裁剪、不重新编码；像素尺寸保持不变。适合恢复被横向拉宽的老录像。")
-        fields.add_field(FieldRow("显示比例", self._aspect_combo, stacked=True))
-        self._strict_match_check = QCheckBox("严格匹配规格")
+        self._aspect_combo.setToolTip("仅改显示比例，保留像素尺寸，不裁剪或转码。适合恢复横向拉宽的老录像。")
+        self._aspect_row = FieldRow("显示比例", self._aspect_combo, stacked=False)
+        advanced.add_field(self._aspect_row)
+        self._strict_match_check = CheckBox("严格匹配规格")
         self._strict_match_check.setChecked(self._settings.strict_match)
         self._strict_match_check.setToolTip("画质、编码或音质不满足目标时停止该项，不自动回退")
         self._strict_match_check.hide()
@@ -556,10 +594,11 @@ class MainWindow(QMainWindow):
         self._match_policy.addItem("允许回退并提示", False)
         self._match_policy.addItem("停止该项", True)
         self._match_policy.setCurrentIndex(int(self._settings.strict_match))
-        self._match_policy.currentIndexChanged.connect(lambda _: self._strict_match_check.setChecked(self._match_policy.currentData()))
+        self._match_policy.currentIndexChanged.connect(self._sync_match_policy)
         self._strict_match_check.toggled.connect(lambda checked: self._match_policy.setCurrentIndex(int(checked)))
-        fields.add_field(FieldRow("规格不满足时", self._match_policy, stacked=True))
-        self._match_policy.setToolTip("请求的画质、编码或音质不可用时，允许回退或停止该项。")
+        self._match_policy_row = FieldRow("规格不符时", self._match_policy, stacked=False)
+        advanced.add_field(self._match_policy_row)
+        self._match_policy.setToolTip("画质、编码或音质不可用时，回退或停止该项。")
         self._match_policy.setAccessibleDescription(self._match_policy.toolTip())
         self._danmaku_check = DownloadOptionCard("下载弹幕", "ASS", "star")
         self._danmaku_check.setChecked(self._settings.download_danmaku)
@@ -579,7 +618,8 @@ class MainWindow(QMainWindow):
                 checked and self._subtitle_check.isEnabled()
             )
         )
-        self._extras_card = SectionCard("附加内容")
+        self._extras_card = SectionCard("一起保存")
+        self._extras_card.setProperty("sectionStyle", "plain")
         self._extras_card.body.addWidget(DownloadOptions(
             self._danmaku_check, self._subtitle_check, self._all_subtitles_check,
             self._cover_check, self._metadata_check,
@@ -604,18 +644,42 @@ class MainWindow(QMainWindow):
         self._inventory_notice = InlineNotice(action="打开", callback=self._open_preview_media)
         self._inventory_notice.action.hide()
         self._video_info._author_row.addWidget(self._inventory_notice, 2)
-        controls.body.addStretch()
-        self._output_sections = ResponsiveSplit(controls, self._extras_card)
-        self._content_layout.addWidget(self._output_sections)
+        controls.fields_layout.addWidget(self._extras_card)
+        controls.fields_layout.addWidget(controls.advanced)
+        review = QPushButton("查看完整配置…")
+        self._configuration_review = review
+        review.setObjectName("TextButton")
+        review.clicked.connect(lambda: self._show_download_configuration(batch=self._download_tabs.currentIndex() == 1))
+        controls.advanced.body.addWidget(review)
         self._sync_output_mode_controls()
 
     def _show_output_options(self):
-        self._download_tabs.setCurrentIndex(0)
-        self._content_section.show()
-        self._empty_download.hide()
-        self._video_info.setVisible(self._current_video is not None)
-        QTimer.singleShot(0, lambda: self._workspace_scroll.ensureWidgetVisible(self._output_card, 0, 12))
-        self._quality_combo.setFocus()
+        self._configuration.open()
+        QTimer.singleShot(0, self, lambda: self._workspace_scroll.ensureWidgetVisible(self._output_card, 0, 12))
+        (self._audio_combo if self._output_mode_combo.currentData() == OutputMode.AUDIO else self._quality_combo).setFocus()
+
+    def _sync_download_presentation(self, *_args):
+        if not hasattr(self, "_download_footers"):
+            return
+        batch = self._download_tabs.currentIndex() == 1
+        self._download_footers.setCurrentIndex(int(batch))
+        self._download_footers.currentWidget()._reflow()
+        self._download_fields.set_field_visible(self._parts_row, not batch)
+        self._batch_parts.setVisible(batch)
+        ready = bool(self._batch_page._resolved_items) if batch else self._current_video is not None
+        self._configuration.set_context(ready)
+        editable = ready or self._configuration._preconfigured
+        self._subtitle_check.setEnabled(editable)
+        self._all_subtitles_check.setEnabled(editable and self._subtitle_check.isChecked())
+        self._content_section.setVisible(self._current_video is not None)
+        welcome = self._current_video is None
+        if welcome and self._resolve_btn.isEnabled():
+            self._resolve_btn.setText("解析")
+        self._hero_title.setVisible(welcome)
+        self._empty_download.setVisible(welcome)
+        self._hero.setProperty("welcome", welcome)
+        self._hero.set_compact(not welcome, minimum_height=190 if welcome else UI_METRICS.source_resolved_height)
+        self._hero.update()
 
     def _refresh_download_summary(self, *_args):
         if not hasattr(self, "_download_hint"):
@@ -645,9 +709,23 @@ class MainWindow(QMainWindow):
             specs = f"{state}，请重新解析后加入队列"
         self._choose_pages_btn.setText(pages + " · 选择…" if self._current_video and self._current_video.is_multi_part else pages if self._current_video else "解析后选择分 P")
         self._choose_pages_btn.setEnabled(bool(self._current_video and self._current_video.is_multi_part))
-        self._download_btn.setText(f"加入 {count} 个任务" if self._current_video else "加入下载队列")
+        self._download_btn.setText(f"加入队列（{count} 项）" if self._current_video else "加入队列")
         self._download_btn.setToolTip("加入下载队列" if self._current_video else "请先成功解析当前来源")
         self._download_hint.set_full_text(specs)
+        advanced_summary = self._audio_combo.currentText() if audio else f"{codec} · {self._audio_combo.currentText()}"
+        if not audio and self._aspect_combo.currentData() == "4:3":
+            advanced_summary += " · 显示 4:3"
+        if self._strict_match_check.isChecked():
+            advanced_summary += " · 严格匹配"
+        brief = f"{'视频 · ' + quality if not audio else '音频 · ' + self._audio_combo.currentText()}"
+        if extras:
+            brief += "\n一起保存：" + "、".join(extras)
+        if not audio and self._aspect_combo.currentData() == "4:3":
+            brief += " · 显示 4:3"
+        if self._strict_match_check.isChecked():
+            brief += " · 严格匹配"
+        self._configuration.set_summary(brief, advanced_summary)
+        self._sync_download_presentation()
         directory = f"保存至 {self._settings.output_dir}"
         full_path = self._settings.output_dir
         if self._current_video:
@@ -673,7 +751,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_batch_page"):
             self._batch_page.output_item_factory = self._make_download_item
             batch_specs = f"{self._audio_combo.currentText()} · 仅音频" if audio else f"视频 · {quality} · {codec}"
-            self._batch_page.set_output_summary(f"{batch_specs} · 各作品全部分 P；实际规格逐项确认", f"保存至 {self._settings.output_dir}")
+            self._batch_page.set_output_summary(f"{batch_specs} · 各作品全部分 P · 逐项确认实际规格", f"保存至 {self._settings.output_dir}")
 
     def _selected_video_infos(self):
         if self._current_video is None:
@@ -721,7 +799,7 @@ class MainWindow(QMainWindow):
             if key != self._download_inventory_target:
                 return
             if isinstance(result, Exception):
-                self._inventory_notice.set_message("已有文件暂未确认，下载时会再次核对。", "warning")
+                self._inventory_notice.set_message("已有文件待确认，下载时将再次核对。", "warning")
                 return
             self._download_inventory_results = result
             self._inventory_notice.set_message("本地：" + inventory_summary(result))
@@ -739,7 +817,7 @@ class MainWindow(QMainWindow):
         from bilibili_downloader.gui.dialogs.workflow import WorkflowDialog
         from bilibili_downloader.gui.widgets.components import ReadOnlyPath
         infos = self._batch_page.get_video_infos() if batch else self._selected_video_infos()
-        dialog = WorkflowDialog("本次下载配置", "核对保存内容及位置；返回后可以继续修改。", self, confirm="返回")
+        dialog = WorkflowDialog("下载配置", "核对内容与位置，返回后可修改。", self, confirm="返回")
         dialog.cancel_button.hide()
         dialog.body.addWidget(help_text(self._batch_page._selected_label.text() if batch else self._download_actions.status.text()))
         group = SectionCard("输出规格")
@@ -913,49 +991,55 @@ class MainWindow(QMainWindow):
         self._settings = settings
 
     def _create_checkbox(self, text: str, checked: bool):
-        cb = QCheckBox(text)
+        cb = CheckBox(text)
         cb.setAttribute(Qt.WA_MacShowFocusRect, False)
         cb.setChecked(checked)
         return cb
 
     def focusNextPrevChild(self, forward):
-        # Cocoa may skip native combo boxes when full keyboard access is off.
-        # Keep the explicit specification → policy → extras route reachable.
-        if hasattr(self, "_match_policy"):
-            codec = self._codec_stack.currentWidget()
-            chain = [codec]
-            if self._aspect_combo.isEnabled():
-                chain.append(self._aspect_combo)
-            chain.extend([self._match_policy, self._danmaku_check])
+        # Cocoa can skip buttons and selectors when system full keyboard access
+        # is off. Follow the visible form, including its disclosure and footer.
+        if hasattr(self, "_download_footers"):
+            video = self._output_mode_combo.currentData() == OutputMode.VIDEO
+            chain = [self._choose_pages_btn, self._output_mode_combo,
+                     self._quality_combo if video else self._audio_combo,
+                     self._danmaku_check, self._subtitle_check, self._all_subtitles_check,
+                     self._cover_check, self._metadata_check, self._configuration.advanced.toggle]
+            if self._configuration.advanced.toggle.isChecked():
+                if video:
+                    chain.extend([self._codec_combo, self._audio_combo, self._aspect_combo])
+                chain.extend([self._match_policy, self._configuration_review])
+            bar = self._download_footers.currentWidget()
+            chain.extend([bar.directory, bar.directory_button, bar.primary_button])
+            chain = [control for control in chain if control.isVisible() and control.isEnabled()]
             focused = QApplication.focusWidget()
             if focused in chain:
                 index = chain.index(focused) + (1 if forward else -1)
                 if 0 <= index < len(chain):
-                    target = chain[index]
-                    if target.isVisible() and target.isEnabled():
-                        target.setFocus(Qt.TabFocusReason if forward else Qt.BacktabFocusReason)
-                        return True
+                    chain[index].setFocus(Qt.TabFocusReason if forward else Qt.BacktabFocusReason)
+                    return True
         return super().focusNextPrevChild(forward)
 
     def _sync_output_mode_controls(self):
         video_mode = self._output_mode_combo.currentData() == OutputMode.VIDEO
         self._quality_combo.setEnabled(video_mode)
         self._aspect_combo.setEnabled(video_mode)
-        self._codec_label.setText("视频编码" if video_mode else "音频质量")
-        self._codec_stack.setCurrentWidget(
-            self._codec_combo if video_mode else self._audio_combo
-        )
-        self._codec_stack.setFocusProxy(self._codec_stack.currentWidget())
-        if hasattr(self, "_output_summary") and self._output_summary.window() is self._metadata_check.window():
-            QWidget.setTabOrder(self._codec_stack.currentWidget(), self._aspect_combo if video_mode else self._match_policy)
-            if video_mode:
-                QWidget.setTabOrder(self._aspect_combo, self._match_policy)
-            QWidget.setTabOrder(self._match_policy, self._danmaku_check)
-            QWidget.setTabOrder(self._metadata_check, self._output_summary)
-            QWidget.setTabOrder(self._output_summary, self._download_actions.directory_button)
-            QWidget.setTabOrder(self._download_actions.directory_button, self._download_actions.review_button)
-            QWidget.setTabOrder(self._download_actions.review_button, self._edit_output_btn)
-            QWidget.setTabOrder(self._edit_output_btn, self._download_btn)
+        self._advanced_fields.set_field_visible(self._aspect_row, video_mode)
+        self._download_fields.set_field_visible(self._quality_row, video_mode)
+        self._advanced_fields.set_field_visible(self._codec_row, video_mode)
+        self._advanced_fields.set_field_visible(self._advanced_audio_row, video_mode)
+        self._audio_row.setVisible(not video_mode)
+        target = self._audio_advanced_layout if video_mode else self._audio_common_layout
+        if target.indexOf(self._audio_combo) < 0:
+            target.addWidget(self._audio_combo)
+            self._audio_combo.show()
+        QWidget.setTabOrder(self._output_mode_combo, self._quality_combo if video_mode else self._audio_combo)
+        QWidget.setTabOrder(self._metadata_check, self._configuration.advanced.toggle)
+
+    def _sync_match_policy(self, *_args):
+        policy = self._match_policy.currentData()
+        if policy is not None:
+            self._strict_match_check.setChecked(policy)
 
     def _populate_quality_combo(self):
         """Fill quality combo box with all available qualities."""
@@ -1092,7 +1176,7 @@ class MainWindow(QMainWindow):
             self._current_video.video_streams, self._current_video.audio_streams = videos, audios
             self._apply_stream_options(videos, audios, ok, self._quality_combo.currentData())
             self._download_btn.setEnabled(True)
-            self._resolve_notice.set_message("" if ok else "暂未确认该分 P 的规格，下载时会重新核对。", "info" if ok else "warning")
+            self._resolve_notice.set_message("" if ok else "该分 P 规格待确认，下载时将重新核对。", "info" if ok else "warning")
 
         def failed(message):
             self._page_stream_workers.discard(worker)
@@ -1108,6 +1192,8 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "_sidebar"):
             return
         compact = width < 1120
+        if hasattr(self, "_batch_page"):
+            self._batch_page._preview.setMinimumHeight(140 if width < 1000 else 264)
         self._sidebar.setFixedWidth(72 if compact else 208)
         if hasattr(self, "_header_stack"):
             for index in range(self._header_stack.count()):
@@ -1149,15 +1235,20 @@ class MainWindow(QMainWindow):
             layout.setContentsMargins(*([density.page_margin] * 4))
             layout.setSpacing(gap)
         for card in self._workspace_pages.findChildren(SectionCard):
-            card.layout().setContentsMargins(padding, padding, padding, padding)
+            if card.objectName() == "DownloadSource":
+                card.layout().setContentsMargins(0, 0, 0, 0)
+            elif card.property("sectionStyle") == "plain":
+                card.layout().setContentsMargins(0, 8, 0, 8)
+            else:
+                card.layout().setContentsMargins(padding, padding, padding, padding)
         for layout in (self._workspace_layout, self._content_layout, self._output_sections.row,
                        self._live_page._content_layout):
             layout.setSpacing(gap)
         self._hero_layout.setContentsMargins(padding, padding, padding, padding)
         for index in range(self._settings_page.tabs.count()):
             self._settings_page.tabs.widget(index).widget().layout().setSpacing(gap)
-        for field in self._download_fields._rows:
-            field.set_stacked(not density.compact)
+        for field in [*self._download_fields._rows, *self._advanced_fields._rows, self._audio_row]:
+            field.set_stacked(False)
         self._video_info.set_density(density)
 
     def _setup_menu(self):
@@ -1509,7 +1600,7 @@ class MainWindow(QMainWindow):
             self._video_info._state_label.set_tone("muted")
             self._refresh_download_summary()
             if getattr(self, "_resolved_url", ""):
-                self._resolve_notice.set_message("来源已修改，请重新解析。")
+                self._resolve_notice.set_message("来源已改，请重新解析。")
 
     # -- Event Handlers --
 
@@ -1620,7 +1711,7 @@ class MainWindow(QMainWindow):
             return
 
         if is_collection_source(url):
-            self._suggest_source_route("batch", "这是收藏夹、合集或番剧季度，可转到批量导入。")
+            self._suggest_source_route("batch", "收藏夹、合集或番剧季度，请用批量导入。")
             return
         if url.startswith(("https://live.bilibili.com/", "http://live.bilibili.com/")):
             try:
@@ -1628,12 +1719,12 @@ class MainWindow(QMainWindow):
             except ValueError:
                 pass
             else:
-                self._suggest_source_route("live", "这是直播间，可转到直播录制。")
+                self._suggest_source_route("live", "直播间请用直播录制。")
                 return
         self._resolve_notice.action.hide()
         if not is_bilibili_url(url):
             self._resolve_notice.set_message(
-                "无法识别这个来源。番剧季度、合集和收藏夹请使用批量导入。", "warning"
+                "无法识别来源。番剧季度、合集和收藏夹请用批量导入。", "warning"
             )
             return
 
@@ -1642,12 +1733,12 @@ class MainWindow(QMainWindow):
         self._current_video = None
         self._download_btn.setEnabled(False)
         self._refresh_download_summary()
-        self._resolve_notice.set_message("正在读取作品与可用规格…")
+        self._resolve_notice.set_message("正在读取作品与规格…")
         self._video_info._state_label.setText("解析中")
         self._video_info._state_label.set_tone("active")
         self._video_info._state_label.setText("解析中")
         self._resolve_btn.setEnabled(False)
-        self._resolve_btn.setText("解析中...")
+        self._resolve_btn.setText("解析中…")
         self._status_bar.showMessage("正在解析视频...")
 
         # Use QThreadPool for async resolve
@@ -1662,10 +1753,10 @@ class MainWindow(QMainWindow):
         clipboard_route = getattr(self, "_clipboard_resolve_source", None) == self._resolve_request_url
         self._clipboard_resolve_source = None
         self._resolve_btn.setEnabled(True)
-        self._resolve_btn.setText("开始解析")
+        self._resolve_btn.setText("解析")
         self._video_info._state_label.setText("等待解析")
         if self._resolve_request_url != self._url_input.text().strip():
-            self._resolve_notice.set_message("来源已修改，请重新解析。", "warning")
+            self._resolve_notice.set_message("来源已改，请重新解析。", "warning")
             return
         if clipboard_route:
             if target == "batch":
@@ -1704,16 +1795,17 @@ class MainWindow(QMainWindow):
         """Handle successful URL resolution."""
         self._resolve_btn.setEnabled(True)
         self._clipboard_resolve_source = None
-        self._resolve_btn.setText("开始解析")
+        self._resolve_btn.setText("解析")
         if (
             getattr(self, "_resolve_request_url", self._url_input.text().strip())
             != self._url_input.text().strip()
         ):
             self._resolve_notice.set_message(
-                "解析期间来源已修改，请重新解析。", "warning"
+                "解析期间来源已改，请重新解析。", "warning"
             )
             return
         self._resolved_url = self._url_input.text().strip()
+        self._configuration.clear_error()
         preferred_quality = self._quality_combo.currentData()
         self._resolve_notice.set_message("")
         self._download_btn.setEnabled(True)
@@ -1722,6 +1814,7 @@ class MainWindow(QMainWindow):
         self._current_video = info
         self._resolve_btn.setText("重新解析")
         self._hero_title.hide()
+        self._hero.setProperty("welcome", False)
         self._hero_layout.setContentsMargins(16, 12, 16, 12)
         self._hero.set_compact(True, minimum_height=UI_METRICS.source_resolved_height)
         self._download_result_state = "已解析"
@@ -1784,7 +1877,7 @@ class MainWindow(QMainWindow):
         """Handle resolution error."""
         self._resolve_btn.setEnabled(True)
         self._clipboard_resolve_source = None
-        self._resolve_btn.setText("开始解析")
+        self._resolve_btn.setText("解析")
         self._status_bar.showMessage("解析失败")
         self._download_btn.setEnabled(False)
         self._current_video = None
@@ -1829,9 +1922,7 @@ class MainWindow(QMainWindow):
             self._show_error("请先解析一个视频链接")
             return
 
-        quality = self._quality_combo.currentData()
-        if quality is None:
-            self._show_error("当前视频没有可用画质，请重新解析或登录后重试")
+        if not self._validate_download_configuration():
             return
         if not self._confirm_copyright_acknowledgement():
             return
@@ -1859,6 +1950,28 @@ class MainWindow(QMainWindow):
         self._status_bar.show_feedback(message, "查看任务", lambda: self._show_tasks(0))
         self._refresh_activity()
 
+    def _validate_download_configuration(self):
+        """Validate the active output fields before either source can enqueue."""
+        self._configuration.clear_error()
+        video = self._output_mode_combo.currentData() == OutputMode.VIDEO
+        fields = [(self._output_mode_row, self._output_mode_combo, "请选择输出类型。")]
+        if video:
+            fields.extend([
+                (self._quality_row, self._quality_combo, "请选择画质；没有可用画质时请重新解析或登录后重试。"),
+                (self._codec_row, self._codec_combo, "请选择视频编码；列表为空时请重新解析。"),
+                (self._aspect_row, self._aspect_combo, "请选择显示比例。"),
+            ])
+        fields.extend([
+            (self._advanced_audio_row if video else self._audio_row, self._audio_combo,
+             "请选择音质；列表为空时请重新解析或切换输出类型。"),
+            (self._match_policy_row, self._match_policy, "请选择规格不符时的处理方式。"),
+        ])
+        for field, control, message in fields:
+            if control.currentData() is None:
+                self._configuration.reveal_error(field, message, control)
+                return False
+        return True
+
     def _make_download_item(self, video_info: VideoInfo) -> DownloadItem:
         all_subtitles = (
             self._subtitle_check.isChecked() and self._all_subtitles_check.isChecked()
@@ -1877,13 +1990,15 @@ class MainWindow(QMainWindow):
                 if self._audio_combo.currentData() is not None
                 else self._settings.default_audio_quality
             ),
-            output_mode=self._output_mode_combo.currentData(),
+            # Path/inventory previews can run while selectors are being reset.
+            # Enqueue validates their actual selections before creating tasks.
+            output_mode=self._output_mode_combo.currentData() or self._settings.default_output_mode,
             path_template=self._settings.template_for(video_info),
             download_danmaku=self._danmaku_check.isChecked(),
             download_subtitle=self._subtitle_check.isChecked(),
             download_all_subtitles=all_subtitles,
             selected_subtitle_lan="zh-en",
-            display_aspect_ratio=(self._aspect_combo.currentData() if self._output_mode_combo.currentData() == OutputMode.VIDEO else "original"),
+            display_aspect_ratio=((self._aspect_combo.currentData() or "original") if self._output_mode_combo.currentData() == OutputMode.VIDEO else "original"),
             download_cover=self._cover_check.isChecked(),
             download_metadata=self._metadata_check.isChecked(),
             strict_match=self._strict_match_check.isChecked(),
@@ -1988,12 +2103,18 @@ class MainWindow(QMainWindow):
             warnings=outcome.warnings,
             outcome=outcome,
         )
-        if outcome.warnings:
+        if outcome.media_verification.get("valid") is False:
+            self._download_feedback(download_id, "文件已保存，媒体核验异常，请查看详情。")
+        elif outcome.missing_artifacts:
             self._download_feedback(download_id,
-                f"文件已保存，有 {len(outcome.warnings)} 条提示。"
+                f"媒体已保存，{len(outcome.missing_artifacts)} 项附件待补全。"
+            )
+        elif outcome.warnings or outcome.spec_warnings:
+            self._download_feedback(download_id,
+                f"文件已保存，有 {len(outcome.warnings) + len(outcome.spec_warnings)} 条提示。"
             )
         else:
-            self._download_feedback(download_id, f"下载完成：{outcome.video_path}")
+            self._download_feedback(download_id, f"已存好，留着慢慢看。\n{outcome.video_path}")
         if outcome.reused_media:
             self._status_bar.show_feedback("已复用已有媒体" + ("，附件待补全" if outcome.missing_artifacts else ""),
                                           "打开已有文件", lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(outcome.video_path)))
@@ -2458,12 +2579,11 @@ class MainWindow(QMainWindow):
             self._user_face = ""
             self._header_login.set_avatar()
             if not persistent:
-                QMessageBox.warning(
-                    self,
+                MessageBox(
                     "登录仅在本次运行有效",
                     "系统凭据库不可用，Cookie 仅保存在当前进程内存中；"
-                    "重启 BiliFlow 后需要重新登录。",
-                )
+                    "重启 BiliFlow 后需要重新登录。", self, tone="warning",
+                ).exec()
             # Fetch and display user info
             self._update_login_status()
             return True
@@ -2537,7 +2657,7 @@ class MainWindow(QMainWindow):
             )
 
     def _enqueue_batch_from_page(self, infos):
-        if infos and self._confirm_copyright_acknowledgement():
+        if infos and self._validate_download_configuration() and self._confirm_copyright_acknowledgement():
             self._enqueue_batch_infos(infos)
 
     def _confirm_copyright_acknowledgement(self) -> bool:

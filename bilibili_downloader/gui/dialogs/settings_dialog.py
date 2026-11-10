@@ -3,13 +3,12 @@
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal
+from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
     QCheckBox,
     QComboBox,
-    QDialog,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -46,6 +45,7 @@ from bilibili_downloader.gui.settings_sections import APPEARANCE_MODES, Settings
 from bilibili_downloader.gui.widgets.appearance_preview import ThemePreviewButton
 from bilibili_downloader.gui.widgets.background_effects import GlassBlurControl
 from bilibili_downloader.gui.widgets.background_picker import BackgroundPicker
+from bilibili_downloader.gui.widgets.check_box import CheckBox
 from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
     ActionBar,
@@ -58,9 +58,11 @@ from bilibili_downloader.gui.widgets.components import (
     ResponsiveFields,
     SectionCard,
     help_text,
+    reveal_field,
     scroll_area,
     stepper,
 )
+from bilibili_downloader.gui.widgets.dialog_shell import AppDialog
 from bilibili_downloader.gui.widgets.download_options import (
     DownloadOptionCard,
     DownloadOptions,
@@ -136,7 +138,7 @@ class _ProbeRunner(QRunnable):
             pass
 
 
-class SettingsDialog(QDialog):
+class SettingsDialog(AppDialog):
     """One editor shared by the settings page and standalone callers."""
 
     save_requested = Signal()
@@ -212,13 +214,13 @@ class SettingsDialog(QDialog):
         )
         download.addWidget(paths)
         recognition = SectionCard("来源识别")
-        self._clipboard_check = QCheckBox("前台识别剪贴板中的 B 站内容")
+        self._clipboard_check = CheckBox("前台识别 B 站剪贴板内容")
         self._controls["clipboard_monitor_enabled"] = self._clipboard_check
         recognition.body.addWidget(self._clipboard_check)
-        self._clipboard_check.setToolTip("启动和切回前台时检查剪贴板，确认后才联网解析。")
+        self._clipboard_check.setToolTip("启动或切回前台时检查剪贴板，确认后联网解析。")
         self._clipboard_check.setAccessibleDescription(self._clipboard_check.toolTip())
         download.addWidget(recognition)
-        formats = SectionCard("默认媒体规格")
+        formats = SectionCard("默认规格")
         self._output_mode_combo = self._combo(
             "default_output_mode",
             formats,
@@ -229,7 +231,7 @@ class SettingsDialog(QDialog):
             ],
         )
         self._quality_combo = self._combo(
-            "default_quality", formats, "画面质量", [(q.label, q) for q in VideoQuality]
+            "default_quality", formats, "画质", [(q.label, q) for q in VideoQuality]
         )
         self._codec_combo = self._combo(
             "default_video_codec",
@@ -240,7 +242,7 @@ class SettingsDialog(QDialog):
         self._audio_combo = self._combo(
             "default_audio_quality",
             formats,
-            "音频质量",
+            "音质",
             [
                 (AUDIO_CODEC_MAP.get(i, str(i)), i)
                 for i in (30251, 30250, 30285, 30280, 30216, 0)
@@ -260,12 +262,12 @@ class SettingsDialog(QDialog):
             format_fields.add_field(row)
         formats.body.addWidget(format_fields)
         for key, label in (("strict_match", "严格匹配画质、编码与音质"),
-                           ("auto_retry_downloads", "网络失败后自动重试（30、60、120 秒，最多三轮）")):
-            control = QCheckBox(label)
+                           ("auto_retry_downloads", "网络失败自动重试（30、60、120 秒，最多三轮）")):
+            control = CheckBox(label)
             self._controls[key] = control
             formats.body.addWidget(control)
         download.addWidget(formats)
-        options = SectionCard("归档附加内容")
+        options = SectionCard("附加内容")
         for key, label, description, icon, attr in (
             ("download_danmaku", "下载弹幕", "ASS", "star", "_danmaku_check"),
             ("download_subtitle", "下载字幕", "中英文 · 含 AI · 独立 SRT", "info", "_subtitle_check"),
@@ -275,7 +277,7 @@ class SettingsDialog(QDialog):
             control = DownloadOptionCard(label, description, icon)
             self._controls[key] = control
             setattr(self, attr, control)
-        self._all_subtitles_check = QCheckBox("全部字幕")
+        self._all_subtitles_check = CheckBox("全部字幕")
         self._controls["download_all_subtitles"] = self._all_subtitles_check
         self._subtitle_check.toggled.connect(self._all_subtitles_check.setEnabled)
         self._subtitle_check.toggled.connect(
@@ -336,7 +338,7 @@ class SettingsDialog(QDialog):
                 variables += ("series", "season", "section", "episode", "episode_number")
             insert = QPushButton("插入字段…")
             insert.setObjectName("TextButton")
-            insert.setToolTip("搜索中文名称，查看用途和示例后插入。")
+            insert.setToolTip("搜索中文名称，查看用途与示例后插入。")
             insert.clicked.connect(lambda _checked=False, field=entry, names=variables: self._insert_naming_field(field, names))
             editor.body.addWidget(insert, alignment=Qt.AlignLeft)
             group.body.addWidget(editor)
@@ -345,7 +347,7 @@ class SettingsDialog(QDialog):
         self._output_dir.textChanged.connect(self._update_template_previews)
         for combo in (self._output_mode_combo, self._audio_combo, self._quality_combo, self._codec_combo):
             combo.currentIndexChanged.connect(self._update_template_previews)
-        self._templates_section.body.addWidget(help_text("仅对新任务生效，已有任务保持原保存位置。"))
+        self._templates_section.body.addWidget(help_text("仅用于新任务，已有任务保留原位置。"))
         self._template_fields = CollapsibleSection("全部命名字段")
         browse_fields = QPushButton("搜索全部命名字段…")
         browse_fields.setObjectName("TextButton")
@@ -353,7 +355,7 @@ class SettingsDialog(QDialog):
         self._template_fields.body.addWidget(browse_fields)
         self._templates_section.body.addWidget(self._template_fields)
         download.addWidget(self._templates_section)
-        defaults = SectionCard("默认录制位置与分段")
+        defaults = SectionCard("默认目录与分段")
         self._review_directories_button = QPushButton("核对旧房间目录")
         self._review_directories_button.setObjectName("TextButton")
         self._review_directories_button.clicked.connect(
@@ -371,22 +373,22 @@ class SettingsDialog(QDialog):
         )
         self._number("live.segment_seconds", defaults, "分段时长", 1, 1440, " 分钟")
         defaults.body.addWidget(
-            help_text("跟随全局的房间在下一场使用此目录；本场录制继续保存在原位置。分段时长用于新增房间。")
+            help_text("跟随全局的房间下场使用此目录，本场保留原位置。分段时长仅用于新增房间。")
         )
-        self._auto_merge_live = QCheckBox("录制结束后自动合并 MP4")
+        self._auto_merge_live = CheckBox("录制结束自动合并 MP4")
         self._controls["live.auto_merge_mp4"] = self._auto_merge_live
         defaults.body.addWidget(self._auto_merge_live)
-        defaults.body.addWidget(help_text("正常下播或手动停止后合并到场次目录，保留原始分段。"))
+        defaults.body.addWidget(help_text("正常下播或手动停止后合并至场次目录，保留原始分段。"))
         quality_hint = QLabel(
-            "默认使用当前可用最高画质；单房间画质可在直播工作台设置，下次拉流生效。"
+            "默认用当前可用最高画质。单房间画质在直播页设置，下次拉流生效。"
         )
         quality_hint.setObjectName("MetaLabel")
         quality_hint.setWordWrap(True)
         defaults.body.addWidget(quality_hint)
         live.addWidget(defaults)
-        self._directory_review = SectionCard("核对已有房间的保存位置")
+        self._directory_review = SectionCard("核对已有房间目录")
         self._directory_review.body.addWidget(Notice(
-            "旧版本未记录目录来源。请逐个选择跟随全局或保留独立目录，保存前继续使用原位置。", "warning"
+            "旧版未记录目录来源。请逐个选择跟随全局或保留独立目录，保存前沿用原位置。", "warning"
         ))
         self._directory_choices = {}
         self._live_directory.textChanged.connect(self._update_directory_previews)
@@ -397,7 +399,7 @@ class SettingsDialog(QDialog):
         self._number("live.minimum_free_bytes", limits, "保留空间", 1, 1024, " GiB")
         limits.body.addWidget(
             Notice(
-                "应用退出或电脑睡眠时无法录制；断线后会重新拉流，缺失内容无法补录。",
+                "退出或睡眠时无法录制；断线后重新拉流，缺失内容无法补录。",
                 "warning",
             )
         )
@@ -427,12 +429,12 @@ class SettingsDialog(QDialog):
             self._probe_notices[kind] = notice
             entry.textChanged.connect(lambda _text, n=notice: n.set_message(""))
             engines.body.addWidget(notice)
-        engines.setToolTip("检测使用当前草稿路径，不会自动保存设置。")
+        engines.setToolTip("检测当前草稿路径，不自动保存设置。")
         self._probe_notice = self._probe_notices["ffmpeg"]
         storage = SectionCard("断点缓存")
         storage.body.addWidget(
             Notice(
-                "清理前请暂停全部下载。清理只删除未完成的断点缓存，保留已保存媒体。",
+                "先暂停全部下载。仅清理未完成的断点缓存，保留已保存媒体。",
                 "warning",
             )
         )
@@ -442,7 +444,7 @@ class SettingsDialog(QDialog):
         storage.body.addWidget(clear, alignment=Qt.AlignLeft)
         tools.addWidget(storage)
         identity = SectionCard("BiliFlow · 星轨收藏站")
-        description = QLabel("视频下载、批量导入与直播录制，统一的本地收藏工作台。")
+        description = QLabel("视频下载、批量导入、直播录制，本地收藏工作台。")
         description.setWordWrap(True)
         description.setObjectName("MetaLabel")
         identity.body.addWidget(description)
@@ -450,15 +452,15 @@ class SettingsDialog(QDialog):
         version = QLabel(f"当前版本：v{__version__}")
         version.setObjectName("MetaLabel")
         update_card.body.addWidget(version)
-        self._auto_update_check = QCheckBox("打开软件时自动检查更新")
+        self._auto_update_check = CheckBox("启动时自动检查更新")
         self._controls["auto_check_updates"] = self._auto_update_check
         update_card.body.addWidget(self._auto_update_check)
         self._update_channel = self._combo(
             "update_channel", update_card, "更新通道",
-            [("仅更新正式版", UpdateChannel.STABLE), ("更新最新版（包含 beta、rc 版）", UpdateChannel.LATEST)],
+            [("仅正式版", UpdateChannel.STABLE), ("最新版（含 beta、rc）", UpdateChannel.LATEST)],
         )
         self._update_channel.currentIndexChanged.connect(lambda *_args: self.update_channel_changed.emit())
-        self._update_channel.setToolTip("启动检查使用已保存通道；手动检查使用当前选择，包含已跳过版本。")
+        self._update_channel.setToolTip("启动检查用已保存通道；手动检查用当前选择，含已跳过版本。")
         self._update_channel.setAccessibleDescription(self._update_channel.toolTip())
         self._update_notice = Notice()
         update_card.body.addWidget(self._update_notice)
@@ -482,11 +484,11 @@ class SettingsDialog(QDialog):
             update_actions.addWidget(button)
         update_actions.addStretch()
         update_card.body.addLayout(update_actions)
-        self._open_update_archive = QPushButton("打开已下载更新包")
+        self._open_update_archive = QPushButton("打开更新包")
         self._open_update_archive.clicked.connect(self.update_archive_requested.emit)
         self._open_update_archive.hide()
         update_card.body.addWidget(self._open_update_archive, alignment=Qt.AlignLeft)
-        release_page = QPushButton("打开版本下载页")
+        release_page = QPushButton("版本下载页")
         release_page.setObjectName("TextButton")
         release_page.clicked.connect(self.update_page_requested.emit)
         update_card.body.addWidget(release_page, alignment=Qt.AlignLeft)
@@ -572,15 +574,19 @@ class SettingsDialog(QDialog):
             self._background_cards.append(card)
             self._background_pickers[workspace] = picker
         self._layout_background_cards()
-        appearance.addWidget(help_text("背景在保存设置后生效。四个页面独立设置，支持小流图库和 PNG、JPEG、WebP 图片，以及深浅模式可见度调节。"))
+        appearance.addWidget(help_text("背景保存后生效，四个页面独立设置。支持小流图库、PNG / JPEG / WebP 及深浅模式可见度调节。"))
         for column in (download, live, tools, updates, appearance):
+            for card in column.parentWidget().findChildren(SectionCard):
+                if not self._glass_preview.isAncestorOf(card):
+                    card.setProperty("sectionStyle", "plain")
+                    card.body.setContentsMargins(0, 12, 0, 12)
             column.addStretch()
         self._notice = Notice()
         layout.addWidget(self._notice)
         self._action_bar = ActionBar(compact=True)
         self._action_bar.setAccessibleName("设置保存操作")
         footer = self._action_bar.row
-        self._draft_label = ElidedLabel("所有修改已保存")
+        self._draft_label = ElidedLabel("已保存")
         self._draft_label.setObjectName("MetaLabel")
         footer.addWidget(self._draft_label, 1)
         self._settings_actions = ResponsiveActions()
@@ -691,9 +697,13 @@ class SettingsDialog(QDialog):
 
     def _tab(self, name, section):
         body = QWidget()
-        column = QVBoxLayout(body)
-        column.setContentsMargins(0, 0, 4, 0)
-        column.setSpacing(16)
+        wrapper = QVBoxLayout(body)
+        wrapper.setContentsMargins(0, 0, 4, 0)
+        form = SectionCard()
+        form.setObjectName("SettingsForm")
+        wrapper.addWidget(form)
+        column = form.body
+        column.setSpacing(20)
         self._sections[section] = self.tabs.addTab(scroll_area(body), name)
         return column
 
@@ -942,7 +952,7 @@ class SettingsDialog(QDialog):
 
     def _draft_changed(self, *_args):
         dirty = self.dirty
-        self._draft_label.set_full_text("有未保存的修改" if dirty else "所有修改已保存")
+        self._draft_label.set_full_text("未保存" if dirty else "已保存")
         self._reset_btn.setEnabled(dirty)
         self._save_btn.setEnabled(
             (dirty or not self._embedded)
@@ -952,7 +962,7 @@ class SettingsDialog(QDialog):
 
     def validate(self):
         if any(picker.busy for picker in self._background_pickers.values()):
-            self._notice.set_message("图片正在读取，请稍后保存。", "warning")
+            self._notice.set_message("图片读取中，请稍后保存。", "warning")
             return False
         for row in self._field_rows.values():
             row.set_error("")
@@ -1034,7 +1044,7 @@ class SettingsDialog(QDialog):
                 row.set_error(message)
                 scroll = self.tabs.currentWidget()
                 # Expansion and error text change the layout on the next pass.
-                QTimer.singleShot(0, scroll, lambda: scroll.ensureWidgetVisible(row, 0, 16))
+                reveal_field(scroll, row)
                 break
         entry.setFocus()
 

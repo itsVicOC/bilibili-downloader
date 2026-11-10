@@ -1,7 +1,7 @@
 """Keyboard-accessible download cards with native checkbox semantics."""
 
 from PySide6.QtCore import QEvent, QRect, QSize, Qt
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPen
 from PySide6.QtWidgets import (
     QCheckBox,
     QGridLayout,
@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from bilibili_downloader.gui.resources.styles import UI_METRICS, blend_color
+from bilibili_downloader.gui.widgets.check_box import draw_check_indicator
 from bilibili_downloader.gui.widgets.components import palette
 from bilibili_downloader.gui.widgets.motion import StateTransition
 
@@ -29,14 +30,22 @@ class DownloadOptionCard(QCheckBox):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setAttribute(Qt.WA_MacShowFocusRect, False)
         self.setAttribute(Qt.WA_Hover)
-        self.setMinimumWidth(200)
         self.setFixedHeight(UI_METRICS.option_card_height)
         self._selection = StateTransition(self)
         self._hover = StateTransition(self)
         self.toggled.connect(lambda checked: self._selection.to(float(checked)))
 
     def sizeHint(self):
-        return QSize(240, UI_METRICS.option_card_height)
+        title_font = self.font()
+        title_font.setWeight(title_font.Weight.Medium)
+        detail_font = self.font()
+        if detail_font.pointSizeF() > 0:
+            detail_font.setPointSizeF(detail_font.pointSizeF() * .82)
+        else:
+            detail_font.setPixelSize(max(1, round(detail_font.pixelSize() * .82)))
+        width = (40 + QFontMetrics(title_font).horizontalAdvance(self.text()) + 8
+                 + QFontMetrics(detail_font).horizontalAdvance(getattr(self, "description", "")) + 28)
+        return QSize(max(240, width), UI_METRICS.option_card_height)
 
     def minimumSizeHint(self):
         return self.sizeHint()
@@ -57,6 +66,8 @@ class DownloadOptionCard(QCheckBox):
             QEvent.FocusOut,
         ):
             self.update()
+        if event.type() in (QEvent.FontChange, QEvent.StyleChange) and hasattr(self, "_selection"):
+            self.setFixedHeight(max(UI_METRICS.option_card_height, self.fontMetrics().height() + 12))
         return super().event(event)
 
     def paintEvent(self, event):
@@ -64,52 +75,31 @@ class DownloadOptionCard(QCheckBox):
         enabled = self.isEnabled()
         checked = self.isChecked()
         foreground = colors.text if enabled else colors.disabled
-        accent = colors.active_text if enabled else colors.disabled
         fill = blend_color(colors.control_fill, colors.control_hover, self._hover.value)
         if enabled:
             fill = blend_color(fill, colors.subtle_selection, self._selection.value)
         else:
             fill = colors.control_fill
-        border = (
-            colors.focus
-            if self.hasFocus() and self.property("keyboardFocus") is not False
-            else (
-                colors.border_hover
-                if self.underMouse() and enabled
-                else colors.card_border
-            )
-        )
+        border = colors.border_hover if self.underMouse() and enabled else colors.popup_border
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(QPen(QColor(border), 2 if self.hasFocus() and self.property("keyboardFocus") else 1))
+        painter.setPen(QPen(QColor(border), UI_METRICS.border_width))
         painter.setBrush(QColor(fill))
         painter.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), UI_METRICS.radius, UI_METRICS.radius)
-        indicator = QRect(12, (self.height() - 16) // 2, 16, 16)
-        painter.setPen(QPen(QColor(accent if checked else colors.border), 1.4))
-        painter.setBrush(
-            QColor(colors.accent if checked and enabled else colors.surface)
-        )
-        painter.drawRoundedRect(indicator, 4, 4)
-        if checked:
-            painter.setPen(
-                QPen(
-                    QColor(colors.accent_text if enabled else colors.disabled),
-                    1.8,
-                    Qt.SolidLine,
-                    Qt.RoundCap,
-                    Qt.RoundJoin,
-                )
-            )
-            x, y = indicator.x(), indicator.y()
-            painter.drawLine(x + 3, y + 7, x + 6, y + 10)
-            painter.drawLine(x + 6, y + 10, x + 11, y + 4)
+        size = UI_METRICS.indicator_size
+        indicator = QRect(12, (self.height() - size) // 2, size, size)
+        draw_check_indicator(painter, indicator, checked=checked, enabled=enabled,
+                             hovered=self.underMouse(), pressed=self.isDown())
         painter.setPen(QColor(foreground))
         font = self.font()
         font.setWeight(font.Weight.Medium)
         painter.setFont(font)
         title_font = painter.font()
         font.setWeight(font.Weight.Normal)
-        font.setPointSizeF(font.pointSizeF() * 0.82)
+        if font.pointSizeF() > 0:
+            font.setPointSizeF(font.pointSizeF() * 0.82)
+        else:
+            font.setPixelSize(max(1, round(font.pixelSize() * .82)))
         painter.setFont(font)
         tag_width = painter.fontMetrics().horizontalAdvance(self.description) + 16
         detail = QRect(self.width() - 12 - tag_width, (self.height() - 24) // 2, tag_width, 24)

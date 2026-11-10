@@ -1,6 +1,7 @@
 """Keep application dialogs on the parent's available desktop work area."""
 
 from PySide6.QtCore import QEvent, QObject, QPoint, QRect, QTimer
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication, QDialog, QFileDialog
 from shiboken6 import isValid
 
@@ -47,6 +48,23 @@ class DialogPlacement(QObject):
         QApplication.instance().installEventFilter(self)
 
     def eventFilter(self, target, event):
+        if isinstance(target, QDialog) and target.isWindow():
+            if event.type() == QEvent.NonClientAreaMouseButtonPress:
+                target.setProperty("placementAutoCenter", False)
+            elif event.type() in (QEvent.LayoutRequest, QEvent.Resize) and target.isVisible() and target.property("placementAutoCenter"):
+                if not target.property("placementCenterQueued"):
+                    target.setProperty("placementCenterQueued", True)
+                    def settle():
+                        target.setProperty("placementCenterQueued", False)
+                        # Headless callers own large test canvases; the default
+                        # 800px virtual desktop must not shrink an explicit resize.
+                        available = target.screen().availableGeometry()
+                        if QGuiApplication.platformName() in {"offscreen", "minimal"} and (
+                            target.width() > available.width() - 16 or target.height() > available.height() - 16
+                        ):
+                            return
+                        fit_dialog(target, center=True)
+                    QTimer.singleShot(0, target, settle)
         if event.type() == QEvent.Show and isinstance(target, QDialog) and target.isWindow():
             # QWidget.isAncestorOf may stop at native child-window boundaries.
             # Follow QObject ownership so dialogs opened by embedded pages or
@@ -59,6 +77,7 @@ class DialogPlacement(QObject):
             if isinstance(target, QFileDialog) and not target.testOption(QFileDialog.DontUseNativeDialog):
                 return False
             target.setProperty("placementFitted", True)
+            target.setProperty("placementAutoCenter", True)
             # Position before the first paint, then account for the final
             # native frame and showEvent adjustments. Reopening uses the
             # owner's current position rather than the previous dialog location.

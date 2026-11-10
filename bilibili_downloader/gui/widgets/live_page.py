@@ -6,9 +6,6 @@ from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QBoxLayout,
-    QCheckBox,
-    QDialog,
-    QDialogButtonBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -26,12 +23,15 @@ from bilibili_downloader.core.live_models import LiveState
 from bilibili_downloader.core.models import AppSettings
 from bilibili_downloader.core.recorder import find_recorder
 from bilibili_downloader.gui.dialogs.settings_dialog import SettingsDialog
+from bilibili_downloader.gui.dialogs.workflow import WorkflowDialog
 from bilibili_downloader.gui.live_controller import LiveUiController
 from bilibili_downloader.gui.resources.styles import UI_METRICS
+from bilibili_downloader.gui.widgets.check_box import CheckBox
 from bilibili_downloader.gui.widgets.chinese_input import ChineseLineEdit
 from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
     ActionBar,
+    CollapsibleSection,
     ElidedLabel,
     EmptyState,
     FieldRow,
@@ -106,7 +106,7 @@ class LivePage(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(24, 24, 24, 24)
         root.setSpacing(16)
-        header = PageHeader("直播录制", "守候开播，记录每一场喜欢的直播")
+        header = PageHeader("直播录制", "记录喜欢的直播")
         self.header = header
         history = QPushButton("录制历史")
         history.setObjectName("TextButton")
@@ -125,7 +125,7 @@ class LivePage(QWidget):
         hero_layout = QVBoxLayout(hero)
         hero_layout.setContentsMargins(16, 16, 16, 16)
         hero_layout.setSpacing(10)
-        hint = QLabel("添加直播间 · 应用运行期间开播自动录制")
+        hint = QLabel("添加直播间 · 应用运行时开播自动录制")
         hint.setObjectName("HeroTitle")
         hero_layout.addWidget(hint)
         input_row = QHBoxLayout()
@@ -157,6 +157,7 @@ class LivePage(QWidget):
         self._count = StatusBadge("0 个直播间")
         self._rooms_card.header.addWidget(self._count)
         self.rooms = QTableWidget(0, 4)
+        self.rooms.setAccessibleName("直播监控列表")
         self.rooms.setHorizontalHeaderLabels(
             ["直播间", "状态 / 监控", "已录时长", "大小 / 速度"]
         )
@@ -177,7 +178,7 @@ class LivePage(QWidget):
         self._room_stack = QStackedWidget()
         self._room_stack.addWidget(self.rooms)
         self._room_stack.addWidget(
-            EmptyState("等待下一场星光", "在上方添加直播间，开播后可自动录制。")
+            EmptyState("等待下一场星光", "在上方添加直播间，开播自动录制。")
         )
         self._room_stack.setMinimumHeight(240)
         self._rooms_card.body.addWidget(self._room_stack, 1)
@@ -192,7 +193,7 @@ class LivePage(QWidget):
         self._detail_toggle.setAccessibleName("展开或收起房间详情")
         self._detail_toggle.toggled.connect(self._sync_detail_visibility)
         self._detail_card.header.addWidget(self._detail_toggle)
-        self._detail_empty = QLabel("选择一个直播间，查看状态与录制设置")
+        self._detail_empty = QLabel("选择直播间，查看状态与录制设置")
         self._detail_empty.setObjectName("MetaLabel")
         self._detail_empty.setWordWrap(True)
         self._detail_card.body.addWidget(self._detail_empty)
@@ -209,16 +210,21 @@ class LivePage(QWidget):
         self._room_id_label.setObjectName("MetaLabel")
         details.addWidget(self._room_id_label)
         self._recording_metrics = QLabel()
-        self._recording_metrics.setObjectName("DetailValue")
+        self._recording_metrics.setObjectName("RecordingSummary")
         self._recording_metrics.setTextFormat(Qt.PlainText)
         details.addWidget(self._recording_metrics)
         self._detail = QLabel()
         self._detail.setTextFormat(Qt.PlainText)
         self._detail.setWordWrap(True)
         details.addWidget(self._detail)
+        self._room_configuration = CollapsibleSection("录制偏好")
+        self._room_configuration.setProperty("sectionStyle", "plain")
+        self._room_configuration.body.setContentsMargins(0, 8, 0, 8)
+        options = self._room_configuration.body
+        details.addWidget(self._room_configuration)
         self.quality = ComboBox()
         self.quality.activated.connect(self._set_quality)
-        details.addWidget(FieldRow("下次拉流画质", self.quality))
+        options.addWidget(FieldRow("下次拉流画质", self.quality))
         self._directory = QLineEdit()
         self._directory.setReadOnly(True)
         directory_row = QWidget()
@@ -228,26 +234,26 @@ class LivePage(QWidget):
         self._open_directory = QPushButton("打开")
         self._open_directory.clicked.connect(lambda: QDesktopServices.openUrl(
             QUrl.fromLocalFile(str(Path(self._directory.text()).expanduser()))
-        ) if Path(self._directory.text()).expanduser().is_dir() else self.controller.notify("保存目录尚未创建或已不可用。", "warning"))
+        ) if Path(self._directory.text()).expanduser().is_dir() else self.controller.notify("保存目录未创建或不可用。", "warning"))
         directory_layout.addWidget(self._open_directory)
-        details.addWidget(FieldRow("保存目录", directory_row))
+        options.addWidget(FieldRow("保存目录", directory_row))
         self._directory_hint = QLabel()
         self._directory_hint.setObjectName("MetaLabel")
         self._directory_hint.setWordWrap(True)
         self._directory_hint.setTextFormat(Qt.PlainText)
-        details.addWidget(self._directory_hint)
+        options.addWidget(self._directory_hint)
         self._segment = QLabel()
         self._segment.setObjectName("MetaLabel")
-        details.addWidget(self._segment)
-        self.monitor = QCheckBox("自动监控并录制")
-        self.monitor.setToolTip("关闭监控会停止本场录制；开启后等待下一场开播")
+        options.addWidget(self._segment)
+        self.monitor = CheckBox("自动监控并录制")
+        self.monitor.setToolTip("关闭监控将停止本场；开启后等待下次开播")
         self.monitor.toggled.connect(self._toggle_monitor)
         self._monitor_hint = QLabel(
-            "停止本场会保留下次自动录制；关闭监控会同时停止本场。"
+            "停止本场保留下次自动录制；关闭监控将停止本场。"
         )
         self._monitor_hint.setObjectName("MetaLabel")
         self._monitor_hint.setWordWrap(True)
-        details.addWidget(self._monitor_hint)
+        options.addWidget(self._monitor_hint)
         buttons = QHBoxLayout()
         buttons.setSpacing(8)
         self.start_stop = QPushButton("立即开始")
@@ -439,7 +445,7 @@ class LivePage(QWidget):
         if fingerprint != self._quality_fingerprint:
             self._quality_fingerprint = fingerprint
             self.quality.clear()
-            self.quality.addItem("当前可用最高画质", 0)
+            self.quality.addItem("当前最高可用画质", 0)
             for quality in row["qualities"]:
                 self.quality.addItem(quality["label"], quality["qn"])
             self.quality.setCurrentIndex(max(0, self.quality.findData(row["quality"])))
@@ -515,16 +521,12 @@ class LivePage(QWidget):
             )
 
     def _build_room_settings_dialog(self, row):
-        dialog = QDialog(self)
-        dialog.setWindowTitle(f"直播间 {row['room_id']} 设置")
-        dialog.setMinimumWidth(560)
-        layout = QVBoxLayout(dialog)
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(16)
-        card = SectionCard("房间录制设置")
+        dialog = WorkflowDialog(f"直播间 {row['room_id']} 设置", "目录与分段设置仅用于此房间。", self, confirm="保存", width=640)
+        dialog.resize(640, 500)
+        card = SectionCard("录制偏好")
         mode = ComboBox()
         mode.addItem("跟随全局保存目录", "default")
-        mode.addItem("单独设置保存目录", "custom")
+        mode.addItem("独立保存目录", "custom")
         mode.setCurrentIndex(0 if row.get("output_dir_mode") == "default" else 1)
         dialog.directory_mode = mode
         card.body.addWidget(FieldRow("目录规则", mode))
@@ -568,14 +570,10 @@ class LivePage(QWidget):
         segment.setSuffix(" 分钟")
         segment_row, _, _ = stepper(segment)
         card.body.addWidget(FieldRow("分段时长", segment_row))
-        card.body.addWidget(Notice("跟随全局时，下次录制使用全局目录；单独设置只影响此房间。录制或收尾期间无法保存。"))
-        layout.addWidget(card)
-        notice = Notice()
-        layout.addWidget(notice)
-        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
-        buttons.button(QDialogButtonBox.Save).setText("保存")
-        buttons.button(QDialogButtonBox.Save).setObjectName("PrimaryButton")
-        buttons.button(QDialogButtonBox.Cancel).setText("取消")
+        card.body.addWidget(Notice("跟随全局时下次录制用全局目录；独立目录仅用于此房间。录制或收尾时无法保存。"))
+        dialog.body.addWidget(card)
+        dialog.body.addStretch()
+        notice = dialog.notice
 
         def save():
             current = next(
@@ -587,18 +585,17 @@ class LivePage(QWidget):
                 or current["active"]
                 or current["state"] in {"recording", "reconnecting", "finalizing"}
             ):
-                notice.set_message("请先停止本场并等待收尾完成。", "warning")
+                notice.set_message("请先停止本场，等待收尾完成。", "warning")
                 return
             if not directory.text().strip() or Path(directory.text().strip()).expanduser().is_file():
-                notice.set_message("请选择有效的录制保存目录。", "danger")
-                directory_field.set_error("请选择有效的录制保存目录。")
+                notice.set_message("请选择有效的录制目录。", "danger")
+                directory_field.set_error("请选择有效的录制目录。")
                 directory.setFocus()
                 return
             dialog.accept()
 
-        buttons.accepted.connect(save)
-        buttons.rejected.connect(dialog.reject)
-        layout.addWidget(buttons)
+        dialog.confirm_button.clicked.disconnect()
+        dialog.confirm_button.clicked.connect(save)
         return dialog
 
     def _update_rows(self, rows):

@@ -8,7 +8,6 @@ from PIL import Image
 from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal
 from PySide6.QtGui import QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
-    QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -34,6 +33,7 @@ from bilibili_downloader.gui.widgets.components import (
     line_icon,
     palette,
 )
+from bilibili_downloader.gui.widgets.dialog_shell import AppDialog
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +104,7 @@ class _CookieValidateRunner(QRunnable):
             manager.close()
 
 
-class LoginDialog(QDialog):
+class LoginDialog(AppDialog):
     """Dialog for Bilibili login via QR code or manual SESSDATA."""
 
     def __init__(self, current_sessdata: Optional[str] | dict[str, str], parent=None, *, account=None, avatar_icon=None, account_valid=None, account_state=None):
@@ -142,10 +142,10 @@ class LoginDialog(QDialog):
         layout.setContentsMargins(margin, margin, margin, margin)
         layout.setSpacing(12 if self._management else 8)
 
-        title = QLabel("当前账号" if self._management else "连接 B 站账号")
+        title = QLabel("当前账号" if self._management else "登录 B 站")
         self._title = title
         title.setObjectName("DialogTitle")
-        caption = QLabel("登录已失效，请重新验证账号" if self._account_expired else "管理当前连接的 B 站账号" if self._management else "登录后可解析当前账号已获完整播放权限的内容")
+        caption = QLabel("登录已失效，请重新验证" if self._account_expired else "管理当前 B 站账号" if self._management else "登录后可解析账号有完整播放权限的内容")
         self._caption = caption
         caption.setObjectName("DialogCaption")
         layout.addWidget(title)
@@ -229,7 +229,7 @@ class LoginDialog(QDialog):
         cookie_layout.setSpacing(12)
 
         # Instructions
-        steps_label = QLabel("获取 SESSDATA 的步骤")
+        steps_label = QLabel("获取 SESSDATA")
         steps_label.setObjectName("SectionTitle")
         cookie_layout.addWidget(steps_label)
 
@@ -255,11 +255,12 @@ class LoginDialog(QDialog):
         self._sync_instruction_color()
         cookie_layout.addWidget(self._instructions)
 
-        input_label = QLabel("粘贴 SESSDATA 值或完整 Cookie 字符串")
+        input_label = QLabel("粘贴 SESSDATA 或完整 Cookie")
         input_label.setObjectName("MetaLabel")
         cookie_layout.addWidget(input_label)
         self._cookie_input = ChineseLineEdit()
-        self._cookie_input.setPlaceholderText("SESSDATA 值，或浏览器 Cookie 字符串")
+        self._cookie_input.setAccessibleName("SESSDATA 或完整 Cookie")
+        self._cookie_input.setPlaceholderText("SESSDATA 值 / 浏览器 Cookie")
         self._cookie_input.setEchoMode(QLineEdit.Password)
         cookie_input_row = QHBoxLayout()
         cookie_input_row.addWidget(self._cookie_input, 1)
@@ -284,7 +285,7 @@ class LoginDialog(QDialog):
         qr_layout.setContentsMargins(8, 4, 8, 4)
         qr_layout.setSpacing(8)
 
-        qr_hint = QLabel("使用哔哩哔哩客户端扫码，在手机端确认。")
+        qr_hint = QLabel("用哔哩哔哩客户端扫码并确认。")
         qr_hint.setWordWrap(True)
         qr_hint.setObjectName("DialogCaption")
         qr_layout.addWidget(qr_hint)
@@ -293,11 +294,14 @@ class LoginDialog(QDialog):
         self._qr_label.setObjectName("EmptyCover")
         self._qr_label.setAlignment(Qt.AlignCenter)
         self._qr_label.setFixedSize(220, 220)
-        self._qr_label.setText("点击下方按钮生成二维码")
+        self._qr_label.setContentsMargins(8, 8, 8, 8)
+        self._qr_label.setWordWrap(True)
+        self._qr_label.setText("点击下方生成二维码")
         qr_layout.addWidget(self._qr_label, alignment=Qt.AlignCenter)
 
         self._qr_status = QLabel("")
         self._qr_status.setAlignment(Qt.AlignCenter)
+        self._qr_status.setWordWrap(True)
         self._qr_status.setMinimumHeight(20)
         qr_layout.addWidget(self._qr_status)
 
@@ -315,10 +319,10 @@ class LoginDialog(QDialog):
         qr_layout.addWidget(self._refresh_btn, alignment=Qt.AlignCenter)
 
         qr_layout.setAlignment(Qt.AlignTop)
-        self._tabs.addTab(qr_tab, "扫码登录")
+        self._tabs.addTab(self._make_scroll_tab(qr_tab), "扫码登录")
         self._tabs.setCurrentIndex(1)
 
-        layout.addWidget(self._tabs, 0)
+        layout.addWidget(self._tabs, 1 if self._login_active else 0)
 
         self._overview_stretch = layout.count()
         layout.addStretch(1 if self._management else 0)
@@ -376,10 +380,10 @@ class LoginDialog(QDialog):
         member = "大会员" if self._account.get("vipStatus") or vip.get("status") else "普通会员"
         self._account_member.setText(member if member_known else "会员状态待确认")
         states = {
-            "valid": ("已登录", "success", "当前账号已连接，可切换或退出登录。"),
-            "checking": ("正在检查", "active", "正在确认登录状态，账号信息暂时保留。"),
-            "unknown": ("暂时无法确认", "warning", "暂时无法连接 B 站，可稍后重试或切换账号。"),
-            "expired": ("登录已失效", "warning", "请重新登录以继续使用需要账号权限的内容。"),
+            "valid": ("已登录", "success", "已连接，可切换或退出登录。"),
+            "checking": ("正在检查", "active", "正在确认登录状态，暂留账号信息。"),
+            "unknown": ("暂时无法确认", "warning", "暂无法连接 B 站，请稍后重试或切换账号。"),
+            "expired": ("登录已失效", "warning", "请重新登录以使用需要账号权限的内容。"),
         }
         label, tone, detail = states[self._account_state]
         self._account_status.setText(label)
@@ -434,7 +438,7 @@ class LoginDialog(QDialog):
         self.layout().setSpacing(8)
         self.layout().setStretch(self._overview_stretch, 0)
         self._title.setText("切换账号")
-        self._caption.setText("验证新账号成功后才会替换当前账号，关闭可保留原登录。")
+        self._caption.setText("新账号验证成功后替换当前账号，关闭保留原登录。")
         self._caption.setWordWrap(True)
         self._tabs.show()
         self.setMinimumHeight(560)
@@ -446,7 +450,7 @@ class LoginDialog(QDialog):
         self._cookie_input.clear()
         self._cookie_visibility_btn.setChecked(False)
         self._qr_label.clear()
-        self._qr_label.setText("点击下方按钮生成二维码")
+        self._qr_label.setText("点击下方生成二维码")
         self._qr_status.clear()
         self._refresh_btn.hide()
         self._generate_btn.show()
@@ -498,7 +502,7 @@ class LoginDialog(QDialog):
         self._reset_attempt()
         self._generate_btn.hide()
         self._refresh_btn.hide()
-        self._qr_label.setText("正在生成二维码...")
+        self._qr_label.setText("正在生成二维码…")
         self._qr_status.setText("")
         self._start_qr_generation()
 
@@ -506,7 +510,7 @@ class LoginDialog(QDialog):
         """Regenerate QR code after expiration."""
         self._reset_attempt()
         self._refresh_btn.hide()
-        self._qr_label.setText("正在生成二维码...")
+        self._qr_label.setText("正在生成二维码…")
         self._qr_status.setText("")
         self._start_qr_generation()
 
@@ -529,7 +533,10 @@ class LoginDialog(QDialog):
         qr_img.save(buffer, format="PNG")
         pixmap = QPixmap()
         pixmap.loadFromData(buffer.getvalue())
-        pixmap = pixmap.scaled(220, 220, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self._qr_label.ensurePolished()
+        dpr = self.devicePixelRatioF()
+        pixmap = pixmap.scaled(self._qr_label.contentsRect().size() * dpr, Qt.KeepAspectRatio, Qt.FastTransformation)
+        pixmap.setDevicePixelRatio(dpr)
         self._qr_label.setPixmap(pixmap)
         self._qr_label.setText("")
 
@@ -573,25 +580,25 @@ class LoginDialog(QDialog):
         if status == 0:
             if self._poll_timer:
                 self._poll_timer.stop()
-            self._qr_status.setText("登录成功！")
+            self._qr_status.setText("登录成功")
             cookies = result.get("cookies", {})
             if "SESSDATA" in cookies:
-                self._qr_status.setText("正在验证账号...")
+                self._qr_status.setText("正在验证账号…")
                 self._begin_cookie_validation(cookies, source="qr")
             else:
                 MessageBox(
                     "登录",
-                    "登录成功但未获取到 SESSDATA，请使用手动输入 Cookie 方式。",
+                    "登录成功但未获取 SESSDATA，请手动输入 Cookie。",
                     self,
                     tone="warning",
                 ).exec()
 
         elif status == 86101:
-            self._qr_status.setText("等待扫码...")
+            self._qr_status.setText("等待扫码…")
         elif status == 86090:
-            self._qr_status.setText("已扫码，请在手机上确认...")
+            self._qr_status.setText("已扫码，请在手机确认…")
         elif status == 86038:
-            self._qr_status.setText("二维码已过期，点击下方刷新")
+            self._qr_status.setText("二维码已过期，请在下方刷新")
             if self._poll_timer:
                 self._poll_timer.stop()
             self._refresh_btn.show()
@@ -602,7 +609,7 @@ class LoginDialog(QDialog):
         """Show QR status errors without freezing the dialog."""
         self._poll_in_flight = False
         logger.warning("QR status check failed: %s", error)
-        self._qr_status.setText("暂时无法确认扫码状态，正在重试…")
+        self._qr_status.setText("暂无法确认扫码状态，正在重试…")
         self._qr_status.setToolTip(f"状态检查异常：{error}")
 
     def _validate_cookie(self):
@@ -620,7 +627,7 @@ class LoginDialog(QDialog):
         self._validation_source = source
         if source == "manual":
             self._validate_btn.setEnabled(False)
-            self._validate_btn.setText("验证中...")
+            self._validate_btn.setText("验证中…")
         self._cookie_worker = _CookieValidateWorker()
         generation = self._generation
         self._cookie_worker.finished.connect(lambda valid: self._deliver(generation, self._on_cookie_validated, valid))
@@ -639,7 +646,7 @@ class LoginDialog(QDialog):
     def _logout(self):
         box = MessageBox(
             "退出登录",
-            "确认从本机凭据库和配置中清除 B 站登录信息吗？",
+            "清除本机凭据库和配置中的 B 站登录信息？",
             self,
             tone="warning",
             buttons=QMessageBox.Yes | QMessageBox.No,
@@ -661,9 +668,9 @@ class LoginDialog(QDialog):
             self._auth_cookies = self._pending_cookies
             self._sessdata = self._auth_cookies.get("SESSDATA")
             if self._validation_source == "manual":
-                MessageBox("验证", "Cookie 有效！", self, tone="success").exec()
+                MessageBox("验证", "Cookie 有效", self, tone="success").exec()
             else:
-                self._qr_status.setText("登录成功！")
+                self._qr_status.setText("登录成功")
             self.accept()
         else:
             if self._validation_source == "qr":

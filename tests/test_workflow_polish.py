@@ -361,6 +361,7 @@ def test_batch_search_reuses_paths_and_directory_changes_invalidate_them(qtbot, 
     assert len(calls) == baseline_calls
     assert len(dialog.get_video_infos()) == 11
     assert "11 个任务" in dialog._selected_label.text()
+    assert dialog._add_btn.text() == "加入队列（11 项）"
     directory[0] = str(tmp_path / "after")
     dialog.set_output_summary("1080P", directory[0])
     assert len(calls) == baseline_calls + 20

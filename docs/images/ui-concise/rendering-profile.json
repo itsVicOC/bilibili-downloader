@@ -1,0 +1,633 @@
+{
+  "date": "2026-11-09",
+  "scenes": {
+    "download-light-before.png": "build/ui-concise/before/star_trail/ui-star_trail-download-light-1320.png",
+    "download-light-after.png": "build/ui-concise/after/ui/ui-star_trail-download-light-1320.png",
+    "download-dark-before.png": "build/ui-concise/before/star_trail/ui-bilibili_blue-download-dark-900.png",
+    "download-dark-after.png": "build/ui-concise/after/ui/ui-bilibili_blue-download-dark-900.png",
+    "batch-before.png": "build/ui-concise/before/star_trail/ui-star_trail-batch-light-900.png",
+    "batch-after.png": "build/ui-concise/after/ui/ui-star_trail-batch-light-900.png",
+    "settings-before.png": "build/ui-concise/before/star_trail/ui-star_trail-settings-download-light-1120.png",
+    "settings-after.png": "build/ui-concise/after/ui/ui-star_trail-settings-download-light-1120.png",
+    "live-settings-before.png": "build/ui-concise/before/star_trail/ui-bilibili_blue-settings-live-dark-900.png",
+    "live-settings-after.png": "build/ui-concise/after/ui/ui-bilibili_blue-settings-live-dark-900.png",
+    "live-before.png": "build/ui-concise/before/star_trail/ui-star_trail-live-light-1120.png",
+    "live-after.png": "build/ui-concise/after/ui/ui-star_trail-live-light-1120.png",
+    "tasks-before.png": "build/ui-concise/before/star_trail/ui-bilibili_blue-tasks-dark-1320.png",
+    "tasks-after.png": "build/ui-concise/after/ui/ui-bilibili_blue-tasks-dark-1320.png",
+    "login-before.png": "build/ui-concise/before/star_trail/ui-bilibili_blue-switch-cookie-dark.png",
+    "login-after.png": "build/ui-concise/after/ui/ui-bilibili_blue-switch-cookie-dark.png",
+    "background-light.png": "build/ui-concise/after/glass/glass-star_trail-builtin-empty-light-900.png",
+    "background-dark.png": "build/ui-concise/after/glass/glass-bilibili_blue-custom-resolved-dark-1120.png",
+    "long-content.png": "build/ui-concise/after/refinement/refine-bilibili_blue-long-content-dark-900.png",
+    "failed.png": "build/ui-concise/after/refinement/refine-star_trail-failed-light-900.png",
+    "native-light.png": "build/ui-concise/native/ui/ui-star_trail-download-light-1320.png",
+    "native-dark.png": "build/ui-concise/native/ui/ui-bilibili_blue-download-dark-900.png"
+  },
+  "offscreen": {
+    "platform": "darwin",
+    "backend": "offscreen",
+    "qt": "6.11.2",
+    "logical_dpi": 96.0,
+    "dpr": 1.0,
+    "scale_factor": "system",
+    "physical_pixels": false,
+    "checks": [
+      {
+        "theme": "star_trail",
+        "mode": "light",
+        "size": [
+          900,
+          640
+        ],
+        "actual_size": [
+          900,
+          640
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 72,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "star_trail",
+        "mode": "light",
+        "size": [
+          1120,
+          760
+        ],
+        "actual_size": [
+          1120,
+          760
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 208,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "star_trail",
+        "mode": "light",
+        "size": [
+          1320,
+          860
+        ],
+        "actual_size": [
+          1320,
+          860
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 208,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "star_trail",
+        "mode": "dark",
+        "size": [
+          900,
+          640
+        ],
+        "actual_size": [
+          900,
+          640
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 72,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "star_trail",
+        "mode": "dark",
+        "size": [
+          1120,
+          760
+        ],
+        "actual_size": [
+          1120,
+          760
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 208,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "star_trail",
+        "mode": "dark",
+        "size": [
+          1320,
+          860
+        ],
+        "actual_size": [
+          1320,
+          860
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 208,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "bilibili_blue",
+        "mode": "light",
+        "size": [
+          900,
+          640
+        ],
+        "actual_size": [
+          900,
+          640
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 72,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "bilibili_blue",
+        "mode": "light",
+        "size": [
+          1120,
+          760
+        ],
+        "actual_size": [
+          1120,
+          760
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 208,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "bilibili_blue",
+        "mode": "light",
+        "size": [
+          1320,
+          860
+        ],
+        "actual_size": [
+          1320,
+          860
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 208,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "bilibili_blue",
+        "mode": "dark",
+        "size": [
+          900,
+          640
+        ],
+        "actual_size": [
+          900,
+          640
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 72,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "bilibili_blue",
+        "mode": "dark",
+        "size": [
+          1120,
+          760
+        ],
+        "actual_size": [
+          1120,
+          760
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 208,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "bilibili_blue",
+        "mode": "dark",
+        "size": [
+          1320,
+          860
+        ],
+        "actual_size": [
+          1320,
+          860
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 208,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      }
+    ]
+  },
+  "native": {
+    "platform": "darwin",
+    "backend": "cocoa",
+    "qt": "6.11.2",
+    "logical_dpi": 72.0,
+    "dpr": 2.0,
+    "scale_factor": "system",
+    "physical_pixels": true,
+    "checks": [
+      {
+        "theme": "star_trail",
+        "mode": "light",
+        "size": [
+          900,
+          640
+        ],
+        "actual_size": [
+          900,
+          640
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 72,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "star_trail",
+        "mode": "light",
+        "size": [
+          1120,
+          760
+        ],
+        "actual_size": [
+          1120,
+          760
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 208,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "star_trail",
+        "mode": "light",
+        "size": [
+          1320,
+          860
+        ],
+        "actual_size": [
+          1320,
+          860
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 208,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "star_trail",
+        "mode": "dark",
+        "size": [
+          900,
+          640
+        ],
+        "actual_size": [
+          900,
+          640
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 72,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "star_trail",
+        "mode": "dark",
+        "size": [
+          1120,
+          760
+        ],
+        "actual_size": [
+          1120,
+          760
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 208,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "star_trail",
+        "mode": "dark",
+        "size": [
+          1320,
+          860
+        ],
+        "actual_size": [
+          1320,
+          860
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 208,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "bilibili_blue",
+        "mode": "light",
+        "size": [
+          900,
+          640
+        ],
+        "actual_size": [
+          900,
+          640
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 72,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "bilibili_blue",
+        "mode": "light",
+        "size": [
+          1120,
+          760
+        ],
+        "actual_size": [
+          1120,
+          760
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 208,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "bilibili_blue",
+        "mode": "light",
+        "size": [
+          1320,
+          860
+        ],
+        "actual_size": [
+          1320,
+          860
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 208,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "bilibili_blue",
+        "mode": "dark",
+        "size": [
+          900,
+          640
+        ],
+        "actual_size": [
+          900,
+          640
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 72,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "bilibili_blue",
+        "mode": "dark",
+        "size": [
+          1120,
+          760
+        ],
+        "actual_size": [
+          1120,
+          760
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 208,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      },
+      {
+        "theme": "bilibili_blue",
+        "mode": "dark",
+        "size": [
+          1320,
+          860
+        ],
+        "actual_size": [
+          1320,
+          860
+        ],
+        "menu_visible": false,
+        "font": "PingFang SC",
+        "resolved_font": "PingFang SC",
+        "font_pixels": 14,
+        "font_height": 20,
+        "sidebar_width": 208,
+        "option_card_heights": [
+          40,
+          40,
+          40,
+          40
+        ]
+      }
+    ]
+  },
+  "wallpaper": {
+    "backend": "offscreen",
+    "qt": "6.11.2",
+    "dpr": 1.0,
+    "physical_pixels": false,
+    "material": "Qt wallpaper glass: cached blur, refraction rim and highlights; native text remains separate",
+    "matrix": "2 palettes x 2 modes x 2 wallpaper sources x 3 sizes x 3 states"
+  }
+}

@@ -21,7 +21,7 @@ class RelocateDirectoryDialog(WorkflowDialog):
     completed = Signal(int)
 
     def __init__(self, repository, old="", parent=None, *, pool=None):
-        super().__init__("重新定位整个目录", "填写原位置和新位置，预览映射后更新文件记录。此操作不移动文件。", parent, confirm="更新位置", width=760)
+        super().__init__("重新定位整个目录", "填写原位置与新位置，预览映射后更新记录，不移动文件。", parent, confirm="更新位置", width=760)
         self.repository = repository
         self.pool = pool or QThreadPool.globalInstance()
         self._job = None
@@ -30,8 +30,8 @@ class RelocateDirectoryDialog(WorkflowDialog):
         self._changes = []
         self.old = QLineEdit(old)
         self.new = QLineEdit()
-        self.old.setPlaceholderText("原目录可已被移动，也可手动粘贴路径")
-        self.new.setPlaceholderText("选择保留相对目录结构的新根目录")
+        self.old.setPlaceholderText("原目录可已移动，支持粘贴路径")
+        self.new.setPlaceholderText("选择保留相对结构的新根目录")
         self.body.addWidget(FieldRow("原根目录", self.old, stacked=True))
         row = QHBoxLayout()
         row.addWidget(self.new, 1)
@@ -51,6 +51,7 @@ class RelocateDirectoryDialog(WorkflowDialog):
         controls.addStretch()
         self.body.addLayout(controls)
         self.table = QTableWidget(0, 3)
+        self.table.setAccessibleName("目录映射预览")
         self.table.setHorizontalHeaderLabels(["原文件", "新位置", "状态"])
         for col in (0, 1):
             self.table.horizontalHeader().setSectionResizeMode(col, QHeaderView.Stretch)

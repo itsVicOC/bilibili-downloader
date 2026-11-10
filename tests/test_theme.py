@@ -21,6 +21,7 @@ from bilibili_downloader.gui.resources.styles import (
     theme_palette,
 )
 from bilibili_downloader.gui.resources.theme import ThemeManager, platform_font_scale
+from tests.test_control_details import show_active
 
 
 def test_dark_and_light_styles_are_distinct():
@@ -87,7 +88,7 @@ def test_theme_applies_same_font_to_body_and_native_bold_labels(qapp, qtbot):
             # Compare actual paint-device metrics against the intended size.
             expected = QFont(qapp.font())
             if points is None:
-                expected.setPixelSize(18)
+                expected.setPixelSize(20)
             else:
                 expected.setPointSizeF(points * reference_dpi / dpi)
             expected.setWeight(widget.font().weight())
@@ -153,7 +154,7 @@ def test_checkbox_focus_is_local_and_uses_product_accent():
 
     assert "QCheckBox::indicator:focus" in dark
     assert "QCheckBox:focus::indicator" not in dark
-    assert "border: 2px solid #ff9ac5" in dark
+    assert "border-color: #ff9ac5" in dark
     assert "QCheckBox::indicator:disabled" in light
     assert "__CHECKMARK_ICON__" not in dark
     assert "checkmark.svg" in dark
@@ -192,9 +193,7 @@ def test_primary_buttons_share_keyboard_focus_without_a_permanent_outline(qapp, 
         row.addWidget(button)
         buttons.append(button)
     try:
-        window.show()
-        window.activateWindow()
-        qtbot.waitUntil(window.isActiveWindow)
+        show_active(qtbot, window)
         p = theme_palette(dark, theme_id)
         focus_color = p.primary_text or p.accent_text
         for button in buttons:
@@ -211,13 +210,17 @@ def test_primary_buttons_share_keyboard_focus_without_a_permanent_outline(qapp, 
         else:
             qtbot.keyClick(buttons[1], Qt.Key_Tab)
         assert buttons[0].hasFocus()
-        assert buttons[0].grab().toImage().pixelColor(1, 22).name() == focus_color
+        image = buttons[0].grab().toImage()
+        dpr = image.devicePixelRatio()
+        assert image.pixelColor(round(3 * dpr), round(22 * dpr)).name() == focus_color
         if qapp.platformName() == "cocoa":
             buttons[1].setFocus(Qt.TabFocusReason)
         else:
             qtbot.keyClick(buttons[0], Qt.Key_Tab)
         assert buttons[1].hasFocus()
-        assert buttons[1].grab().toImage().pixelColor(1, 22).name() == focus_color
+        image = buttons[1].grab().toImage()
+        dpr = image.devicePixelRatio()
+        assert image.pixelColor(round(3 * dpr), round(22 * dpr)).name() == focus_color
         with qtbot.waitSignal(buttons[1].clicked):
             qtbot.keyClick(buttons[1], Qt.Key_Space)
     finally:
@@ -256,23 +259,19 @@ def test_theme_tokens_meet_text_and_control_contrast_targets():
             palette.danger_border,
         ):
             assert _contrast(readable_fill_text(fill, palette.accent_text), fill) >= 4.5
-        # Official Bilibili pink/white is an explicit brand choice; retain AA
-        # for the blue primary and all ordinary text/selection surfaces.
         for fill in (palette.primary, palette.primary_hover, palette.primary_pressed):
-            if palette in (BLUE_DARK_PALETTE, BLUE_LIGHT_PALETTE):
-                assert _contrast(palette.primary_text, fill) >= 4.5
+            assert _contrast(palette.primary_text, fill) >= 4.5
         assert _contrast(palette.text_selection_text, palette.text_selection) >= 4.5
         assert _contrast(palette.text_selection, palette.control_fill) >= 2.0
 
 
-@pytest.mark.parametrize("dark, expected", [
-    (False, ("#ff6699", "#ff8cb0", "#e84b85")),
-    (True, ("#d44e7d", "#dc6d94", "#a73e65")),
-])
-def test_pink_primary_uses_bilibili_white_text_and_official_pink_steps(dark, expected):
+@pytest.mark.parametrize("dark", [False, True])
+def test_pink_primary_retains_rose_hues_with_readable_white_labels(dark):
     p = theme_palette(dark)
-    assert (p.primary, p.primary_hover, p.primary_pressed) == expected
     assert p.primary_text == "#ffffff"
+    for fill in (p.primary, p.primary_hover, p.primary_pressed):
+        assert int(fill[1:3], 16) > max(int(fill[3:5], 16), int(fill[5:7], 16))
+        assert _contrast(p.primary_text, fill) >= 4.5
 
 
 @pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])

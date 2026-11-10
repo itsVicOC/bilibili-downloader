@@ -72,7 +72,7 @@ Automatic updates are available starting with `v0.8.1b1` and are currently a bet
 
 Stable `v0.8.10` combines three beta stages of download management, durable media reuse, independent attachment repair, selection across filters, and UI polish, with fixes for multi-part naming and missing audio tracks. The user has confirmed that device testing passed. [Fluent Design](docs/FLUENT_DESIGN.md), the pink/purple and blue themes, Xiao Liu, window restoration, and custom Windows caption controls remain available. [Download stable 0.8.10](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10) · [Changelog](CHANGELOG.md#v0810---2026-11-06) (Chinese).
 
-Prerelease `v0.8.11b1` adds subtitle identity and file-hash checks, refreshing of unverified legacy subtitles, and lossless 4:3 display copies. Select the beta update channel to try it; use attachment repair to refresh old subtitles. [Download Beta 1](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.11b1) · [Validation scope](docs/SUBTITLE_ASPECT_VALIDATION.md) (Chinese).
+Prerelease `v0.8.11b2` redesigns the collection workspace with shared download settings, warmer copy, and consistent controls, keyboard focus, and dialogs. Subtitle provenance checks and lossless 4:3 display copies remain available. Select the latest update channel to try it. [Download Beta 2](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.11b2) · [UI validation](docs/UI_DETAIL_POLISH.md) · [Subtitle and aspect validation](docs/SUBTITLE_ASPECT_VALIDATION.md) (Chinese).
 
 Path actions now sit beside the download directory, task views highlight whole rows, and recording-history sessions can be removed with undo while keeping all media files. Foreground clipboard recognition is enabled by default and requires confirmation before parsing; it does not queue downloads automatically. Accounts, settings, wallpapers, tasks, and media remain compatible. See the [user guide](docs/USER_GUIDE.md), [window restoration validation](docs/FLUENT_V4_VALIDATION.md), and [interaction validation](docs/FLUENT_V5_VALIDATION.md) (Chinese).
 
@@ -134,9 +134,9 @@ Releases also include the pinned FFmpeg source archive, a CycloneDX SBOM for eac
 ## Quick start
 
 1. Open BiliFlow. For `lite` or source installations, first confirm FFmpeg is available.
-2. Paste a BV/AV/ep ID, video or bangumi episode URL, or b23.tv short link into the video workspace, then click Parse (`开始解析`).
+2. Paste a BV/AV/ep ID, video or bangumi episode URL, or b23.tv short link into the video workspace, then click Parse (`解析`).
 3. Choose the parts, quality, codec, video/audio output, and archive extras you want.
-4. Click Add to queue (`加入下载队列`). Use the task center to view progress, pause, resume, and open the output folder.
+4. Click Add to queue (`加入队列`). Use the task center to view progress, pause, resume, and open the output folder.
 5. For collections, favorites, and bangumi `ss/md` pages, open Batch import (`批量导入`), preview the source, and select the items to queue.
 6. Review the copyright notice when creating your first download task. Tasks and temporary media files are created only after confirmation.
 
@@ -151,6 +151,8 @@ See the [user guide](docs/USER_GUIDE.md) for task states, output templates, and 
 **Keep tasks running after closing the window:** On macOS, the red close button and `⌘W` close only the window; click the Dock icon to restore it, or use `⌘Q` / the app menu to quit. On Windows, closing offers Minimize to system tray or Quit, with an optional remembered choice. Change it in Settings → Appearance → Window (`设置 → 外观 → 窗口`). Click the tray icon to restore the window or use its context menu to quit. Downloads, live monitoring, recording, and exports continue while the window is closed or in the tray. Quitting confirms active tasks and waits for cleanup.
 
 ## Screenshots
+
+The development branch introduces shared download settings, a clearer content layout, and warmer welcome and empty states. The main screenshots below show this development UI; see the [detail comparisons and state atlas](docs/images/ui-detail/index.html) and [validation notes](docs/UI_DETAIL_POLISH.md).
 
 Xiao Liu follows five local time periods, playing a different action after 15–30 seconds of foreground idle time. Animations pause while the app is hidden, minimized, or inactive.
 

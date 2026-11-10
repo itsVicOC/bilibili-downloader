@@ -6,12 +6,13 @@ from PySide6.QtWidgets import (
     QApplication,
     QBoxLayout,
     QLayout,
-    QMenu,
     QPushButton,
     QSizePolicy,
     QWidget,
     QWidgetItem,
 )
+
+from bilibili_downloader.gui.widgets.popup_menu import PopupMenu
 
 
 class ActionButton(QPushButton):
@@ -26,6 +27,11 @@ class ActionButton(QPushButton):
         self.addAction(self.action)
         self.action.triggered.connect(self.click)
         self.action.changed.connect(self._sync_action)
+
+    def setFixedHeight(self, height):
+        self._detail_base_height = height
+        self._detail_was_fixed = True
+        super().setFixedHeight(height)
 
     def _sync_action(self):
         QPushButton.setText(self, self.action.text())
@@ -117,8 +123,7 @@ class ResponsiveActions(QWidget):
         self._own_more.setObjectName("TableSubtleButton")
         self._own_more.setProperty("menuButton", True)
         self._own_more.setAccessibleName(more_text)
-        menu = QMenu(self._own_more)
-        menu.setAttribute(Qt.WA_TranslucentBackground, True)
+        menu = PopupMenu(self._own_more)
         self._own_more.setMenu(menu)
         menu.aboutToShow.connect(self.reflow)
         self.more = self._own_more

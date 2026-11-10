@@ -238,7 +238,7 @@ class LibraryPage(QWidget):
         self.recycle_action = menu.addAction("移入回收站…", self.recycle_selected)
         menu.addSeparator()
         self.recover_action = menu.addAction("恢复文件记录", self.replay)
-        self.details_action = menu.addAction("查看上次处理详情", self.show_details)
+        self.details_action = menu.addAction("上次处理详情", self.show_details)
         more.setMenu(menu)
         self.tools.actions.addWidget(more)
         layout.addWidget(self.tools)
@@ -254,6 +254,7 @@ class LibraryPage(QWidget):
         summary.addWidget(self.progress_label)
         layout.addLayout(summary)
         self.table = FileTable()
+        self.table.setAccessibleName("下载文件列表")
         self.table.setHorizontalHeaderLabels(
             [
                 "文件 / 作品",
@@ -294,7 +295,7 @@ class LibraryPage(QWidget):
         self.stack.addWidget(
             EmptyState(
                 "暂无文件记录",
-                "下载完成后，文件会显示在这里。",
+                "这里显示下载完成的文件。",
                 "去下载",
                 self.download_requested.emit,
             )
@@ -302,7 +303,7 @@ class LibraryPage(QWidget):
         self.stack.addWidget(
             EmptyState(
                 "没有匹配的文件",
-                "试试其他关键词或筛选条件。",
+                "请更换关键词或筛选条件。",
                 "清除筛选",
                 self.clear_filters,
             )
@@ -326,6 +327,7 @@ class LibraryPage(QWidget):
         self.attachments_toggle.toggled.connect(lambda expanded: self.files.setVisible(expanded and self.files.topLevelItemCount() > 0))
         self.detail.result_row.layout().insertWidget(3, self.attachments_toggle)
         self.files = QTreeWidget()
+        self.files.setAccessibleName("附加文件列表")
         self.files.setHeaderLabels(["附件", "状态", "大小"])
         self.files.header().setSectionResizeMode(0, QHeaderView.Stretch)
         self.files.setMaximumHeight(120)
@@ -360,7 +362,7 @@ class LibraryPage(QWidget):
 
     def show_details(self):
         OperationDialog(
-            "处理详情", "完整路径和逐项原因如下。", self._details, self
+            "处理详情", "查看完整路径与逐项原因。", self._details, self
         ).exec()
 
     def set_repository(self, repository):
@@ -600,9 +602,9 @@ class LibraryPage(QWidget):
             self.detail_title.set_full_text(asset["item"].display_title)
             self.detail_path.set_full_text(media["path"] if media else asset["path"])
             hint = {
-                "missing": "文件未找到，可重新选择文件更新位置。",
+                "missing": "未找到文件，请重新选择以更新位置。",
                 "inaccessible": "无法访问，请检查目录或磁盘连接后重试。",
-                "recycled": "文件已回收，可从系统回收站恢复后检查。",
+                "recycled": "文件已回收，请从系统回收站恢复后检查。",
             }.get(media["state"] if media else "unchecked", "")
             if asset["outcome"].warnings:
                 self.detail_title.setToolTip(

@@ -63,7 +63,7 @@ def assert_buttons_fit(host):
 @pytest.mark.parametrize("font_scale", [1, 1.25, 1.5])
 def test_actions_fit_with_counts_long_paths_and_actual_scaled_fonts(qapp, qtbot, kind, width, font_scale):
     theme = ThemeManager(qapp, "star_trail", "light")
-    probe = QPushButton("加入 10000 个任务")
+    probe = QPushButton("加入队列（10000 项）")
     original = probe.fontMetrics().horizontalAdvance(probe.text())
     qapp.setStyleSheet(load_stylesheet(False, font_scale=theme._font_scale * font_scale,
                                      font_family=theme._font_family, theme_id="star_trail"))
@@ -81,7 +81,7 @@ def test_actions_fit_with_counts_long_paths_and_actual_scaled_fonts(qapp, qtbot,
         widget = OutputActionBar("已选 10000 个作品 · 10000 个任务")
         widget.directory.set_full_text("保存至 /" + "长目录/" * 80)
         widget.specs.set_full_text("1080P · HEVC · AAC · MP4")
-        widget.primary_button.setText("加入 10000 个任务")
+        widget.primary_button.setText("加入队列（10000 项）")
         widget.primary_button.setEnabled(True)
     elif kind == "commands":
         widget = CommandBar()
@@ -159,7 +159,7 @@ def test_output_bar_settles_when_idle_and_reflows_after_changes(qapp, qtbot, mon
     calls.clear()
     qtbot.wait(100)
     assert len(calls) <= 2, "An idle action bar must not continuously invalidate its parent layout"
-    bar.primary_button.setText("加入 10000 个任务")
+    bar.primary_button.setText("加入队列（10000 项）")
     host.resize(420, 400)
     qtbot.wait(100)
     assert_buttons_fit(host)

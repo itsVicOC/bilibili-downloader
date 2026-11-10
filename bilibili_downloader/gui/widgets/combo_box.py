@@ -63,11 +63,11 @@ class _OptionDelegate(QStyledItemDelegate):
         if current or (highlighted and enabled):
             painter.setPen(Qt.NoPen)
             painter.setBrush(QColor(p.subtle_selection if current else p.control_hover))
-            painter.drawRoundedRect(rect, 6, 6)
+            painter.drawRoundedRect(rect, UI_METRICS.small_radius, UI_METRICS.small_radius)
         if enabled and index == self.combo.view().currentIndex() and self.combo.view().property("keyboardFocus"):
-            painter.setPen(QPen(QColor(p.focus), 1))
+            painter.setPen(QPen(QColor(p.focus), UI_METRICS.focus_width))
             painter.setBrush(Qt.NoBrush)
-            painter.drawRoundedRect(rect.adjusted(2, 1, -2, -1), 5, 5)
+            painter.drawRoundedRect(rect.adjusted(2, 1, -2, -1), UI_METRICS.small_radius - 2, UI_METRICS.small_radius - 2)
         color = p.disabled if not enabled else p.active_text if current else p.text
         painter.setPen(QColor(color))
         painter.setFont(opt.font)
@@ -114,6 +114,7 @@ class ComboBox(QComboBox):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setProperty("popupOpen", False)
+        self.setProperty("customArrow", True)
         self._explicit_tooltip = ""
         self._pointer_pos = QCursor.pos()
         self.setMaxVisibleItems(8)

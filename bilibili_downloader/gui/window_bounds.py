@@ -1,5 +1,7 @@
 """Keep transient windows inside the available desktop, in logical pixels."""
 
+import weakref
+
 from PySide6.QtCore import QEvent, QObject, QRect, QSize, QTimer
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QDialog
@@ -11,12 +13,16 @@ from bilibili_downloader.gui.window_state import fit_rect
 class ScreenBounds(QObject):
     def __init__(self, window, minimum=QSize(), *, available_geometry=None):
         super().__init__(window)
-        self.window, self.minimum = window, minimum
+        self._window, self.minimum = weakref.ref(window), minimum
         self.available_geometry = available_geometry
         self._queued = False
         self._screen = None
         self._handle = None
         window.installEventFilter(self)
+
+    @property
+    def window(self):
+        return self._window()
 
     def schedule(self, *_args):
         if not self._queued:
@@ -26,7 +32,7 @@ class ScreenBounds(QObject):
     def fit(self):
         self._queued = False
         window = self.window
-        if not window.isVisible():
+        if window is None or not isValid(window) or not window.isVisible():
             return
         # Headless renderers expose an artificial 800px desktop. Their caller
         # owns the canvas; an explicit provider exercises bounds in tests.

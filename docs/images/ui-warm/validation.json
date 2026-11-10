@@ -1,0 +1,63 @@
+{
+  "date": "2026-11-10",
+  "platform": {
+    "system": "macOS",
+    "version": "27.0.1",
+    "build": "26A434",
+    "architecture": "arm64",
+    "qt": "6.11.2",
+    "font": "PingFang SC",
+    "native_backend": "cocoa",
+    "native_logical_dpi": 72,
+    "native_dpr": 2,
+    "offscreen_logical_dpi": 96,
+    "offscreen_dpr": 1
+  },
+  "tests": {
+    "full_offscreen": {
+      "passed": 1367,
+      "skipped": 6,
+      "warnings": 9,
+      "seconds": 330.3,
+      "result": "1367 passed, 6 skipped, 9 warnings in 330.30s (0:05:30)"
+    },
+    "native_gui": {
+      "passed": 204,
+      "warnings": 9,
+      "seconds": 117.59,
+      "result": "204 passed, 9 warnings in 117.59s (0:01:57)"
+    },
+    "new_interaction_regressions_included": 21
+  },
+  "static_checks": {
+    "ruff": "passed",
+    "compileall": "passed",
+    "git_diff_check": "passed"
+  },
+  "screenshots": {
+    "offscreen_ui": 307,
+    "native_ui": 307,
+    "background_matrix": 72,
+    "background_examples": 5,
+    "refinement_states": 60,
+    "focused_offscreen": 2,
+    "focused_native": 2,
+    "delivered_comparison_pairs": 7,
+    "delivered_examples": 13
+  },
+  "commands": {
+    "full_offscreen": "QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q",
+    "native_gui": "QT_QPA_PLATFORM=cocoa .venv/bin/python -m pytest -q tests/test_warm_workspaces.py tests/test_workspaces.py tests/test_ui_refresh.py tests/test_ui_feedback.py tests/test_fluent_refinement.py tests/test_fluent_design.py",
+    "ruff": ".venv/bin/ruff check bilibili_downloader tests packaging_hooks scripts",
+    "compileall": ".venv/bin/python -m compileall -q bilibili_downloader tests scripts",
+    "diff": "git diff --check"
+  },
+  "windows_native": {
+    "status": "not_run",
+    "reason": "No Windows desktop environment is available on this macOS host."
+  },
+  "notes": [
+    "Native QWidget.grab excludes system-composited window controls.",
+    "Existing QApplication.setActiveWindow deprecation warnings remain."
+  ]
+}

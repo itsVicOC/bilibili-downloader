@@ -2,18 +2,20 @@
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QDialog,
-    QHBoxLayout,
     QLabel,
-    QPushButton,
     QVBoxLayout,
 )
 
 from bilibili_downloader import __version__
+from bilibili_downloader.gui.widgets.dialog_shell import AppDialog
 from bilibili_downloader.gui.widgets.release_notes import ReleaseNotesBrowser
+from bilibili_downloader.gui.widgets.responsive_actions import (
+    ActionButton,
+    ResponsiveActions,
+)
 
 
-class UpdateDialog(QDialog):
+class UpdateDialog(AppDialog):
     UPDATE = 1
     LATER = 2
     SKIP = 3
@@ -42,14 +44,15 @@ class UpdateDialog(QDialog):
         layout.addWidget(version)
         self.notes = ReleaseNotesBrowser(release, self)
         layout.addWidget(self.notes, 1)
-        footer = QHBoxLayout()
-        footer.setSpacing(8)
+        self.actions = ResponsiveActions()
+        footer = self.actions.row
         for text, result in (
             ("跳过此版本", self.SKIP),
             ("稍后提醒", self.LATER),
             ("立即更新", self.UPDATE),
         ):
-            button = QPushButton(text)
+            button = ActionButton(text)
+            button.setProperty("alwaysVisible", result != self.SKIP)
             button.setObjectName(
                 "PrimaryButton" if result == self.UPDATE else "TextButton" if result == self.SKIP else "SubtleButton"
             )
@@ -58,5 +61,5 @@ class UpdateDialog(QDialog):
             )
             footer.addWidget(button)
             if result == self.SKIP:
-                footer.addStretch()
-        layout.addLayout(footer)
+                button.setProperty("actionPriority", -10)
+        layout.addWidget(self.actions)

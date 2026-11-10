@@ -117,6 +117,8 @@ class GlassBackdrop:
 
 
 def paint_widget_glass(widget):
+    if widget.property("sectionStyle") == "plain":
+        return False
     current = widget.parentWidget()
     while current is not None and current.window() == widget.window():
         if hasattr(current, "paint_glass"):

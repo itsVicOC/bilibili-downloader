@@ -1,0 +1,114 @@
+[
+  {
+    "image": "floating-star_trail-light-combo-below.png",
+    "theme": "star_trail",
+    "mode": "light",
+    "popup": [
+      58,
+      178,
+      412,
+      334
+    ],
+    "within_screen": true,
+    "current_value": 15,
+    "horizontal_scroll": 0
+  },
+  {
+    "image": "floating-star_trail-light-combo-above.png",
+    "theme": "star_trail",
+    "mode": "light",
+    "popup": [
+      58,
+      783,
+      412,
+      334
+    ],
+    "within_screen": true,
+    "current_value": 15,
+    "horizontal_scroll": 0
+  },
+  {
+    "image": "floating-star_trail-dark-combo-below.png",
+    "theme": "star_trail",
+    "mode": "dark",
+    "popup": [
+      58,
+      178,
+      412,
+      334
+    ],
+    "within_screen": true,
+    "current_value": 15,
+    "horizontal_scroll": 0
+  },
+  {
+    "image": "floating-star_trail-dark-combo-above.png",
+    "theme": "star_trail",
+    "mode": "dark",
+    "popup": [
+      58,
+      783,
+      412,
+      334
+    ],
+    "within_screen": true,
+    "current_value": 15,
+    "horizontal_scroll": 0
+  },
+  {
+    "image": "floating-bilibili_blue-light-combo-below.png",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "popup": [
+      58,
+      178,
+      412,
+      334
+    ],
+    "within_screen": true,
+    "current_value": 15,
+    "horizontal_scroll": 0
+  },
+  {
+    "image": "floating-bilibili_blue-light-combo-above.png",
+    "theme": "bilibili_blue",
+    "mode": "light",
+    "popup": [
+      58,
+      783,
+      412,
+      334
+    ],
+    "within_screen": true,
+    "current_value": 15,
+    "horizontal_scroll": 0
+  },
+  {
+    "image": "floating-bilibili_blue-dark-combo-below.png",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "popup": [
+      58,
+      178,
+      412,
+      334
+    ],
+    "within_screen": true,
+    "current_value": 15,
+    "horizontal_scroll": 0
+  },
+  {
+    "image": "floating-bilibili_blue-dark-combo-above.png",
+    "theme": "bilibili_blue",
+    "mode": "dark",
+    "popup": [
+      58,
+      783,
+      412,
+      334
+    ],
+    "within_screen": true,
+    "current_value": 15,
+    "horizontal_scroll": 0
+  }
+]

@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 
 from PySide6.QtCore import QEvent, QObject, QRect, Qt, Signal
-from PySide6.QtGui import QColor, QKeySequence, QPainter, QPen
+from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
     QLabel,
     QStyle,
@@ -13,7 +13,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from bilibili_downloader.gui.widgets.components import palette
+from bilibili_downloader.gui.resources.styles import UI_METRICS
+from bilibili_downloader.gui.widgets.check_box import draw_check_indicator
 from bilibili_downloader.gui.widgets.responsive_actions import (
     ActionButton,
     ResponsiveActions,
@@ -134,19 +135,13 @@ class CheckableRowDelegate(QStyledItemDelegate):
             self.content.paint(painter, opt, index)
         else:
             option.widget.style().drawControl(QStyle.CE_ItemViewItem, opt, painter, option.widget)
-        p = palette()
-        checked = index.data(Qt.UserRole) in self.binding.state.selected if state_only else index.data(Qt.CheckStateRole) == Qt.Checked.value
-        rect = QRect(option.rect.left() + 9, option.rect.center().y() - 8, 16, 16)
-        painter.save()
-        painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(QPen(QColor(p.accent if checked else p.border_hover), 1.5))
-        painter.setBrush(QColor(p.accent if checked else p.surface))
-        painter.drawRoundedRect(rect, 4, 4)
-        if checked:
-            painter.setPen(QPen(QColor(p.accent_text), 1.8))
-            painter.drawLine(rect.left() + 4, rect.top() + 8, rect.left() + 7, rect.top() + 11)
-            painter.drawLine(rect.left() + 7, rect.top() + 11, rect.left() + 12, rect.top() + 5)
-        painter.restore()
+        checked = index.data(Qt.UserRole) in self.binding.state.selected if state_only else index.data(Qt.CheckStateRole) in (Qt.Checked, Qt.Checked.value)
+        size = UI_METRICS.indicator_size
+        rect = QRect(option.rect.left() + 8, option.rect.center().y() - size // 2, size, size)
+        draw_check_indicator(painter, rect, checked=checked,
+                             partial=index.data(Qt.CheckStateRole) in (Qt.PartiallyChecked, Qt.PartiallyChecked.value),
+                             enabled=bool(option.state & QStyle.State_Enabled),
+                             hovered=bool(option.state & QStyle.State_MouseOver))
 
     def editorEvent(self, event, model, option, index):
         if self.binding is not None and self.binding.paint_only and index.data(Qt.UserRole) in self.binding._keys:
@@ -157,7 +152,7 @@ class CheckableRowDelegate(QStyledItemDelegate):
         if index.data(Qt.CheckStateRole) is None:
             return False
         if event.type() == QEvent.MouseButtonRelease and event.button() == Qt.LeftButton and event.position().x() <= option.rect.left() + 30:
-            checked = index.data(Qt.CheckStateRole) == Qt.Checked.value
+            checked = index.data(Qt.CheckStateRole) in (Qt.Checked, Qt.Checked.value)
             return model.setData(index, Qt.Unchecked if checked else Qt.Checked, Qt.CheckStateRole)
         return False
 

@@ -4,7 +4,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QPoint, QRect, QUrl
 from PySide6.QtGui import QDesktopServices, QFont, QKeySequence, QTextCursor, QTextTable
 from PySide6.QtWidgets import QTextBrowser
 
@@ -137,11 +137,12 @@ def test_long_release_body_and_actions_fit(qtbot, size):
     qtbot.waitExposed(dialog)
     assert dialog.notes.horizontalScrollBar().maximum() == 0
     assert dialog.notes.verticalScrollBar().maximum() > 0
-    from PySide6.QtWidgets import QPushButton
 
-    assert len(dialog.findChildren(QPushButton)) == 3
-    for button in dialog.findChildren(QPushButton):
-        assert button.isVisible() and dialog.rect().contains(button.geometry())
+    assert len(dialog.actions._buttons) == 3
+    for button in dialog.actions._buttons:
+        assert button.isVisible()
+        rect = QRect(button.mapTo(dialog, QPoint()), button.size())
+        assert dialog.rect().contains(rect)
 
 
 @pytest.mark.parametrize("notes", ["", "   ", "普通说明：中文、符号 & 路径。"])

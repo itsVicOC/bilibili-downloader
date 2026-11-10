@@ -1,10 +1,21 @@
 """Video info display widget."""
 
 import io
+from dataclasses import replace
 
 from PIL import Image, UnidentifiedImageError
-from PySide6.QtCore import QObject, QRect, QRunnable, QSize, Qt, QThreadPool, Signal
-from PySide6.QtGui import QPainter, QPixmap, QTextLayout, QTextOption
+from PySide6.QtCore import (
+    QObject,
+    QPointF,
+    QRect,
+    QRectF,
+    QRunnable,
+    QSize,
+    Qt,
+    QThreadPool,
+    Signal,
+)
+from PySide6.QtGui import QPainter, QPainterPath, QPixmap, QTextLayout, QTextOption
 from PySide6.QtWidgets import (
     QBoxLayout,
     QHBoxLayout,
@@ -14,6 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from bilibili_downloader.gui.layout_policy import COMFORTABLE
+from bilibili_downloader.gui.resources.styles import UI_METRICS
 from bilibili_downloader.gui.widgets.components import StatusBadge, line_icon
 from bilibili_downloader.gui.widgets.glass_surface import GlassWidget
 from bilibili_downloader.utils.network import BILIBILI_RESOURCE_HOSTS, trusted_https_url
@@ -30,6 +42,7 @@ class _AspectCoverLabel(QLabel):
         self._source = QPixmap()
         self._expand = False
         self._density = COMFORTABLE
+        self.featured = False
         self.setMinimumSize(160, 90)
         self.setMaximumSize(176, 99)
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
@@ -38,6 +51,8 @@ class _AspectCoverLabel(QLabel):
         return True
 
     def heightForWidth(self, width: int) -> int:
+        if self.featured and not self._density.compact:
+            return max(144, min(292, round(width * 9 / 16)))
         if self._density.compact:
             return self._density.cover_height
         return max(90, min(99, round(width * 9 / 16)))
@@ -46,13 +61,16 @@ class _AspectCoverLabel(QLabel):
         return QSize(self._density.cover_width, self._density.cover_height)
 
     def minimumSizeHint(self) -> QSize:
+        if self.featured and not self._density.compact:
+            return QSize(240, 135)
         if self._density.compact:
             return self.sizeHint()
         return QSize(160, 90)
 
     def set_density(self, density):
         self._density = density
-        self.setMinimumSize(density.cover_width if density.compact else 160, density.cover_height if density.compact else 90)
+        self.setMinimumSize(240 if self.featured and not density.compact else density.cover_width if density.compact else 160,
+                            135 if self.featured and not density.compact else density.cover_height if density.compact else 90)
         self.setMaximumSize(density.cover_width, density.cover_height)
         self.updateGeometry()
 
@@ -72,9 +90,22 @@ class _AspectCoverLabel(QLabel):
             super().setPixmap(self._source)
             return
         mode = Qt.KeepAspectRatioByExpanding if self._expand else Qt.KeepAspectRatio
-        super().setPixmap(
-            self._source.scaled(self.size(), mode, Qt.SmoothTransformation)
-        )
+        dpr = self.devicePixelRatioF()
+        rendered = self._source.scaled(self.size() * dpr, mode, Qt.SmoothTransformation)
+        rendered.setDevicePixelRatio(dpr)
+        super().setPixmap(rendered)
+
+    def paintEvent(self, event):
+        pixmap = self.pixmap()
+        if pixmap is None or pixmap.isNull():
+            return super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        shape = QPainterPath()
+        shape.addRoundedRect(QRectF(self.contentsRect()), UI_METRICS.radius, UI_METRICS.radius)
+        painter.setClipPath(shape)
+        size = pixmap.deviceIndependentSize()
+        painter.drawPixmap(QPointF((self.width() - size.width()) / 2, (self.height() - size.height()) / 2), pixmap)
 
     def resizeEvent(self, event):
         self.setFixedHeight(self.heightForWidth(event.size().width()))
@@ -213,6 +244,7 @@ class VideoInfoWidget(GlassWidget):
 
     def __init__(self):
         super().__init__()
+        self._featured = False
         self._cover_url = ""
         self._cover_pool = QThreadPool.globalInstance()
         self._cover_jobs = []
@@ -276,11 +308,20 @@ class VideoInfoWidget(GlassWidget):
 
     def resizeEvent(self, event):
         self._identity_layout.setDirection(
-            QBoxLayout.TopToBottom if event.size().width() < 380 else QBoxLayout.LeftToRight
+            QBoxLayout.TopToBottom if (self._featured and not self._cover_label._density.compact) or event.size().width() < 380 else QBoxLayout.LeftToRight
         )
         super().resizeEvent(event)
 
+    def set_featured(self, featured):
+        self._featured = featured
+        self._cover_label.featured = featured
+        self.setProperty("featured", featured)
+        self.setProperty("sectionStyle", "plain" if featured else "card")
+        self.set_density(COMFORTABLE)
+
     def set_density(self, density):
+        if self._featured and not density.compact:
+            density = replace(density, cover_width=520, cover_height=292)
         padding = density.card_padding
         self.layout().setContentsMargins(padding, padding, padding, padding)
         self._identity_layout.setSpacing(12 if density.compact else 16)
@@ -310,6 +351,7 @@ class VideoInfoWidget(GlassWidget):
         self._bvid_label.set_full_text(f"作品号  {identity}")
         self._state_label.setText("已解析")
         self._state_label.set_tone("success")
+        self._state_label.setVisible(not self._featured)
 
         # Load cover image
         if info.cover_url:

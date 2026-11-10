@@ -1,8 +1,7 @@
 """Consistent, bounded workflow dialogs with a fixed action footer."""
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QDialog,
     QLabel,
     QLineEdit,
     QPlainTextEdit,
@@ -11,15 +10,21 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from bilibili_downloader.gui.widgets.components import Notice, help_text, scroll_area
+from bilibili_downloader.gui.widgets.components import (
+    Notice,
+    SectionCard,
+    help_text,
+    repolish,
+    scroll_area,
+)
+from bilibili_downloader.gui.widgets.dialog_shell import AppDialog, prepare_dialog
 from bilibili_downloader.gui.widgets.responsive_actions import (
     ActionButton,
     ResponsiveActions,
 )
-from bilibili_downloader.gui.window_bounds import ScreenBounds
 
 
-class WorkflowDialog(QDialog):
+class WorkflowDialog(AppDialog):
     def __init__(self, title, description="", parent=None, *, confirm="确认", width=640):
         super().__init__(parent)
         self.setWindowTitle(title)
@@ -63,14 +68,12 @@ class WorkflowDialog(QDialog):
         footer.addWidget(self.footer_actions)
         root.addWidget(self.footer)
         self.resize(width, 500)
-        self._return_focus = parent.focusWidget() if parent else None
-        self.finished.connect(self._restore_focus)
-        self._screen_bounds = ScreenBounds(self, QSize(420, 0))
-
-    def _restore_focus(self, _result):
-        from shiboken6 import isValid
-        if self._return_focus is not None and isValid(self._return_focus):
-            self._return_focus.setFocus(Qt.OtherFocusReason)
+        prepare_dialog(self)
+    def showEvent(self, event):
+        for group in self.content.findChildren(SectionCard):
+            group.setProperty("sectionStyle", "plain")
+            repolish(group)
+        super().showEvent(event)
 
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key_Return, Qt.Key_Enter) and isinstance(self.focusWidget(), (QLineEdit, QPlainTextEdit)):

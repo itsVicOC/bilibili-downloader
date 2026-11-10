@@ -113,9 +113,24 @@ def test_control_states_do_not_move_the_form(qapp, qtbot, theme_id, dark):
     host.show()
     qtbot.waitExposed(host)
     original = (entry.geometry(), button.geometry(), host.sizeHint())
+    button.setFocus()
+    qtbot.mouseMove(button)
+    qapp.processEvents()
+    image = entry.grab().toImage()
+    # A field has the same thin edge on every side, including the old underline.
+    assert image.pixelColor(0, image.height() // 2) == image.pixelColor(image.width() // 2, image.height() - 1)
     entry.setFocus()
     qapp.processEvents()
     assert (entry.geometry(), button.geometry(), host.sizeHint()) == original
+    entry.setProperty("invalid", True)
+    repolish(entry)
+    qtbot.mouseMove(entry)
+    image = entry.grab().toImage()
+    # Hover and keyboard focus must not hide the validation error.
+    assert image.pixelColor(0, image.height() // 2) == QColor(theme_palette(dark, theme_id).danger_border)
+    assert (entry.geometry(), button.geometry(), host.sizeHint()) == original
+    entry.setProperty("invalid", False)
+    repolish(entry)
     entry.setReadOnly(True)
     button.setEnabled(False)
     qapp.processEvents()

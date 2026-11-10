@@ -20,7 +20,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, qVersion
+from PySide6.QtCore import QEvent, QPoint, QRect, QSettings, QSize, Qt, qVersion
 from PySide6.QtGui import (
     QCloseEvent,
     QColor,
@@ -211,6 +211,7 @@ def _make_main_window(workdir: Path, *, desktop_platform=None) -> MainWindow:
     config.save(
         AppSettings(
             output_dir="~/Downloads/BiliFlow",
+            auto_check_updates=False,
             path_template="{author}/{collection}/{title}{part_suffix}",
             download_danmaku=True,
             download_subtitle=True,
@@ -507,6 +508,7 @@ def _capture_dropdowns(app, theme, window):
 def _capture_platform_checks(app, theme, window):
     """Match the unparsed download form and long list seen on a real desktop."""
     checks = []
+    window._show_output_options()
     combo = window._quality_combo
     combo.setCurrentIndex(combo.findData(VideoQuality.Q1080P60))
     for dark in (True, False):
@@ -1315,6 +1317,7 @@ def _capture_ui_refresh(app, theme, window):
                 assert all(card.height() >= card.fontMetrics().height() + 16 for card in cards)
                 for section in SettingsSection:
                     window._show_settings_tab(section)
+                    window._settings_page.tabs.currentWidget().verticalScrollBar().setValue(0)
                     _save_widget(app, window, f"ui-{theme_id}-settings-{section.value}-{mode}-{width}.png")
                     if section == SettingsSection.DOWNLOAD:
                         window._settings_page._templates_section.set_expanded(True)
@@ -2005,6 +2008,118 @@ def _capture_dialog_placement(app, theme, window):
     )
 
 
+def _capture_warm_workspaces(app, theme, window):
+    """The shared rail, welcoming entry, advanced state and audio placement."""
+    _capture_ui_refresh(app, theme, window)
+    checks = []
+    for theme_id in ("star_trail", "bilibili_blue"):
+        window._settings.appearance.theme = theme_id
+        theme.set_color_theme(theme_id)
+        for dark in (False, True):
+            theme.apply_theme(dark)
+            mode = "dark" if dark else "light"
+            for width, height in ((900, 640), (1120, 760), (1320, 860)):
+                window.resize(width, height)
+                window._show_workspace(0)
+                window._download_tabs.setCurrentIndex(0)
+                window._configuration.advanced.set_expanded(False)
+                window._output_mode_combo.setCurrentIndex(window._output_mode_combo.findData(OutputMode.VIDEO))
+                window._aspect_combo.setCurrentIndex(0)
+                window._strict_match_check.setChecked(False)
+                window._url_input.clear()
+                window._resolved_url = ""
+                window._current_video = None
+                window._download_result_state = "待解析"
+                window._configuration._preconfigured = False
+                window._resolve_notice.set_message("")
+                window._download_btn.setEnabled(False)
+                window._refresh_download_summary()
+                window._workspace_scroll.verticalScrollBar().setValue(0)
+                _save_widget(app, window, f"warm-{theme_id}-empty-{mode}-{width}.png")
+                window._show_output_options()
+                window.show()
+                _flush_events(app)
+                window._workspace_scroll.ensureWidgetVisible(window._configuration, 0, 8)
+                _save_widget(app, window, f"warm-{theme_id}-preconfigure-{mode}-{width}.png")
+                _populate_main_window(window)
+                window._workspace_scroll.verticalScrollBar().setValue(0)
+                window.show()
+                _flush_events(app)
+                assert window._download_btn.visibleRegion().boundingRect().contains(window._download_btn.rect())
+                _save_widget(app, window, f"warm-{theme_id}-resolved-{mode}-{width}.png")
+                window._configuration.advanced.set_expanded(True)
+                window._aspect_combo.setCurrentIndex(1)
+                window._strict_match_check.setChecked(True)
+                window.show()
+                _flush_events(app)
+                window._workspace_scroll.ensureWidgetVisible(window._match_policy, 0, 16)
+                _save_widget(app, window, f"warm-{theme_id}-advanced-{mode}-{width}.png")
+                window._configuration.advanced.set_expanded(False)
+                window._output_mode_combo.setCurrentIndex(window._output_mode_combo.findData(OutputMode.AUDIO))
+                window.show()
+                _flush_events(app)
+                window._workspace_scroll.ensureWidgetVisible(window._audio_combo, 0, 16)
+                _save_widget(app, window, f"warm-{theme_id}-audio-{mode}-{width}.png")
+                assert window._audio_combo.parentWidget() is window._audio_common_host
+                checks.append({"theme": theme_id, "mode": mode, "size": [width, height],
+                               "actual_size": [window.width(), window.height()],
+                               "horizontal_scroll": window._workspace_scroll.horizontalScrollBar().maximum(),
+                               "shared_configuration": window._configuration.isAncestorOf(window._audio_combo)})
+    (OUTPUT_DIR / "warm-checks.json").write_text(json.dumps(checks, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    theme.set_color_theme("star_trail")
+    empty = _make_main_window(Path(app.property("docsTempRoot")) / "warm-empty-workspaces")
+    try:
+        for theme_id in ("star_trail", "bilibili_blue"):
+            empty._settings.appearance.theme = theme_id
+            theme.set_color_theme(theme_id)
+            for dark in (False, True):
+                theme.apply_theme(dark)
+                mode = "dark" if dark else "light"
+                for width, height in ((900, 640), (1120, 760), (1320, 860)):
+                    empty.resize(width, height)
+                    for page, select in (("tasks-empty", lambda: empty._show_tasks(0)),
+                                         ("history-empty", lambda: empty._show_tasks(2)),
+                                         ("live-empty", lambda: empty._show_workspace(1))):
+                        select()
+                        _save_widget(app, empty, f"warm-{theme_id}-{page}-{mode}-{width}.png")
+    finally:
+        empty.request_quit(confirmed=True)
+        empty.deleteLater()
+
+
+def _capture_warm_details(app, theme, window):
+    """Focused task details and a real enqueue validation failure, offline."""
+    theme.set_color_theme("bilibili_blue")
+    theme.apply_theme(True)
+    _populate_main_window(window)
+    window.resize(1320, 860)
+    window._show_tasks(0)
+    window.show()
+    _flush_events(app)
+    window._download_list.setCurrentCell(0, 0)
+    _save_widget(app, window, "queue-selected.png")
+    theme.set_color_theme("star_trail")
+    theme.apply_theme(False)
+    window._show_workspace(0)
+    window.resize(900, 640)
+    window._configuration.advanced.set_expanded(False)
+    window._codec_combo.setCurrentIndex(-1)
+    window.show()
+    _flush_events(app)
+    window._on_download_clicked()
+    _flush_events(app)
+    assert window._configuration.advanced.toggle.isChecked()
+    assert window.focusWidget() is window._codec_combo
+    assert window._download_btn.visibleRegion().boundingRect().contains(window._download_btn.rect())
+    _save_widget(app, window, "advanced-error.png")
+    (OUTPUT_DIR / "checks.json").write_text(json.dumps({
+        "backend": app.platformName(), "advanced_opened": True,
+        "actual_control_focused": True, "fixed_primary_visible": True,
+        "invalid_selection_not_enqueued": True,
+    }, indent=2) + "\n", encoding="utf-8")
+
+
 def main(argv=None) -> int:
     global OUTPUT_DIR
     parser = argparse.ArgumentParser(description=__doc__)
@@ -2018,6 +2133,12 @@ def main(argv=None) -> int:
     )
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
     parser.add_argument("--color-theme", choices=("star_trail", "bilibili_blue"), default="star_trail", help="Color theme for the complete workspace and dialog matrix")
+    parser.add_argument("--warm-only", action="store_true", help="Capture shared download settings, warm entry states, advanced and audio modes")
+    parser.add_argument("--detail-audit-only", action="store_true", help="Capture all GUI component states and detailed coverage")
+    parser.add_argument("--audit-components-only", action="store_true", help="Limit detail audit to component states")
+    parser.add_argument("--audit-dialogs-only", action="store_true", help="Limit detail audit to application dialogs")
+    parser.add_argument("--audit-fonts-only", action="store_true", help="Capture enlarged-font workspace stress states")
+    parser.add_argument("--warm-details-only", action="store_true", help="Capture task details and advanced field error recovery")
     parser.add_argument("--ui-refresh-only", action="store_true", help="Capture navigation, download cards, modes and account states")
     parser.add_argument("--interactions-only", action="store_true", help="Capture row hover, history removal and isolated clipboard prompts")
     parser.add_argument("--download-management-only", action="store_true", help="Capture multipart queue and independent downloads library")
@@ -2050,6 +2171,8 @@ def main(argv=None) -> int:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="biliflow-docs-") as temp_dir, ExitStack() as cleanup:
         temp_root = Path(temp_dir)
+        QSettings.setDefaultFormat(QSettings.IniFormat)
+        QSettings.setPath(QSettings.IniFormat, QSettings.UserScope, str(temp_root / "qt-settings"))
         if (
             not QApplication.instance()
             and os.environ.get("QT_QPA_PLATFORM") == "offscreen"
@@ -2126,6 +2249,23 @@ def main(argv=None) -> int:
             return 0
         if args.interactions_only:
             _capture_interactions(app, theme, window)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
+        if args.warm_only:
+            _capture_warm_workspaces(app, theme, window)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
+        if args.detail_audit_only or args.audit_components_only or args.audit_dialogs_only or args.audit_fonts_only:
+            from scripts.ui_detail_audit import run
+            run(app, theme, window, sys.modules[__name__], components_only=args.audit_components_only,
+                dialogs_only=args.audit_dialogs_only, fonts_only=args.audit_fonts_only)
+            window._live_controller.shutdown()
+            window.request_quit(confirmed=True)
+            return 0
+        if args.warm_details_only:
+            _capture_warm_details(app, theme, window)
             window._live_controller.shutdown()
             window.request_quit(confirmed=True)
             return 0

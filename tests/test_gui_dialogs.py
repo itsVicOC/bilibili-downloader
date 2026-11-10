@@ -36,7 +36,7 @@ def test_login_cookie_is_masked_by_default(qtbot):
     assert dialog._instructions.wordWrap()
     assert "SESSDATA" in dialog._instructions.text()
     assert dialog._tabs.tabText(1) == "扫码登录"
-    assert dialog._qr_label.text() == "点击下方按钮生成二维码"
+    assert dialog._qr_label.text() == "点击下方生成二维码"
 
 
 def test_login_defaults_to_qr_and_signed_in_account_opens_management(qtbot):
@@ -158,8 +158,8 @@ def test_main_window_separates_download_and_service_pools(qtbot, tmp_path):
 
     audio_index = window._output_mode_combo.findData(OutputMode.AUDIO)
     window._output_mode_combo.setCurrentIndex(audio_index)
-    assert window._codec_label.text() == "音频质量"
-    assert window._codec_stack.currentWidget() is window._audio_combo
+    assert window._audio_row.label.text() == "音质"
+    assert window._audio_combo.parentWidget() is window._audio_common_host
     assert not window._quality_combo.isEnabled()
 
     fallback_index = window._audio_combo.findData(0)
