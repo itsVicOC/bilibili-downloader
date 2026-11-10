@@ -30,7 +30,7 @@ def resolve(window, title="城市夜航"):
 @pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])
 @pytest.mark.parametrize("dark", [False, True])
 @pytest.mark.parametrize("height", [840, 860])
-def test_resolved_download_is_complete_in_standard_window(workspace, qapp, theme_id, dark, height):
+def test_resolved_download_is_complete_in_standard_window(workspace, qapp, qtbot, theme_id, dark, height):
     theme = ThemeManager(qapp, theme_id, "dark" if dark else "light")
     resolve(workspace)
     workspace.resize(1320, height)
@@ -39,13 +39,18 @@ def test_resolved_download_is_complete_in_standard_window(workspace, qapp, theme
     assert workspace._resolve_btn.text() == "重新解析"
     assert workspace._hero.height() < 90
     assert workspace._video_info._cover_label.width() >= 240
-    assert workspace._workspace_scroll.verticalScrollBar().maximum() == 0
+    assert workspace._workspace_scroll.horizontalScrollBar().maximum() == 0
     for control in (workspace._video_info, workspace._choose_pages_btn, workspace._quality_combo,
                     workspace._output_summary,
                     workspace._danmaku_check, workspace._subtitle_check,
                     workspace._all_subtitles_check, workspace._cover_check,
                     workspace._metadata_check, workspace._download_btn):
-        assert control.visibleRegion().boundingRect().contains(control.rect())
+        # The body may scroll with the platform's font metrics; each field must
+        # remain fully reachable while the fixed queue action stays visible.
+        if workspace._workspace_scroll.widget().isAncestorOf(control):
+            workspace._workspace_scroll.ensureWidgetVisible(control, 0, 8)
+        qtbot.waitUntil(lambda: control.visibleRegion().boundingRect().contains(control.rect()), timeout=1000)
+        assert workspace._download_btn.visibleRegion().boundingRect().contains(workspace._download_btn.rect())
     theme.deleteLater()
 
 

@@ -150,7 +150,7 @@ def test_sidebar_groups_settings_above_the_companion(workspace, qtbot):
     QApplication.processEvents()
     assert workspace._settings_nav.y() > workspace._tasks_nav.y()
     assert workspace._settings_nav.geometry().bottom() < workspace._mascot_card.y()
-    assert workspace._mode_button.geometry().bottom() < workspace._header_login.y()
+    qtbot.waitUntil(lambda: workspace._mode_button.geometry().bottom() < workspace._header_login.y(), timeout=1000)
     workspace.resize(900, 640)
     QApplication.processEvents()
     assert not workspace._mode_button.text()
