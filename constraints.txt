@@ -1,6 +1,6 @@
 # Direct dependency versions verified by CI and local release builds.
 # Platform-specific transitive dependencies remain resolver-managed.
-PySide6==6.11.1
+PySide6==6.12.0
 certifi==2026.10.23
 httpx==0.28.1
 pydantic==2.14.2
