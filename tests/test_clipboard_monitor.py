@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QApplication, QDialog
 
 from bilibili_downloader.core.models import AppSettings, VideoInfo
 from bilibili_downloader.gui.clipboard_controller import ClipboardController
+from bilibili_downloader.gui.threads.resolve_worker import ResolveRunner
 from tests.test_workspaces import workspace as workspace
 
 
@@ -39,7 +40,10 @@ def monitor(workspace, qtbot, monkeypatch):
     clipboard = Clipboard()
     clipboard.set('BV1GJ411x7h7')  # Copied before the monitoring object exists.
     calls = []
-    monkeypatch.setattr(workspace._service_pool, 'start', lambda runner: calls.append(runner))
+    # Count parsing requests, not the local inventory match scheduled after a
+    # successful resolve. Keep the stub from executing either kind of work.
+    monkeypatch.setattr(workspace._service_pool, 'start',
+                        lambda runner: calls.append(runner) if isinstance(runner, ResolveRunner) else None)
     manager = ClipboardController(workspace, clipboard=clipboard,
                                   foreground=lambda: focus.active and workspace.isVisible() and not workspace.isMinimized())
     workspace._clipboard = manager
