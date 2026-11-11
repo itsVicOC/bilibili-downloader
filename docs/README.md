@@ -4,6 +4,8 @@
 
 项目入口：[官方网站 · 1008.si](https://1008.si/) · [中文 README](../README.md) · [English README](../README.en.md)。详细指南目前以简体中文为主。
 
+[`v0.8.11` 正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.11)归集两个 beta 的字幕核验、无损 4:3 显示、收藏工作台与全界面精修。用户已确认各项验证完成；正式版与包含 beta 的更新通道均可升级，详见[更新日志](../CHANGELOG.md#v0811---2026-11-11)和[发布记录](BUILDING.md)。
+
 本轮[全界面细节精修](UI_DETAIL_POLISH.md)统一输入、选择、焦点和弹窗，提供[逐实例清单与状态图册](images/ui-detail/index.html)。完整矩阵与 macOS／Windows 验证边界随记录保存。
 
 此前[第二轮界面重做](UI_WARM_REDESIGN.md)引入共享下载设置、作品优先的布局和有温度的短句；[前后对照](images/ui-warm/index.html)与下面各发行版本的历史记录分别保留。

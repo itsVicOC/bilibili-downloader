@@ -68,15 +68,13 @@
 
 `v0.8.3` 为软件更新接入[官方镜像](https://1008.si/download/)，优先加速查询和下载，网络失败时自动尝试 GitHub。v0.8.2 及更早版本可从官网加速下载本版后手动安装；后续更新走镜像。
 
-`v0.8.10` 正式版汇总三个 beta 阶段的下载管理、媒体复用、独立附件补全、跨筛选选择与界面精修，修复多分 P 命名和音轨封装问题。用户已确认实机测试通过；保留 [Fluent Design](docs/FLUENT_DESIGN.md)、粉紫／青蓝、小流、窗口记忆及 Windows 自绘窗口按钮。[下载 0.8.10 正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10) · [更新日志](CHANGELOG.md#v0810---2026-11-06)。
-
-`v0.8.11b2` 预发布版重做收藏工作台、共享下载设置与温暖短句，并统一控件、焦点和弹窗；保留字幕来源核验及无损 4:3 显示副本。体验 beta 请使用「更新最新版」通道。[下载 Beta 2](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.11b2) · [界面验收](docs/UI_DETAIL_POLISH.md) · [字幕与显示比例](docs/SUBTITLE_ASPECT_VALIDATION.md)。
+`v0.8.11` 正式版归集两个 beta 的字幕来源核验、旧字幕重新获取、无损 4:3 显示，以及收藏工作台、共享下载配置和全界面精修。用户已确认各项验证完成；账号、设置、任务与媒体保持兼容，旧字幕可通过「补全附件」重新获取。[下载 0.8.11 正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.11) · [更新日志](CHANGELOG.md#v0811---2026-11-11) · [界面验收](docs/UI_DETAIL_POLISH.md) · [字幕与显示比例](docs/SUBTITLE_ASPECT_VALIDATION.md)。
 
 下载目录按钮紧随路径，任务中心采用整行悬停，录制历史支持整场移除与撤销；默认开启的前台剪贴板识别需确认后才解析，不自动加入队列。账号、配置、背景选择、任务和媒体文件保持兼容。操作说明与截图见[用户指南](docs/USER_GUIDE.md)、[窗口记忆验收](docs/FLUENT_V4_VALIDATION.md)和[交互验收](docs/FLUENT_V5_VALIDATION.md)。
 
 ## 下载与安装
 
-**`v0.8.10` 正式版：** 精简重复提示，移除悬停描边与列表竖线；窄窗口中的次要操作自动收进「更多」，按钮与操作数量保持完整。弹窗每次打开均相对所属软件窗口居中，靠近屏幕边缘时自动避让。[下载正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.10) · [原生对比与验收记录](docs/UI_FEEDBACK_VALIDATION.md)。正式更新通道和包含 beta 的通道均可升级。
+**`v0.8.11` 正式版：** 支持字幕来源与哈希核验、旧字幕重新获取和不裁剪的 4:3 显示副本；下载采用共享配置与作品优先的布局，控件、焦点和弹窗统一精修。[下载正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.11) · [验证记录](docs/BUILDING.md)。正式版与包含 beta 的通道均可升级。
 
 包含文件复用、独立附件补全、严格规格匹配、队列与批量搜索、自选分 P、网络失败自动重试，以及媒体核验和目录批量重新定位。已有设置和任务快照继续生效；跨搜索保留勾选并显示筛选外数量，结果区分媒体／规格／附件，命名字段支持中文搜索。[使用说明](docs/USER_GUIDE.md#下载与归档优化) · [流程精修验收](docs/WORKFLOW_POLISH_VALIDATION.md)。
 
