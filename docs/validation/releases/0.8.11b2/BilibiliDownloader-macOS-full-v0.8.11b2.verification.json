@@ -1,0 +1,23 @@
+{
+  "protocol": 1,
+  "build": {
+    "version": "0.8.11b2",
+    "platform": "macOS",
+    "architecture": "arm64",
+    "variant": "full",
+    "updater_protocol": 1
+  },
+  "files": 526,
+  "installer": "BilibiliDownloader-macOS-full-v0.8.11b2.dmg",
+  "installer_sha256": "1714c609482334788aa2214fe72f2c61bc37ccfcc50b1ed3ba909b498b6bd56a",
+  "archive": "BilibiliDownloader-macOS-full-v0.8.11b2.zip",
+  "archive_sha256": "decb7b3870298cd5e14920fe12fa7cde0509bdabf8128927aaf6dbad8d286133",
+  "checks": [
+    "mount",
+    "applications-link",
+    "copy",
+    "signature",
+    "payload",
+    "cli"
+  ]
+}

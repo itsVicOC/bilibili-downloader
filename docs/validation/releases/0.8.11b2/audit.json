@@ -1,0 +1,77 @@
+{
+  "tag": "v0.8.11b2",
+  "commit": "3f0714259d47f94e7aa3625bcfc5ee5e00fb42c9",
+  "public": true,
+  "prerelease": true,
+  "latest_stable": "v0.8.10",
+  "notes_match_changelog": true,
+  "assets": {
+    "BilibiliDownloader-Windows-full-v0.8.11b2.zip": {
+      "sha256": "9e6e6ed462fa68e7327f3ebfb5f2a0f390d2359174681394eefb5f467f12ad8f",
+      "size": 95483044,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-Windows-lite-v0.8.11b2.zip": {
+      "sha256": "a425dca984773f5ff800700d378f2bf0ea014d788605fb914767bd5df6fb01a0",
+      "size": 89720937,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-macOS-full-v0.8.11b2.zip": {
+      "sha256": "decb7b3870298cd5e14920fe12fa7cde0509bdabf8128927aaf6dbad8d286133",
+      "size": 75695220,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-macOS-lite-v0.8.11b2.zip": {
+      "sha256": "ee52603ba1e87c915b55a6abff873c7e8bfd2a84512a862220a3f12dc304919e",
+      "size": 70570553,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-macOS-full-v0.8.11b2.dmg": {
+      "sha256": "1714c609482334788aa2214fe72f2c61bc37ccfcc50b1ed3ba909b498b6bd56a",
+      "size": 81307946,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-Windows-full-v0.8.11b2-setup.exe": {
+      "sha256": "4d8dfa46029d2550c7fbf768263ffca656da83f5bf53380895bf1c74972e7043",
+      "size": 71690786,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-Windows-full-v0.8.11b2.cdx.json": {
+      "sha256": "1e20ced1d847d55b3d5cca510cbdc44a6737e73b77758f873f838c05e5174eb2",
+      "size": 251348,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-Windows-lite-v0.8.11b2.cdx.json": {
+      "sha256": "3c2040e38202e1f21b2593f560ae627d4fff7d37f79de90ea21f3b874e8f390e",
+      "size": 107789,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-macOS-full-v0.8.11b2.cdx.json": {
+      "sha256": "0068e484be982241499a0a965ba051d1c469979f205805562ec339f7ad0d0fab",
+      "size": 235187,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-macOS-lite-v0.8.11b2.cdx.json": {
+      "sha256": "ab410e3c9e0ddfa93f37f0b1909da94cca3e0e330e8c1e900dc9c2f26518a200",
+      "size": 94663,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-Windows-full-v0.8.11b2-setup.verification.json": {
+      "sha256": "8050744e354dd03a9f15a6bff3c3e9463a9e8dddbc8d3c44fd11ffaf6631a648",
+      "size": 663,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-macOS-full-v0.8.11b2.verification.json": {
+      "sha256": "2fb2f69e55adc42ecf83fe5be2807dd5884487a7352a16842da366952dea9c93",
+      "size": 594,
+      "github_digest_matches": true
+    },
+    "FFmpeg-7.1-source.tar.gz": {
+      "sha256": "02fa6d9827da3b6786e4df821218cc036db2b4481e7f48267c2dcda695633afc",
+      "size": 15900622,
+      "github_digest_matches": true
+    }
+  },
+  "checksum_file_digest_matches": true,
+  "scope": "核对公开附件的名称、大小、GitHub 计算的摘要与已下载校验清单；构建、安装包和字节级 bundle 验证由发布流水线执行。未在用户设备安装。"
+}

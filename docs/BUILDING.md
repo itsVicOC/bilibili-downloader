@@ -1,12 +1,17 @@
 # 构建与发布
 
-## 0.8.11 beta 2 发布准备（2026-11-10）
+## 0.8.11 beta 2 发布检查（2026-11-10 发布，2026-11-11 复核）
 
-- 版本为 `0.8.11b2`，目标标签 `v0.8.11b2`，按预发布通道发布；正式版 Latest 保持 `v0.8.10`。本轮收藏工作台、共享配置、控件与弹窗改动见[全界面精修记录](UI_DETAIL_POLISH.md)。
+- [v0.8.11b2](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.11b2) 于 **2026-11-10 23:06（北京时间）**公开，非草稿、标记为预发布版；正式版 Latest 保持 `v0.8.10`。发布提交为 `3f0714259d47f94e7aa3625bcfc5ee5e00fb42c9`，附注标签已核对到同一提交。本轮收藏工作台、共享配置、控件与弹窗改动见[全界面精修记录](UI_DETAIL_POLISH.md)。
 - 本地完整回归 1383 项通过、6 项平台专项跳过，macOS Cocoa 专项 323 项通过；版本调整后更新选择、启动、发布说明与包校验专项 91 项通过。Ruff、编译与差异检查通过。
 - beta 2 实际发行说明在两套配色、深浅模式和 480×360／680×520 下完成 8 项 Cocoa 检查，无横向溢出、可见操作均在窗口内；隔离设置的版本页显示 `0.8.11b2`。[原始记录](images/releases/0.8.11b2/checks.json)、[窄弹窗](images/releases/0.8.11b2/notes-star_trail-light-480.png)、[版本页](images/releases/0.8.11b2/about-native.png)。未读取用户账号或启动更新查询。
 - CI 的双平台原生专项加入本轮控件与共享配置回归，并补充 125%／150% 字体下的小屏工作区长内容截图。托管 runner 的原生自动化与用户设备的实机操作分别记录。
 - 发布前 Linux 回归发现旧版「840px 下正文不得滚动」及单次事件循环后读取侧栏位置的断言；更新为逐控件滚动可达、固定主操作可见和字体调整后无重叠的检查。对应本地布局专项 44 项通过、1 项平台跳过，未修改产品行为。
+- 修正后 [CI 42827722791](https://github.com/itsVicOC/bilibili-downloader/actions/runs/42827722791) **17/17 项成功**；Linux Python 3.11／3.12 及 macOS 全量均 1367 项通过、22 项跳过，Windows Python 3.11／3.12 均 1366 项通过、23 项跳过。双平台原生专项均分两组完成：133 通过／1 跳过、229 通过／6 跳过。四档 Windows 缩放、双平台配对性能、三平台录制器、原生更新器及依赖审计均通过。[任务记录](validation/releases/0.8.11b2/ci.json)与[测试摘要](validation/releases/0.8.11b2/ci-test-results.json)分别保存平台结果；托管桌面自动化不替代用户设备的输入法、混合 DPI 和长时运行实测。
+- [Release 42831443875](https://github.com/itsVicOC/bilibili-downloader/actions/runs/42831443875) **5/5 项成功**，重新构建 Windows／macOS full、lite ZIP 与 full EXE／DMG，完成冻结应用、更新和回滚、媒体样例、SBOM、安装器及汇总包验证。[发布任务](validation/releases/0.8.11b2/release-workflow.json)绑定同一发布提交。
+- 公开的 14 个附件齐全。已下载 SHA-256 清单并逐项核对 GitHub 计算的摘要，13 个载荷与校验清单自身共 14 项均匹配；发行说明与标签中的更新日志一致。公开安装报告的版本为 `0.8.11b2`，安装器与 ZIP 摘要均和附件元信息一致：Windows 验证 958 个载荷文件及安装、覆盖、运行中拦截、更新后卸载与媒体保留；macOS 验证 526 个载荷文件及挂载、复制、签名和冻结 CLI。[公开附件审计](validation/releases/0.8.11b2/audit.json)记录核对范围；字节级 bundle 与安装验证由对应 runner 完成，本机未覆盖安装。Windows 原始 CRLF 报告以 gzip 保留，逐字节核对方式见[记录格式](validation/releases/0.8.11b2/record-formats.json)。
+- 公开 GitHub 元信息回放的 6 个更新选择场景通过；官方镜像的 14 个附件 ID、大小、摘要与 GitHub 一致。真实网络查询确认 beta 1 的「更新最新版」可发现 beta 2，稳定版 Latest 仍为 `v0.8.10`。见[更新选择](validation/releases/0.8.11b2/update-selection.json)、[镜像核对](validation/releases/0.8.11b2/mirror.json)与[标签目标](validation/releases/0.8.11b2/tag-target.json)。只查询与核对，没有在用户数据上安装或迁移。
+
 
 ## 开发环境
 

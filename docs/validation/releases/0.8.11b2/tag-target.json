@@ -1,0 +1,24 @@
+{
+  "node_id": "TA_kwDOSfa_VNoAKGJmNjYzMTJmNmJkMjU2NjQ1ZDQ4MzM4ZTYxZTUyZGY2YzVjODlmOGQ",
+  "sha": "bf66312f6bd256645d48338e61e52df6c5c89f8d",
+  "url": "https://api.github.com/repos/itsVicOC/bilibili-downloader/git/tags/bf66312f6bd256645d48338e61e52df6c5c89f8d",
+  "tagger": {
+    "name": "itsVicOC",
+    "email": "265573803+itsVicOC@users.noreply.github.com",
+    "date": "2026-11-10T14:10:35Z"
+  },
+  "object": {
+    "sha": "3f0714259d47f94e7aa3625bcfc5ee5e00fb42c9",
+    "type": "commit",
+    "url": "https://api.github.com/repos/itsVicOC/bilibili-downloader/git/commits/3f0714259d47f94e7aa3625bcfc5ee5e00fb42c9"
+  },
+  "tag": "v0.8.11b2",
+  "message": "BiliFlow 0.8.11 beta 2\n",
+  "verification": {
+    "verified": false,
+    "reason": "unsigned",
+    "signature": null,
+    "payload": null,
+    "verified_at": null
+  }
+}

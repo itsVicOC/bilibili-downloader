@@ -1,0 +1,9 @@
+{
+  "raw_windows_report": {
+    "file": "BilibiliDownloader-Windows-full-v0.8.11b2-setup.verification.json.gz",
+    "asset": "BilibiliDownloader-Windows-full-v0.8.11b2-setup.verification.json",
+    "sha256_after_decompression": "8050744e354dd03a9f15a6bff3c3e9463a9e8dddbc8d3c44fd11ffaf6631a648",
+    "note": "保留公开附件的原始 CRLF 字节，使用 gzip 避免 Git 文本换行转换。"
+  },
+  "other_json": "可直接阅读的 JSON 副本"
+}

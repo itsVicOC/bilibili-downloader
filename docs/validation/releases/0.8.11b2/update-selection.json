@@ -1,0 +1,35 @@
+{
+  "source": "GitHub 公开元信息回放，不执行安装或用户数据迁移",
+  "checks": [
+    {
+      "current": "0.8.11b1",
+      "channel": "latest",
+      "result": "v0.8.11b2"
+    },
+    {
+      "current": "0.8.10",
+      "channel": "latest",
+      "result": "v0.8.11b2"
+    },
+    {
+      "current": "0.8.11b2",
+      "channel": "latest",
+      "result": null
+    },
+    {
+      "current": "0.8.11b1",
+      "channel": "stable",
+      "result": null
+    },
+    {
+      "current": "0.8.10",
+      "channel": "stable",
+      "result": null
+    },
+    {
+      "current": "0.8.9",
+      "channel": "stable",
+      "result": "v0.8.10"
+    }
+  ]
+}

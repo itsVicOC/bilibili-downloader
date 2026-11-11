@@ -1,0 +1,36 @@
+{
+  "macos312": {
+    "suite_summaries": [
+      "133 passed, 1 skipped, 5 warnings in 104.95s",
+      "229 passed, 6 skipped, 4 warnings in 165.20s",
+      "1367 passed, 22 skipped, 9 warnings in 800.23s"
+    ],
+    "full_suite": "1367 passed, 22 skipped, 9 warnings in 800.23s"
+  },
+  "linux312": {
+    "suite_summaries": [
+      "1367 passed, 22 skipped, 9 warnings in 1204.62s"
+    ],
+    "full_suite": "1367 passed, 22 skipped, 9 warnings in 1204.62s"
+  },
+  "linux311": {
+    "suite_summaries": [
+      "1367 passed, 22 skipped, 9 warnings in 991.10s"
+    ],
+    "full_suite": "1367 passed, 22 skipped, 9 warnings in 991.10s"
+  },
+  "windows312": {
+    "suite_summaries": [
+      "133 passed, 1 skipped, 5 warnings in 136.63s",
+      "229 passed, 6 skipped, 4 warnings in 295.11s",
+      "1366 passed, 23 skipped, 9 warnings in 1557.88s"
+    ],
+    "full_suite": "1366 passed, 23 skipped, 9 warnings in 1557.88s"
+  },
+  "windows311": {
+    "suite_summaries": [
+      "1366 passed, 23 skipped, 9 warnings in 1443.08s"
+    ],
+    "full_suite": "1366 passed, 23 skipped, 9 warnings in 1443.08s"
+  }
+}

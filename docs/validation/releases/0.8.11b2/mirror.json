@@ -1,0 +1,9 @@
+{
+  "mirror": "https://dl.1008.si/releases/index.json",
+  "tag": "v0.8.11b2",
+  "assets": 14,
+  "ids_sizes_digests_match": true,
+  "real_update_query_from": "0.8.11b1",
+  "selected": "v0.8.11b2",
+  "installed": false
+}
