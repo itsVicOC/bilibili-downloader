@@ -630,9 +630,11 @@ def test_ordinary_record_removal_has_no_confirmation_and_keeps_undo(workspace):
     assert workspace._task_repository.get(task_id).status == TaskStatus.PAUSED
 
 
-def test_library_empty_filtered_and_loading_states(workspace, tmp_path):
+def test_library_empty_filtered_and_loading_states(workspace, tmp_path, qtbot):
     page = workspace._library_page
-    assert page.stack.currentIndex() == 1
+    # The initial repository read runs in the pool. Its valid loading state can
+    # outlive widget construction on a busy runner.
+    qtbot.waitUntil(lambda: page.stack.currentIndex() == 1, timeout=5000)
     page.check()
     assert not page._jobs and not page.check_button.isEnabled()
     item, outcome = saved(tmp_path)
