@@ -1,0 +1,14 @@
+{
+  "release_tag": "v0.8.11",
+  "release_commit": "c66e54990d805281acb7bba83787794297d275b0",
+  "source_verification_commit": "12a74ff16d83da821978b8084fc31d6e1be54024",
+  "application_native_constraints_and_packaging_identical": true,
+  "source_changes_since_release": [
+    "tests/test_download_management.py",
+    "tests/test_clipboard_monitor.py"
+  ],
+  "test_isolation_verification": {
+    "offscreen_passed": 52,
+    "cocoa_passed": 16
+  }
+}

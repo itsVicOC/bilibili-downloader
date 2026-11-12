@@ -1,11 +1,17 @@
 # 构建与发布
 
-## 0.8.11 正式版发布准备（2026-11-11）
+## 0.8.11 正式版发布检查（2026-11-11 准备，2026-11-12 发布）
 
-- 用户于 2026-11-11 确认 0.8.11 各项验证已完成，授权归集两个 beta 并正式发布。版本为 `0.8.11`，目标标签 `v0.8.11`。
+- 用户于 2026-11-11 确认 0.8.11 各项验证已完成，授权归集两个 beta 并正式发布。正式标签为 `v0.8.11`，发布提交为 `c66e54990d805281acb7bba83787794297d275b0`。
 - 正式版相对已验证 beta 2 仅晋级版本号与发行文档，程序功能、配置格式、任务路径与规格快照、账号和媒体保持兼容；beta 标签与附件保留。
 - 更新日志归集 beta 1 的字幕来源核验、旧字幕重新获取和无损 4:3 显示，以及 beta 2 的收藏工作台、共享下载配置、控件与弹窗精修。正式版与包含 beta 的更新通道均可升级。
 - 正式版本地更新与发布专项 91 项通过；真实发行说明在两套配色、深浅模式和 480×360／680×520 下完成 8 项 Cocoa 检查，关于页显示 `0.8.11`。[说明布局](images/releases/0.8.11/checks.json)、[关于页](images/releases/0.8.11/about-native.png)。Ruff、编译与差异检查通过。
+- [v0.8.11](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.11) 于 **2026-11-12 00:54（北京时间）**公开，非草稿、非预发布版，已成为 GitHub Latest。[正式发布流水线](https://github.com/itsVicOC/bilibili-downloader/actions/runs/43054053011) **5/5 项成功**，包含两端完整测试、full／lite、冻结更新和回滚、媒体样例、原生安装包及汇总包验证。
+- 14 个公开附件齐全；已下载校验清单并核对 GitHub 计算的全部附件摘要，发行说明与正式标签中的更新日志一致。另实际下载 macOS full DMG（81,287,964 字节），SHA-256 与清单和 GitHub digest 一致。[公开附件审计](validation/releases/0.8.11/audit.json)与[安装包下载抽查](validation/releases/0.8.11/installer-download-check.json)保存范围；本机没有覆盖安装。
+- 公开 GitHub 元信息回放的 9 个更新选择场景通过：0.8.10 和两个 beta 的正式／最新版通道均选择 0.8.11，0.8.11 不重复提示。官方镜像随后已同步，14 个附件 ID、大小与摘要一致；真实网络查询确认正式版和 beta 用户均能发现 0.8.11，0.8.11 不重复提示。见[镜像记录](validation/releases/0.8.11/mirror.json)，只查询与核对，没有安装或迁移用户数据。
+- 独立源码复核首次遇到 Ubuntu 包源 DNS 失败及初始文件列表查询尚未完成时的测试抢读；随后又确认剪贴板测试误将本地媒体匹配计入解析请求。两处修正仅涉及测试等待和计数隔离，本地 52 项离屏回归与 16 项原生测试通过；正式程序和公开产物未变。`main` 的应用、原生组件、约束与打包配置已逐项和正式标签核对一致。
+- 测试隔离修正后的 [CI 43064640784](https://github.com/itsVicOC/bilibili-downloader/actions/runs/43064640784) **17/17 项成功**。Linux Python 3.11／3.12 及 macOS 全量均 1367 通过、22 跳过，Windows Python 3.11／3.12 均 1366 通过、23 跳过；两端原生专项均分两组完成，分别为 133 通过／1 跳过、229 通过／6 跳过。四档 Windows 缩放、双平台性能、三平台录制器、更新器和依赖审计均通过。见[最终 CI](validation/releases/0.8.11/ci.json)、[平台测试摘要](validation/releases/0.8.11/ci-test-results.json)与[复核过程](validation/releases/0.8.11/ci-recovery.json)。
+- 正式标签固定指向发布提交，源码复核提交 `12a74ff16d83da821978b8084fc31d6e1be54024` 只调整两处测试；[应用等价核对](validation/releases/0.8.11/application-equivalence.json)确认应用、原生组件、依赖约束和打包配置与正式标签一致。公开安装验证报告版本为 `0.8.11`，安装器和 ZIP 摘要与附件一致；Windows 原始 CRLF 报告以 gzip 保留，见[记录格式](validation/releases/0.8.11/record-formats.json)。
 
 ## 0.8.11 beta 2 发布检查（2026-11-10 发布，2026-11-11 复核）
 

@@ -1,0 +1,29 @@
+{
+  "mirror": "https://dl.1008.si/releases/index.json",
+  "tag": "v0.8.11",
+  "assets": 14,
+  "ids_sizes_digests_match": true,
+  "real_update_queries": [
+    {
+      "current": "0.8.10",
+      "channel": "stable",
+      "result": "v0.8.11"
+    },
+    {
+      "current": "0.8.11b2",
+      "channel": "stable",
+      "result": "v0.8.11"
+    },
+    {
+      "current": "0.8.11b2",
+      "channel": "latest",
+      "result": "v0.8.11"
+    },
+    {
+      "current": "0.8.11",
+      "channel": "stable",
+      "result": null
+    }
+  ],
+  "installed": false
+}

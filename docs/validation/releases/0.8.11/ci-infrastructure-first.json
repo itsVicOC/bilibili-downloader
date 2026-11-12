@@ -1,0 +1,25 @@
+{
+  "run": 43053913322,
+  "commit": "c66e54990d805281acb7bba83787794297d275b0",
+  "jobs": [
+    130638167874,
+    130638168143
+  ],
+  "phase": "Install Linux Qt runtime libraries",
+  "error": "Temporary failure resolving azure.archive.ubuntu.com / archive.ubuntu.com / security.ubuntu.com",
+  "exit_code": 100,
+  "application_tests_started": false,
+  "retry": "在原 CI 结束后重跑失败任务",
+  "product_code_changed": false,
+  "additional_test_race": {
+    "job": 130638168566,
+    "test": "tests/test_download_management.py::test_library_empty_filtered_and_loading_states",
+    "actual": "初始异步查询仍在加载（3），测试立即要求空状态（1）",
+    "product_code_changed": false,
+    "test_fix": "等待异步查询进入空状态再检查后续交互",
+    "local_verification": {
+      "offscreen_passed": 37,
+      "cocoa_passed": 1
+    }
+  }
+}

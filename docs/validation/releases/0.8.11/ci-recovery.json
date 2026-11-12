@@ -1,0 +1,37 @@
+{
+  "release_tag": "v0.8.11",
+  "release_commit": "c66e54990d805281acb7bba83787794297d275b0",
+  "checks": [
+    {
+      "run": 43053913322,
+      "head": "c66e54990d805281acb7bba83787794297d275b0",
+      "result": "failure",
+      "environment_failures": [
+        "两个 Linux 测试任务及 Linux 录制器任务的 Ubuntu 包源 DNS 解析失败，退出 100"
+      ],
+      "test_issue": "空列表测试未等待初始异步查询完成"
+    },
+    {
+      "run": 43063421040,
+      "head": "a9538ce5807f53484daaa2e1f5090e165175a59e",
+      "result": "cancelled after test issue identified",
+      "test_issue": "剪贴板测试将本地媒体匹配任务误计为解析请求"
+    },
+    {
+      "run": 43064640784,
+      "head": "12a74ff16d83da821978b8084fc31d6e1be54024",
+      "result": "success",
+      "jobs_passed": 17
+    }
+  ],
+  "product_changes_after_publication": false,
+  "test_changes": [
+    "等待初始异步查询进入空状态",
+    "仅统计 ResolveRunner 解析请求"
+  ],
+  "local_test_verification": {
+    "offscreen_passed": 52,
+    "cocoa_passed": 16
+  },
+  "product_equivalence": "application-equivalence.json"
+}

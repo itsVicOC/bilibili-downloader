@@ -1,0 +1,9 @@
+{
+  "raw_CRLF_reports": {
+    "BilibiliDownloader-Windows-full-v0.8.11-setup.verification.json": {
+      "file": "BilibiliDownloader-Windows-full-v0.8.11-setup.verification.json.gz",
+      "sha256_after_decompression": "0e4aba4d8a06a76173d14ca52edd2e8957cbefd6294ae88b32533b9ab064ce78"
+    }
+  },
+  "note": "gzip 保留原始报告字节，避免 Git 文本换行转换。"
+}
