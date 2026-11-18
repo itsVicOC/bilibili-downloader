@@ -1,0 +1,11 @@
+{
+  "passed": 1420,
+  "skipped": 6,
+  "failures": 0,
+  "errors": 0,
+  "seconds": 369.868,
+  "qt_platform": "offscreen",
+  "python": "3.11.15",
+  "ruff": true,
+  "compileall": true
+}

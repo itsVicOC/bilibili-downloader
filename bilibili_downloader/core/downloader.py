@@ -2,6 +2,7 @@
 
 import hashlib
 import logging
+import re
 import shutil
 import ssl
 import threading
@@ -39,6 +40,7 @@ STREAM_HEADERS = {
 }
 
 CHUNK_SIZE = 8192
+RANGE_CHUNK_SIZE = 4 * 1024 * 1024
 MAX_RETRIES = 5
 
 
@@ -438,34 +440,49 @@ class StreamDownloader:
         progress_callback: Callable[[float], None],
         referer: str = "https://www.bilibili.com/",
     ) -> None:
-        """Download one URL, resuming from an existing partial file when possible."""
+        """Download finite byte ranges, resuming from the validated local prefix."""
         resume_from = dest.stat().st_size if dest.exists() else 0
         headers = dict(STREAM_HEADERS)
         headers["Referer"] = referer
-        if resume_from > 0:
-            headers["Range"] = f"bytes={resume_from}-"
-
+        # Range offsets describe encoded bytes. Never let transparent content
+        # decompression change the offsets written to the partial file.
+        headers["Accept-Encoding"] = "identity"
+        total_size = None
         current_url = trusted_https_url(url, BILIBILI_RESOURCE_HOSTS)
-        for _ in range(8):
-            with client.stream(
-                "GET",
-                current_url,
-                headers=headers,
-                timeout=120.0,
-                follow_redirects=False,
-            ) as response:
-                if response.is_redirect:
-                    location = response.headers.get("location")
-                    if not location:
-                        response.raise_for_status()
-                    current_url = trusted_https_url(
-                        urljoin(current_url, location),
-                        BILIBILI_RESOURCE_HOSTS,
+        while True:
+            if self._cancelled:
+                raise RuntimeError("Download cancelled")
+            range_end = resume_from + RANGE_CHUNK_SIZE - 1
+            if total_size is not None:
+                range_end = min(range_end, total_size - 1)
+            # Some overseas CDNs reject both absent and open-ended Range headers.
+            headers["Range"] = f"bytes={resume_from}-{range_end}"
+            for _ in range(8):
+                with client.stream(
+                    "GET",
+                    current_url,
+                    headers=headers,
+                    timeout=120.0,
+                    follow_redirects=False,
+                ) as response:
+                    if response.is_redirect:
+                        location = response.headers.get("location")
+                        if not location:
+                            response.raise_for_status()
+                        current_url = trusted_https_url(
+                            urljoin(current_url, location), BILIBILI_RESOURCE_HOSTS,
+                        )
+                        continue
+                    downloaded, total = self._write_response(
+                        response, dest, resume_from, progress_callback,
+                        range_end=range_end, expected_total=total_size,
                     )
-                    continue
-                self._write_response(response, dest, resume_from, progress_callback)
-                return
-        raise RuntimeError("下载失败：媒体地址重定向次数过多")
+                    if response.status_code != 206 or downloaded == total:
+                        return
+                    resume_from, total_size = downloaded, total
+                    break
+            else:
+                raise RuntimeError("下载失败：媒体地址重定向次数过多")
 
     def _write_response(
         self,
@@ -473,23 +490,53 @@ class StreamDownloader:
         dest: Path,
         resume_from: int,
         progress_callback: Callable[[float], None],
-    ) -> None:
-        """Validate and persist a terminal media response."""
+        *,
+        range_end: Optional[int] = None,
+        expected_total: Optional[int] = None,
+    ) -> tuple[int, int]:
+        """Validate one response and return the saved offset and resource size."""
         if response.status_code == 416 and _range_already_complete(response, dest):
+            total = dest.stat().st_size
+            if expected_total is not None and total != expected_total:
+                raise httpx.ProtocolError("服务器返回的媒体总大小发生变化", request=response.request)
+            self._transfer_metrics = TransferMetrics(downloaded_bytes=total, total_bytes=total)
             progress_callback(1.0)
-            return
+            return total, total
         response.raise_for_status()
+        if response.status_code not in (200, 206):
+            raise httpx.ProtocolError("服务器未返回完整媒体或有效分块", request=response.request)
+        if response.headers.get("content-encoding", "identity").lower() != "identity":
+            raise httpx.ProtocolError("媒体响应使用了不支持的内容编码", request=response.request)
+
+        length = response.headers.get("content-length")
+        if length is not None and not length.isdigit():
+            raise httpx.ProtocolError("媒体响应长度无效", request=response.request)
+        body_size = int(length) if length is not None else None
 
         append = resume_from > 0 and response.status_code == 206
         if response.status_code == 206:
-            range_start = _content_range_start(response)
-            if range_start != resume_from:
+            byte_range = _content_range(response)
+            if byte_range is None:
+                raise httpx.ProtocolError("服务器返回的分块范围无效", request=response.request)
+            start, end, total = byte_range
+            if start != resume_from:
                 raise httpx.ProtocolError(
                     "服务器返回的续传起点与本地文件大小不一致",
                     request=response.request,
                 )
+            if range_end is not None and end > range_end:
+                raise httpx.ProtocolError("服务器返回的分块超出请求范围", request=response.request)
+            if body_size is not None and body_size != end - start + 1:
+                raise httpx.ProtocolError("分块长度与范围不一致", request=response.request)
+            body_size = end - start + 1
+        else:
+            total = body_size if body_size is not None else (expected_total or 0)
+            if body_size is None and expected_total is not None:
+                body_size = expected_total
+        if expected_total is not None and total != expected_total:
+            raise httpx.ProtocolError("服务器返回的媒体总大小发生变化", request=response.request)
         downloaded = resume_from if append else 0
-        total = _response_total_size(response, downloaded)
+        received = 0
         mode = "ab" if append else "wb"
 
         last_reported = -1.0
@@ -500,7 +547,10 @@ class StreamDownloader:
             for chunk in response.iter_bytes(chunk_size=65536):
                 if self._cancelled:
                     raise RuntimeError("Download cancelled")
+                if body_size is not None and received + len(chunk) > body_size:
+                    raise httpx.ProtocolError("媒体响应超过声明的长度", request=response.request)
                 f.write(chunk)
+                received += len(chunk)
                 downloaded += len(chunk)
                 elapsed = max(time.monotonic() - started_at, 0.001)
                 speed = max(0.0, (downloaded - started_bytes) / elapsed)
@@ -523,11 +573,19 @@ class StreamDownloader:
                         or now - last_reported_at >= 0.5
                         or pct >= 1.0
                     ):
-                        progress_callback(pct)
+                        # A complete-length body is not complete until EOF and
+                        # the response length have both been verified below.
+                        if downloaded < total:
+                            progress_callback(pct)
                         last_reported = pct
                         last_reported_at = now
 
-        progress_callback(1.0)
+        if body_size is not None and received != body_size:
+            raise httpx.ProtocolError("媒体响应未达到声明的长度，已保留断点", request=response.request)
+        if self._cancelled:
+            raise RuntimeError("Download cancelled")
+        progress_callback(downloaded / total if total else 1.0)
+        return downloaded, total
 
     def _wait_for_retry(self, delay: float) -> None:
         """Wait between retries while remaining responsive to cancellation."""
@@ -563,14 +621,13 @@ def _response_total_size(response: httpx.Response, downloaded: int) -> int:
     return content_length
 
 
-def _content_range_start(response: httpx.Response) -> Optional[int]:
-    """Parse the first byte offset from a 206 Content-Range header."""
-    value = response.headers.get("content-range", "")
-    unit, separator, byte_range = value.partition(" ")
-    start, dash, _remainder = byte_range.partition("-")
-    if unit.lower() != "bytes" or not separator or not dash or not start.isdigit():
+def _content_range(response: httpx.Response) -> Optional[tuple[int, int, int]]:
+    """Require an ordered range and a known, positive total before appending."""
+    match = re.fullmatch(r"bytes (\d+)-(\d+)/(\d+)", response.headers.get("content-range", "").strip(), re.I)
+    if match is None:
         return None
-    return int(start)
+    start, end, total = map(int, match.groups())
+    return (start, end, total) if 0 <= start <= end < total else None
 
 
 def _retry_delay(attempt: int, error: Optional[BaseException]) -> float:
@@ -582,11 +639,8 @@ def _retry_delay(attempt: int, error: Optional[BaseException]) -> float:
 
 def _range_already_complete(response: httpx.Response, dest: Path) -> bool:
     """Treat a 416 response as success when the partial file is already complete."""
-    content_range = response.headers.get("content-range", "")
-    if "/" not in content_range or not dest.is_file():
-        return False
-    total = content_range.rsplit("/", 1)[-1]
-    return total.isdigit() and dest.stat().st_size == int(total)
+    match = re.fullmatch(r"bytes \*/(\d+)", response.headers.get("content-range", "").strip(), re.I)
+    return match is not None and dest.is_file() and dest.stat().st_size == int(match.group(1))
 
 
 def _has_valid_completion_marker(dest: Path, marker: Path) -> bool:

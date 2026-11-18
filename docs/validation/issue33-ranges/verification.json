@@ -1,0 +1,42 @@
+{
+  "run": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/44250821937",
+  "sample": {
+    "bvid": "BV1GJ411x7h7",
+    "cid": 137649199,
+    "quality": 32,
+    "codec": "AVC",
+    "authenticated": false
+  },
+  "source_hashes_by_checkout_line_endings": {
+    "LF": "a47c41afd67358d76acab2c772c8a721c24ab23f794f9bd345d6845c60453de2",
+    "CRLF": "9ca7238094a3c65dc78f02872c28ec358df2abecb0f1576bad1b473a2a7dcecb"
+  },
+  "platforms": {
+    "linux": {
+      "passed": true,
+      "unit_tests_passed": 45,
+      "original_video_status": 403,
+      "original_audio_status": 403,
+      "full_download_and_decode": true,
+      "video_bytes": 20872903,
+      "audio_bytes": 1167163,
+      "duration_seconds": 212.39,
+      "resume_offset": 2162688,
+      "resumed_sha256_matches": true,
+      "source_matches": true
+    },
+    "windows": {
+      "passed": true,
+      "unit_tests_passed": 45,
+      "original_video_status": 403,
+      "original_audio_status": 403,
+      "full_download_and_decode": true,
+      "video_bytes": 20872903,
+      "audio_bytes": 1167163,
+      "duration_seconds": 212.39,
+      "resume_offset": 2162688,
+      "resumed_sha256_matches": true,
+      "source_matches": true
+    }
+  }
+}

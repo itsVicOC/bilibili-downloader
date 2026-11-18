@@ -68,13 +68,13 @@
 
 `v0.8.3` 为软件更新接入[官方镜像](https://1008.si/download/)，优先加速查询和下载，网络失败时自动尝试 GitHub。v0.8.2 及更早版本可从官网加速下载本版后手动安装；后续更新走镜像。
 
-`v0.8.12` 正式补丁版修复海外 Akamai CDN 地址被误报为「不受信任的网络目标」的问题（#33），同步更新下载器与直播录制引擎白名单。保留字幕来源核验、旧字幕重新获取、无损 4:3 显示和收藏工作台；账号、设置、任务与媒体保持兼容。[下载 0.8.12 正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.12) · [更新日志](CHANGELOG.md#v0812---2026-11-18) · [界面验收](docs/UI_DETAIL_POLISH.md) · [字幕与显示比例](docs/SUBTITLE_ASPECT_VALIDATION.md)。
+`v0.8.13` 正式补丁版修复海外 CDN 返回 HTTP 403、导致下载与续传失败的问题（#33）。采用有界分块请求并逐块校验，在美国 Windows／Linux 完成整条音视频下载、解码和断点续传验证；账号、设置、任务与媒体保持兼容。[下载 0.8.13 正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.13) · [更新日志](CHANGELOG.md#v0813---2026-11-18) · [海外 CDN 验证](docs/ISSUE33_RANGE_VALIDATION.md) · [界面验收](docs/UI_DETAIL_POLISH.md)。
 
 下载目录按钮紧随路径，任务中心采用整行悬停，录制历史支持整场移除与撤销；默认开启的前台剪贴板识别需确认后才解析，不自动加入队列。账号、配置、背景选择、任务和媒体文件保持兼容。操作说明与截图见[用户指南](docs/USER_GUIDE.md)、[窗口记忆验收](docs/FLUENT_V4_VALIDATION.md)和[交互验收](docs/FLUENT_V5_VALIDATION.md)。
 
 ## 下载与安装
 
-**`v0.8.12` 正式版：** 修复部分海外网络下 Akamai CDN 下载失败的问题，保留既有字幕核验、4:3 显示副本与收藏工作台。[下载正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.12) · [验证记录](docs/BUILDING.md)。正式版与包含 beta 的通道均可升级。
+**`v0.8.13` 正式版：** 修复海外 CDN 下载与续传的 HTTP 403 问题，完整流校验通过后才记录完成；保留字幕核验、4:3 显示副本与收藏工作台。[下载正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.13) · [验证记录](docs/BUILDING.md)。正式版与包含 beta 的通道均可升级。
 
 包含文件复用、独立附件补全、严格规格匹配、队列与批量搜索、自选分 P、网络失败自动重试，以及媒体核验和目录批量重新定位。已有设置和任务快照继续生效；跨搜索保留勾选并显示筛选外数量，结果区分媒体／规格／附件，命名字段支持中文搜索。[使用说明](docs/USER_GUIDE.md#下载与归档优化) · [流程精修验收](docs/WORKFLOW_POLISH_VALIDATION.md)。
 
