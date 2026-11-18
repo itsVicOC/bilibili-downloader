@@ -1,0 +1,28 @@
+{
+  "version": "0.8.13",
+  "commit": "5ed589e2fbef09b4e1be0354c2c3a6e81da30e7e",
+  "fix_full_regression_before_version_bump": {
+    "passed": 1420,
+    "skipped": 6,
+    "failures": 0,
+    "errors": 0,
+    "seconds": 369.868,
+    "qt_platform": "offscreen",
+    "python": "3.11.15",
+    "ruff": true,
+    "compileall": true
+  },
+  "version_release_checks": {
+    "passed": 91,
+    "skipped": 0,
+    "failures": 0,
+    "errors": 0,
+    "seconds": 3.837
+  },
+  "us_full_download_validation": "https://github.com/itsVicOC/bilibili-downloader/actions/runs/44250821937",
+  "checks": {
+    "ruff": true,
+    "compileall": true,
+    "git_diff_check": true
+  }
+}

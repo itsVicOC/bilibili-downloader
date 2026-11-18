@@ -1,5 +1,15 @@
 # 构建与发布
 
+## 0.8.13 正式补丁版发布检查（2026-11-18）
+
+- 用户于 2026-11-18 授权提交、推送并正式发布 `v0.8.13`。发布提交为 `5ed589e2fbef09b4e1be0354c2c3a6e81da30e7e`，发布时远端 `main` 与附注标签已核对到同一提交；标签固定保留在该发布提交。
+- 首次下载与续传统一采用 4 MiB 有界 Range，逐块核对范围、总大小及实际字节数；中断保留前缀，完整流核验后才记录完成。美国 Windows／Linux 各通过 45 项下载器回归，并完成匿名音视频下载、MP4 合并、完整解码和中断续传 SHA-256 一致性验证，见[#33 验证记录](ISSUE33_RANGE_VALIDATION.md)。账号、配置、任务与媒体继续兼容。
+- 修复阶段本地完整回归 **1420 项通过、6 项平台专项跳过**；版本调整后更新、启动、发行说明和包校验专项 **91 项通过**，Ruff、编译和差异检查通过，见[本地记录](validation/releases/0.8.13/local-tests.json)。发布提交的[源码 CI](https://github.com/itsVicOC/bilibili-downloader/actions/runs/44254417771) **17/17 项成功**，见[CI 记录](validation/releases/0.8.13/ci.json)。
+- [v0.8.13](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.13) 于 **2026-11-18 15:45:53（北京时间）**公开，非草稿、非预发布版，已成为 GitHub Latest。[发行流水线](https://github.com/itsVicOC/bilibili-downloader/actions/runs/44254423338) **5/5 项成功**，重新生成两端 full／lite ZIP、full EXE／DMG，并完成冻结更新与回滚、媒体样例、原生安装和统一附件验证，见[发行任务](validation/releases/0.8.13/release-workflow.json)。
+- 14 个公开附件齐全；GitHub 计算的全部附件摘要与下载的 SHA-256 清单一致，发行说明与标签中的更新日志一致。两份原生安装验证报告版本为 `0.8.13`，绑定的安装器与 ZIP 摘要均已核对；Windows 原始 CRLF 报告以 gzip 保留。另实际下载 macOS full DMG，大小及摘要均匹配，见[公开附件审计](validation/releases/0.8.13/audit.json)与[安装包下载抽查](validation/releases/0.8.13/installer-download-check.json)。
+- 公开 GitHub 元信息回放的 10 个更新选择场景通过：旧正式版及 beta 的两个通道均选择 `v0.8.13`，新版不重复提示，见[更新选择](validation/releases/0.8.13/update-selection.json)。**15:51（北京时间）**确认官方镜像已同步，14 个附件的 ID、大小与摘要及校验清单均与 GitHub 一致，六个 EXE／DMG／ZIP 下载入口 HEAD 均为 200 且大小匹配。正常网络更新查询的 6 个场景通过：`0.8.12`、`0.8.11b2` 的两个通道均发现 `v0.8.13`，`0.8.13` 不重复提示，见[镜像核对](validation/releases/0.8.13/mirror.json)。
+- 美国网络下载验证使用公开样本，未取得报告者截图原视频的 BV 号；没有在用户设备覆盖安装或迁移数据。具体样本、源码哈希、实际请求及验证边界均保留在上述记录中。
+
 ## 0.8.12 正式补丁版发布检查（2026-11-18）
 
 - 用户于 2026-11-18 授权以 `v0.8.12` 正式补丁版发布 #33 修复。发布提交为 `24570dafd5354c33d33e0a81232fa348abf4c552`，发布时远端 `main` 与附注标签已核对到同一提交；标签固定保留在该发布提交。

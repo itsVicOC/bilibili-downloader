@@ -1,0 +1,12 @@
+{
+  "checks": [
+    {
+      "file": "BilibiliDownloader-macOS-full-v0.8.13.dmg",
+      "bytes": 81328429,
+      "sha256": "5480f8d2921593a603b847088bb66085133c41aa04ad0f0fde93da1e1be4096d",
+      "github_digest_matches": true,
+      "checksum_file_entry_matches": true
+    }
+  ],
+  "installed": false
+}
