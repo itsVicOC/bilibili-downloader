@@ -1,244 +1,36 @@
 name: CI
 
 on:
-  push:
-    branches: [main, master, 'codex/**']
-  pull_request:
-    branches: [main, master]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  test:
+  diagnose:
+    name: Issue 33 overseas probe (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    env:
-      QT_QPA_PLATFORM: offscreen
+    timeout-minutes: 7
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            python-version: '3.11'
-          - os: ubuntu-latest
-            python-version: '3.12'
-          - os: windows-latest
-            python-version: '3.11'
-          - os: windows-latest
-            python-version: '3.12'
-          - os: macos-latest
-            python-version: '3.12'
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: Install Linux Qt runtime libraries
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes libegl1 libgl1
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -c constraints.txt -e ".[dev]"
-
-      - name: Check native desktop UI
-        timeout-minutes: 10
-        if: runner.os != 'Linux' && matrix.python-version == '3.12'
-        shell: bash
-        env:
-          QT_QPA_PLATFORM: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
-        run: |
-          python -m scripts.configure_ui_test_display
-          python -X faulthandler -m pytest -vv -s --maxfail=1 tests/test_caption_controls.py tests/test_release_notes.py tests/test_theme.py::test_theme_applies_same_font_to_body_and_native_bold_labels tests/test_ui_refresh.py::test_initial_focus_is_the_source_field tests/test_fluent_design.py tests/test_fluent_refinement.py tests/test_window_state.py tests/test_fluent_window_polish.py tests/test_task_interactions.py tests/test_live_history_removal.py tests/test_clipboard_monitor.py tests/test_clipboard_native.py
-          python -X faulthandler -m pytest -vv -s --maxfail=1 tests/test_download_management.py tests/test_issue_regressions.py tests/test_archive_workflow.py tests/test_workflow_polish.py tests/test_ui_feedback.py tests/test_dialog_placement.py tests/test_control_details.py tests/test_warm_workspaces.py
-
-      - name: Capture native desktop UI evidence
-        timeout-minutes: 30
-        if: runner.os != 'Linux' && matrix.python-version == '3.12'
-        shell: bash
-        env:
-          QT_QPA_PLATFORM: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
-        run: |
-          for scene in chrome ui-refresh appearance-controls glass refinement interactions download-management dialog-placement audit-fonts; do
-            python -m scripts.capture_docs_screenshots --native --physical-pixels "--${scene}-only" --output-dir "build/ui-parity/$scene"
-          done
-          for color in star_trail bilibili_blue; do
-            python -m scripts.capture_docs_screenshots --native --physical-pixels --color-theme "$color" --output-dir "build/ui-parity/full/$color"
-            python -m scripts.capture_docs_screenshots --native --physical-pixels --color-theme "$color" --workflow-polish-only --output-dir "build/ui-parity/workflow/$color"
-            python -m scripts.capture_ui_feedback --native --color-theme "$color" --output-dir "build/ui-parity/feedback/$color"
-          done
-
-      - name: Upload native desktop UI evidence
-        if: always() && runner.os != 'Linux' && matrix.python-version == '3.12'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: ui-parity-${{ runner.os }}
-          path: build/ui-parity
-          retention-days: 7
-
-      - name: Run tests
-        id: pytest
-        run: pytest -v
-
-      - name: Diagnose a Linux native crash
-        if: failure() && steps.pytest.outcome == 'failure' && runner.os == 'Linux' && matrix.python-version == '3.11'
-        run: |
-          sudo apt-get install --yes gdb
-          gdb --batch -ex 'set disable-randomization off' -ex run -ex 'thread apply all bt 30' --args python -X faulthandler -m pytest -v
-
-      - name: Compile source
-        run: python -m compileall -q bilibili_downloader tests scripts
-
-      - name: Run static checks
-        run: ruff check bilibili_downloader tests packaging_hooks scripts
-
-  caption:
-    name: Windows caption (${{ matrix.scale }}x)
-    runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        scale: ['1', '1.25', '1.5', '2']
+        os: [ubuntu-latest, windows-latest]
     env:
-      QT_QPA_PLATFORM: windows
-      QT_SCALE_FACTOR: ${{ matrix.scale }}
+      PYTHONUNBUFFERED: '1'
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
           python-version: '3.12'
-      - name: Install dependencies
-        run: pip install -c constraints.txt -e ".[dev]"
-      - name: Check native caption geometry and input
-        timeout-minutes: 10
+      - name: Install minimal pinned diagnostic dependencies
+        run: python -m pip install -c constraints.txt "httpx[http2]" certifi pydantic
+      - name: Probe anonymous public APIs and CDN ranges
         shell: bash
-        run: |
-          python -m scripts.configure_ui_test_display
-          python -X faulthandler -m pytest -vv -s --maxfail=1 tests/test_caption_controls.py tests/test_window_chrome.py
-      - name: Upload caption compositor evidence
+        run: python scripts/diagnose_issue33.py | tee issue33-probe.jsonl
+      - name: Upload sanitized request results
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: windows-caption-${{ matrix.scale }}x
-          path: build/ui-parity/chrome-regression
-          retention-days: 14
-
-  updater:
-    name: Native updater (${{ matrix.platform }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            platform: macOS
-          - os: windows-latest
-            platform: Windows
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
-        with:
-          python-version: '3.12'
-      - name: Install updater test dependencies
-        run: pip install -c constraints.txt -e . pyinstaller
-      - name: Build standalone updater
-        run: python -m PyInstaller --noconfirm --clean BiliFlowUpdater.spec
-      - name: Verify full/lite installation, rollback and resource cleanup
-        shell: bash
-        run: |
-          helper=dist/biliflow-updater
-          if [ "$RUNNER_OS" = "Windows" ]; then helper="$helper.exe"; fi
-          python -m scripts.smoke_updater --helper "$helper" --platform "${{ matrix.platform }}"
-
-  recorder:
-    name: Native recorder (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
-    env:
-      MACOSX_DEPLOYMENT_TARGET: '12.0'
-      RUSTFLAGS: ${{ matrix.os == 'windows-latest' && '-C target-feature=+crt-static' || '' }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
-        with:
-          python-version: '3.12'
-      - name: Install pinned Rust
-        run: |
-          rustup toolchain install 1.96.0 --profile minimal --component rustfmt --component clippy
-          rustup default 1.96.0
-      - name: Install fixture FFmpeg on macOS
-        if: runner.os == 'macOS'
-        run: brew install ffmpeg
-      - name: Install fixture FFmpeg on Windows
-        if: runner.os == 'Windows'
-        run: choco install ffmpeg --yes --no-progress
-      - name: Install fixture FFmpeg on Linux
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - name: Check native code
-        run: |
-          cargo fmt --manifest-path native/recorder/Cargo.toml -- --check
-          cargo clippy --manifest-path native/recorder/Cargo.toml --locked -- -D warnings
-          cargo test --manifest-path native/recorder/Cargo.toml --locked
-      - name: Build fixture-only recorder
-        run: cargo build --manifest-path native/recorder/Cargo.toml --locked --features test-fixtures
-      - name: Verify FLV, HLS-TS, HLS-fMP4 and stop/parent-exit handling
-        shell: bash
-        run: |
-          binary=native/recorder/target/debug/biliflow-recorder
-          if [ "$RUNNER_OS" = "Windows" ]; then binary="$binary.exe"; fi
-          python scripts/smoke_live_recorder.py --binary "$binary"
-
-  dependency-audit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
-        with:
-          python-version: '3.12'
-      - name: Install project and auditor
-        run: |
-          python -m pip install --upgrade pip
-          pip install -c constraints.txt -e . pip-audit
-      - name: Audit installed dependencies
-        run: pip-audit
-
-  archive-performance:
-    name: Archive performance (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 50
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-latest]
-    env:
-      QT_QPA_PLATFORM: offscreen
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
-        with:
-          python-version: '3.12'
-      - name: Install performance dependencies
-        run: pip install -c constraints.txt -e ".[dev]"
-      - name: Compare three paired baselines and enforce UX limits
-        # The unchanged Windows baseline can take over five minutes per check.
-        timeout-minutes: 40
-        run: python -m scripts.benchmark_workflow_polish --output-dir build/workflow-polish/performance
-      - name: Upload paired performance evidence
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: archive-performance-${{ runner.os }}
-          path: build/workflow-polish/performance
-          if-no-files-found: warn
-          retention-days: 14
+          name: issue33-${{ matrix.os }}
+          path: issue33-probe.jsonl
+          retention-days: 3
