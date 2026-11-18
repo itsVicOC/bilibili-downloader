@@ -24,7 +24,7 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 def emit(**value):
-    print(json.dumps(value, ensure_ascii=False), flush=True)
+    print(json.dumps(value, ensure_ascii=True), flush=True)
 
 
 def error_summary(error):
@@ -67,6 +67,7 @@ def media_client():
 parser = argparse.ArgumentParser()
 parser.add_argument("bvid", nargs="?", default="BV1GJ411x7h7")
 parser.add_argument("--search", action="store_true")
+parser.add_argument("--cid", type=int)
 args = parser.parse_args()
 
 with httpx.Client(timeout=15) as client:
@@ -98,9 +99,14 @@ try:
             {"bvid": entry.get("bvid"), "title": entry.get("title")}
             for entry in (payload.get("data") or {}).get("result", [])[:5]
         ])
-    info = api.get_video_info(args.bvid)
-    emit(stage="metadata", bvid=info.bvid, cid=info.cid, title=info.title)
-    streams = api.get_play_url(info.bvid, info.cid, VideoQuality(32), preferred_codec=7)
+    if args.cid is None:
+        info = api.get_video_info(args.bvid)
+        bvid, cid = info.bvid, info.cid
+        emit(stage="metadata", bvid=bvid, cid=cid, title=info.title)
+    else:
+        bvid, cid = args.bvid, args.cid
+        emit(stage="known_public_metadata", bvid=bvid, cid=cid)
+    streams = api.get_play_url(bvid, cid, VideoQuality(32), preferred_codec=7)
     emit(stage="playurl", videos=len(streams["video_streams"]), audios=len(streams["audio_streams"]))
     with tempfile.TemporaryDirectory(prefix="issue33-probe-") as directory:
         downloader = ProbeDownloader(api, directory, max_retries=1)

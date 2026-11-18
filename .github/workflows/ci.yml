@@ -17,6 +17,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     env:
       PYTHONUNBUFFERED: '1'
+      PYTHONUTF8: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
@@ -26,7 +27,7 @@ jobs:
         run: python -m pip install -c constraints.txt "httpx[http2]" certifi pydantic
       - name: Probe anonymous public APIs and CDN ranges
         shell: bash
-        run: python scripts/diagnose_issue33.py | tee issue33-probe.jsonl
+        run: python scripts/diagnose_issue33.py --cid 137649199 | tee issue33-probe.jsonl
       - name: Upload sanitized request results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
