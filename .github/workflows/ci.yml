@@ -10,7 +10,7 @@ jobs:
   diagnose:
     name: Issue 33 overseas probe (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 7
+    timeout-minutes: 12
     strategy:
       fail-fast: false
       matrix:
@@ -24,14 +24,20 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install minimal pinned diagnostic dependencies
-        run: python -m pip install -c constraints.txt "httpx[http2]" certifi pydantic
-      - name: Probe anonymous public APIs and CDN ranges
+        run: python -m pip install -c constraints.txt "httpx[http2]" certifi pydantic pytest imageio-ffmpeg==0.6.0
+      - name: Run downloader and range regressions
+        run: python -m pytest --noconftest -q tests/test_download_ranges.py tests/test_downloader.py --junitxml=issue33-unit.xml
+      - name: Verify full anonymous CDN download, decode and resume
         shell: bash
-        run: python scripts/diagnose_issue33.py --cid 137649199 | tee issue33-probe.jsonl
+        run: |
+          issue_ffmpeg="$(python -c 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())')"
+          python -m scripts.smoke_cdn_ranges --require-country US --ffmpeg "$issue_ffmpeg" --report issue33-full.json
       - name: Upload sanitized request results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: issue33-${{ matrix.os }}
-          path: issue33-probe.jsonl
+          path: |
+            issue33-full.json
+            issue33-unit.xml
           retention-days: 3
