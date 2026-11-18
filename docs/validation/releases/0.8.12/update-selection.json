@@ -1,0 +1,45 @@
+{
+  "source": "公开 GitHub 元信息回放，未安装或迁移用户数据",
+  "checks": [
+    {
+      "current": "0.8.10",
+      "channel": "stable",
+      "result": "v0.8.12"
+    },
+    {
+      "current": "0.8.10",
+      "channel": "latest",
+      "result": "v0.8.12"
+    },
+    {
+      "current": "0.8.11b2",
+      "channel": "stable",
+      "result": "v0.8.12"
+    },
+    {
+      "current": "0.8.11b2",
+      "channel": "latest",
+      "result": "v0.8.12"
+    },
+    {
+      "current": "0.8.11",
+      "channel": "stable",
+      "result": "v0.8.12"
+    },
+    {
+      "current": "0.8.11",
+      "channel": "latest",
+      "result": "v0.8.12"
+    },
+    {
+      "current": "0.8.12",
+      "channel": "stable",
+      "result": null
+    },
+    {
+      "current": "0.8.12",
+      "channel": "latest",
+      "result": null
+    }
+  ]
+}

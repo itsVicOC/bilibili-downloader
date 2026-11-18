@@ -1,5 +1,15 @@
 # 构建与发布
 
+## 0.8.12 正式补丁版发布检查（2026-11-18）
+
+- 用户于 2026-11-18 授权以 `v0.8.12` 正式补丁版发布 #33 修复。发布提交为 `24570dafd5354c33d33e0a81232fa348abf4c552`，发布时远端 `main` 与附注标签已核对到同一提交；标签固定保留在该发布提交。
+- Python 下载器与 Rust 录制引擎同步支持 `upos-hz-mirrorakam.akamaized.net`，保留 HTTPS、标准端口、无 URL 凭据及重定向／HLS 子资源校验。新增直接下载、跨 CDN 重定向、签名参数保留、Cookie 隔离及不受信任目标拒绝回归；账号、配置、任务与媒体继续兼容。
+- 本地完整回归 **1395 项通过、6 项平台专项跳过**；Rust 5 项通过，Ruff、编译、Rust 格式及差异检查通过，见[本地结果](validation/releases/0.8.12/local-tests.json)。同一发布提交的[独立源码 CI](https://github.com/itsVicOC/bilibili-downloader/actions/runs/44215044503) **17/17 项成功**，涵盖跨平台全量、原生界面、三平台录制器、更新器、依赖与性能检查，见[CI 记录](validation/releases/0.8.12/ci.json)。
+- [v0.8.12](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.12) 于 **2026-11-18 10:27:58（北京时间）**公开，非草稿、非预发布版，已成为 GitHub Latest。[正式发行流水线](https://github.com/itsVicOC/bilibili-downloader/actions/runs/44216349552) **5/5 项成功**，重新生成两端 full／lite ZIP、full EXE／DMG，并完成媒体样例、冻结更新与回滚、原生安装及统一附件验证，见[发行任务](validation/releases/0.8.12/release-workflow.json)。
+- 14 个公开附件齐全；GitHub 计算的全部附件摘要与下载的 SHA-256 清单一致，发行说明与标签中的更新日志一致。两份原生安装验证报告版本为 `0.8.12`，绑定的安装器与 ZIP 摘要均已核对；Windows 原始 CRLF 报告以 gzip 保留。另实际下载 macOS full DMG 并核对大小及摘要，见[公开附件审计](validation/releases/0.8.12/audit.json)与[安装包下载抽查](validation/releases/0.8.12/installer-download-check.json)。
+- 公开 GitHub 元信息回放的 8 个更新选择场景通过：旧正式版及 beta 的正式／最新版通道均选择 `v0.8.12`，`0.8.12` 不重复提示，见[更新选择](validation/releases/0.8.12/update-selection.json)。**10:36（北京时间）**确认官方镜像已同步，14 个附件的 ID、大小与摘要及校验清单均与 GitHub 一致，六个 EXE／DMG／ZIP 下载入口 HEAD 均为 200 且大小匹配。实际网络更新查询的 6 个场景通过：`0.8.11`、`0.8.11b2` 的两个通道均发现 `v0.8.12`，`0.8.12` 不重复提示，见[镜像核对](validation/releases/0.8.12/mirror.json)。
+- 验证范围为源码与模拟网络回归、托管 runner 的构建／安装验证及公开下载核验；没有在用户设备覆盖安装或迁移数据，真实海外媒体下载尚未实测。
+
 ## 0.8.11 正式版发布检查（2026-11-11 准备，2026-11-12 发布）
 
 - 用户于 2026-11-11 确认 0.8.11 各项验证已完成，授权归集两个 beta 并正式发布。正式标签为 `v0.8.11`，发布提交为 `c66e54990d805281acb7bba83787794297d275b0`。

@@ -1,0 +1,36 @@
+{
+  "ref": {
+    "ref": "refs/tags/v0.8.12",
+    "node_id": "REF_kwDOSfa_VLFyZWZzL3RhZ3MvdjAuOC4xMg",
+    "url": "https://api.github.com/repos/itsVicOC/bilibili-downloader/git/refs/tags/v0.8.12",
+    "object": {
+      "sha": "25d62ee1bb0cf584b3d3496b643d4d0792e69e63",
+      "type": "tag",
+      "url": "https://api.github.com/repos/itsVicOC/bilibili-downloader/git/tags/25d62ee1bb0cf584b3d3496b643d4d0792e69e63"
+    }
+  },
+  "target": {
+    "node_id": "TA_kwDOSfa_VNoAKDI1ZDYyZWUxYmIwY2Y1ODRiM2QzNDk2YjY0M2Q0ZDA3OTJlNjllNjM",
+    "sha": "25d62ee1bb0cf584b3d3496b643d4d0792e69e63",
+    "url": "https://api.github.com/repos/itsVicOC/bilibili-downloader/git/tags/25d62ee1bb0cf584b3d3496b643d4d0792e69e63",
+    "tagger": {
+      "name": "itsVicOC",
+      "email": "265573803+itsVicOC@users.noreply.github.com",
+      "date": "2026-11-18T01:30:37Z"
+    },
+    "object": {
+      "sha": "24570dafd5354c33d33e0a81232fa348abf4c552",
+      "type": "commit",
+      "url": "https://api.github.com/repos/itsVicOC/bilibili-downloader/git/commits/24570dafd5354c33d33e0a81232fa348abf4c552"
+    },
+    "tag": "v0.8.12",
+    "message": "BiliFlow v0.8.12\n",
+    "verification": {
+      "verified": false,
+      "reason": "unsigned",
+      "signature": null,
+      "payload": null,
+      "verified_at": null
+    }
+  }
+}

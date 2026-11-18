@@ -1,0 +1,77 @@
+{
+  "tag": "v0.8.12",
+  "commit": "24570dafd5354c33d33e0a81232fa348abf4c552",
+  "public": true,
+  "prerelease": false,
+  "latest_stable": "v0.8.12",
+  "notes_match_changelog": true,
+  "assets": {
+    "BilibiliDownloader-Windows-full-v0.8.12.zip": {
+      "sha256": "9cfadff5bd17fdd5e32c8f5b8328eb4beb40fa49ca3428454f746331ac30c929",
+      "size": 95482363,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-Windows-lite-v0.8.12.zip": {
+      "sha256": "6dba560ca57bd05199f01b706040d6c84ae682fd3eb0f06ea98e5da0f4bcd340",
+      "size": 89720045,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-macOS-full-v0.8.12.zip": {
+      "sha256": "5373b4eeb00e6309097aa421243d45e99b2d29f1ba48cedde3fe607105352d2f",
+      "size": 75698365,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-macOS-lite-v0.8.12.zip": {
+      "sha256": "adf1c3317163f3f5686987182f8ef42ba3470752b407e2fc95bf5ae3fcb6f210",
+      "size": 70573230,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-macOS-full-v0.8.12.dmg": {
+      "sha256": "c7112d3ccba608c3953efa50e37b8289ad0a97e4203d04ee899d278d10629787",
+      "size": 81393475,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-Windows-full-v0.8.12-setup.exe": {
+      "sha256": "e1178cb74148a2dcf81e772800e87099142c047efb1fde21daec2ed7e0e092e8",
+      "size": 71700949,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-Windows-full-v0.8.12.cdx.json": {
+      "sha256": "c4a2078f4cae4a5c68414c7e6dd62b34c9a92603e0fdb6e1a9c0dcf060342b6e",
+      "size": 251314,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-Windows-lite-v0.8.12.cdx.json": {
+      "sha256": "287261140e7697eab312c945df894f622dc704f37fcfdf28e5fee2a2234b1f6c",
+      "size": 107755,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-macOS-full-v0.8.12.cdx.json": {
+      "sha256": "02a1ad6b302c8bebdad9aa650870badb5821d8d2861bf1542a958f2122c3a606",
+      "size": 235153,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-macOS-lite-v0.8.12.cdx.json": {
+      "sha256": "9e7c741c91aa96c6d9ba18b281edc333dd44308c7af6eddc10e5e2dcf915907b",
+      "size": 94629,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-Windows-full-v0.8.12-setup.verification.json": {
+      "sha256": "8344a65cf14ef899fabe0120f62ff656399e653cfee6eb0562a6af12f1d56d07",
+      "size": 657,
+      "github_digest_matches": true
+    },
+    "BilibiliDownloader-macOS-full-v0.8.12.verification.json": {
+      "sha256": "dbab84dc3ccedbc92392fe60d09206bf606222892a506057abb43496c8395809",
+      "size": 588,
+      "github_digest_matches": true
+    },
+    "FFmpeg-7.1-source.tar.gz": {
+      "sha256": "02fa6d9827da3b6786e4df821218cc036db2b4481e7f48267c2dcda695633afc",
+      "size": 15900622,
+      "github_digest_matches": true
+    }
+  },
+  "checksum_file_digest_matches": true,
+  "scope": "公开附件摘要与下载校验清单核对；原生安装报告绑定本版 ZIP 和安装器。未在用户设备安装。"
+}

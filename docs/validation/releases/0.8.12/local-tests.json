@@ -1,0 +1,23 @@
+{
+  "commit": "24570dafd5354c33d33e0a81232fa348abf4c552",
+  "version": "0.8.12",
+  "date": "2026-11-18",
+  "platform": "macOS-27.0.1-arm64-arm-64bit",
+  "python": "3.11.15",
+  "qt_platform": "offscreen",
+  "pytest": {
+    "passed": 1395,
+    "skipped": 6,
+    "failures": 0,
+    "errors": 0,
+    "seconds": 373.234
+  },
+  "rust_tests_passed": 5,
+  "checks": {
+    "compileall": true,
+    "ruff": true,
+    "cargo_fmt": true,
+    "git_diff_check": true
+  },
+  "scope": "本地源码与模拟网络回归；未验证真实海外媒体下载，未在用户设备安装。"
+}
