@@ -10,6 +10,7 @@ BILIBILI_RESOURCE_HOSTS = (
     "hdslb.com",
     "edge.mountaintoys.cn",
     "v.smtcdns.net",
+    "upos-hz-mirrorakam.akamaized.net",
 )
 
 

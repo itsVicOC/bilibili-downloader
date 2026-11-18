@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
+from bilibili_downloader.api.client import BilibiliAPIClient
 from bilibili_downloader.core import downloader as downloader_module
 from bilibili_downloader.core.downloader import (
     StreamDownloader,
@@ -99,6 +100,48 @@ def test_download_stream_skips_untrusted_primary_url(monkeypatch, tmp_path):
         "https://mcdn.bilivideo.cn:8082/audio.m4s",
         "https://upos-sz.bilivideo.com/audio.m4s",
     ]
+
+
+@pytest.mark.parametrize("redirect", [False, True])
+def test_download_stream_accepts_akamai_without_leaking_auth_cookies(
+    monkeypatch, tmp_path, redirect
+):
+    signed_url = (
+        "https://upos-hz-mirrorakam.akamaized.net/video.m4s"
+        "?deadline=1&token=test%2Fsignature%2Bvalue"
+    )
+    initial_url = "https://upos-sz.bilivideo.com/video.m4s" if redirect else signed_url
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        if redirect and str(request.url) == initial_url:
+            return httpx.Response(302, headers={"location": signed_url})
+        assert str(request.url) == signed_url
+        return httpx.Response(200, content=b"media")
+
+    api_client = BilibiliAPIClient(
+        auth_cookies={"SESSDATA": "session-secret", "bili_jct": "csrf-secret"}
+    )
+    monkeypatch.setattr(
+        downloader_module.httpx, "HTTPTransport",
+        lambda **_kwargs: httpx.MockTransport(handler),
+    )
+    downloader = StreamDownloader(api_client, str(tmp_path), max_retries=1)
+    dest = tmp_path / "video.m4s"
+    progress = []
+    try:
+        downloader._download_stream(StreamInfo(base_url=initial_url), dest, progress.append)
+    finally:
+        api_client.close()
+
+    assert dest.read_bytes() == b"media"
+    assert progress[-1] == 1.0
+    expected_urls = [initial_url, signed_url] if redirect else [signed_url]
+    assert [str(request.url) for request in requests] == expected_urls
+    for request in requests:
+        assert "cookie" not in request.headers
+        assert request.headers["referer"] == "https://www.bilibili.com/"
 
 
 def test_download_failure_log_does_not_expose_signed_url(
@@ -215,8 +258,18 @@ def test_download_cache_is_stable_and_audio_specific(tmp_path):
     assert third_path != first_path
 
 
-def test_download_url_rejects_redirect_to_untrusted_host(tmp_path):
+@pytest.mark.parametrize(
+    "source_url",
+    [
+        "https://upos-sz.bilivideo.com/video.m4s",
+        "https://upos-hz-mirrorakam.akamaized.net/video.m4s",
+    ],
+)
+def test_download_url_rejects_redirect_to_untrusted_host(tmp_path, source_url):
+    requested_urls = []
+
     def handler(request):
+        requested_urls.append(str(request.url))
         return httpx.Response(
             302,
             headers={"location": "https://example.org/private"},
@@ -229,12 +282,13 @@ def test_download_url_rejects_redirect_to_untrusted_host(tmp_path):
         with pytest.raises(ValueError, match="不受信任"):
             downloader._download_url(
                 client,
-                "https://upos-sz.bilivideo.com/video.m4s",
+                source_url,
                 tmp_path / "video.m4s",
                 lambda _progress: None,
             )
     finally:
         client.close()
+    assert requested_urls == [source_url]
 
 
 def test_write_response_resumes_valid_partial_content(tmp_path):

@@ -45,6 +45,7 @@ pub fn validate_url(value: &str) -> Result<Url, String> {
         "hdslb.com",
         "edge.mountaintoys.cn",
         "v.smtcdns.net",
+        "upos-hz-mirrorakam.akamaized.net",
     ]
     .iter()
     .any(|d| host == *d || host.ends_with(&format!(".{d}")));
@@ -276,6 +277,47 @@ mod tests {
             "http://cdn.v.smtcdns.net/a",
         ] {
             assert!(validate_url(url).is_err());
+        }
+    }
+    #[test]
+    fn accepts_bilibili_akamai_host_without_trusting_other_akamai_hosts() {
+        for url in [
+            "https://upos-hz-mirrorakam.akamaized.net/a?token=test%2Fsignature",
+            "https://upos-hz-mirrorakam.akamaized.net:443/a",
+        ] {
+            assert!(validate_url(url).is_ok(), "{url}");
+        }
+        for url in [
+            "https://akamaized.net/a",
+            "https://other.akamaized.net/a",
+            "https://upos-hz-mirrorakam.akamaized.net.evil.test/a",
+            "https://fake-upos-hz-mirrorakam.akamaized.net/a",
+            "http://upos-hz-mirrorakam.akamaized.net/a",
+            "https://upos-hz-mirrorakam.akamaized.net:8443/a",
+            "https://u:p@upos-hz-mirrorakam.akamaized.net/a",
+        ] {
+            assert!(validate_url(url).is_err(), "{url}");
+        }
+    }
+    #[test]
+    fn rewrites_akamai_playlist_resources_and_checks_their_hosts() {
+        let base = Url::parse("https://a.bilivideo.com/live/index.m3u8").unwrap();
+        let prefix = "http://127.0.0.1:1/token";
+        let init = "https://upos-hz-mirrorakam.akamaized.net/init.mp4?token=test%2Finit";
+        let segment = "https://upos-hz-mirrorakam.akamaized.net/seg.m4s?token=test%2Fsegment";
+        let text = format!("#EXTM3U\n#EXT-X-MAP:URI=\"{init}\"\n#EXTINF:1,\n{segment}\n");
+        let output = rewrite_playlist(&text, &base, prefix).unwrap();
+        assert_eq!(
+            output,
+            format!(
+                "#EXTM3U\n#EXT-X-MAP:URI=\"{}\"\n#EXTINF:1,\n{}\n",
+                local_url(prefix, &Url::parse(init).unwrap()),
+                local_url(prefix, &Url::parse(segment).unwrap()),
+            )
+        );
+        for target in [init, segment] {
+            let untrusted = text.replace(target, "https://other.akamaized.net/a");
+            assert!(rewrite_playlist(&untrusted, &base, prefix).is_err());
         }
     }
     #[test]

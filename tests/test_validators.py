@@ -195,3 +195,26 @@ def test_smtcdn_media_zone_is_trusted_without_trusting_parent_or_suffix_tricks()
     ):
         with pytest.raises(ValueError):
             trusted_https_url(url, BILIBILI_RESOURCE_HOSTS)
+
+
+@pytest.mark.parametrize("port", ["", ":443"])
+def test_trusted_https_url_accepts_bilibili_akamai_media_host(port):
+    url = f"https://upos-hz-mirrorakam.akamaized.net{port}/video.m4s?token=test%2Fsignature"
+    assert trusted_https_url(url, BILIBILI_RESOURCE_HOSTS) == url
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://akamaized.net/video.m4s",
+        "https://other.akamaized.net/video.m4s",
+        "https://upos-hz-mirrorakam.akamaized.net.evil.test/video.m4s",
+        "https://fake-upos-hz-mirrorakam.akamaized.net/video.m4s",
+        "http://upos-hz-mirrorakam.akamaized.net/video.m4s",
+        "https://upos-hz-mirrorakam.akamaized.net:8443/video.m4s",
+        "https://user:pass@upos-hz-mirrorakam.akamaized.net/video.m4s",
+    ],
+)
+def test_trusted_https_url_keeps_akamai_media_host_boundary(url):
+    with pytest.raises(ValueError):
+        trusted_https_url(url, BILIBILI_RESOURCE_HOSTS)
