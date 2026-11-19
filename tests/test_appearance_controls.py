@@ -199,10 +199,10 @@ def test_blur_failure_retry_runtime_and_immediate_mode_preserve_drafts(workspace
     monkeypatch.setattr(workspace._config, "save", lambda *_: (_ for _ in ()).throw(OSError("disk full")))
     assert not workspace._save_settings()
     assert panel._glass_blur.value() == 32 and panel.dirty
-    assert workspace._workspace_pages._glass_blur == 18
+    assert workspace.backdrop.blur == 18
     monkeypatch.setattr(workspace._config, "save", save)
     assert workspace._save_settings()
-    assert workspace._workspace_pages._glass_blur == 32
+    assert workspace.backdrop.blur == 32
     assert ConfigManager(workspace._config.data_dir / "config.json").load().appearance.glass_blur == 32
     panel._glass_blur.setValue(0)
     panel._reset_btn.click()
@@ -224,4 +224,4 @@ def test_blur_slider_changes_preview_without_saving_or_blurring_text(workspace, 
     assert panel._glass_preview._glass.image.cacheKey() != first
     assert panel._glass_blur.display.text() == "40 px"
     assert workspace._settings.appearance.glass_blur == 18
-    assert panel._glass_preview.findChild(QLabel).graphicsEffect() is None
+    assert panel._glass_preview.graphicsEffect() is None

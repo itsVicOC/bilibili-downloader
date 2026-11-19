@@ -1,6 +1,6 @@
 """A viewport-fixed backdrop shared by all persistent workspaces."""
 
-from PySide6.QtCore import QPoint, QRectF, Qt
+from PySide6.QtCore import QObject, QPoint, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QImageReader, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QStackedWidget, QWidget
 
@@ -43,19 +43,37 @@ def paint_workspace_background(painter, rect, pixmap, is_dark, theme_id, visibil
     painter.fillRect(rect, overlay)
 
 
-class WorkspaceStack(QStackedWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._background = QPixmap()
+class WindowBackdrop(QObject):
+    """Use one crop and one glass cache in the host's coordinate space."""
+
+    def __init__(self, host):
+        super().__init__(host)
+        self.host = host
+        self.image = QPixmap()
         self._background_key = None
         self._builtin = False
         self._pixel_art = False
-        self._visibility = BackgroundVisibility()
-        self._glass = GlassBackdrop()
-        self._glass_blur = DEFAULT_GLASS_BLUR
-        self.setProperty("customBackground", False)
-        self.setProperty("mascotBackground", False)
-        self._readability = BackgroundReadability(self)
+        self.visibility = BackgroundVisibility()
+        self.glass = GlassBackdrop()
+        self.blur = DEFAULT_GLASS_BLUR
+        self._viewport_key = None
+        self._viewport = QPixmap()
+        host.setProperty("customBackground", False)
+        host.setProperty("mascotBackground", False)
+        self._readability = BackgroundReadability(host)
+
+    def inherit(self, source):
+        """Take a snapshot so an open dialog keeps its opening wallpaper."""
+        if source is None:
+            self.set_background(None)
+            self.set_visibility(BackgroundVisibility())
+            self.set_glass_blur(DEFAULT_GLASS_BLUR)
+            return
+        self.image = QPixmap(source.image)
+        self._background_key = source._background_key
+        self.set_visibility(source.visibility)
+        self.set_glass_blur(source.blur)
+        self._apply_source(source._builtin, source._pixel_art)
 
     def set_background(self, path, *, builtin=False, pixel_art=False):
         try:
@@ -63,58 +81,102 @@ class WorkspaceStack(QStackedWidget):
             key = (str(path), stat.st_mtime_ns, stat.st_size, builtin, pixel_art) if stat else None
             if key == self._background_key:
                 return
-            self._background = background_pixmap(path)
+            self.image = background_pixmap(path)
             self._background_key = key
         except OSError:
-            self._background = QPixmap()
+            self.image = QPixmap()
             self._background_key = None
-        previous = self.property("customBackground")
-        self._glass.clear()
-        self.setProperty("customBackground", not self._background.isNull())
-        self._builtin = builtin and not self._background.isNull()
-        self._pixel_art = pixel_art and not self._background.isNull()
-        if previous != self.property("customBackground") or self.property("mascotBackground") != self._builtin:
-            self.setProperty("mascotBackground", self._builtin)
-            for widget in [self, *self.findChildren(QWidget)]:
+        self._apply_source(builtin, pixel_art)
+
+    def _apply_source(self, builtin, pixel_art):
+        host = self.host
+        active = not self.image.isNull()
+        self._builtin = builtin and active
+        self._pixel_art = pixel_art and active
+        if host.property("customBackground") != active or host.property("mascotBackground") != self._builtin:
+            host.setProperty("customBackground", active)
+            host.setProperty("mascotBackground", self._builtin)
+            for widget in [host, *host.findChildren(QWidget)]:
+                if widget.window() != host.window():
+                    continue
                 widget.style().unpolish(widget)
                 widget.style().polish(widget)
-                widget.update()
-        self.update()
-        for child in self.findChildren(QStackedWidget):
-            child.update()
+        host.update()
 
     def set_visibility(self, visibility):
-        self._visibility = visibility.model_copy(deep=True)
-        self.update()
+        if self.visibility != visibility:
+            self.visibility = visibility.model_copy(deep=True)
+            self.host.update()
 
-    def paint_glass(self, painter, widget):
+    def _scene(self):
         app = QApplication.instance()
         dark = bool(app.property("darkTheme"))
         theme_id = app.property("colorTheme")
-        visible = self._visibility.dark if dark else self._visibility.light
-        key = (self._background.cacheKey(), theme_id, visible, self._builtin, self._pixel_art)
-        self._glass.prepare(
-            key, self.size(),
-            lambda p, rect: paint_workspace_background(p, rect, self._background, dark, theme_id, visible, builtin=self._builtin, pixel_art=self._pixel_art),
-            dark, theme_palette(dark, theme_id), self._glass_blur,
+        visible = self.visibility.dark if dark else self.visibility.light
+        host = self.host
+        dpr = host.devicePixelRatioF()
+        key = (self.image.cacheKey(), theme_id, dark, visible, self._builtin, self._pixel_art, dpr)
+        viewport_key = (key, host.size())
+        colors = theme_palette(dark, theme_id)
+        if viewport_key != self._viewport_key:
+            self._viewport = QPixmap()
+            if not self.image.isNull() and not host.size().isEmpty():
+                self._viewport = QPixmap(QSize(round(host.width() * dpr), round(host.height() * dpr)))
+                self._viewport.setDevicePixelRatio(dpr)
+                painter = QPainter(self._viewport)
+                paint_workspace_background(
+                    painter, QRectF(host.rect()), self.image, dark, theme_id, visible,
+                    builtin=self._builtin, pixel_art=self._pixel_art,
+                )
+                painter.end()
+            self._viewport_key = viewport_key
+        return key, dark, colors
+
+    def _paint_viewport(self, painter, rect, color):
+        if self._viewport.isNull():
+            painter.fillRect(rect, color)
+        else:
+            painter.setRenderHint(QPainter.SmoothPixmapTransform, not self._pixel_art)
+            painter.drawPixmap(QRectF(rect), self._viewport, QRectF(self._viewport.rect()))
+
+    def paint_glass(self, painter, widget, radius=18):
+        key, dark, colors = self._scene()
+        host = self.host
+        self.glass.prepare(
+            key, host.size(),
+            lambda p, rect: self._paint_viewport(p, rect, QColor(colors.background)),
+            dark, colors, self.blur, flat=self.image.isNull(),
         )
-        offset = widget.mapTo(self, QPoint())
-        self._glass.paint(painter, widget.rect(), QRectF(offset, widget.size()))
+        offset = QPoint() if widget is host else widget.mapTo(host, QPoint())
+        self.glass.paint(painter, widget.rect(), QRectF(offset, widget.size()), radius=radius)
 
     def set_glass_blur(self, value):
-        if self._glass_blur != value:
-            self._glass_blur = value
-            self.update()
+        if self.blur != value:
+            self.blur = value
+            self.host.update()
+
+    def paint(self, painter):
+        _, _, colors = self._scene()
+        self._paint_viewport(painter, self.host.rect(), QColor(colors.background))
+
+
+class WorkspaceStack(QStackedWidget):
+    def __init__(self, parent=None, *, backdrop=None):
+        super().__init__(parent)
+        self.backdrop = backdrop if backdrop is not None else WindowBackdrop(self)
+
+    def set_background(self, path, *, builtin=False, pixel_art=False):
+        self.backdrop.set_background(path, builtin=builtin, pixel_art=pixel_art)
+
+    def set_visibility(self, visibility):
+        self.backdrop.set_visibility(visibility)
+
+    def set_glass_blur(self, blur):
+        self.backdrop.set_glass_blur(blur)
 
     def paintEvent(self, event):
         super().paintEvent(event)
-        painter = QPainter(self)
-        app = QApplication.instance()
-        is_dark = bool(app.property("darkTheme"))
-        paint_workspace_background(
-            painter, self.rect(), self._background, is_dark,
-            app.property("colorTheme"),
-            self._visibility.dark if is_dark else self._visibility.light,
-            builtin=self._builtin, pixel_art=self._pixel_art,
-        )
-        painter.end()
+        if self.backdrop.host is self:
+            painter = QPainter(self)
+            self.backdrop.paint(painter)
+            painter.end()

@@ -65,7 +65,7 @@ class BackgroundReadability(QObject):
             return False
         current = widget
         while current != self.stack:
-            if current.objectName() in {
+            if current.property("glassSurface") or current.objectName() in {
                 "ActionBar", "OutputActionBar", "ToolSurface", "Notice", "StatusBadge",
                 "StatusPill", "EmptyCover", "LoginInstructions", "WarningBanner",
                 "Panel", "SectionCard", "ControlPanel", "SettingsSection", "HeroPanel",

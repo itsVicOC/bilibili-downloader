@@ -15,6 +15,7 @@ from bilibili_downloader.core.errors import (
     user_error_message,
 )
 from bilibili_downloader.core.models import DownloadItem
+from bilibili_downloader.core.progress import transfer_summary
 
 logger = logging.getLogger(__name__)
 
@@ -152,12 +153,4 @@ class DownloadRunner(QRunnable):
 
 
 def _progress_text(text: str, speed: float, eta: int | None) -> str:
-    if speed >= 1024 * 1024:
-        speed_text = f"{speed / 1024 / 1024:.1f} MB/s"
-    else:
-        speed_text = f"{speed / 1024:.0f} KB/s"
-    if eta is None:
-        return f"{text.rstrip('.')} · {speed_text}"
-    minutes, seconds = divmod(max(0, eta), 60)
-    eta_text = f"{minutes:d}:{seconds:02d}"
-    return f"{text.rstrip('.')} · {speed_text} · 剩余 {eta_text}"
+    return f"{text.rstrip('.')} · {transfer_summary(speed, eta)}"

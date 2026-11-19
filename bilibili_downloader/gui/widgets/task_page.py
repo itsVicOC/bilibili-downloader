@@ -94,7 +94,7 @@ class TaskPage(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
-        self.header = PageHeader("任务中心", "查看下载、录制与历史")
+        self.header = PageHeader("任务中心", "")
         layout.addWidget(self.header)
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs, 1)
@@ -192,14 +192,11 @@ class TaskPage(QWidget):
         self._download_stack.addWidget(self.downloads)
         self._download_stack.addWidget(
             EmptyState(
-                "收藏，从这里开始。",
-                "解析作品，加入下载队列。",
-                "去解析",
-                self.download_requested.emit,
+                "暂无下载任务", action="去下载", callback=self.download_requested.emit, workspace="tasks",
             )
         )
         self._download_stack.addWidget(
-            EmptyState("没有匹配的任务", "保留已选任务。", "清除筛选", self.clear_download_filters)
+            EmptyState("没有匹配的任务", action="清除筛选", callback=self.clear_download_filters)
         )
         layout.addWidget(self._download_stack, 1)
         self.download_detail = TaskDetailPanel()
@@ -389,7 +386,7 @@ class TaskPage(QWidget):
         self._current_stack = QStackedWidget()
         self._current_stack.addWidget(self.current)
         self._current_stack.addWidget(
-            EmptyState("等待下一场星光", "这里显示开播录制、重连与收尾状态。")
+            EmptyState("暂无录制任务", workspace="tasks")
         )
         layout.addWidget(self._current_stack, 1)
         self.current_detail = TaskDetailPanel()
@@ -547,7 +544,7 @@ class TaskPage(QWidget):
         self.history.setMinimumHeight(120)
         self._history_stack.addWidget(self.history)
         self._history_stack.addWidget(
-            EmptyState("留住每一场相遇", "这里保存录制场次与已封口片段。")
+            EmptyState("暂无录制历史", workspace="tasks")
         )
         layout.addWidget(self._history_stack, 1)
         self._history_sessions = {}
