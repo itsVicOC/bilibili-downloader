@@ -453,10 +453,9 @@ jobs:
         shell: pwsh
         run: |
           foreach ($variant in @("lite", "full")) {
-            Compress-Archive `
-              -Path "dist/variants/$variant/BilibiliDownloader" `
-              -DestinationPath "${{ matrix.archive_name }}-$variant-${env:RELEASE_ID}.zip" `
-              -Force
+            python -m zipfile -c "${{ matrix.archive_name }}-$variant-${env:RELEASE_ID}.zip" `
+              "dist/variants/$variant/BilibiliDownloader"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
 
       - name: Install pinned Inno Setup and build Windows installer
