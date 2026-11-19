@@ -38,7 +38,11 @@ from PySide6.QtWidgets import (
 from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
 from bilibili_downloader.gui.layout_policy import path_preferred_width
 from bilibili_downloader.gui.resources.paths import background_path
-from bilibili_downloader.gui.resources.styles import UI_METRICS, theme_palette
+from bilibili_downloader.gui.resources.styles import (
+    UI_METRICS,
+    theme_palette,
+    wallpaper_palette,
+)
 from bilibili_downloader.gui.widgets.background_readability import wallpaper_active
 from bilibili_downloader.gui.widgets.dialog_shell import (
     paint_dialog_glass,
@@ -73,12 +77,14 @@ _ICON_PATHS = {
 }
 
 
-def palette():
+def palette(widget=None):
     app = QApplication.instance()
-    return theme_palette(
-        bool(app and app.property("darkTheme")),
+    dark = bool(app and app.property("darkTheme"))
+    colors = theme_palette(
+        dark,
         app.property("colorTheme") if app else "star_trail",
     )
+    return wallpaper_palette(colors, dark) if widget is not None and wallpaper_active(widget) else colors
 
 
 def line_icon(name, color=None, size=24):
@@ -502,7 +508,7 @@ class PageHeader(WindowDragSurface):
 
 class SectionCard(GlassFrame):
     def __init__(self, title="", parent=None, *, glass=False):
-        super().__init__(parent, glass=glass)
+        super().__init__(parent, glass=glass, reading=not glass)
         self.setObjectName("SectionCard")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.body = QVBoxLayout(self)
@@ -517,6 +523,10 @@ class SectionCard(GlassFrame):
         self.header.addStretch()
         if title:
             self.body.addLayout(self.header)
+
+    def set_plain(self):
+        self.setProperty("readingSurface", False)
+        self.setProperty("sectionStyle", "plain")
 
 
 class CollapsibleSection(SectionCard):

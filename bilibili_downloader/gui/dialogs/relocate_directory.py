@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 from bilibili_downloader.gui.dialogs.file_picker import file_picker
 from bilibili_downloader.gui.dialogs.workflow import WorkflowDialog
 from bilibili_downloader.gui.widgets.components import FieldRow, help_text
+from bilibili_downloader.gui.widgets.glass_surface import ItemViewSurface
 
 
 class RelocateDirectoryDialog(WorkflowDialog):
@@ -51,6 +52,7 @@ class RelocateDirectoryDialog(WorkflowDialog):
         controls.addStretch()
         self.body.addLayout(controls)
         self.table = QTableWidget(0, 3)
+        self._table_surface = ItemViewSurface(self.table)
         self.table.setAccessibleName("目录映射预览")
         self.table.setHorizontalHeaderLabels(["原文件", "新位置", "状态"])
         for col in (0, 1):

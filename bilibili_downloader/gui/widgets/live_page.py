@@ -48,6 +48,7 @@ from bilibili_downloader.gui.widgets.download_list import (
     STATUS_TONE_ROLE,
     _StatusDelegate,
 )
+from bilibili_downloader.gui.widgets.glass_surface import ItemViewSurface
 from bilibili_downloader.gui.widgets.hero_panel import HeroPanel
 
 
@@ -157,6 +158,7 @@ class LivePage(QWidget):
         self._count = StatusBadge("0 个直播间")
         self._rooms_card.body.addWidget(self._count, alignment=Qt.AlignRight)
         self.rooms = QTableWidget(0, 4)
+        self._rooms_surface = ItemViewSurface(self.rooms)
         self.rooms.setAccessibleName("直播监控列表")
         self.rooms.setHorizontalHeaderLabels(
             ["直播间", "状态 / 监控", "已录时长", "大小 / 速度"]
@@ -214,7 +216,7 @@ class LivePage(QWidget):
         self._detail.setWordWrap(True)
         details.addWidget(self._detail)
         self._room_configuration = CollapsibleSection("录制偏好")
-        self._room_configuration.setProperty("sectionStyle", "plain")
+        self._room_configuration.set_plain()
         self._room_configuration.body.setContentsMargins(0, 8, 0, 8)
         options = self._room_configuration.body
         details.addWidget(self._room_configuration)

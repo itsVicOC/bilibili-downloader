@@ -11,8 +11,8 @@ from bilibili_downloader.gui.layout_policy import (
 )
 from bilibili_downloader.gui.resources.styles import (
     UI_METRICS,
-    glass_text_color,
     theme_palette,
+    wallpaper_palette,
 )
 from bilibili_downloader.gui.widgets.background_readability import paint_reading_surface
 from bilibili_downloader.gui.widgets.components import palette
@@ -165,10 +165,13 @@ class WorkspacePreview(QWidget):
 
     def paintEvent(self, event):
         dark = bool(QApplication.instance().property("darkTheme")) if self.is_dark is None else self.is_dark
-        p = theme_palette(dark, self.theme_id)
+        colors = theme_palette(dark, self.theme_id)
+        p = colors if self.pixmap.isNull() else wallpaper_palette(colors, dark)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.fillRect(self.rect(), QColor(p.surface_raised))
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(p.surface_raised))
+        painter.drawRoundedRect(QRectF(self.rect()), UI_METRICS.radius, UI_METRICS.radius)
         if self.original and not self.pixmap.isNull():
             size = self.pixmap.size().scaled(self.size() - QSize(16, 16), Qt.KeepAspectRatio)
             painter.setRenderHint(QPainter.SmoothPixmapTransform, not self.pixel_art)
@@ -179,8 +182,10 @@ class WorkspacePreview(QWidget):
         painter.translate(canvas.topLeft())
         painter.scale(canvas.width() / self.viewport_size.width(), canvas.height() / self.viewport_size.height())
         width, height = self.viewport_size.width(), self.viewport_size.height()
-        painter.setClipRect(QRectF(0, 0, width, height))
         background = self.background_rect()
+        clip = QPainterPath()
+        clip.addRoundedRect(background, UI_METRICS.card_radius, UI_METRICS.card_radius)
+        painter.setClipPath(clip)
         visible = self.visibility.dark if dark else self.visibility.light
         paint_workspace_background(
             painter, background, self.pixmap, dark, self.theme_id, visible,
@@ -190,7 +195,7 @@ class WorkspacePreview(QWidget):
         self._glass.prepare(
             key, self.viewport_size,
             lambda p, r: paint_workspace_background(p, r, self.pixmap, dark, self.theme_id, visible, builtin=self.builtin, pixel_art=self.pixel_art),
-            dark, p, self.glass_blur, flat=self.pixmap.isNull(),
+            dark, colors, self.glass_blur, flat=self.pixmap.isNull(),
         )
         sidebar = 72 if width < 1120 else 208
         content = QRectF(sidebar, HEADER_HEIGHT, width - sidebar, height - HEADER_HEIGHT - 36)
@@ -206,7 +211,7 @@ class WorkspacePreview(QWidget):
             f = QFont(painter.font())
             f.setBold(bold)
             painter.setFont(f)
-            color = (glass_text_color(p) if not self.pixmap.isNull() else p.muted) if muted else p.text
+            color = p.muted if muted else p.text
             label = painter.fontMetrics().elidedText(value, Qt.ElideRight, max(1, int(rect.width())))
             if protected and not self.pixmap.isNull():
                 bounds = painter.fontMetrics().boundingRect(rect.toRect(), int(Qt.AlignLeft | Qt.AlignVCenter), label)
@@ -219,26 +224,31 @@ class WorkspacePreview(QWidget):
             if glass:
                 self._glass.paint(painter, rect, rect)
                 return
-            painter.setBrush(QColor(p.surface))
-            painter.setPen(QPen(QColor(p.card_border), 1))
-            painter.drawRoundedRect(rect, UI_METRICS.card_radius, UI_METRICS.card_radius)
+            self._glass.paint_reading(painter, rect, rect)
 
         def control(rect, value, primary=False):
             painter.setPen(QPen(QColor((p.primary or p.accent) if primary else p.control_border), 1))
-            painter.setBrush(QColor((p.primary or p.accent) if primary else p.control_fill))
+            fill = QColor((p.primary or p.accent) if primary else p.surface_raised)
+            if not primary and not self.pixmap.isNull():
+                fill.setAlpha(72)
+            painter.setBrush(fill)
             painter.drawRoundedRect(rect, UI_METRICS.radius, UI_METRICS.radius)
             painter.setPen(QColor((p.primary_text or p.accent_text) if primary else p.text))
             painter.drawText(rect.adjusted(12, 0, -8, 0), Qt.AlignVCenter, value)
 
         def table(rect, headers, rows):
             card(rect)
+            rect = rect.adjusted(8, 8, -8, -8)
             cell = rect.width() / len(headers)
-            painter.fillRect(QRectF(rect.left(), rect.top(), rect.width(), 40), QColor(p.table_header))
+            header = QColor(p.surface_raised)
+            header.setAlpha(112)
+            painter.fillRect(QRectF(rect.left(), rect.top(), rect.width(), 40), header)
             for column, label in enumerate(headers):
                 text(QRectF(rect.left() + column * cell + 12, rect.top(), cell - 24, 40), label, muted=True, protected=False)
             for row, values in enumerate(rows):
                 row_rect = QRectF(rect.left(), rect.top() + 40 + row * 56, rect.width(), 56)
-                painter.fillRect(row_rect, QColor(p.surface))
+                painter.setPen(QColor(p.row_divider))
+                painter.drawLine(row_rect.bottomLeft(), row_rect.bottomRight())
                 for column, label in enumerate(values):
                     text(QRectF(rect.left() + column * cell + 12, row_rect.top(), cell - 24, 56), label, protected=False)
 
@@ -248,7 +258,9 @@ class WorkspacePreview(QWidget):
         for i, name in enumerate(names):
             rect = QRectF(12, 130 + i * 56, sidebar - 24, 42)
             if keys[i] == self.workspace:
-                painter.fillRect(rect, QColor(p.subtle_selection))
+                painter.setPen(Qt.NoPen)
+                painter.setBrush(QColor(p.subtle_selection))
+                painter.drawRoundedRect(rect, UI_METRICS.radius, UI_METRICS.radius)
             text(rect.adjusted(12, 0, -2, 0), name if sidebar > 100 else name[:2], protected=False)
         if sidebar > 100:
             text(QRectF(24, 48, sidebar - 40, 36), "BiliFlow", protected=False, bold=True)

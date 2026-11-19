@@ -1,22 +1,32 @@
 """Wallpaper glass preserves text contrast, coordinates and shared cache lifetime."""
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw
 from PySide6.QtCore import QPoint, QRect, QRectF, QSize
 from PySide6.QtGui import QColor, QImage, QPainter, QPalette, QPixmap
-from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import (
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
 from bilibili_downloader.core.appearance import prepare_background
 from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
 from bilibili_downloader.core.models import BackgroundVisibility, VideoInfo
 from bilibili_downloader.gui.resources.styles import (
     contrast_ratio,
-    glass_text_color,
     theme_palette,
+    wallpaper_palette,
 )
 from bilibili_downloader.gui.resources.theme import ThemeManager
+from bilibili_downloader.gui.widgets.components import SectionCard
 from bilibili_downloader.gui.widgets.dialog_shell import AppDialog
 from bilibili_downloader.gui.widgets.glass_surface import GlassBackdrop
+from bilibili_downloader.gui.widgets.row_hover import RowHoverTable
+from bilibili_downloader.gui.widgets.workspace_background import WorkspaceStack
 from tests.test_ui_polish import flush
 from tests.test_ui_refresh import restore_theme as restore_theme
 from tests.test_workspaces import workspace as workspace
@@ -45,12 +55,74 @@ def test_scene_refraction_stays_within_the_round_edge(qapp):
     assert shaded.copy(14, 14, 96, 54) == lit.copy(14, 14, 96, 54)
 
 
+@pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])
+@pytest.mark.parametrize("dark", [False, True])
+def test_reading_surface_reveals_wallpaper_and_clips_item_view(qtbot, qapp, tmp_path, theme_id, dark):
+    theme = ThemeManager(qapp, theme_id=theme_id, mode="dark" if dark else "light")
+    colors = wallpaper_palette(theme_palette(dark, theme_id), dark)
+    source = tmp_path / "split.png"
+    picture = Image.new("RGB", (800, 560), "black")
+    ImageDraw.Draw(picture).rectangle((400, 0, 800, 560), fill="white")
+    picture.save(source)
+    host = WorkspaceStack()
+    qtbot.addWidget(host)
+    host.set_background(source)
+    host.set_visibility(BackgroundVisibility(light=100, dark=100))
+    page = QWidget()
+    layout = QVBoxLayout(page)
+    layout.setContentsMargins(26, 26, 26, 26)
+    table = RowHoverTable(20, 2)
+    table.setHorizontalHeaderLabels(["作品", "状态"])
+    table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+    table.verticalHeader().hide()
+    table.setAlternatingRowColors(True)
+    for row in range(table.rowCount()):
+        table.setItem(row, 0, QTableWidgetItem(f"任务 {row + 1}"))
+        table.setItem(row, 1, QTableWidgetItem("待下载"))
+    form = SectionCard()
+    entry = QLineEdit()
+    form.body.addWidget(entry)
+    layout.addWidget(table)
+    layout.addWidget(form)
+    host.addWidget(page)
+    host.resize(800, 560)
+    host.show()
+    host.setFocus()
+    flush()
+
+    def rgb(image, widget, x, y):
+        dpr = image.devicePixelRatio()
+        point = widget.mapTo(host, QPoint(x, y))
+        return image.pixelColor(round(point.x() * dpr), round(point.y() * dpr))
+
+    screenshot = host.grab().toImage()
+    original = host.backdrop._viewport.toImage()
+    for view, y in ((table.viewport(), table.rowHeight(0) // 2), (form, form.height() // 2), (entry, 10)):
+        left = rgb(screenshot, view, view.width() // 4, y)
+        right = rgb(screenshot, view, view.width() * 3 // 4, y)
+        assert right.lightness() - left.lightness() >= 18, view.objectName()
+        assert min(contrast_ratio(colors.text, value.name()) for value in (left, right)) >= 4.5
+    assert table.horizontalHeader().geometry().topLeft().manhattanLength() >= 16
+    assert table.verticalScrollBar().maximum() > 0
+    cache = host.backdrop.glass.reading.cacheKey()
+    for row in (0, table.rowCount() - 1):
+        table.selectRow(row)
+        table.scrollToItem(table.item(row, 0))
+        flush()
+        screenshot = host.grab().toImage()
+        for x in (1, table.width() - 2):
+            for y in (1, table.height() - 2):
+                assert rgb(screenshot, table, x, y) == rgb(original, table, x, y)
+        assert host.backdrop.glass.reading.cacheKey() == cache
+    theme.deleteLater()
+
+
 @pytest.mark.parametrize("dark", [False, True])
 @pytest.mark.parametrize("source_kind", ["builtin", "custom"])
 @pytest.mark.parametrize("blur", [0, 18, 40])
 def test_glass_blurs_only_wallpaper_and_reuses_cache(workspace, qapp, tmp_path, dark, source_kind, blur):
     theme = ThemeManager(qapp, mode="dark" if dark else "light")
-    colors = theme_palette(dark)
+    colors = wallpaper_palette(theme_palette(dark), dark)
     if source_kind == "builtin":
         reference = BUILTIN_BACKGROUNDS[0].reference
     else:
@@ -70,23 +142,28 @@ def test_glass_blurs_only_wallpaper_and_reuses_cache(workspace, qapp, tmp_path, 
     stack = workspace._workspace_pages
     workspace.grab()
     glass = workspace.backdrop.glass
-    key = glass.image.cacheKey()
+    keys = glass.image.cacheKey(), glass.reading.cacheKey()
     assert not glass.image.isNull()
     assert stack.backdrop is workspace.backdrop
     assert workspace._hero.graphicsEffect() is None
-    image = glass.image.toImage()
-    for x in range(10, image.width(), 70):
-        for y in range(10, image.height(), 70):
-            for color in (colors.text, colors.muted, glass_text_color(colors)):
-                assert contrast_ratio(color, image.pixelColor(x, y).name()) >= 4.5
+    for material in (glass.image, glass.reading):
+        image = material.toImage()
+        for x in range(10, image.width(), 70):
+            for y in range(10, image.height(), 70):
+                base = image.pixelColor(x, y).name()
+                for color in (colors.text, colors.muted, colors.active_text, colors.success, colors.warning, colors.danger):
+                    assert contrast_ratio(color, base) >= 4.5
+                for color in (colors.control_border, colors.focus):
+                    assert contrast_ratio(color, base) >= 3
     workspace._on_resolve_success(VideoInfo(bvid="BV1DEMO", title="缓存复用"), [], [], True)
     flush()
     workspace._workspace_scroll.verticalScrollBar().setValue(80)
     workspace.grab()
-    assert glass.image.cacheKey() == key
+    assert (glass.image.cacheKey(), glass.reading.cacheKey()) == keys
     stack.set_visibility(BackgroundVisibility(light=50, dark=50))
     workspace.grab()
-    assert glass.image.cacheKey() != key
+    assert glass.image.cacheKey() != keys[0]
+    assert glass.reading.cacheKey() != keys[1]
     # Actual text bounds still use native Qt glyphs on the background material.
     for label in workspace._hero.findChildren(QLabel):
         if label.isVisible():

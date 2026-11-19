@@ -243,7 +243,7 @@ class VideoInfoWidget(GlassWidget):
     """Displays video metadata (title, author, duration, cover)."""
 
     def __init__(self):
-        super().__init__()
+        super().__init__(reading=True)
         self._featured = False
         self._cover_url = ""
         self._cover_pool = QThreadPool.globalInstance()

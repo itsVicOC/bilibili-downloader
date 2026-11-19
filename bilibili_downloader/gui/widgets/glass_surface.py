@@ -1,7 +1,7 @@
 """Cached wallpaper glass; native Qt text is painted separately and stays sharp."""
 
 from PIL import Image, ImageEnhance, ImageFilter
-from PySide6.QtCore import QPoint, QRectF, QSize, Qt
+from PySide6.QtCore import QEvent, QPoint, QRectF, QSize, Qt
 from PySide6.QtGui import (
     QColor,
     QImage,
@@ -11,10 +11,14 @@ from PySide6.QtGui import (
     QPen,
     QPixmap,
 )
-from PySide6.QtWidgets import QFrame, QWidget
+from PySide6.QtWidgets import QApplication, QFrame, QTableView, QWidget
 
 from bilibili_downloader.core.models import DEFAULT_GLASS_BLUR
-from bilibili_downloader.gui.resources.styles import contrast_ratio, glass_text_color
+from bilibili_downloader.gui.resources.styles import (
+    UI_METRICS,
+    theme_palette,
+    wallpaper_tones,
+)
 
 
 class GlassBackdrop:
@@ -23,13 +27,16 @@ class GlassBackdrop:
     def __init__(self):
         self.key = None
         self.image = QPixmap()
+        self.reading = QPixmap()
         self.original = QPixmap()
         self.scale = (1.0, 1.0)
         self.dark = False
+        self.outline = QColor()
 
     def clear(self):
         self.key = None
         self.image = QPixmap()
+        self.reading = QPixmap()
         self.original = QPixmap()
 
     def prepare(self, key, size, render, dark, colors, blur=DEFAULT_GLASS_BLUR, *, flat=False):
@@ -53,28 +60,44 @@ class GlassBackdrop:
         painter.end()
         self.original = QPixmap.fromImage(base)
         picture = Image.frombytes("RGBA", (base.width(), base.height()), base.bits().tobytes()).convert("RGB")
-        picture = ImageEnhance.Color(picture).enhance(.90)
-        picture = picture.filter(ImageFilter.GaussianBlur(blur * self.scale[0]))
-        foregrounds = (colors.text, colors.muted, glass_text_color(colors))
-        # Bound every channel, so even black/white art keeps text readable.
-        candidates = range(255, -1, -1) if dark else range(256)
-        bound = next(value for value in candidates if all(
-            contrast_ratio(fg, f"#{value:02x}{value:02x}{value:02x}") >= (5.5 if dark else 5.0)
-            for fg in foregrounds
-        ))
-        surface = QColor(colors.surface)
-        channels = []
-        for channel, tint in zip(picture.split(), (surface.red(), surface.green(), surface.blue())):
-            # Compress the tonal range; clipping bright channels flattens the
-            # colors into a grey block over most of an illustrated wallpaper.
-            low = min(bound, round(tint * .55)) if dark else bound
-            high = bound if dark else max(bound, round(tint * .25 + 255 * .75))
-            lut = [round(low + (high - low) * value / 255) for value in range(256)]
-            channels.append(channel.point(lut))
-        picture = Image.merge("RGB", channels).convert("RGBA")
-        data = picture.tobytes()
-        self.image = QPixmap.fromImage(QImage(data, picture.width, picture.height, picture.width * 4, QImage.Format_RGBA8888).copy())
+        if flat:
+            self.image = _pixmap(Image.new("RGB", picture.size, colors.surface_raised))
+            self.reading = self.image
+        else:
+            picture = ImageEnhance.Color(picture).enhance(.95)
+            low, high = wallpaper_tones(dark)
+            # Preserve contours instead of clipping distinct source tones into
+            # the same shade. The reading surface takes a lighter blur pass.
+            gamma = .8 if dark else 1
+            lut = [round(low + (high - low) * (value / 255) ** gamma) for value in range(256)] * 3
+            strength = blur * self.scale[0]
+            self.image = _pixmap(picture.filter(ImageFilter.GaussianBlur(strength)).point(lut))
+            self.reading = _pixmap(picture.filter(ImageFilter.GaussianBlur(strength * .45)).point(lut)) if strength else self.image
         self.key, self.dark = key, dark
+        self.outline = QColor(colors.card_border)
+
+    def _sampling_rect(self, source):
+        sx, sy = self.scale
+        return QRectF(source.x() * sx, source.y() * sy, source.width() * sx, source.height() * sy)
+
+    def paint_reading(self, painter, rect, source_rect):
+        rect = QRectF(rect).adjusted(.5, .5, -.5, -.5)
+        if self.reading.isNull() or rect.isEmpty():
+            return
+        path = QPainterPath()
+        radius = UI_METRICS.card_radius
+        path.addRoundedRect(rect, radius, radius)
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        painter.save()
+        painter.setClipPath(path, Qt.IntersectClip)
+        painter.drawPixmap(rect, self.reading, self._sampling_rect(QRectF(source_rect).adjusted(.5, .5, -.5, -.5)))
+        painter.restore()
+        painter.setPen(self.outline)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawPath(path)
+        painter.restore()
 
     def paint(self, painter, rect, source_rect, radius=18):
         if self.image.isNull():
@@ -82,9 +105,8 @@ class GlassBackdrop:
         rect = QRectF(rect).adjusted(2, 2, -2, -3)
         if rect.isEmpty():
             return
-        source = QRectF(source_rect)
+        source = self._sampling_rect(QRectF(source_rect).adjusted(2, 2, -2, -3))
         sx, sy = self.scale
-        source = QRectF(source.x() * sx, source.y() * sy, source.width() * sx, source.height() * sy)
         radius = min(radius, rect.width() / 2, rect.height() / 2)
         path = QPainterPath()
         path.addRoundedRect(rect, radius, radius)
@@ -127,15 +149,23 @@ class GlassBackdrop:
         painter.restore()
 
 
+def _pixmap(source):
+    rgba = source.convert("RGBA")
+    image = QImage(rgba.tobytes(), rgba.width, rgba.height, rgba.width * 4, QImage.Format_RGBA8888)
+    return QPixmap.fromImage(image.copy())
+
+
 def paint_widget_glass(widget):
-    if not widget.property("glassSurface") or widget.property("sectionStyle") == "plain":
+    glass = widget.property("glassSurface")
+    reading = widget.property("readingSurface")
+    if not (glass or reading) or widget.property("sectionStyle") == "plain":
         return False
     current = widget.parentWidget()
     while current is not None and current.window() == widget.window():
         backdrop = getattr(current, "backdrop", None)
         if backdrop is not None:
             painter = QPainter(widget)
-            backdrop.paint_glass(painter, widget)
+            backdrop.paint_glass(painter, widget, reading=reading and not glass)
             painter.end()
             return True
         current = current.parentWidget()
@@ -143,9 +173,10 @@ def paint_widget_glass(widget):
 
 
 class GlassFrame(QFrame):
-    def __init__(self, parent=None, *, glass=False):
+    def __init__(self, parent=None, *, glass=False, reading=False):
         super().__init__(parent)
         self.setProperty("glassSurface", glass)
+        self.setProperty("readingSurface", reading)
 
     def paintEvent(self, event):
         super().paintEvent(event)
@@ -153,10 +184,53 @@ class GlassFrame(QFrame):
 
 
 class GlassWidget(QWidget):
-    def __init__(self, parent=None, *, glass=False):
+    def __init__(self, parent=None, *, glass=False, reading=False):
         super().__init__(parent)
         self.setProperty("glassSurface", glass)
+        self.setProperty("readingSurface", reading)
 
     def paintEvent(self, event):
         super().paintEvent(event)
         paint_widget_glass(self)
+
+
+class ItemViewSurface(GlassWidget):
+    """Paint below an item view's viewport, headers and scroll bars."""
+
+    def __init__(self, view):
+        super().__init__(view, reading=True)
+        self._headers = ((view.horizontalHeader(), view.verticalHeader()) if isinstance(view, QTableView)
+                         else (view.header(),))
+        for header in self._headers:
+            header.geometriesChanged.connect(self.update)
+        view.setProperty("readingView", True)
+        view.viewport().setAutoFillBackground(False)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.setGeometry(view.rect())
+        self.lower()
+        self.show()
+        view.installEventFilter(self)
+
+    def eventFilter(self, view, event):
+        if event.type() == QEvent.Resize:
+            self.setGeometry(view.rect())
+        return False
+
+    def paintEvent(self, event):
+        has_backdrop = paint_widget_glass(self)
+        app = QApplication.instance()
+        colors = theme_palette(bool(app.property("darkTheme")), app.property("colorTheme"))
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(Qt.NoPen)
+        if not has_backdrop:
+            painter.setBrush(QColor(colors.surface_raised))
+            painter.drawRoundedRect(QRectF(self.rect()), UI_METRICS.card_radius, UI_METRICS.card_radius)
+        tint = QColor(colors.surface_raised)
+        tint.setAlpha(112)
+        painter.setBrush(tint)
+        for header in self._headers:
+            if header.isVisible():
+                radius = UI_METRICS.radius
+                painter.drawRoundedRect(QRectF(header.geometry()), radius, radius)
+        painter.end()

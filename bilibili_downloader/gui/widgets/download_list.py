@@ -69,7 +69,7 @@ class _SpecificationDelegate(QStyledItemDelegate):
         style.drawControl(QStyle.CE_ItemViewItem, row_option(opt, index), painter, opt.widget)
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing)
-        p = palette()
+        p = palette(opt.widget)
         font = QFont(opt.font)
         font.setPointSizeF(font.pointSizeF() * 0.86)
         painter.setFont(font)
@@ -170,7 +170,7 @@ class _StatusDelegate(QStyledItemDelegate):
                 transfer = transfer.replace(" · 剩余 ", " · ")
             text += "\n" + transfer
         style.drawControl(QStyle.CE_ItemViewItem, row_option(opt, index), painter, opt.widget)
-        p = palette()
+        p = palette(opt.widget)
         color = {"active": p.active_text, "success": p.success, "warning": p.warning,
                  "danger": p.danger, "muted": p.muted}.get(tone, p.text)
         painter.save()

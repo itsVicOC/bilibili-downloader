@@ -511,7 +511,7 @@ def test_full_settings_page_reveals_fixed_workspace_background(
                 scroll.verticalScrollBar().setValue(0)
                 QApplication.processEvents()
                 card = scroll.widget().layout().itemAt(0).widget()
-                assert widget_color(card, QPoint(card.width() - 24, 20)) == QColor(
+                assert widget_color(card, QPoint(card.width() - 24, 20)) != QColor(
                     theme_palette(dark, theme_id).surface
                 )
             assert widget_color(panel._action_bar, QPoint(panel._action_bar.width() // 2, 2)) != QColor(

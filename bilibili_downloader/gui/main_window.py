@@ -475,7 +475,7 @@ class MainWindow(QMainWindow):
         self._download_tabs.addTab(self._batch_page, "批量导入")
         self._source_surface = SectionCard()
         self._source_surface.setObjectName("DownloadSource")
-        self._source_surface.setProperty("sectionStyle", "plain")
+        self._source_surface.set_plain()
         self._source_surface.body.setContentsMargins(0, 0, 0, 0)
         self._source_surface.body.addWidget(self._download_tabs)
         self._output_sections = DownloadWorkspace(self._source_surface, self._configuration)
@@ -489,7 +489,7 @@ class MainWindow(QMainWindow):
             self._download_footers.addWidget(bar)
         layout.addWidget(self._download_footers)
         for card in (self._batch_page._input_card, self._batch_page._preview_card):
-            card.setProperty("sectionStyle", "plain")
+            card.set_plain()
         self._batch_page.selection.changed.connect(self._sync_download_presentation)
         self._sync_output_mode_controls()
         self._download_tabs.currentChanged.connect(self._sync_download_presentation)
@@ -600,7 +600,7 @@ class MainWindow(QMainWindow):
             )
         )
         self._extras_card = SectionCard("一起保存")
-        self._extras_card.setProperty("sectionStyle", "plain")
+        self._extras_card.set_plain()
         self._extras_card.body.addWidget(DownloadOptions(
             self._danmaku_check, self._subtitle_check, self._all_subtitles_check,
             self._cover_check, self._metadata_check,

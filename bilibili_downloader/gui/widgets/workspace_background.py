@@ -142,7 +142,7 @@ class WindowBackdrop(QObject):
             painter.setRenderHint(QPainter.SmoothPixmapTransform, not self._pixel_art)
             painter.drawPixmap(QRectF(rect), self._viewport, QRectF(self._viewport.rect()))
 
-    def paint_glass(self, painter, widget, radius=18):
+    def paint_glass(self, painter, widget, radius=18, *, reading=False):
         key, dark, colors = self._scene()
         host = self.host
         self.glass.prepare(
@@ -151,7 +151,11 @@ class WindowBackdrop(QObject):
             dark, colors, self.blur, flat=self.image.isNull(),
         )
         offset = QPoint() if widget is host else widget.mapTo(host, QPoint())
-        self.glass.paint(painter, widget.rect(), QRectF(offset, widget.size()), radius=radius)
+        source = QRectF(offset, widget.size())
+        if reading:
+            self.glass.paint_reading(painter, widget.rect(), source)
+        else:
+            self.glass.paint(painter, widget.rect(), source, radius=radius)
 
     def set_glass_blur(self, value):
         if self.blur != value:

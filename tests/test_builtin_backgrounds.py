@@ -359,10 +359,11 @@ def test_builtin_surfaces_and_three_window_sizes(
             assert window.property("mascotBackground")
     form = window._settings_page.tabs.currentWidget().widget().layout().itemAt(0).widget()
     image = form.grab().toImage()
-    assert image.pixelColor(
+    builtin_pixel = image.pixelColor(
         round((form.width() - 12) * image.devicePixelRatio()),
         round(12 * image.devicePixelRatio()),
-    ) == QColor(colors.surface)
+    )
+    assert builtin_pixel != QColor(colors.surface)
     custom = prepare_background(local_image(tmp_path / "plain.png"))
     window._background_store.install(custom)
     window._settings.appearance.backgrounds.settings = custom.reference
@@ -372,5 +373,5 @@ def test_builtin_surfaces_and_three_window_sizes(
     assert image.pixelColor(
         round((form.width() - 12) * image.devicePixelRatio()),
         round(12 * image.devicePixelRatio()),
-    ) == QColor(colors.surface)
+    ) != builtin_pixel
     theme.deleteLater()

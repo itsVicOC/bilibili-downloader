@@ -53,6 +53,7 @@ class SelectionBar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         from PySide6.QtWidgets import QBoxLayout
+        self.setObjectName("SelectionBar")
         row = QBoxLayout(QBoxLayout.LeftToRight, self)
         self.row = row
         row.setContentsMargins(0, 0, 0, 0)

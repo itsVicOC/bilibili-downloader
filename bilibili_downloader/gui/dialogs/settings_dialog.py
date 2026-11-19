@@ -569,7 +569,7 @@ class SettingsDialog(AppDialog):
         self._layout_background_cards()
         for column in (download, live, tools, updates, appearance):
             for card in column.parentWidget().findChildren(SectionCard):
-                card.setProperty("sectionStyle", "plain")
+                card.set_plain()
                 card.body.setContentsMargins(0, 12, 0, 12)
             column.addStretch()
         self._notice = Notice()
