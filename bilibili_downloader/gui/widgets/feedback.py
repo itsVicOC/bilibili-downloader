@@ -10,6 +10,7 @@ class FeedbackBar(QStatusBar):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setProperty("glassSurface", True)
+        self.setProperty("clearGlass", True)
         self.setFixedHeight(36)
         self._callback = None
         self.action = QPushButton()

@@ -52,6 +52,15 @@ jobs:
           } else {
             python $driver --native --physical-pixels --glass-only --output-dir "$output"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $meter = "$PWD/.measure_stripes.py"
+            python $meter | Set-Content -Encoding utf8 "$output/stripes-after.json"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $baseline = "$env:RUNNER_TEMP/biliflow-before"
+            git worktree add --detach $baseline HEAD~1
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Set-Location $baseline
+            python $meter | Set-Content -Encoding utf8 "$output/stripes-before.json"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
       - name: Verify real Windows Qt widgets
         if: matrix.kind == 'after'
@@ -62,7 +71,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
         with:
-          name: wallpaper-windows-${{ matrix.kind }}
+          name: clear-glass-windows-${{ matrix.kind }}
           path: ${{ runner.temp }}/wallpaper
           if-no-files-found: error
           compression-level: 0

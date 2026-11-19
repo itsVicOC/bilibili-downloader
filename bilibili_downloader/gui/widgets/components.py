@@ -243,6 +243,7 @@ class ActionBar(GlassFrame):
 
     def __init__(self, parent=None, *, compact=False):
         super().__init__(parent, glass=True)
+        self.setProperty("clearGlass", True)
         self.setObjectName("ActionBar")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self._base_height = UI_METRICS.settings_bar_height if compact else 72
@@ -483,6 +484,7 @@ class WindowDragSurface(GlassFrame):
 class PageHeader(WindowDragSurface):
     def __init__(self, title, caption, parent=None):
         super().__init__(parent)
+        self.setProperty("clearGlass", True)
         self.setObjectName("PageHeader")
         self.setAccessibleName(title)
         self.setAccessibleDescription(caption)
@@ -579,6 +581,7 @@ class CommandBar(GlassFrame):
 
     def __init__(self, parent=None):
         super().__init__(parent, glass=True)
+        self.setProperty("clearGlass", True)
         self.setObjectName("ToolSurface")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self._grid = QGridLayout(self)

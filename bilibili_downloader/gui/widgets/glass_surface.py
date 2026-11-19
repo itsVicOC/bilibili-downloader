@@ -27,6 +27,7 @@ class GlassBackdrop:
     def __init__(self):
         self.key = None
         self.image = QPixmap()
+        self.clear_image = QPixmap()
         self.reading = QPixmap()
         self.original = QPixmap()
         self.scale = (1.0, 1.0)
@@ -36,11 +37,12 @@ class GlassBackdrop:
     def clear(self):
         self.key = None
         self.image = QPixmap()
+        self.clear_image = QPixmap()
         self.reading = QPixmap()
         self.original = QPixmap()
 
     def prepare(self, key, size, render, dark, colors, blur=DEFAULT_GLASS_BLUR, *, flat=False):
-        key = (key, size.width(), size.height(), dark, colors, blur)
+        key = (key, size.width(), size.height(), dark, colors, blur, flat)
         if key == self.key:
             return
         if size.isEmpty():
@@ -63,16 +65,13 @@ class GlassBackdrop:
         if flat:
             self.image = _pixmap(Image.new("RGB", picture.size, colors.surface_raised))
             self.reading = self.image
+            self.clear_image = self.image
         else:
-            picture = ImageEnhance.Color(picture).enhance(.95)
-            low, high = wallpaper_tones(dark)
-            # Preserve contours instead of clipping distinct source tones into
-            # the same shade. The reading surface takes a lighter blur pass.
-            gamma = .8 if dark else 1
-            lut = [round(low + (high - low) * (value / 255) ** gamma) for value in range(256)] * 3
             strength = blur * self.scale[0]
-            self.image = _pixmap(picture.filter(ImageFilter.GaussianBlur(strength)).point(lut))
-            self.reading = _pixmap(picture.filter(ImageFilter.GaussianBlur(strength * .45)).point(lut)) if strength else self.image
+            softened = ImageEnhance.Color(picture).enhance(.95)
+            self.image = _material(softened, strength * .70, dark)
+            self.reading = _material(softened, strength * .35, dark) if strength else self.image
+            self.clear_image = _material(picture, strength * .30, dark, clear=True)
         self.key, self.dark = key, dark
         self.outline = QColor(colors.card_border)
 
@@ -80,7 +79,7 @@ class GlassBackdrop:
         sx, sy = self.scale
         return QRectF(source.x() * sx, source.y() * sy, source.width() * sx, source.height() * sy)
 
-    def paint_reading(self, painter, rect, source_rect):
+    def paint_reading(self, painter, rect, source_rect, *, clear_below=None):
         rect = QRectF(rect).adjusted(.5, .5, -.5, -.5)
         if self.reading.isNull() or rect.isEmpty():
             return
@@ -92,15 +91,47 @@ class GlassBackdrop:
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
         painter.save()
         painter.setClipPath(path, Qt.IntersectClip)
-        painter.drawPixmap(rect, self.reading, self._sampling_rect(QRectF(source_rect).adjusted(.5, .5, -.5, -.5)))
+        source_rect = QRectF(source_rect).adjusted(.5, .5, -.5, -.5)
+        painter.drawPixmap(rect, self.reading, self._sampling_rect(source_rect))
+        if clear_below is not None and self.clear_image.cacheKey() != self.reading.cacheKey() and clear_below < rect.bottom():
+            self._paint_blank(painter, rect, source_rect, clear_below)
         painter.restore()
         painter.setPen(self.outline)
         painter.setBrush(Qt.NoBrush)
         painter.drawPath(path)
         painter.restore()
 
-    def paint(self, painter, rect, source_rect, radius=18):
-        if self.image.isNull():
+    def _paint_blank(self, painter, rect, source_rect, top):
+        # Fade only the narrow transition band, then draw the remaining
+        # wallpaper directly from its cache. Both samples use window coordinates.
+        top = max(rect.top(), top)
+        fade_height = min(16, rect.bottom() - top)
+        if fade_height <= 0:
+            return
+        fade = QRectF(rect.left(), top, rect.width(), fade_height)
+        dpr = painter.device().devicePixelRatioF()
+        size = QSize(round(fade.width() * dpr), round(fade.height() * dpr)).expandedTo(QSize(1, 1))
+        band = QImage(size, QImage.Format_ARGB32_Premultiplied)
+        band.setDevicePixelRatio(dpr)
+        band.fill(Qt.transparent)
+        mask = QPainter(band)
+        local = QRectF(QPoint(), band.deviceIndependentSize())
+        mask.setRenderHint(QPainter.SmoothPixmapTransform)
+        mask.drawPixmap(local, self.clear_image, self._sampling_rect(fade.translated(source_rect.topLeft() - rect.topLeft())))
+        alpha = QLinearGradient(local.topLeft(), local.bottomLeft())
+        alpha.setColorAt(0, Qt.transparent)
+        alpha.setColorAt(1, Qt.black)
+        mask.setCompositionMode(QPainter.CompositionMode_DestinationIn)
+        mask.fillRect(local, alpha)
+        mask.end()
+        painter.drawImage(fade, band, QRectF(band.rect()))
+        blank = QRectF(rect.left(), fade.bottom(), rect.width(), rect.bottom() - fade.bottom())
+        if not blank.isEmpty():
+            painter.drawPixmap(blank, self.clear_image, self._sampling_rect(blank.translated(source_rect.topLeft() - rect.topLeft())))
+
+    def paint(self, painter, rect, source_rect, radius=18, *, clear=False):
+        material = self.clear_image if clear else self.image
+        if material.isNull():
             return
         rect = QRectF(rect).adjusted(2, 2, -2, -3)
         if rect.isEmpty():
@@ -117,7 +148,7 @@ class GlassBackdrop:
         painter.setBrush(Qt.NoBrush)
         painter.drawRoundedRect(rect.translated(0, 1), radius, radius)
         painter.setClipPath(path, Qt.IntersectClip)
-        painter.drawPixmap(rect, self.image, source)
+        painter.drawPixmap(rect, material, source)
         # The lens displaces the underlying image most at the outer edge.
         # Keep both bands outside the surface's reading area.
         if min(rect.width(), rect.height()) > 12:
@@ -133,12 +164,6 @@ class GlassBackdrop:
                 painter.drawPixmap(rect, self.original, source.adjusted(dx, dy, -dx, -dy))
                 painter.restore()
                 outer = inner
-        shine = QLinearGradient(rect.topLeft(), rect.bottomRight())
-        shine.setColorAt(0, QColor(255, 255, 255, 8 if self.dark else 24))
-        shine.setColorAt(.24, QColor(255, 255, 255, 3 if self.dark else 11))
-        shine.setColorAt(.70, QColor(255, 255, 255, 0))
-        shine.setColorAt(1, QColor(255, 255, 255, 8 if self.dark else 12))
-        painter.fillPath(path, shine)
         rim = QLinearGradient(rect.topLeft(), rect.bottomLeft())
         rim.setColorAt(0, QColor(255, 255, 255, 84 if self.dark else 190))
         rim.setColorAt(.45, QColor(255, 255, 255, 26 if self.dark else 48))
@@ -149,13 +174,20 @@ class GlassBackdrop:
         painter.restore()
 
 
+def _material(source, strength, dark, *, clear=False):
+    low, high = wallpaper_tones(dark, clear=clear)
+    gamma = .8 if dark else 1
+    lut = [round(low + (high - low) * (value / 255) ** gamma) for value in range(256)] * 3
+    return _pixmap(source.filter(ImageFilter.GaussianBlur(strength)).point(lut))
+
+
 def _pixmap(source):
     rgba = source.convert("RGBA")
     image = QImage(rgba.tobytes(), rgba.width, rgba.height, rgba.width * 4, QImage.Format_RGBA8888)
     return QPixmap.fromImage(image.copy())
 
 
-def paint_widget_glass(widget):
+def paint_widget_glass(widget, *, clear_below=None):
     glass = widget.property("glassSurface")
     reading = widget.property("readingSurface")
     if not (glass or reading) or widget.property("sectionStyle") == "plain":
@@ -165,7 +197,10 @@ def paint_widget_glass(widget):
         backdrop = getattr(current, "backdrop", None)
         if backdrop is not None:
             painter = QPainter(widget)
-            backdrop.paint_glass(painter, widget, reading=reading and not glass)
+            backdrop.paint_glass(
+                painter, widget, reading=reading and not glass,
+                clear=bool(widget.property("clearGlass")), clear_below=clear_below,
+            )
             painter.end()
             return True
         current = current.parentWidget()
@@ -228,7 +263,7 @@ class ScrollAreaSurface(GlassWidget):
 
 
 class ItemViewSurface(ScrollAreaSurface):
-    """Apply one rounded tint to each header, beneath its sections."""
+    """Draw rounded header tints and reveal more wallpaper below the rows."""
 
     def __init__(self, view):
         super().__init__(view)
@@ -236,10 +271,47 @@ class ItemViewSurface(ScrollAreaSurface):
                          else (view.header(),))
         for header in self._headers:
             header.geometriesChanged.connect(self.update)
+            header.sectionResized.connect(self._rows_changed)
+        model = view.model()
+        for signal in (model.rowsInserted, model.rowsRemoved, model.layoutChanged, model.modelReset,
+                       view.verticalScrollBar().valueChanged):
+            signal.connect(self._rows_changed)
+        if not isinstance(view, QTableView):
+            view.expanded.connect(self._rows_changed)
+            view.collapsed.connect(self._rows_changed)
         view.setProperty("readingView", True)
 
+    def _rows_changed(self, *_):
+        self.update()
+
+    def _blank_top(self):
+        view = self.parentWidget()
+        viewport = view.viewport()
+        if not viewport.isVisible() or viewport.height() < 1:
+            return None
+        if view.model().rowCount(view.rootIndex()) == 0:
+            return viewport.y()
+
+        def occupied(y):
+            if isinstance(view, QTableView):
+                return view.rowAt(y) >= 0
+            return view.indexAt(QPoint(0, y)).isValid()
+
+        low, high = 0, viewport.height() - 1
+        if occupied(high) or not occupied(low):
+            return None
+        # Visible rows occupy a contiguous run from the top of the viewport.
+        while high - low > 1:
+            mid = (low + high) // 2
+            if occupied(mid):
+                low = mid
+            else:
+                high = mid
+        return viewport.y() + high
+
     def paintEvent(self, event):
-        super().paintEvent(event)
+        if not paint_widget_glass(self, clear_below=self._blank_top()):
+            _paint_reading_fallback(self)
         app = QApplication.instance()
         colors = theme_palette(bool(app.property("darkTheme")), app.property("colorTheme"))
         tint = QColor(colors.surface_raised)

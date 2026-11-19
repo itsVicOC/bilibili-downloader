@@ -277,16 +277,21 @@ def glass_text_color(colors: ThemePalette) -> str:
     return "#" + "".join(f"{channel:02x}" for channel in channels)
 
 
-def wallpaper_tones(is_dark: bool) -> tuple[int, int]:
-    """Retain a useful range of wallpaper tones in the reading material."""
+READING_FIELD_OPACITY = 44
+
+
+def wallpaper_tones(is_dark: bool, *, clear=False) -> tuple[int, int]:
+    """Bound wallpaper detail underneath foreground text."""
+    if clear:
+        return (16, 100) if is_dark else (164, 249)
     return (22, 92) if is_dark else (187, 246)
 
 
 @lru_cache(maxsize=8)
 def wallpaper_palette(colors: ThemePalette, is_dark: bool) -> ThemePalette:
     """Strengthen foregrounds against the least favorable material tone."""
-    low, high = wallpaper_tones(is_dark)
-    value = high + 5 if is_dark else low
+    low, high = wallpaper_tones(is_dark, clear=True)
+    value = high + 4 if is_dark else low
     limit = f"#{value:02x}{value:02x}{value:02x}"
 
     def readable(color, ratio):
@@ -582,7 +587,8 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     #ActionBar, #OutputActionBar {{ background: {p.surface}; border: 1px solid {p.confirmation_border}; border-radius: {m.card_radius}px; }}
     #ToolSurface {{ background: {p.surface}; border: none; border-radius: {m.radius}px; }}
     #ActionBar[glassSurface="true"], #OutputActionBar[glassSurface="true"],
-    #ToolSurface[glassSurface="true"], #SectionCard[glassSurface="true"] {{ background: transparent; border: none; }}
+    #ToolSurface[glassSurface="true"], #SectionCard[glassSurface="true"],
+    #HeroPanel[glassSurface="true"] {{ background: transparent; border: none; }}
     QWidget[customBackground="true"] QWidget[readingSurface="true"] {{ background: transparent; }}
     QWidget[customBackground="true"] QLabel#FieldLabel,
     QWidget[customBackground="true"] QLabel#Caption, QWidget[customBackground="true"] QLabel#DialogCaption,
@@ -643,7 +649,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     surfaces = ('QWidget[customBackground="true"] QWidget[readingSurface="true"]',
                 'QWidget[customBackground="true"] QWidget[glassSurface="true"]',
                 'QDialog[customBackground="true"]')
-    for state, opacity in ((":enabled", 72), (":enabled:hover", 128)):
+    for state, opacity in ((":enabled", READING_FIELD_OPACITY), (":enabled:hover", 100)):
         selectors = ", ".join(f'{surface} {kind}{state}' for surface in surfaces for kind in editors)
         stylesheet += f"{selectors} {{ background: {translucent(p.surface_raised, opacity)}; }}"
     if theme_id == "bilibili_blue":

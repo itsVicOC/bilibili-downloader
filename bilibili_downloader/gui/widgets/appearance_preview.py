@@ -10,6 +10,7 @@ from bilibili_downloader.gui.layout_policy import (
     path_preferred_width,
 )
 from bilibili_downloader.gui.resources.styles import (
+    READING_FIELD_OPACITY,
     UI_METRICS,
     theme_palette,
     wallpaper_palette,
@@ -199,8 +200,10 @@ class WorkspacePreview(QWidget):
         )
         sidebar = 72 if width < 1120 else 208
         content = QRectF(sidebar, HEADER_HEIGHT, width - sidebar, height - HEADER_HEIGHT - 36)
-        for rim in (QRectF(0, 0, sidebar, height - 36), QRectF(sidebar, 0, width - sidebar, HEADER_HEIGHT), QRectF(0, height - 36, width, 36)):
-            self._glass.paint(painter, rim, rim)
+        rail = QRectF(0, 0, sidebar, height - 36)
+        self._glass.paint(painter, rail, rail)
+        for rim in (QRectF(sidebar, 0, width - sidebar, HEADER_HEIGHT), QRectF(0, height - 36, width, 36)):
+            self._glass.paint(painter, rim, rim, clear=True)
         font = QFont(painter.font())
         font.setPixelSize(14)
         painter.setFont(font)
@@ -222,7 +225,7 @@ class WorkspacePreview(QWidget):
 
         def card(rect, glass=False):
             if glass:
-                self._glass.paint(painter, rect, rect)
+                self._glass.paint(painter, rect, rect, clear=True)
                 return
             self._glass.paint_reading(painter, rect, rect)
 
@@ -230,14 +233,14 @@ class WorkspacePreview(QWidget):
             painter.setPen(QPen(QColor((p.primary or p.accent) if primary else p.control_border), 1))
             fill = QColor((p.primary or p.accent) if primary else p.surface_raised)
             if not primary and not self.pixmap.isNull():
-                fill.setAlpha(72)
+                fill.setAlpha(READING_FIELD_OPACITY)
             painter.setBrush(fill)
             painter.drawRoundedRect(rect, UI_METRICS.radius, UI_METRICS.radius)
             painter.setPen(QColor((p.primary_text or p.accent_text) if primary else p.text))
             painter.drawText(rect.adjusted(12, 0, -8, 0), Qt.AlignVCenter, value)
 
         def table(rect, headers, rows):
-            card(rect)
+            self._glass.paint_reading(painter, rect, rect, clear_below=rect.top() + 48 + len(rows) * 56)
             rect = rect.adjusted(8, 8, -8, -8)
             cell = rect.width() / len(headers)
             header = QColor(p.surface_raised)
@@ -281,6 +284,7 @@ class WorkspacePreview(QWidget):
             source = QRectF(inner.left(), top, source_width, source_height)
             card(source)
             text(QRectF(source.left() + padding, top + 8, source.width() - padding * 2, 28), "单个解析       批量导入", bold=True)
+            card(QRectF(source.left() + 4, top + 36, source.width() - 8, 68), True)
             control(QRectF(source.left() + padding, top + 48, source.width() - 140 - padding, 40), "BV1DEMO2026A")
             control(QRectF(source.right() - 116, top + 48, 100, 40), "重新解析", True)
             large = wide and not density.compact
@@ -309,7 +313,7 @@ class WorkspacePreview(QWidget):
             text(QRectF(settings.left() + padding, y + 256, settings.width() - padding * 2, 24), "HEVC · AAC 192kbps", muted=True)
         elif self.workspace == "live":
             hero = QRectF(inner.left(), top, inner.width(), 72)
-            card(hero)
+            card(hero, True)
             control(QRectF(hero.left() + padding, top + 16, hero.width() - 152, 40), "直播间链接或房间号")
             control(QRectF(hero.right() - 128, top + 16, 112, 40), "添加并监控", True)
             top = hero.bottom() + gap
