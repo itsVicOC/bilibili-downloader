@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          fetch-depth: 2
+          fetch-depth: 3
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
           python-version: '3.12'
@@ -37,7 +37,7 @@ jobs:
           $output = "$env:RUNNER_TEMP/wallpaper"
           if ($kind -eq 'before') {
             $baseline = "$env:RUNNER_TEMP/biliflow-before"
-            git worktree add --detach $baseline HEAD~1
+            git worktree add --detach $baseline HEAD~2
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             Set-Location $baseline
           }
@@ -56,7 +56,7 @@ jobs:
             python $meter | Set-Content -Encoding utf8 "$output/stripes-after.json"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             $baseline = "$env:RUNNER_TEMP/biliflow-before"
-            git worktree add --detach $baseline HEAD~1
+            git worktree add --detach $baseline HEAD~2
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             Set-Location $baseline
             python $meter | Set-Content -Encoding utf8 "$output/stripes-before.json"

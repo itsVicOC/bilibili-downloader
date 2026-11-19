@@ -76,6 +76,15 @@ def test_clear_chrome_preserves_more_stripe_detail(qapp, dark):
     assert brightness_spread(glass.clear_image) >= 1.20 * brightness_spread(glass.image) > 0
 
 
+def test_dark_blue_wallpaper_keeps_semantic_text_colors():
+    theme = theme_palette(True, "bilibili_blue")
+    for clear, backdrop in ((True, "#686868"), (False, "#5c5c5c")):
+        colors = wallpaper_palette(theme, True, clear=clear)
+        text_roles = (colors.text, colors.active_text, colors.success, colors.warning, colors.danger)
+        assert len(set(text_roles)) == len(text_roles)
+        assert all(contrast_ratio(color, backdrop) >= 4.5 for color in text_roles)
+
+
 @pytest.mark.parametrize("kind", ["table", "tree"])
 def test_clear_space_moves_with_last_visible_row_without_rebuilding_wallpaper(qtbot, qapp, tmp_path, kind):
     theme = ThemeManager(qapp, mode="light")

@@ -287,19 +287,20 @@ def wallpaper_tones(is_dark: bool, *, clear=False) -> tuple[int, int]:
     return (22, 92) if is_dark else (187, 246)
 
 
-@lru_cache(maxsize=8)
-def wallpaper_palette(colors: ThemePalette, is_dark: bool) -> ThemePalette:
+@lru_cache(maxsize=16)
+def wallpaper_palette(colors: ThemePalette, is_dark: bool, *, clear=True) -> ThemePalette:
     """Strengthen foregrounds against the least favorable material tone."""
-    low, high = wallpaper_tones(is_dark, clear=True)
-    value = high + 4 if is_dark else low
+    low, high = wallpaper_tones(is_dark, clear=clear)
+    value = high + (4 if clear else 0) if is_dark else low
     limit = f"#{value:02x}{value:02x}{value:02x}"
+    white_or_black = "#ffffff" if is_dark else "#000000"
 
     def readable(color, ratio):
-        for step in range(21):
-            candidate = blend_color(color, colors.text, step / 20)
+        for step in range(41):
+            candidate = blend_color(color, white_or_black, step / 40)
             if contrast_ratio(candidate, limit) >= ratio:
                 return candidate
-        return colors.text
+        return white_or_black
 
     return replace(colors, **{
         name: readable(getattr(colors, name), ratio)
@@ -517,7 +518,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QWidget[readingView="true"] QHeaderView::section, QWidget[readingView="true"] QTableCornerButton::section {{
         background: transparent; border-color: transparent;
     }}
-    QWidget[customBackground="true"] QWidget[readingView="true"] QHeaderView::section {{ color: {w.muted}; }}
+    QWidget[customBackground="true"] QWidget[readingView="true"] QHeaderView::section {{ color: {wallpaper_palette(p, is_dark, clear=False).muted}; }}
     QProgressBar {{ min-height: 16px; max-height: 16px; border: none; border-radius: 5px; background: {p.surface_raised}; color: {p.text}; font-size: 9pt; text-align: center; }}
     QProgressBar::chunk {{ background: {p.accent}; border-radius: 5px; }}
     QProgressBar[captioned="true"] {{ min-height: 28px; max-height: 28px; background: transparent; }}

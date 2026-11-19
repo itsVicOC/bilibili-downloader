@@ -84,7 +84,9 @@ def palette(widget=None):
         dark,
         app.property("colorTheme") if app else "star_trail",
     )
-    return wallpaper_palette(colors, dark) if widget is not None and wallpaper_active(widget) else colors
+    if widget is not None and wallpaper_active(widget):
+        return wallpaper_palette(colors, dark, clear=not widget.property("readingView"))
+    return colors
 
 
 def line_icon(name, color=None, size=24):
