@@ -369,7 +369,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QFrame#SidebarDivider {{ background: {p.divider}; border: none; }}
     QLabel#AccountName {{ font-size: 20px; font-weight: 600; }}
     QFrame#AccountIdentity {{ background: transparent; border: none; }}
-    QFrame#AccountDetails {{ background: {p.surface}; border: 1px solid {p.card_border}; border-radius: 12px; }}
+    QFrame#AccountDetails {{ background: {p.surface_raised}; border: 1px solid {p.card_border}; border-radius: {m.card_radius}px; }}
     QFrame#AccountDivider {{ background: {p.divider}; border: none; }}
     QLabel#AccountValue {{ font-size: 14px; }}
     QPushButton#SidebarAction::menu-indicator {{ image: none; width: 0; }}
@@ -532,6 +532,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QWidget[customBackground="true"] QTabBar::tab:!selected {{ background: {translucent(p.surface_raised, 228)}; color: {w.muted}; }}
     QWidget[customBackground="true"] QTabBar::tab:hover:!selected {{ background: {p.control_hover}; color: {p.text}; }}
     QScrollArea, QScrollArea > QWidget > QWidget {{ background: transparent; border: none; }}
+    QScrollArea[readingSurface="true"] {{ border: 8px solid transparent; border-radius: {m.card_radius}px; }}
     QScrollBar:vertical {{ width: 10px; background: transparent; margin: 4px 1px; }}
     QScrollBar:horizontal {{ height: 10px; background: transparent; margin: 1px 4px; }}
     QScrollBar::handle:vertical {{ min-height: 32px; border-radius: 4px; background: {p.border}; margin: 0 2px; }}
@@ -600,6 +601,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     #DownloadSource[sectionStyle="plain"] {{ background: transparent; border: none; }}
     #DownloadSource QTabWidget::pane {{ padding-top: 8px; }}
     #DownloadSource QTabBar {{ margin: 8px 12px 0; }}
+    #SettingsForm {{ background: transparent; border: none; }}
     #SettingsForm #SectionCard {{ background: transparent; border: none; border-top: 1px solid {p.card_border}; border-radius: 0; }}
     QLabel#OutputSelection {{ font-weight: 600; color: {p.text}; }}
     QPushButton#OutputSecondaryButton {{

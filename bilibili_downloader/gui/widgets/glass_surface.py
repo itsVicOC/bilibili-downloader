@@ -172,6 +172,18 @@ def paint_widget_glass(widget):
     return False
 
 
+def _paint_reading_fallback(widget):
+    app = QApplication.instance()
+    colors = theme_palette(bool(app.property("darkTheme")), app.property("colorTheme"))
+    painter = QPainter(widget)
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setPen(QColor(colors.card_border))
+    painter.setBrush(QColor(colors.surface_raised))
+    rect = QRectF(widget.rect()).adjusted(.5, .5, -.5, -.5)
+    painter.drawRoundedRect(rect, UI_METRICS.card_radius, UI_METRICS.card_radius)
+    painter.end()
+
+
 class GlassFrame(QFrame):
     def __init__(self, parent=None, *, glass=False, reading=False):
         super().__init__(parent)
@@ -180,7 +192,8 @@ class GlassFrame(QFrame):
 
     def paintEvent(self, event):
         super().paintEvent(event)
-        paint_widget_glass(self)
+        if not paint_widget_glass(self) and self.property("readingSurface"):
+            _paint_reading_fallback(self)
 
 
 class GlassWidget(QWidget):
@@ -191,43 +204,48 @@ class GlassWidget(QWidget):
 
     def paintEvent(self, event):
         super().paintEvent(event)
-        paint_widget_glass(self)
+        if not paint_widget_glass(self) and self.property("readingSurface"):
+            _paint_reading_fallback(self)
 
 
-class ItemViewSurface(GlassWidget):
-    """Paint below an item view's viewport, headers and scroll bars."""
+class ScrollAreaSurface(GlassWidget):
+    """Keep the rounded surface fixed while the viewport moves its content."""
 
-    def __init__(self, view):
-        super().__init__(view, reading=True)
-        self._headers = ((view.horizontalHeader(), view.verticalHeader()) if isinstance(view, QTableView)
-                         else (view.header(),))
-        for header in self._headers:
-            header.geometriesChanged.connect(self.update)
-        view.setProperty("readingView", True)
-        view.viewport().setAutoFillBackground(False)
+    def __init__(self, area):
+        super().__init__(area, reading=True)
+        area.setProperty("readingSurface", True)
+        area.viewport().setAutoFillBackground(False)
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self.setGeometry(view.rect())
+        self.setGeometry(area.rect())
         self.lower()
         self.show()
-        view.installEventFilter(self)
+        area.installEventFilter(self)
 
     def eventFilter(self, view, event):
         if event.type() == QEvent.Resize:
             self.setGeometry(view.rect())
         return False
 
+class ItemViewSurface(ScrollAreaSurface):
+    """Apply one rounded tint to each header, beneath its sections."""
+
+    def __init__(self, view):
+        super().__init__(view)
+        self._headers = ((view.horizontalHeader(), view.verticalHeader()) if isinstance(view, QTableView)
+                         else (view.header(),))
+        for header in self._headers:
+            header.geometriesChanged.connect(self.update)
+        view.setProperty("readingView", True)
+
     def paintEvent(self, event):
-        has_backdrop = paint_widget_glass(self)
+        super().paintEvent(event)
         app = QApplication.instance()
         colors = theme_palette(bool(app.property("darkTheme")), app.property("colorTheme"))
+        tint = QColor(colors.surface_raised)
+        tint.setAlpha(112)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setPen(Qt.NoPen)
-        if not has_backdrop:
-            painter.setBrush(QColor(colors.surface_raised))
-            painter.drawRoundedRect(QRectF(self.rect()), UI_METRICS.card_radius, UI_METRICS.card_radius)
-        tint = QColor(colors.surface_raised)
-        tint.setAlpha(112)
         painter.setBrush(tint)
         for header in self._headers:
             if header.isVisible():

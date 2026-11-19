@@ -70,6 +70,7 @@ from bilibili_downloader.gui.widgets.download_options import (
     DownloadOptionCard,
     DownloadOptions,
 )
+from bilibili_downloader.gui.widgets.glass_surface import ScrollAreaSurface
 from bilibili_downloader.gui.widgets.workspace_background import background_pixmap
 from bilibili_downloader.utils.validators import render_path_template
 
@@ -695,10 +696,13 @@ class SettingsDialog(AppDialog):
         wrapper.setContentsMargins(0, 0, 4, 0)
         form = SectionCard()
         form.setObjectName("SettingsForm")
+        form.setProperty("readingSurface", False)
         wrapper.addWidget(form)
         column = form.body
         column.setSpacing(20)
-        self._sections[section] = self.tabs.addTab(scroll_area(body), name)
+        scroll = scroll_area(body)
+        scroll._reading_surface = ScrollAreaSurface(scroll)
+        self._sections[section] = self.tabs.addTab(scroll, name)
         return column
 
     def show_section(self, section):

@@ -306,7 +306,7 @@ def test_source_input_card_uses_a_plain_readable_surface(qapp, qtbot, dark, them
         for x in range(20, 780, 40):
             for y in (20, 50, 100, 170):
                 background = image.pixelColor(x, y).name()
-                assert background == p.surface
+                assert background == p.surface_raised
                 assert _contrast(p.active_text, background) >= 4.5
                 assert _contrast(p.text, background) >= 4.5
     finally:

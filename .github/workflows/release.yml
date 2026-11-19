@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        kind: [before, after, scales]
+        kind: [after, scales]
     env:
       PYTHONUTF8: "1"
     steps:

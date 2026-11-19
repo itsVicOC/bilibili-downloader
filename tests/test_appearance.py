@@ -500,18 +500,17 @@ def test_full_settings_page_reveals_fixed_workspace_background(
                 panel.tabs.setCurrentIndex(index)
                 QApplication.processEvents()
                 scroll = panel.tabs.widget(index)
-                viewport = scroll.viewport()
                 for offset in (0, scroll.verticalScrollBar().maximum()):
                     scroll.verticalScrollBar().setValue(offset)
                     QApplication.processEvents()
                     assert_backdrop([
                         panel.mapTo(window, QPoint(panel.width() - 8, 8)),
-                        viewport.mapTo(window, QPoint(viewport.width() - 2, viewport.height() // 2)),
+                        scroll.mapTo(window, QPoint(1, 1)),
+                        scroll.mapTo(window, QPoint(scroll.width() - 2, scroll.height() - 2)),
                     ])
                 scroll.verticalScrollBar().setValue(0)
                 QApplication.processEvents()
-                card = scroll.widget().layout().itemAt(0).widget()
-                assert widget_color(card, QPoint(card.width() - 24, 20)) != QColor(
+                assert widget_color(scroll, QPoint(12, 12)) != QColor(
                     theme_palette(dark, theme_id).surface
                 )
             assert widget_color(panel._action_bar, QPoint(panel._action_bar.width() // 2, 2)) != QColor(

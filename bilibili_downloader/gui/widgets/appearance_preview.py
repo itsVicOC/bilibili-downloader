@@ -242,7 +242,9 @@ class WorkspacePreview(QWidget):
             cell = rect.width() / len(headers)
             header = QColor(p.surface_raised)
             header.setAlpha(112)
-            painter.fillRect(QRectF(rect.left(), rect.top(), rect.width(), 40), header)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(header)
+            painter.drawRoundedRect(QRectF(rect.left(), rect.top(), rect.width(), 40), UI_METRICS.radius, UI_METRICS.radius)
             for column, label in enumerate(headers):
                 text(QRectF(rect.left() + column * cell + 12, rect.top(), cell - 24, 40), label, muted=True, protected=False)
             for row, values in enumerate(rows):
