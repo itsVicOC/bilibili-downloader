@@ -19,6 +19,7 @@ from bilibili_downloader.gui.resources.theme import ThemeManager
 from bilibili_downloader.gui.widgets.caption_controls import (
     CAPTION_HOVER_ALPHA,
     CAPTION_PRESSED_ALPHA,
+    CaptionControls,
     caption_rects,
 )
 from bilibili_downloader.gui.window_chrome import WindowChrome
@@ -86,9 +87,11 @@ def test_shared_edges_and_hit_regions_at_every_scale(scale):
 @pytest.mark.parametrize("dark", [False, True])
 def test_caption_base_hover_glyphs_and_animation_settle(qapp, qtbot, theme_id, dark):
     manager = ThemeManager(qapp, theme_id, "dark" if dark else "light")
-    window = ChromeWindow()
+    window = QMainWindow()
+    # Drive paint states without foreground changes or a real desktop pointer.
+    # Native pointer input is covered separately in test_window_chrome.py.
+    window.setAttribute(Qt.WA_DontShowOnScreen)
     qtbot.addWidget(window)
-    controls = window.chrome.controls
     p = theme_palette(dark, theme_id)
 
     class Backdrop(QWidget):
@@ -100,8 +103,8 @@ def test_caption_base_hover_glyphs_and_animation_settle(qapp, qtbot, theme_id, d
 
     window.setCentralWidget(Backdrop())
     window.resize(480, 320)
+    controls = CaptionControls(window)
     window.show()
-    window.activateWindow()
     qapp.processEvents()
     controls.hide()
     wallpaper = window.grab().toImage()
@@ -133,7 +136,7 @@ def test_caption_base_hover_glyphs_and_animation_settle(qapp, qtbot, theme_id, d
             red = p.caption_close_pressed if pressed else p.caption_close_hover
             expected = red if name == "close" else blend_color(pixel(reference, 9, 12), p.text, alpha / 255)
             actual = pixel(image, 9, 12)
-            assert all(abs(int(actual[i:i + 2], 16) - int(expected[i:i + 2], 16)) <= 2 for i in (1, 3, 5))
+            assert all(abs(int(actual[i:i + 2], 16) - int(expected[i:i + 2], 16)) <= 2 for i in (1, 3, 5)), (name, actual, expected)
             return image
 
         button.set_hovered(True)
