@@ -2,8 +2,8 @@
 
 import pytest
 from PIL import Image
-from PySide6.QtCore import QPoint
-from PySide6.QtGui import QPalette
+from PySide6.QtCore import QPoint, QRect, QRectF, QSize
+from PySide6.QtGui import QColor, QImage, QPainter, QPalette, QPixmap
 from PySide6.QtWidgets import QLabel
 
 from bilibili_downloader.core.appearance import prepare_background
@@ -15,9 +15,34 @@ from bilibili_downloader.gui.resources.styles import (
     theme_palette,
 )
 from bilibili_downloader.gui.resources.theme import ThemeManager
+from bilibili_downloader.gui.widgets.dialog_shell import AppDialog
+from bilibili_downloader.gui.widgets.glass_surface import GlassBackdrop
 from tests.test_ui_polish import flush
 from tests.test_ui_refresh import restore_theme as restore_theme
 from tests.test_workspaces import workspace as workspace
+
+
+def test_scene_refraction_stays_within_the_round_edge(qapp):
+    size = QSize(124, 82)
+    colors = theme_palette(False)
+    glass = GlassBackdrop()
+    glass.prepare("contrast", size, lambda painter, rect: painter.fillRect(rect, QColor("black")), False, colors)
+    area = QRectF(QPoint(), size)
+
+    def draw():
+        image = QImage(size, QImage.Format_ARGB32_Premultiplied)
+        image.fill(QColor(colors.background))
+        painter = QPainter(image)
+        glass.paint(painter, area, area)
+        painter.end()
+        return image
+
+    shaded = draw()
+    glass.original = QPixmap(size)
+    glass.original.fill(QColor("white"))
+    lit = draw()
+    assert shaded != lit
+    assert shaded.copy(14, 14, 96, 54) == lit.copy(14, 14, 96, 54)
 
 
 @pytest.mark.parametrize("dark", [False, True])
@@ -44,36 +69,37 @@ def test_glass_blurs_only_wallpaper_and_reuses_cache(workspace, qapp, tmp_path, 
     flush()
     stack = workspace._workspace_pages
     workspace.grab()
-    key = stack._glass.image.cacheKey()
-    assert not stack._glass.image.isNull()
+    glass = workspace.backdrop.glass
+    key = glass.image.cacheKey()
+    assert not glass.image.isNull()
+    assert stack.backdrop is workspace.backdrop
     assert workspace._hero.graphicsEffect() is None
-    assert workspace._hero_title.graphicsEffect() is None
-    image = stack._glass.image.toImage()
+    image = glass.image.toImage()
     for x in range(10, image.width(), 70):
         for y in range(10, image.height(), 70):
-            for color in (colors.text, glass_text_color(colors)):
+            for color in (colors.text, colors.muted, glass_text_color(colors)):
                 assert contrast_ratio(color, image.pixelColor(x, y).name()) >= 4.5
     workspace._on_resolve_success(VideoInfo(bvid="BV1DEMO", title="缓存复用"), [], [], True)
     flush()
     workspace._workspace_scroll.verticalScrollBar().setValue(80)
     workspace.grab()
-    assert stack._glass.image.cacheKey() == key
+    assert glass.image.cacheKey() == key
     stack.set_visibility(BackgroundVisibility(light=50, dark=50))
     workspace.grab()
-    assert stack._glass.image.cacheKey() != key
+    assert glass.image.cacheKey() != key
     # Actual text bounds still use native Qt glyphs on the background material.
     for label in workspace._hero.findChildren(QLabel):
         if label.isVisible():
             assert label.graphicsEffect() is None
     stack.set_background(None)
     flush()
-    assert stack._glass.image.isNull()
-    assert not stack.property("customBackground")
+    assert workspace.backdrop.image.isNull()
+    assert not workspace.property("customBackground")
     theme.deleteLater()
 
 
 @pytest.mark.parametrize("dark", [False, True])
-def test_hero_title_retains_contrast_on_dark_saturated_art(workspace, qapp, tmp_path, dark):
+def test_glass_toolbar_title_retains_contrast_on_saturated_art(workspace, qapp, tmp_path, dark):
     theme = ThemeManager(qapp, theme_id="bilibili_blue", mode="dark" if dark else "light")
     source = tmp_path / "blue.png"
     Image.new("RGB", (640, 480), (8, 25, 170)).save(source)
@@ -83,11 +109,52 @@ def test_hero_title_retains_contrast_on_dark_saturated_art(workspace, qapp, tmp_
     workspace._refresh_workspace_background()
     workspace.show()
     flush()
-    label = workspace._hero_title
+    header = workspace._download_header
+    label = header.title
     label.hide()
-    backdrop = workspace._hero.grab().toImage()
-    point = label.mapTo(workspace._hero, QPoint(label.width() // 2, label.height() // 2))
+    backdrop = header.grab().toImage()
+    point = label.mapTo(header, QPoint(24, label.height() // 2))
     background = backdrop.pixelColor(round(point.x() * backdrop.devicePixelRatio()), round(point.y() * backdrop.devicePixelRatio())).name()
     label.show()
     assert contrast_ratio(label.palette().color(QPalette.WindowText).name(), background) >= 4.5
+    theme.deleteLater()
+
+
+def test_main_wallpaper_changes_chrome_and_dialog_inherits_opening_page(workspace, qtbot, qapp):
+    theme = ThemeManager(qapp, mode="dark")
+    workspace.show()
+    flush()
+    regions = (workspace._sidebar, workspace._download_header, workspace._status_bar)
+
+    def samples():
+        image = workspace.grab().toImage()
+        dpr = image.devicePixelRatio()
+        length = round(10 * dpr)
+        patches = []
+        for widget in regions:
+            points = [widget.mapTo(workspace, QPoint(x, widget.height() // 2 - 5))
+                      for x in (12, widget.width() // 3, widget.width() // 2, widget.width() - 14)]
+            patches.append([image.copy(QRect(round(point.x() * dpr), round(point.y() * dpr), length, length))
+                            for point in points])
+        return patches
+
+    previous = samples()
+    workspace._settings.appearance.backgrounds.download = BUILTIN_BACKGROUNDS[0].reference
+    workspace._settings.appearance.background_visibility.download = BackgroundVisibility(light=100, dark=100)
+    workspace._refresh_workspace_background()
+    flush()
+    for widget, first, second in zip(regions, previous, samples()):
+        assert first != second, widget.objectName()
+
+    dialog = AppDialog(workspace)
+    qtbot.addWidget(dialog)
+    dialog.show()
+    flush()
+    assert dialog.backdrop.image.cacheKey() == workspace.backdrop.image.cacheKey()
+    workspace._show_workspace(1)
+    assert workspace.backdrop.image.isNull() and not dialog.backdrop.image.isNull()
+    dialog.hide()
+    dialog.show()
+    flush()
+    assert dialog.backdrop.image.isNull()
     theme.deleteLater()

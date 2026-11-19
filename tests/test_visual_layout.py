@@ -107,7 +107,7 @@ def test_last_task_removal_returns_task_center_to_shared_empty_state(qtbot, tmp_
     assert window._task_page._download_stack.currentIndex() == 0
     window._download_list.remove_item(1)
     assert window._task_page._download_stack.currentIndex() == 1
-    assert not window._hero_title.isHidden()
+    assert not window._empty_download.isHidden()
 
 
 def test_login_qr_controls_do_not_overlap_at_minimum_size(qtbot):
