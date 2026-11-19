@@ -63,6 +63,7 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
         CAPTION_PRESSED_ALPHA,
         caption_rects,
     )
+    from scripts.capture_docs_screenshots import _grab_windows_client
 
     if qapp.platformName() != "windows":
         pytest.skip("Requires the Windows Qt backend")
@@ -220,13 +221,7 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
                 assert user32.SendInput(1, ctypes.byref(down), ctypes.sizeof(Input)) == 1
                 qtbot.waitUntil(control.isDown, timeout=1000)
                 qtbot.wait(60)
-                screen = window.screen()
-                pixmap = screen.grabWindow(0)
-                dpr, origin = pixmap.devicePixelRatio(), screen.geometry().topLeft()
-                image = pixmap.toImage().copy(QRect(
-                    x + rect.left() - round(origin.x() * dpr),
-                    y - round(origin.y() * dpr), rect.width(), rect.height(),
-                ))
+                image = _grab_windows_client(window).copy(QRect(rect.left(), 0, rect.width(), rect.height()))
                 assert image.save(str(evidence / f"{theme_id}-{mode}-{action}-pressed.png"))
                 assert_button_fill(image, reference, action, pressed=True)
             finally:
@@ -302,30 +297,29 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
 
     def assert_clear(stage):
         ensure_foreground()
-        reference = bare_header()
         origin = wintypes.POINT()
         assert user32.ClientToScreen(hwnd, ctypes.byref(origin))
         assert user32.SetCursorPos(origin.x + 300, origin.y + 200)
         qtbot.wait(150)
+        reference = bare_header()
+        qtbot.wait(100)
         frame = window.frameGeometry()
-        pixmap = window.screen().grabWindow(0, *frame.getRect())
-        assert not pixmap.isNull()
-        pixmap.save(str(evidence / f"{theme_id}-{mode}-{stage}.png"))
+        image = _grab_windows_client(window)
+        assert not image.isNull()
+        image.save(str(evidence / f"{theme_id}-{mode}-{stage}.png"))
         checks.append({"stage": stage, "frame": frame.getRect(),
                        "client": window.geometry().getRect(),
                        "qt_maximized": window.isMaximized(),
                        "native_maximized": bool(user32.IsZoomed(hwnd)),
                        "qwindow_flags": int(window.windowHandle().flags())})
         (evidence / f"{theme_id}-{mode}.json").write_text(json.dumps(checks, indent=2), encoding="utf-8")
-        origin = window.mapToGlobal(QPoint()) - frame.topLeft()
-        image = pixmap.toImage()
         samples = [QPoint(x, y) for x in range(12, 60) for y in range(6, 18)]
-        matching = sum(matches(qt_pixel(image, origin + point), qt_pixel(reference, point)) for point in samples)
-        assert matching / len(samples) >= 0.98, f"Legacy caption repainted after {stage}"
+        matching = sum(matches(qt_pixel(image, point), qt_pixel(reference, point)) for point in samples)
+        assert matching / len(samples) >= 0.98, f"Caption backing matched {matching}/{len(samples)} samples after {stage}"
         for button in window._chrome.controls.buttons.values():
             for x in (2, 8, 35, 43):
                 point = button.mapTo(window, QPoint(x, 16))
-                actual, expected = qt_pixel(image, origin + point), qt_pixel(reference, point)
+                actual, expected = qt_pixel(image, point), qt_pixel(reference, point)
                 assert matches(actual, expected), (stage, button.action, actual.name(), expected.name())
         assert window.windowHandle().flags() & Qt.FramelessWindowHint
 
@@ -342,14 +336,7 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
             control = window._chrome.controls.buttons[button]
             qtbot.waitUntil(lambda: control.hovered and control._hover.value == 1)
             qtbot.wait(50)  # Allow DWM to present the completed 120 ms transition.
-            screen = window.screen()
-            pixmap = screen.grabWindow(0)
-            dpr = pixmap.devicePixelRatio()
-            # Win32 coordinates are physical; QScreen's origin is logical.
-            origin = screen.geometry().topLeft()
-            image = pixmap.toImage().copy(QRect(
-                left - round(origin.x() * dpr), y - round(origin.y() * dpr), width, height,
-            ))
+            image = _grab_windows_client(window).copy(QRect(rect.left(), 0, width, height))
             assert image.save(str(evidence / f"{theme_id}-{mode}-{stage}-{button}-hover.png"))
             (evidence / f"{theme_id}-{mode}-{stage}-{button}-hover.json").write_text(json.dumps({
                 "native_tracking": window._chrome.controls.native_tracking,
