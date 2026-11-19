@@ -73,6 +73,39 @@ def run(executable, theme, mode, screenshot):
                     process.wait(timeout=15)
 
 
+def check_installer_upgrade(baseline, candidate, output):
+    with TemporaryDirectory(prefix="biliflow-frozen-upgrade-") as temporary:
+        installation = Path(temporary) / "中文 Upgrade With Spaces"
+        app = installation / "BilibiliDownloader"
+        args = ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/NOICONS",
+                "/TASKS=", f"/DIR={installation}"]
+        uninstaller = installation / "uninst" / "unins000.exe"
+        try:
+            subprocess.run([baseline, *args], check=True, timeout=300)
+            user_media = app / "user-media.mp4"
+            user_media.write_bytes(b"placeholder user media")
+            old = json.loads((app / "biliflow-payload.json").read_text(encoding="utf-8"))["files"]
+            subprocess.run([candidate, *args], check=True, timeout=300)
+            new = json.loads((app / "biliflow-payload.json").read_text(encoding="utf-8"))["files"]
+            assert user_media.read_bytes() == b"placeholder user media"
+            run(app / "BilibiliDownloader.exe", "star_trail", "light", output / "installer-upgrade.png")
+            stale = [name for name in sorted(old.keys() - new.keys()) if (app / name).is_file()]
+            bytes_left = sum((app / name).stat().st_size for name in stale)
+            (output / "installer-upgrade.json").write_text(json.dumps({
+                "user_media_preserved": True, "legacy_files_remaining": stale,
+                "legacy_bytes_remaining": bytes_left,
+            }, indent=2), encoding="utf-8")
+        finally:
+            if uninstaller.is_file():
+                subprocess.run([uninstaller, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"],
+                               check=True, timeout=180)
+                for _ in range(80):
+                    if not uninstaller.is_file():
+                        break
+                    time.sleep(0.25)
+                assert not uninstaller.is_file(), "uninstaller did not finish cleanup"
+
+
 themes = [(theme, mode) for theme in ("star_trail", "bilibili_blue") for mode in ("light", "dark")]
 output = Path("windows-frozen-desktop")
 output.mkdir(exist_ok=True)
@@ -94,3 +127,5 @@ for theme, mode in themes:
         comparison[name] = {"dimensions": candidate.size, "difference_bounds": bounds}
 (output / "comparison.json").write_text(json.dumps(comparison, indent=2), encoding="utf-8")
 print(comparison)
+installers = [next(Path(source).glob("*-full-*-setup.exe")).resolve() for source in sys.argv[1:]]
+check_installer_upgrade(*installers, output)
