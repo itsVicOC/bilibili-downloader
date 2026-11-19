@@ -12,9 +12,11 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QLineEdit,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
     QSpinBox,
     QTabWidget,
     QVBoxLayout,
@@ -258,6 +260,9 @@ class SettingsDialog(AppDialog):
         self._concurrency_down.setToolTip("减少并发数")
         self._concurrency_up.setToolTip("增加并发数")
         format_fields = ResponsiveFields(column_width=430)
+        # A two-column grid must be able to shrink before it can stack again.
+        format_fields.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        format_fields.layout().setSizeConstraint(QLayout.SetNoConstraint)
         for key in ("default_output_mode", "default_quality", "default_video_codec",
                     "default_audio_quality", "max_concurrent_downloads"):
             row = self._field_rows[key]

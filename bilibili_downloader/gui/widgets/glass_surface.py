@@ -226,6 +226,7 @@ class ScrollAreaSurface(GlassWidget):
             self.setGeometry(view.rect())
         return False
 
+
 class ItemViewSurface(ScrollAreaSurface):
     """Apply one rounded tint to each header, beneath its sections."""
 
