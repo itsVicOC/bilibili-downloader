@@ -294,21 +294,15 @@ class LibraryPage(QWidget):
         self.stack.addWidget(self.table)
         self.stack.addWidget(
             EmptyState(
-                "暂无文件记录",
-                "这里显示下载完成的文件。",
-                "去下载",
-                self.download_requested.emit,
+                "暂无文件记录", action="去下载", callback=self.download_requested.emit, workspace="tasks",
             )
         )
         self.stack.addWidget(
             EmptyState(
-                "没有匹配的文件",
-                "请更换关键词或筛选条件。",
-                "清除筛选",
-                self.clear_filters,
+                "没有匹配的文件", action="清除筛选", callback=self.clear_filters,
             )
         )
-        self.stack.addWidget(EmptyState("正在加载文件记录", "请稍候。"))
+        self.stack.addWidget(EmptyState("正在加载文件记录"))
         self.stack.addWidget(
             EmptyState(
                 "文件列表暂不可用", "本地文件仍保留，请重试加载。", "重试", self.replay

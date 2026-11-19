@@ -106,7 +106,7 @@ class LivePage(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(24, 24, 24, 24)
         root.setSpacing(16)
-        header = PageHeader("直播录制", "记录喜欢的直播")
+        header = PageHeader("直播录制", "")
         self.header = header
         history = QPushButton("录制历史")
         history.setObjectName("TextButton")
@@ -121,16 +121,14 @@ class LivePage(QWidget):
         column.setContentsMargins(0, 0, 4, 0)
         column.setSpacing(16)
         hero = HeroPanel()
-        hero.set_compact(True)
+        hero.set_compact(True, minimum_height=UI_METRICS.source_resolved_height)
         hero_layout = QVBoxLayout(hero)
         hero_layout.setContentsMargins(16, 16, 16, 16)
         hero_layout.setSpacing(10)
-        hint = QLabel("添加直播间 · 应用运行时开播自动录制")
-        hint.setObjectName("HeroTitle")
-        hero_layout.addWidget(hint)
         input_row = QHBoxLayout()
         input_row.setSpacing(12)
         self.source = ChineseLineEdit()
+        self.source.setAccessibleName("直播间来源")
         self.source.setPlaceholderText("直播间链接、房间号或 b23.tv 短链")
         self.source.returnPressed.connect(self._add)
         self.source.textChanged.connect(
@@ -143,6 +141,8 @@ class LivePage(QWidget):
         input_row.addWidget(self.source, 1)
         self.add_button = QPushButton("添加并监控")
         self.add_button.setObjectName("PrimaryButton")
+        self.add_button.setToolTip("BiliFlow 运行时，监控的房间开播即自动录制")
+        self.add_button.setAccessibleDescription(self.add_button.toolTip())
         self.add_button.clicked.connect(self._add)
         input_row.addWidget(self.add_button)
         hero_layout.addLayout(input_row)
@@ -153,9 +153,9 @@ class LivePage(QWidget):
         self._content_layout = QBoxLayout(QBoxLayout.LeftToRight, self._content)
         self._content_layout.setContentsMargins(0, 0, 0, 0)
         self._content_layout.setSpacing(16)
-        self._rooms_card = SectionCard("监控列表")
+        self._rooms_card = SectionCard()
         self._count = StatusBadge("0 个直播间")
-        self._rooms_card.header.addWidget(self._count)
+        self._rooms_card.body.addWidget(self._count, alignment=Qt.AlignRight)
         self.rooms = QTableWidget(0, 4)
         self.rooms.setAccessibleName("直播监控列表")
         self.rooms.setHorizontalHeaderLabels(
@@ -178,7 +178,7 @@ class LivePage(QWidget):
         self._room_stack = QStackedWidget()
         self._room_stack.addWidget(self.rooms)
         self._room_stack.addWidget(
-            EmptyState("等待下一场星光", "在上方添加直播间，开播自动录制。")
+            EmptyState("暂无直播间", action="添加房间", callback=self.source.setFocus, workspace="live")
         )
         self._room_stack.setMinimumHeight(240)
         self._rooms_card.body.addWidget(self._room_stack, 1)
@@ -193,10 +193,6 @@ class LivePage(QWidget):
         self._detail_toggle.setAccessibleName("展开或收起房间详情")
         self._detail_toggle.toggled.connect(self._sync_detail_visibility)
         self._detail_card.header.addWidget(self._detail_toggle)
-        self._detail_empty = QLabel("选择直播间，查看状态与录制设置")
-        self._detail_empty.setObjectName("MetaLabel")
-        self._detail_empty.setWordWrap(True)
-        self._detail_card.body.addWidget(self._detail_empty)
         self._detail_controls = QWidget()
         details = QVBoxLayout(self._detail_controls)
         details.setContentsMargins(0, 0, 0, 0)
@@ -247,10 +243,9 @@ class LivePage(QWidget):
         options.addWidget(self._segment)
         self.monitor = CheckBox("自动监控并录制")
         self.monitor.setToolTip("关闭监控将停止本场；开启后等待下次开播")
+        self.monitor.setAccessibleDescription(self.monitor.toolTip())
         self.monitor.toggled.connect(self._toggle_monitor)
-        self._monitor_hint = QLabel(
-            "停止本场保留下次自动录制；关闭监控将停止本场。"
-        )
+        self._monitor_hint = QLabel("关闭监控会停止本场录制。")
         self._monitor_hint.setObjectName("MetaLabel")
         self._monitor_hint.setWordWrap(True)
         options.addWidget(self._monitor_hint)
@@ -341,8 +336,8 @@ class LivePage(QWidget):
     def _sync_detail_visibility(self, *_args):
         expanded = not getattr(self, "_stacked_details", True) or self._detail_toggle.isChecked()
         selected = self._selected_row() is not None
+        self._detail_card.setVisible(selected)
         self._detail_controls.setVisible(expanded and selected)
-        self._detail_empty.setVisible(expanded and not selected)
         self._detail_toggle.setText("收起" if expanded else "展开")
 
     def _update_table_height(self):
@@ -459,6 +454,7 @@ class LivePage(QWidget):
             "reconnecting",
         }
         finalizing = row["state"] == "finalizing"
+        self._monitor_hint.setVisible(active and row["enabled"] and not finalizing)
         self.start_stop.setText(
             "正在收尾…" if finalizing else "停止本场" if active else "立即开始"
         )

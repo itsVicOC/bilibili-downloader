@@ -3,20 +3,35 @@
 import weakref
 
 from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QPainter
 from PySide6.QtWidgets import QDialog, QLineEdit, QPlainTextEdit, QPushButton
 from shiboken6 import isValid
 
+from bilibili_downloader.gui.widgets.workspace_background import WindowBackdrop
 from bilibili_downloader.gui.window_bounds import ScreenBounds
 
 
 def prepare_dialog(dialog):
     if not dialog.isWindow():
         return
+    if not hasattr(dialog, "backdrop"):
+        dialog.backdrop = WindowBackdrop(dialog)
+    parent = dialog.parentWidget()
+    dialog.backdrop.inherit(getattr(parent.window(), "backdrop", None) if parent else None)
     if not hasattr(dialog, "_screen_bounds"):
         dialog._screen_bounds = ScreenBounds(dialog, QSize(min(420, dialog.minimumWidth()), 0))
     dialog._screen_bounds.schedule()
     for button in dialog.findChildren(QPushButton):
         button.setAutoDefault(False)
+
+
+def paint_dialog_glass(dialog):
+    if not dialog.isWindow() or not hasattr(dialog, "backdrop"):
+        return
+    painter = QPainter(dialog)
+    dialog.backdrop.paint(painter)
+    dialog.backdrop.paint_glass(painter, dialog, radius=18)
+    painter.end()
 
 
 def restore_focus(dialog):
@@ -46,6 +61,10 @@ class AppDialog(QDialog):
     def showEvent(self, event):
         prepare_dialog(self)
         super().showEvent(event)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        paint_dialog_glass(self)
 
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key_Return, Qt.Key_Enter) and isinstance(self.focusWidget(), (QLineEdit, QPlainTextEdit)):

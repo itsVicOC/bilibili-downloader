@@ -74,7 +74,7 @@ class BackgroundEffects(QWidget):
         row = QHBoxLayout()
         row.setSpacing(4)
         self._views = QButtonGroup(self)
-        self.page_button = self._segment("页面效果", self._views, row)
+        self.page_button = self._segment("整窗效果", self._views, row)
         self.original_button = self._segment("原图", self._views, row)
         self.page_button.setChecked(True)
         self.original_button.toggled.connect(self._change_view)

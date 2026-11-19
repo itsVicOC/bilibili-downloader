@@ -106,9 +106,9 @@ class BackgroundPicker(QWidget):
                 pass
         if not pixmap.isNull():
             self.preview.setPixmap(pixmap)
-            self.status.setText(f"小流 · {entry.title} · 点击预览效果" if entry else "图片已准备好，保存设置后生效" if self.prepared else "已保存自定义背景 · 点击缩略图预览效果")
+            self.status.setText("待保存" if self.prepared else entry.title if entry else "自定义背景")
         else:
-            self.preview.setText("默认背景\n点击预览")
+            self.preview.setText("默认背景")
             self.status.setText(
                 "背景丢失或损坏，请重新选择图片" if self.reference else "使用主题默认背景"
             )

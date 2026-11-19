@@ -10,6 +10,7 @@ import pytest
 from PySide6.QtWidgets import QMessageBox
 
 from bilibili_downloader.core.download_service import DownloadService
+from bilibili_downloader.core.downloader import TransferMetrics
 from bilibili_downloader.core.library import LibraryRepository, absolute_path
 from bilibili_downloader.core.models import (
     AppSettings,
@@ -21,6 +22,7 @@ from bilibili_downloader.core.models import (
     VideoInfo,
     VideoPage,
 )
+from bilibili_downloader.core.progress import DownloadPhase
 from bilibili_downloader.core.task_repository import TaskRepository
 from bilibili_downloader.core.update_protocol import (
     InstallDataInApplicationError,
@@ -454,6 +456,41 @@ def test_retry_uses_frozen_directory_after_settings_change(
     assert worker._output_dir == str(original)
     assert submitted
     window._on_worker_settled(task_id, worker)
+
+
+def test_resume_uses_confirmed_progress_before_replacing_paused_readout(workspace, monkeypatch, tmp_path):
+    class OfflineDownload:
+        def __init__(self, *_args, **_kwargs):
+            self.transfer_metrics = TransferMetrics()
+
+        def download(self, _item, report):
+            for stage, label, fraction, total, text, speed in (
+                ("prepare", "确认可用规格", None, 0, "正在获取流地址…", 0),
+                ("transfer", "传输视频", 0, 0, "正在下载视频流…", 0),
+                ("transfer", "传输视频", 1, .528, "正在下载视频流…", 0),
+                ("transfer", "传输音频", 0, .528, "正在下载音频流…", 0),
+                ("transfer", "传输音频", .25, .572, "正在下载音频流…", 1024),
+                ("mux", "封装媒体", .5, .79, "正在封装媒体…", 0),
+                ("attachments", "补全字幕", None, 1, "正在下载字幕…", 0),
+            ):
+                self.transfer_metrics = TransferMetrics(speed_bytes_per_second=speed)
+                self.phase_callback(DownloadPhase(stage, label, fraction))
+                report(total, text)
+                percentages.append(workspace._download_list._progress_at(0).value())
+            return DownloadOutcome(video_path=str(tmp_path / "output.mp4"), missing_artifacts=["subtitle"])
+
+    monkeypatch.setattr("bilibili_downloader.gui.threads.download_worker.DownloadService", OfflineDownload)
+    runners, percentages = [], []
+    monkeypatch.setattr(workspace._download_pool, "start", runners.append)
+    item = DownloadItem(video_info=VideoInfo(bvid="BVresume", cid=1), progress=.64)
+    task_id = workspace._task_repository.add(item, TaskStatus.PAUSED)
+    workspace._download_list.add_item(item, download_id=task_id, status=TaskStatus.PAUSED, progress=item.progress)
+    workspace._on_retry_download(task_id)
+    assert workspace._download_list._progress_at(0).value() == 64
+    runners[0].run()
+    assert percentages == [64, 64, 64, 64, 57, 79, 99]
+    assert workspace._download_list._progress_at(0).value() == 100
+    assert workspace._task_repository.get(task_id).outcome.missing_artifacts == ["subtitle"]
 
 
 def test_failed_recycle_never_unlinks_media(tmp_path):

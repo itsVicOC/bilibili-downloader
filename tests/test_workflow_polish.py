@@ -26,7 +26,11 @@ from bilibili_downloader.gui.dialogs.page_selection import PageSelectionDialog
 from bilibili_downloader.gui.dialogs.relocate_directory import RelocateDirectoryDialog
 from bilibili_downloader.gui.dialogs.settings_dialog import NAMING_FIELDS
 from bilibili_downloader.gui.threads.inventory_worker import InventoryMatchRunner
-from bilibili_downloader.gui.widgets.download_list import DownloadListWidget
+from bilibili_downloader.gui.widgets.download_list import (
+    STATUS_METRICS_ROLE,
+    STATUS_PHASE_ROLE,
+    DownloadListWidget,
+)
 from tests.test_archive_workflow import stored
 from tests.test_workspaces import workspace as workspace
 
@@ -394,16 +398,38 @@ def test_inventory_preview_distinguishes_media_from_missing_companions(tmp_path)
     assert "待补附件" in results[1].label
 
 
-def test_stage_display_uses_stage_progress_and_separates_pending_attachments(workspace):
+def test_total_progress_is_independent_of_stages_and_reserved_completion(workspace):
     table = workspace._download_list
     item = DownloadItem(video_info=VideoInfo(bvid="BVstage", title="阶段"))
     key = table.add_item(item)
+    row = table._row_for(key)
+    bar = table._progress_at(row)
+    status = table.item(row, 3)
+    table.mark_downloading(key)
+    table.update_phase(key, DownloadPhase("transfer", "传输视频", .9))
+    table.update_progress(key, .46, "下载视频")
+    table.update_transfer_metrics(key, 2 * 1024**2, 15)
+    assert bar.value() == 46
+    assert status.data(STATUS_METRICS_ROLE) == "2.0 MB/s · 剩余 0:15"
+    table.update_phase(key, DownloadPhase("transfer", "传输音频", 0))
+    assert bar.value() == 46
+    assert status.data(STATUS_PHASE_ROLE) == "传输音频"
+    assert status.data(STATUS_METRICS_ROLE) is None
     table.update_phase(key, DownloadPhase("mux", "封装媒体", .25))
     table.update_progress(key, .85, "正在封装媒体", TaskStatus.MERGING)
-    bar = table._progress_at(table._row_for(key))
-    assert bar.value() == 25 and "25%" in bar.property("stageCaption")
+    assert bar.value() == 85 and status.data(STATUS_PHASE_ROLE) == "封装媒体"
+    table.update_phase(key, DownloadPhase("attachments", "补全字幕", None, 1, 3))
+    assert bar.value() == 85 and status.data(STATUS_PHASE_ROLE) == "补全字幕 · 1/3"
+    table.mark_paused(key)
+    assert bar.value() == bar._fill.value == 85
+    table.mark_downloading(key)
+    table.update_progress(key, .42, "断点已重新校验")
+    assert bar.value() == bar._fill.value == 42
+    table.update_progress(key, 1.0, "媒体已保存")
+    assert bar.value() == 99
     table.mark_done(key, DownloadOutcome(video_path="/demo/video.mp4", missing_artifacts=["subtitle"]))
-    assert bar.property("stageCaption") == "媒体已保存"
+    assert bar.value() == bar._fill.value == 100
+    assert bar.objectName() == "WarningProgress"
 
 
 def test_late_library_read_after_widget_deletion_is_ignored(qapp, qtbot, tmp_path, monkeypatch):

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import QRect, QSize, Qt, Signal
+from PySide6.QtCore import QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -34,14 +34,12 @@ from bilibili_downloader.core.models import (
     TaskStatus,
     VideoQuality,
 )
+from bilibili_downloader.core.progress import transfer_summary
 from bilibili_downloader.gui.resources.styles import (
     UI_METRICS,
 )
-from bilibili_downloader.gui.widgets.background_readability import (
-    paint_reading_surface,
-    wallpaper_active,
-)
 from bilibili_downloader.gui.widgets.components import PopupMenu, line_icon, palette
+from bilibili_downloader.gui.widgets.motion import StateTransition
 from bilibili_downloader.gui.widgets.row_hover import RowHoverTable, row_option
 from bilibili_downloader.gui.widgets.selection import SelectionItem, TableSelection
 
@@ -49,6 +47,8 @@ ACTION_BUTTON_MIN_WIDTH = 60
 ACTION_BUTTON_GAP = 6
 ACTION_CELL_PADDING = 12
 STATUS_TONE_ROLE = Qt.UserRole + 1
+STATUS_PHASE_ROLE = Qt.UserRole + 2
+STATUS_METRICS_ROLE = Qt.UserRole + 3
 
 _TABLE_BUTTON_NAMES = {
     "SubtleButton": "TableSubtleButton",
@@ -89,22 +89,36 @@ class _SpecificationDelegate(QStyledItemDelegate):
 
 
 class _ReadableProgressBar(QProgressBar):
-    """Separate percentage text from the thin semantic progress track."""
+    """Show the task's cumulative progress beside a stable-width percentage."""
 
     def __init__(self):
         super().__init__()
         self.setTextVisible(False)
         self.setProperty("captioned", True)
+        self.setAccessibleName("下载总体进度")
+        self._fill = StateTransition(self)
+
+    def set_progress(self, percentage, *, animate=False):
+        if percentage == self.value():
+            return
+        growing = percentage > self.value()
+        self.setValue(percentage)
+        if growing and animate and not self.visibleRegion().isEmpty():
+            self._fill.to(percentage)
+        else:
+            self._fill.target = percentage
+            self._fill.settle()
 
     def paintEvent(self, event):
         p = palette()
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        text = self.property("stageCaption") or f"{self.value()}%"
+        text = f"{max(0, self.value())}%"
         painter.setPen(QColor(p.text))
         painter.setFont(self.font())
-        painter.drawText(self.rect().adjusted(0, 0, 0, -10), Qt.AlignRight | Qt.AlignVCenter, text)
-        width = round(self.width() * self.value() / max(1, self.maximum()))
+        number_width = painter.fontMetrics().horizontalAdvance("100%") + 4
+        number = self.rect().adjusted(self.width() - number_width, 0, 0, 0)
+        painter.drawText(number, Qt.AlignRight | Qt.AlignVCenter, text)
         fill = {
             "CompletedProgress": p.success,
             "WarningProgress": p.warning,
@@ -112,13 +126,17 @@ class _ReadableProgressBar(QProgressBar):
             "PausedProgress": p.border,
             "CancelledProgress": p.border,
         }.get(self.objectName(), p.accent)
-        track = self.rect().adjusted(0, self.height() - 6, 0, 0)
+        track = QRectF(0, (self.height() - 8) / 2, max(0, self.width() - number_width - 10), 8)
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(p.surface_raised))
-        painter.drawRoundedRect(track, 3, 3)
+        painter.setBrush(QColor(p.control_border))
+        painter.drawRoundedRect(track, 4, 4)
+        groove = track.adjusted(1, 1, -1, -1)
+        painter.setBrush(QColor(p.control_fill))
+        painter.drawRoundedRect(groove, 3, 3)
+        width = groove.width() * min(self._fill.value, self.value()) / 100
         if width > 0:
             painter.setBrush(QColor(fill))
-            painter.drawRoundedRect(QRect(track.left(), track.top(), width, track.height()), 3, 3)
+            painter.drawRoundedRect(QRectF(groove.left(), groove.top(), width, groove.height()), 3, 3)
         painter.end()
 
 
@@ -143,6 +161,9 @@ class _StatusDelegate(QStyledItemDelegate):
         style = opt.widget.style() if opt.widget else QApplication.style()
         content = style.subElementRect(QStyle.SE_ItemViewItemText, opt, opt.widget)
         text, opt.text = opt.text, ""
+        if tone == "active" and (stage := index.data(STATUS_PHASE_ROLE)):
+            metrics_text = index.data(STATUS_METRICS_ROLE)
+            text = f"{stage}\n{metrics_text}" if metrics_text else stage
         style.drawControl(QStyle.CE_ItemViewItem, row_option(opt, index), painter, opt.widget)
         p = palette()
         color = {"active": p.active_text, "success": p.success, "warning": p.warning,
@@ -189,9 +210,6 @@ class _StatusDelegate(QStyledItemDelegate):
         alignment = (opt.displayAlignment & Qt.AlignHorizontal_Mask) | Qt.AlignVCenter
         for line in lines:
             rect = QRect(content.left(), top, max(1, content.width()), height)
-            if opt.widget and wallpaper_active(opt.widget):
-                label_rect = metrics.boundingRect(rect, int(alignment), metrics.elidedText(line, Qt.ElideRight, rect.width()))
-                paint_reading_surface(painter, label_rect.adjusted(-3, -2, 3, 2), p.surface, color)
             painter.drawText(
                 rect, alignment, metrics.elidedText(line, Qt.ElideRight, rect.width())
             )
@@ -303,7 +321,7 @@ class DownloadListWidget(RowHoverTable):
     def _setup_ui(self):
         self.setAccessibleName("下载任务列表")
         self.setColumnCount(5)
-        self.setHorizontalHeaderLabels(["作品", "规格", "处理阶段", "任务状态", "操作"])
+        self.setHorizontalHeaderLabels(["作品", "规格", "进度", "状态", "操作"])
         self.horizontalHeaderItem(3).setTextAlignment(Qt.AlignCenter)
         self.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
@@ -386,9 +404,7 @@ class DownloadListWidget(RowHoverTable):
         progress_bar = _ReadableProgressBar()
         progress_bar.setMinimum(0)
         progress_bar.setMaximum(100)
-        progress_bar.setValue(int(progress * 100))
-        if status == TaskStatus.QUEUED:
-            progress_bar.setProperty("stageCaption", "等待重试" if item.retry_at else "等待开始")
+        progress_bar.set_progress(100 if status == TaskStatus.COMPLETED else _unfinished_percentage(progress))
         self.setCellWidget(row, 2, _ProgressCell(progress_bar))
         _set_progress_state(
             progress_bar,
@@ -429,7 +445,7 @@ class DownloadListWidget(RowHoverTable):
         self.setItem(row, 0, title)
         self.setItem(row, 1, QTableWidgetItem("解析失败"))
         progress = _ReadableProgressBar()
-        progress.setValue(0)
+        progress.set_progress(0)
         _set_progress_state(progress, "ErrorProgress")
         self.setCellWidget(row, 2, _ProgressCell(progress))
         status = QTableWidgetItem("未加入队列")
@@ -448,7 +464,7 @@ class DownloadListWidget(RowHoverTable):
         """Return the current row index for a download ID."""
         return self._id_to_row.get(download_id)
 
-    def _progress_at(self, row: int) -> QProgressBar | None:
+    def _progress_at(self, row: int) -> _ReadableProgressBar | None:
         cell = self.cellWidget(row, 2)
         return cell.bar if isinstance(cell, _ProgressCell) else None
 
@@ -504,11 +520,9 @@ class DownloadListWidget(RowHoverTable):
             return
         progress_bar = self._progress_at(row)
         if progress_bar and status == TaskStatus.QUEUED:
-            progress_bar.setProperty("phaseActive", False)
             _set_progress_state(progress_bar, "PausedProgress")
-            progress_bar.setProperty("stageCaption", "等待重试" if self._items[download_id].retry_at else "等待开始")
-        if progress_bar and not progress_bar.property("phaseActive"):
-            progress_bar.setValue(int(progress * 100))
+        if progress_bar:
+            progress_bar.set_progress(_unfinished_percentage(progress), animate=status in {TaskStatus.DOWNLOADING, TaskStatus.MERGING})
 
         self._states[download_id] = status
         status_item = self.item(row, 3)
@@ -521,27 +535,27 @@ class DownloadListWidget(RowHoverTable):
         row = self._row_for(download_id)
         if row is None:
             return
-        bar = self._progress_at(row)
-        if bar:
-            bar.setProperty("phaseActive", True)
-            bar.setValue(round(100 * (phase.done / max(1, phase.total) if phase.stage == "attachments" else phase.progress or 0)))
-            if phase.stage == "attachments":
-                caption = f"附件 {phase.done}/{phase.total}"
-            elif phase.progress is not None:
-                caption = f"{phase.label} {phase.progress:.0%}"
-            else:
-                caption = phase.label + "…"
-            bar.setProperty("stageCaption", caption)
-            bar.update()
+        item = self.item(row, 3)
+        if item:
+            label = f"{phase.label} · {phase.done}/{phase.total}" if phase.stage == "attachments" else phase.label
+            if phase.stage != "transfer" or label != item.data(STATUS_PHASE_ROLE):
+                item.setData(STATUS_METRICS_ROLE, None)
+            item.setData(STATUS_PHASE_ROLE, label)
+
+    def update_transfer_metrics(self, download_id, speed, eta):
+        row = self._row_for(download_id)
+        if row is not None and (item := self.item(row, 3)):
+            item.setData(STATUS_METRICS_ROLE, transfer_summary(speed, eta))
 
     def mark_downloading(self, download_id: int):
         self._states[download_id] = TaskStatus.DOWNLOADING
         row = self._row_for(download_id)
         if row is not None:
-            self._progress_at(row).setProperty("stageCaption", "")
-            self._progress_at(row).setProperty("phaseActive", False)
             _set_progress_state(self._progress_at(row), "")
-            self.item(row, 3).setData(STATUS_TONE_ROLE, "active")
+            item = self.item(row, 3)
+            item.setData(STATUS_PHASE_ROLE, None)
+            item.setData(STATUS_METRICS_ROLE, None)
+            item.setData(STATUS_TONE_ROLE, "active")
         self._set_actions(download_id, TaskStatus.DOWNLOADING)
 
     def mark_done(self, download_id: int, outcome=None):
@@ -562,10 +576,7 @@ class DownloadListWidget(RowHoverTable):
                 if getattr(outcome, "warnings", None) or getattr(outcome, "missing_artifacts", None) or getattr(outcome, "spec_warnings", None)
                 else "CompletedProgress",
             )
-            progress_bar.setValue(100)
-
-        if progress_bar:
-            progress_bar.setProperty("stageCaption", "媒体已保存" if outcome and outcome.missing_artifacts else "已完成")
+            progress_bar.set_progress(100)
         status_item = self.item(row, 3)
         if status_item:
             warnings = list(getattr(outcome, "warnings", []) or [])
@@ -658,7 +669,6 @@ class DownloadListWidget(RowHoverTable):
             return
         progress_bar = self._progress_at(row)
         if progress_bar:
-            progress_bar.setValue(0)
             _set_progress_state(progress_bar, "")
 
         status_item = self.item(row, 3)
@@ -831,15 +841,13 @@ class DownloadListWidget(RowHoverTable):
         super().keyPressEvent(event)
 
 
-def _set_progress_state(progress_bar: QProgressBar, object_name: str):
-    """Refresh QSS when switching progress bar visual state."""
+def _unfinished_percentage(progress):
+    return max(0, min(99, int(progress * 100)))
+
+
+def _set_progress_state(progress_bar: _ReadableProgressBar, object_name: str):
     progress_bar.setObjectName(object_name)
-    caption = {"PausedProgress": "已暂停", "CancelledProgress": "已取消", "ErrorProgress": "待重试"}.get(object_name)
-    if caption:
-        progress_bar.setProperty("stageCaption", caption)
-        progress_bar.setProperty("phaseActive", False)
-    progress_bar.style().unpolish(progress_bar)
-    progress_bar.style().polish(progress_bar)
+    progress_bar._fill.settle()
 
 
 def _status_label(status: TaskStatus) -> str:

@@ -11,17 +11,13 @@ from bilibili_downloader.gui.layout_policy import (
 )
 from bilibili_downloader.gui.resources.styles import (
     UI_METRICS,
-    background_reading_alpha,
     glass_text_color,
     theme_palette,
 )
 from bilibili_downloader.gui.widgets.background_readability import paint_reading_surface
 from bilibili_downloader.gui.widgets.components import palette
 from bilibili_downloader.gui.widgets.glass_surface import GlassBackdrop
-from bilibili_downloader.gui.widgets.header_backdrop import (
-    HEADER_HEIGHT,
-    paint_header_backdrop,
-)
+from bilibili_downloader.gui.widgets.header_backdrop import HEADER_HEIGHT
 from bilibili_downloader.gui.widgets.workspace_background import (
     paint_workspace_background,
 )
@@ -36,7 +32,7 @@ class ThemePreviewButton(QAbstractButton):
         self.setAccessibleName(f"{name}主题，{description}")
         self.setToolTip(f"{name} · {description}；保存后应用")
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.setMinimumHeight(140)
+        self.setMinimumHeight(114)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setProperty("focusRadius", UI_METRICS.card_radius - 2)
         self.setCursor(Qt.PointingHandCursor)
@@ -49,7 +45,7 @@ class ThemePreviewButton(QAbstractButton):
         )
 
     def sizeHint(self):
-        return QSize(260, max(140, 90 + self.fontMetrics().height() * 2 + 16))
+        return QSize(260, max(114, 90 + self.fontMetrics().height() + 12))
 
     def event(self, event):
         if event.type() in (QEvent.StyleChange, QEvent.FontChange) and hasattr(self, "description"):
@@ -84,20 +80,16 @@ class ThemePreviewButton(QAbstractButton):
         )
         painter.restore()
         line = self.fontMetrics().height()
-        selected_width = self.fontMetrics().horizontalAdvance("✓ 已选") + 12 if selected else 0
+        selected_width = self.fontMetrics().horizontalAdvance("✓") + 12 if selected else 0
         name = QRectF(14, 90, self.width() - 28 - selected_width, line)
-        detail = QRectF(14, 94 + line, self.width() - 28, line)
         painter.setPen(QColor(p.text))
         painter.drawText(name, Qt.AlignLeft | Qt.AlignVCenter, self.name)
-        painter.setPen(QColor(p.muted))
-        painter.drawText(detail, Qt.AlignLeft | Qt.AlignVCenter,
-                         painter.fontMetrics().elidedText(self.description, Qt.ElideRight, int(detail.width())))
         if self.isChecked():
             painter.setPen(QColor(palette().active_text))
             painter.drawText(
                 QRectF(self.width() - 14 - selected_width, 90, selected_width, line),
                 Qt.AlignRight | Qt.AlignVCenter,
-                "✓ 已选",
+                "✓",
             )
         painter.end()
 
@@ -155,7 +147,7 @@ class WorkspacePreview(QWidget):
         self.title, self.pixmap, self.theme_id = title, pixmap, theme_id
         self.builtin, self.pixel_art = builtin, pixel_art
         self.visibility = (visibility or BackgroundVisibility()).model_copy(deep=True)
-        self.is_dark = bool(QApplication.instance().property("darkTheme"))
+        self.is_dark = None
         self.workspace = workspace
         self.viewport_size = QSize(1320, 860)
         self.original = False
@@ -169,11 +161,11 @@ class WorkspacePreview(QWidget):
         return QRectF((self.width() - size.width()) / 2, (self.height() - size.height()) / 2, size.width(), size.height())
 
     def background_rect(self):
-        sidebar = 72 if self.viewport_size.width() < 1120 else 208
-        return QRectF(sidebar, HEADER_HEIGHT, self.viewport_size.width() - sidebar, self.viewport_size.height() - HEADER_HEIGHT - 36)
+        return QRectF(0, 0, self.viewport_size.width(), self.viewport_size.height())
 
     def paintEvent(self, event):
-        p = theme_palette(self.is_dark, self.theme_id)
+        dark = bool(QApplication.instance().property("darkTheme")) if self.is_dark is None else self.is_dark
+        p = theme_palette(dark, self.theme_id)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         painter.fillRect(self.rect(), QColor(p.surface_raised))
@@ -188,29 +180,22 @@ class WorkspacePreview(QWidget):
         painter.scale(canvas.width() / self.viewport_size.width(), canvas.height() / self.viewport_size.height())
         width, height = self.viewport_size.width(), self.viewport_size.height()
         painter.setClipRect(QRectF(0, 0, width, height))
-        painter.fillRect(QRectF(0, 0, width, height), QColor(p.background))
-        content = self.background_rect()
+        background = self.background_rect()
+        visible = self.visibility.dark if dark else self.visibility.light
         paint_workspace_background(
-            painter, content, self.pixmap, self.is_dark, self.theme_id,
-            self.visibility.dark if self.is_dark else self.visibility.light,
+            painter, background, self.pixmap, dark, self.theme_id, visible,
             builtin=self.builtin, pixel_art=self.pixel_art,
         )
-        if not self.pixmap.isNull():
-            visible = self.visibility.dark if self.is_dark else self.visibility.light
-            key = (self.pixmap.cacheKey(), self.theme_id, visible, self.builtin, self.pixel_art)
-            self._glass.prepare(
-                key, content.size().toSize(),
-                lambda p, r: paint_workspace_background(p, r, self.pixmap, self.is_dark, self.theme_id, visible, builtin=self.builtin, pixel_art=self.pixel_art),
-                self.is_dark, p, self.glass_blur,
-            )
-        sidebar = content.left()
-        painter.fillRect(QRectF(0, 0, sidebar, height), QColor(p.sidebar))
-        painter.fillRect(QRectF(sidebar - 1, 0, 1, height), QColor(p.divider))
-        paint_header_backdrop(
-            painter, QRectF(sidebar, 0, width - sidebar, HEADER_HEIGHT),
-            self.is_dark, self.theme_id,
+        key = (self.pixmap.cacheKey(), self.theme_id, visible, self.builtin, self.pixel_art, self.devicePixelRatioF())
+        self._glass.prepare(
+            key, self.viewport_size,
+            lambda p, r: paint_workspace_background(p, r, self.pixmap, dark, self.theme_id, visible, builtin=self.builtin, pixel_art=self.pixel_art),
+            dark, p, self.glass_blur, flat=self.pixmap.isNull(),
         )
-        painter.fillRect(QRectF(0, height - 36, width, 36), QColor(p.sidebar))
+        sidebar = 72 if width < 1120 else 208
+        content = QRectF(sidebar, HEADER_HEIGHT, width - sidebar, height - HEADER_HEIGHT - 36)
+        for rim in (QRectF(0, 0, sidebar, height - 36), QRectF(sidebar, 0, width - sidebar, HEADER_HEIGHT), QRectF(0, height - 36, width, 36)):
+            self._glass.paint(painter, rim, rim)
         font = QFont(painter.font())
         font.setPixelSize(14)
         painter.setFont(font)
@@ -230,14 +215,11 @@ class WorkspacePreview(QWidget):
             painter.drawText(rect, Qt.AlignLeft | Qt.AlignVCenter, label)
             painter.restore()
 
-        def card(rect, solid=False):
-            if not self.pixmap.isNull():
-                self._glass.paint(painter, rect, QRectF(rect).translated(-content.topLeft()))
+        def card(rect, glass=False):
+            if glass:
+                self._glass.paint(painter, rect, rect)
                 return
-            surface = QColor(p.surface)
-            if not solid and not self.pixmap.isNull():
-                surface.setAlpha(background_reading_alpha(p.surface, p.text, p.muted, p.active_text))
-            painter.setBrush(surface)
+            painter.setBrush(QColor(p.surface))
             painter.setPen(QPen(QColor(p.card_border), 1))
             painter.drawRoundedRect(rect, UI_METRICS.card_radius, UI_METRICS.card_radius)
 
@@ -256,10 +238,7 @@ class WorkspacePreview(QWidget):
                 text(QRectF(rect.left() + column * cell + 12, rect.top(), cell - 24, 40), label, muted=True, protected=False)
             for row, values in enumerate(rows):
                 row_rect = QRectF(rect.left(), rect.top() + 40 + row * 56, rect.width(), 56)
-                surface = QColor(p.surface)
-                if not self.pixmap.isNull():
-                    surface.setAlpha(background_reading_alpha(p.surface, p.text))
-                painter.fillRect(row_rect, surface)
+                painter.fillRect(row_rect, QColor(p.surface))
                 for column, label in enumerate(values):
                     text(QRectF(rect.left() + column * cell + 12, row_rect.top(), cell - 24, 56), label, protected=False)
 
@@ -315,11 +294,10 @@ class WorkspacePreview(QWidget):
             text(QRectF(settings.left() + padding, y + 224, settings.width() - padding * 2, 28), "高级设置    展开", bold=True)
             text(QRectF(settings.left() + padding, y + 256, settings.width() - padding * 2, 24), "HEVC · AAC 192kbps", muted=True)
         elif self.workspace == "live":
-            hero = QRectF(inner.left(), top, inner.width(), 96)
+            hero = QRectF(inner.left(), top, inner.width(), 72)
             card(hero)
-            text(QRectF(hero.left() + padding, top + 8, hero.width() - 2 * padding, 28), "添加直播间 · 应用运行时开播自动录制", bold=True)
-            control(QRectF(hero.left() + padding, top + 44, hero.width() - 152, 40), "直播间链接或房间号")
-            control(QRectF(hero.right() - 128, top + 44, 112, 40), "添加并监控", True)
+            control(QRectF(hero.left() + padding, top + 16, hero.width() - 152, 40), "直播间链接或房间号")
+            control(QRectF(hero.right() - 128, top + 16, 112, 40), "添加并监控", True)
             top = hero.bottom() + gap
             wide = inner.width() >= 880
             left_width = (inner.width() - gap) * .62 if wide else inner.width()

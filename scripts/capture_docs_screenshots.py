@@ -1127,7 +1127,7 @@ def _capture_builtin_backgrounds(app, theme, window, temp_root):
             window._settings_page.show_section(SettingsSection.APPEARANCE)
         window.show()
         _flush_events(app)
-        assert window._workspace_pages.property("mascotBackground")
+        assert window.property("mascotBackground")
         _save_widget(app, window, f"biliflow-background-{entry.id}-{mode}.png")
 
     for theme_id in ("star_trail", "bilibili_blue"):
@@ -1141,7 +1141,7 @@ def _capture_builtin_backgrounds(app, theme, window, temp_root):
                     window._show_workspace(page)
                     _flush_events(app)
                     assert window.size().width() == size[0] and window.size().height() == size[1]
-                    assert window._workspace_pages.property("mascotBackground")
+                    assert window.property("mascotBackground")
     theme.set_color_theme("bilibili_blue")
     theme.apply_theme(False)
     picker = window._settings_page._background_pickers["download"]
@@ -1627,7 +1627,7 @@ def _capture_glass(app, theme, window):
                     window._download_result_state = "待解析"
                     window._download_btn.setEnabled(False)
                     window._content_section.hide()
-                    window._empty_download.show()
+                    window._empty_download.setVisible(window.backdrop.image.isNull())
                     window._url_input.clear()
                     window._resolve_notice.set_message("")
                     window._refresh_download_summary()
@@ -1635,7 +1635,7 @@ def _capture_glass(app, theme, window):
                     window.show()
                     _flush_events(app)
                     hero = window._hero
-                    for control in (window._hero_title, window._url_input, window._resolve_btn, window._empty_download):
+                    for control in (window._url_input, window._resolve_btn):
                         assert hero.rect().contains(QRect(control.mapTo(hero, QPoint()), control.size()))
                     _save_widget(app, window, f"glass-{theme_id}-{source}-empty-{mode}-{width}.png")
                     _populate_main_window(window)
@@ -1646,7 +1646,7 @@ def _capture_glass(app, theme, window):
     (OUTPUT_DIR / "rendering-profile.json").write_text(json.dumps({
         "backend": app.platformName(), "qt": qVersion(), "dpr": screen.devicePixelRatio(),
         "physical_pixels": bool(app.property("capturePhysicalPixels")),
-        "material": "Qt wallpaper glass: cached blur, refraction rim and highlights; native text remains separate",
+        "material": "Qt liquid glass: one window crop, cached sampling, edge refraction and separate native text",
         "matrix": "2 palettes x 2 modes x 2 wallpaper sources x 3 sizes x 3 states",
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     _refresh_document_previews("glass")
