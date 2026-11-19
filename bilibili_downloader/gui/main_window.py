@@ -17,6 +17,7 @@ from PySide6.QtGui import (
     QDesktopServices,
     QIcon,
     QKeySequence,
+    QPainter,
 )
 from PySide6.QtWidgets import (
     QApplication,
@@ -104,6 +105,7 @@ from bilibili_downloader.gui.widgets.components import (
     PopupMenu,
     ResponsiveFields,
     SectionCard,
+    StarArt,
     WindowDragSurface,
     help_text,
     repolish,
@@ -125,7 +127,10 @@ from bilibili_downloader.gui.widgets.live_page import LivePage
 from bilibili_downloader.gui.widgets.pixel_mascot import MascotCard
 from bilibili_downloader.gui.widgets.task_page import TaskPage
 from bilibili_downloader.gui.widgets.video_info import VideoInfoWidget
-from bilibili_downloader.gui.widgets.workspace_background import WorkspaceStack
+from bilibili_downloader.gui.widgets.workspace_background import (
+    WindowBackdrop,
+    WorkspaceStack,
+)
 from bilibili_downloader.gui.window_chrome import WindowChrome
 from bilibili_downloader.utils.clipboard_sources import (
     ClipboardCandidate,
@@ -208,6 +213,7 @@ class MainWindow(QMainWindow):
         self._update_transaction = None
         self._update_helper = None
         self._provided_live_controller = live_controller
+        self.backdrop = WindowBackdrop(self)
         self._setup_ui()
         self._setup_menu()
         self._setup_status_bar()
@@ -289,22 +295,11 @@ class MainWindow(QMainWindow):
         brand_icon.setPixmap(QIcon(asset_path("app_icon.png")).pixmap(40, 40))
         brand_icon.setFixedSize(40, 40)
         brand.addWidget(brand_icon)
-        self._brand_copy = QWidget()
-        copy = QVBoxLayout(self._brand_copy)
-        copy.setContentsMargins(0, 0, 0, 0)
-        copy.setSpacing(2)
-        title = QLabel("BiliFlow")
-        title.setObjectName("BrandTitle")
-        caption = QLabel("星轨收藏站")
-        caption.setObjectName("SidebarCaption")
-        copy.addWidget(title)
-        copy.addWidget(caption)
+        self._brand_copy = QLabel("BiliFlow")
+        self._brand_copy.setObjectName("BrandTitle")
         brand.addWidget(self._brand_copy, 1)
         self._side_layout.addLayout(brand)
-        self._side_layout.addSpacing(16)
-        self._nav_caption = QLabel("工作区")
-        self._nav_caption.setObjectName("NavSection")
-        self._side_layout.addWidget(self._nav_caption)
+        self._side_layout.addSpacing(12)
         self._nav_buttons = []
         for index, (text, icon) in enumerate(
             (("视频下载", "download"), ("直播录制", "live"), ("任务中心", "tasks"))
@@ -348,7 +343,7 @@ class MainWindow(QMainWindow):
         self._workspace_shell_layout.setContentsMargins(0, 0, 0, 0)
         self._workspace_shell_layout.setSpacing(0)
         shell.addWidget(workspace, 1)
-        self._workspace_pages = WorkspaceStack()
+        self._workspace_pages = WorkspaceStack(backdrop=self.backdrop)
         self._workspace_shell_layout.addWidget(self._workspace_pages, 1)
         self._build_download_page()
         self._live_controller = self._provided_live_controller or LiveUiController(
@@ -434,15 +429,10 @@ class MainWindow(QMainWindow):
         self._workspace_layout.setContentsMargins(0, 0, 4, 0)
         self._workspace_layout.setSpacing(16)
         self._hero = HeroPanel()
-        self._hero.set_compact(True)
+        self._hero.set_compact(True, minimum_height=UI_METRICS.source_resolved_height)
         self._hero_layout = QVBoxLayout(self._hero)
         self._hero_layout.setContentsMargins(16, 16, 16, 16)
         self._hero_layout.setSpacing(10)
-        self._hero_title = QLabel("喜欢的这一集，留在身边。")
-        self._hero_title.setWordWrap(True)
-        self._hero_title.setObjectName("WelcomeTitle")
-        self._hero.setProperty("welcome", True)
-        self._hero_layout.addWidget(self._hero_title)
         row = QHBoxLayout()
         row.setSpacing(12)
         self._url_input = ChineseLineEdit()
@@ -459,18 +449,8 @@ class MainWindow(QMainWindow):
         self._workspace_layout.addWidget(self._hero)
         self._resolve_notice = Notice(callback=self._route_current_source)
         self._workspace_layout.addWidget(self._resolve_notice)
-        self._empty_download = QWidget()
-        empty_layout = QHBoxLayout(self._empty_download)
-        empty_layout.setContentsMargins(0, 0, 0, 0)
-        empty_hint = QLabel("解析后，选好画质和分 P，就能带回本地。")
-        empty_hint.setWordWrap(True)
-        empty_hint.setObjectName("MetaLabel")
-        empty_layout.addWidget(empty_hint, 1)
-        import_collection = QPushButton("导入收藏夹 / 合集 →")
-        import_collection.setObjectName("TextButton")
-        import_collection.clicked.connect(self._on_batch_clicked)
-        empty_layout.addWidget(import_collection)
-        self._hero_layout.addWidget(self._empty_download)
+        self._empty_download = StarArt(workspace="download")
+        self._workspace_layout.addWidget(self._empty_download, alignment=Qt.AlignHCenter)
         self._content_section = QWidget()
         self._content_layout = QVBoxLayout(self._content_section)
         self._content_layout.setContentsMargins(0, 0, 0, 0)
@@ -495,6 +475,7 @@ class MainWindow(QMainWindow):
         self._download_tabs.addTab(self._batch_page, "批量导入")
         self._source_surface = SectionCard()
         self._source_surface.setObjectName("DownloadSource")
+        self._source_surface.set_plain()
         self._source_surface.body.setContentsMargins(0, 0, 0, 0)
         self._source_surface.body.addWidget(self._download_tabs)
         self._output_sections = DownloadWorkspace(self._source_surface, self._configuration)
@@ -508,7 +489,7 @@ class MainWindow(QMainWindow):
             self._download_footers.addWidget(bar)
         layout.addWidget(self._download_footers)
         for card in (self._batch_page._input_card, self._batch_page._preview_card):
-            card.setProperty("sectionStyle", "plain")
+            card.set_plain()
         self._batch_page.selection.changed.connect(self._sync_download_presentation)
         self._sync_output_mode_controls()
         self._download_tabs.currentChanged.connect(self._sync_download_presentation)
@@ -619,7 +600,7 @@ class MainWindow(QMainWindow):
             )
         )
         self._extras_card = SectionCard("一起保存")
-        self._extras_card.setProperty("sectionStyle", "plain")
+        self._extras_card.set_plain()
         self._extras_card.body.addWidget(DownloadOptions(
             self._danmaku_check, self._subtitle_check, self._all_subtitles_check,
             self._cover_check, self._metadata_check,
@@ -675,11 +656,7 @@ class MainWindow(QMainWindow):
         welcome = self._current_video is None
         if welcome and self._resolve_btn.isEnabled():
             self._resolve_btn.setText("解析")
-        self._hero_title.setVisible(welcome)
-        self._empty_download.setVisible(welcome)
-        self._hero.setProperty("welcome", welcome)
-        self._hero.set_compact(not welcome, minimum_height=190 if welcome else UI_METRICS.source_resolved_height)
-        self._hero.update()
+        self._empty_download.setVisible(welcome and self.backdrop.image.isNull())
 
     def _refresh_download_summary(self, *_args):
         if not hasattr(self, "_download_hint"):
@@ -877,6 +854,14 @@ class MainWindow(QMainWindow):
             getattr(self._settings.appearance.background_visibility, workspace)
         )
         self._workspace_pages.set_glass_blur(self._settings.appearance.glass_blur)
+        self._empty_download.setVisible(self._current_video is None and self.backdrop.image.isNull())
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if hasattr(self, "backdrop"):
+            painter = QPainter(self)
+            self.backdrop.paint(painter)
+            painter.end()
 
     def _sync_workspace_actions(self):
         for index, action in enumerate(getattr(self, "_workspace_actions", ())):
@@ -1205,7 +1190,7 @@ class MainWindow(QMainWindow):
             48 if self._chrome.expanded and self._desktop_platform == "darwin" else 24,
             12 if compact else 16, 16,
         )
-        for widget in (self._brand_copy, self._nav_caption, self._mascot_card):
+        for widget in (self._brand_copy, self._mascot_card):
             widget.setVisible(not compact)
         for button in [*self._nav_buttons, self._settings_nav, self._mode_button, self._header_login]:
             button.set_compact(compact)
@@ -1813,10 +1798,6 @@ class MainWindow(QMainWindow):
 
         self._current_video = info
         self._resolve_btn.setText("重新解析")
-        self._hero_title.hide()
-        self._hero.setProperty("welcome", False)
-        self._hero_layout.setContentsMargins(16, 12, 16, 12)
-        self._hero.set_compact(True, minimum_height=UI_METRICS.source_resolved_height)
         self._download_result_state = "已解析"
         self._content_section.show()
         self._empty_download.hide()
@@ -1906,7 +1887,6 @@ class MainWindow(QMainWindow):
             self._task_repository.update(
                 download_id,
                 status=TaskStatus.QUEUED,
-                progress=0.0,
                 status_text="等待继续",
                 error=None,
                 speed_bytes_per_second=0,
@@ -2229,6 +2209,7 @@ class MainWindow(QMainWindow):
     def _on_download_metrics(self, download_id: int, speed: float, eta):
         if self._download_list.get_item(download_id) is None or download_id in self._download_list.removing_ids:
             return
+        self._download_list.update_transfer_metrics(download_id, speed, eta)
         self._task_repository.update(
             download_id,
             speed_bytes_per_second=max(0.0, speed),

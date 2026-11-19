@@ -239,8 +239,8 @@ def test_missing_resource_falls_back_without_erasing_saved_reference(
     window._settings.appearance.backgrounds.download = entry.reference
     monkeypatch.setattr(main_window, "background_path", lambda *_args: None)
     window._refresh_workspace_background()
-    assert window._workspace_pages._background.isNull()
-    assert not window._workspace_pages.property("mascotBackground")
+    assert window.backdrop.image.isNull()
+    assert not window.property("mascotBackground")
     assert window._settings.appearance.backgrounds.download == entry.reference
 
 
@@ -356,21 +356,22 @@ def test_builtin_surfaces_and_three_window_sizes(
             window._show_workspace(page)
             flush()
             assert (window.width(), window.height()) == (width, height)
-            assert window._workspace_pages.property("mascotBackground")
-    card = window._settings_page._background_cards[0]
-    image = card.grab().toImage()
-    assert image.pixelColor(
-        round((card.width() - 24) * image.devicePixelRatio()),
+            assert window.property("mascotBackground")
+    form = window._settings_page.tabs.currentWidget()
+    image = form.grab().toImage()
+    builtin_pixel = image.pixelColor(
+        round(13 * image.devicePixelRatio()),
         round(20 * image.devicePixelRatio()),
-    ) != QColor(colors.surface)
+    )
+    assert builtin_pixel != QColor(colors.surface)
     custom = prepare_background(local_image(tmp_path / "plain.png"))
     window._background_store.install(custom)
     window._settings.appearance.backgrounds.settings = custom.reference
     window._refresh_workspace_background()
     flush()
-    image = card.grab().toImage()
+    image = form.grab().toImage()
     assert image.pixelColor(
-        round((card.width() - 24) * image.devicePixelRatio()),
+        round(13 * image.devicePixelRatio()),
         round(20 * image.devicePixelRatio()),
-    ) != QColor(colors.surface)
+    ) != builtin_pixel
     theme.deleteLater()

@@ -74,6 +74,8 @@
 
 ## 下载与安装
 
+**`v0.9.0b1` 预发布版**带来整窗壁纸、分层液态玻璃、融入标题栏的 Windows 窗口按钮、更清晰的下载阶段与更小的发布包。已安装的用户可通过「更新最新版」通道获取。[下载 0.9.0 Beta 1](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.9.0b1) · [更新日志](CHANGELOG.md#v090b1---2026-11-19)
+
 **`v0.8.13` 正式版：** 修复海外 CDN 下载与续传的 HTTP 403 问题，完整流校验通过后才记录完成；保留字幕核验、4:3 显示副本与收藏工作台。[下载正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.13) · [验证记录](docs/BUILDING.md)。正式版与包含 beta 的通道均可升级。
 
 包含文件复用、独立附件补全、严格规格匹配、队列与批量搜索、自选分 P、网络失败自动重试，以及媒体核验和目录批量重新定位。已有设置和任务快照继续生效；跨搜索保留勾选并显示筛选外数量，结果区分媒体／规格／附件，命名字段支持中文搜索。[使用说明](docs/USER_GUIDE.md#下载与归档优化) · [流程精修验收](docs/WORKFLOW_POLISH_VALIDATION.md)。

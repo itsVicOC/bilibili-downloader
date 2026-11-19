@@ -71,7 +71,7 @@ class WorkflowDialog(AppDialog):
         prepare_dialog(self)
     def showEvent(self, event):
         for group in self.content.findChildren(SectionCard):
-            group.setProperty("sectionStyle", "plain")
+            group.set_plain()
             repolish(group)
         super().showEvent(event)
 

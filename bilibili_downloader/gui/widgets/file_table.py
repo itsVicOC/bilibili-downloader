@@ -3,6 +3,7 @@
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal
 from PySide6.QtWidgets import QTableView
 
+from bilibili_downloader.gui.widgets.glass_surface import ItemViewSurface
 from bilibili_downloader.gui.widgets.row_hover import RowDelegate, RowHover
 
 
@@ -104,6 +105,7 @@ class FileTable(QTableView):
         super().__init__(parent)
         self._cells = {}
         self.setModel(_FileModel(self))
+        self._reading_surface = ItemViewSurface(self)
         self._row_hover = RowHover(self)
         self.setItemDelegate(RowDelegate(self))
         self.verticalHeader().geometriesChanged.connect(self._row_hover.schedule)

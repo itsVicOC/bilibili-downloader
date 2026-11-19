@@ -35,14 +35,22 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
 from bilibili_downloader.gui.layout_policy import path_preferred_width
-from bilibili_downloader.gui.resources.styles import UI_METRICS, theme_palette
-from bilibili_downloader.gui.widgets.dialog_shell import prepare_dialog, remember_focus
-from bilibili_downloader.gui.widgets.glass_surface import GlassFrame
-from bilibili_downloader.gui.widgets.header_backdrop import (
-    HEADER_HEIGHT,
-    paint_header_backdrop,
+from bilibili_downloader.gui.resources.paths import background_path
+from bilibili_downloader.gui.resources.styles import (
+    UI_METRICS,
+    theme_palette,
+    wallpaper_palette,
 )
+from bilibili_downloader.gui.widgets.background_readability import wallpaper_active
+from bilibili_downloader.gui.widgets.dialog_shell import (
+    paint_dialog_glass,
+    prepare_dialog,
+    remember_focus,
+)
+from bilibili_downloader.gui.widgets.glass_surface import GlassFrame
+from bilibili_downloader.gui.widgets.header_backdrop import HEADER_HEIGHT
 from bilibili_downloader.gui.widgets.motion import StateTransition
 from bilibili_downloader.gui.widgets.popup_menu import PopupMenu as PopupMenu
 from bilibili_downloader.gui.widgets.responsive_actions import (
@@ -69,12 +77,16 @@ _ICON_PATHS = {
 }
 
 
-def palette():
+def palette(widget=None):
     app = QApplication.instance()
-    return theme_palette(
-        bool(app and app.property("darkTheme")),
+    dark = bool(app and app.property("darkTheme"))
+    colors = theme_palette(
+        dark,
         app.property("colorTheme") if app else "star_trail",
     )
+    if widget is not None and wallpaper_active(widget):
+        return wallpaper_palette(colors, dark, clear=not widget.property("readingView"))
+    return colors
 
 
 def line_icon(name, color=None, size=24):
@@ -232,7 +244,8 @@ class ActionBar(GlassFrame):
     """A stable, readable surface for workspace confirmation actions."""
 
     def __init__(self, parent=None, *, compact=False):
-        super().__init__(parent)
+        super().__init__(parent, glass=True)
+        self.setProperty("clearGlass", True)
         self.setObjectName("ActionBar")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self._base_height = UI_METRICS.settings_bar_height if compact else 72
@@ -448,8 +461,11 @@ class OutputActionBar(ActionBar):
         self.setFixedHeight(max(self._base_height, height if height >= 0 else self.row.sizeHint().height()))
 
 
-class WindowDragSurface(QFrame):
+class WindowDragSurface(GlassFrame):
     """Move the native window from unused chrome, leaving controls interactive."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent, glass=True)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton and self.window().windowHandle():
@@ -470,6 +486,7 @@ class WindowDragSurface(QFrame):
 class PageHeader(WindowDragSurface):
     def __init__(self, title, caption, parent=None):
         super().__init__(parent)
+        self.setProperty("clearGlass", True)
         self.setObjectName("PageHeader")
         self.setAccessibleName(title)
         self.setAccessibleDescription(caption)
@@ -493,21 +510,9 @@ class PageHeader(WindowDragSurface):
         self.layout().setContentsMargins(max(24, left - sidebar_width), top, right, bottom)
         self.update()
 
-    def paintEvent(self, event):
-        super().paintEvent(event)
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        app = QApplication.instance()
-        paint_header_backdrop(
-            painter, self.rect(), bool(app.property("darkTheme")),
-            app.property("colorTheme"),
-        )
-        painter.end()
-
-
 class SectionCard(GlassFrame):
-    def __init__(self, title="", parent=None):
-        super().__init__(parent)
+    def __init__(self, title="", parent=None, *, glass=False):
+        super().__init__(parent, glass=glass, reading=not glass)
         self.setObjectName("SectionCard")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.body = QVBoxLayout(self)
@@ -522,6 +527,10 @@ class SectionCard(GlassFrame):
         self.header.addStretch()
         if title:
             self.body.addLayout(self.header)
+
+    def set_plain(self):
+        self.setProperty("readingSurface", False)
+        self.setProperty("sectionStyle", "plain")
 
 
 class CollapsibleSection(SectionCard):
@@ -573,7 +582,8 @@ class CommandBar(GlassFrame):
     """Keep filters before actions in visual and keyboard order when wrapped."""
 
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__(parent, glass=True)
+        self.setProperty("clearGlass", True)
         self.setObjectName("ToolSurface")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self._grid = QGridLayout(self)
@@ -875,6 +885,10 @@ class MessageBox(QMessageBox):
         super().showEvent(event)
         self._layout_reading_area()
 
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        paint_dialog_glass(self)
+
     def _layout_reading_area(self):
         if not hasattr(self, "reading_area"):
             return
@@ -953,14 +967,33 @@ class Notice(QFrame):
 class StarArt(QWidget):
     """Small scalable brand illustration for all empty states."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, workspace=None):
         super().__init__(parent)
-        self.setFixedSize(112, 72)
+        entry = next((item for item in BUILTIN_BACKGROUNDS if item.workspace == workspace and item.style == "anime"), None)
+        path = background_path(entry.reference, thumbnail=True) if entry is not None else None
+        self.art = QPixmap(str(path)) if path is not None else QPixmap()
+        self.setFixedSize(QSize(112, 72) if self.art.isNull() else QSize(176, 99))
+        self.setFocusPolicy(Qt.NoFocus)
 
     def paintEvent(self, event):
+        if not self.art.isNull() and wallpaper_active(self):
+            return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         p = palette()
+        if not self.art.isNull():
+            frame = QRectF(self.rect()).adjusted(.5, .5, -.5, -.5)
+            clip = QPainterPath()
+            clip.addRoundedRect(frame, 16, 16)
+            painter.save()
+            painter.setClipPath(clip)
+            painter.setRenderHint(QPainter.SmoothPixmapTransform)
+            painter.drawPixmap(frame, self.art, QRectF(self.art.rect()))
+            painter.restore()
+            painter.setPen(QPen(QColor(p.card_border), 1))
+            painter.drawPath(clip)
+            painter.end()
+            return
         painter.setPen(QPen(QColor(p.border), 1))
         painter.drawEllipse(8, 20, 96, 30)
         painter.setPen(QPen(QColor(p.accent), 1.5))
@@ -998,22 +1031,22 @@ class InlineNotice(QWidget):
 
 
 class EmptyState(QWidget):
-    def __init__(self, title, description, action="", callback=None, parent=None):
+    def __init__(self, title, description="", action="", callback=None, parent=None, *, workspace=None):
         super().__init__(parent)
         column = QVBoxLayout(self)
         column.setContentsMargins(20, 20, 20, 20)
         column.setSpacing(8)
         column.addStretch()
-        column.addWidget(StarArt(), alignment=Qt.AlignCenter)
-        title_label = QLabel(title)
-        title_label.setObjectName("SectionTitle")
-        title_label.setAlignment(Qt.AlignCenter)
-        column.addWidget(title_label)
-        desc = QLabel(description)
-        desc.setObjectName("MetaLabel")
-        desc.setWordWrap(True)
-        desc.setAlignment(Qt.AlignCenter)
-        column.addWidget(desc)
+        column.addWidget(StarArt(workspace=workspace), alignment=Qt.AlignCenter)
+        if title:
+            title_label = QLabel(title)
+            title_label.setObjectName("SectionTitle")
+            title_label.setAlignment(Qt.AlignCenter)
+            column.addWidget(title_label)
+        if description:
+            desc = help_text(description)
+            desc.setAlignment(Qt.AlignCenter)
+            column.addWidget(desc)
         if action:
             button = QPushButton(action)
             button.setObjectName("SubtleButton")

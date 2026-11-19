@@ -12,9 +12,11 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QLineEdit,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
     QSpinBox,
     QTabWidget,
     QVBoxLayout,
@@ -42,7 +44,10 @@ from bilibili_downloader.gui.dialogs.file_picker import file_picker
 from bilibili_downloader.gui.resources.paths import background_path
 from bilibili_downloader.gui.resources.styles import UI_METRICS
 from bilibili_downloader.gui.settings_sections import APPEARANCE_MODES, SettingsSection
-from bilibili_downloader.gui.widgets.appearance_preview import ThemePreviewButton
+from bilibili_downloader.gui.widgets.appearance_preview import (
+    ThemePreviewButton,
+    WorkspacePreview,
+)
 from bilibili_downloader.gui.widgets.background_effects import GlassBlurControl
 from bilibili_downloader.gui.widgets.background_picker import BackgroundPicker
 from bilibili_downloader.gui.widgets.check_box import CheckBox
@@ -67,7 +72,8 @@ from bilibili_downloader.gui.widgets.download_options import (
     DownloadOptionCard,
     DownloadOptions,
 )
-from bilibili_downloader.gui.widgets.workspace_background import WorkspaceStack
+from bilibili_downloader.gui.widgets.glass_surface import ScrollAreaSurface
+from bilibili_downloader.gui.widgets.workspace_background import background_pixmap
 from bilibili_downloader.utils.validators import render_path_template
 
 NAMING_FIELDS = {
@@ -206,14 +212,14 @@ class SettingsDialog(AppDialog):
                 ("工具与存储", SettingsSection.TOOLS), ("关于与更新", SettingsSection.ABOUT),
             )
         ]
-        paths = SectionCard("保存位置")
+        paths = SectionCard()
         self._output_dir = _LeadingPathLineEdit()
         self._controls["output_dir"] = self._output_dir
         self._field(
             "output_dir", paths, "保存目录", self._path_row(self._output_dir, True)
         )
         download.addWidget(paths)
-        recognition = SectionCard("来源识别")
+        recognition = SectionCard()
         self._clipboard_check = CheckBox("前台识别 B 站剪贴板内容")
         self._controls["clipboard_monitor_enabled"] = self._clipboard_check
         recognition.body.addWidget(self._clipboard_check)
@@ -254,6 +260,9 @@ class SettingsDialog(AppDialog):
         self._concurrency_down.setToolTip("减少并发数")
         self._concurrency_up.setToolTip("增加并发数")
         format_fields = ResponsiveFields(column_width=430)
+        # A two-column grid must be able to shrink before it can stack again.
+        format_fields.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        format_fields.layout().setSizeConstraint(QLayout.SetNoConstraint)
         for key in ("default_output_mode", "default_quality", "default_video_codec",
                     "default_audio_quality", "max_concurrent_downloads"):
             row = self._field_rows[key]
@@ -443,11 +452,7 @@ class SettingsDialog(AppDialog):
         clear.clicked.connect(self.cache_requested.emit)
         storage.body.addWidget(clear, alignment=Qt.AlignLeft)
         tools.addWidget(storage)
-        identity = SectionCard("BiliFlow · 星轨收藏站")
-        description = QLabel("视频下载、批量导入、直播录制，本地收藏工作台。")
-        description.setWordWrap(True)
-        description.setObjectName("MetaLabel")
-        identity.body.addWidget(description)
+        identity = SectionCard("BiliFlow")
         update_card = SectionCard("软件更新")
         version = QLabel(f"当前版本：v{__version__}")
         version.setObjectName("MetaLabel")
@@ -494,7 +499,7 @@ class SettingsDialog(AppDialog):
         update_card.body.addWidget(release_page, alignment=Qt.AlignLeft)
         updates.addWidget(update_card)
         updates.addWidget(identity)
-        mode_card = SectionCard("显示模式 · 立即生效")
+        mode_card = SectionCard("显示模式")
         self._mode_buttons = QButtonGroup(self)
         modes = QHBoxLayout()
         for index, (label, mode) in enumerate(APPEARANCE_MODES):
@@ -521,7 +526,7 @@ class SettingsDialog(AppDialog):
                  ("彻底退出", WindowCloseAction.QUIT)],
             )
             appearance.addWidget(window_card)
-        theme = SectionCard("应用配色 · 保存后生效")
+        theme = SectionCard("配色")
         self._theme_combo = self._combo(
             "appearance.theme", theme, "主题",
             [("星河", "star_trail"), ("晴海", "bilibili_blue")],
@@ -542,23 +547,17 @@ class SettingsDialog(AppDialog):
         self._theme_combo.currentIndexChanged.connect(self._sync_appearance_preview)
         theme.body.addLayout(previews)
         appearance.addWidget(theme)
-        glass = SectionCard("玻璃效果 · 保存后生效")
+        glass = SectionCard()
         self._glass_card = glass
         self._glass_blur = GlassBlurControl()
         self._controls["appearance.glass_blur"] = self._glass_blur
         glass.body.addWidget(self._glass_blur)
-        self._glass_preview = WorkspaceStack()
-        self._glass_preview.setFixedHeight(160)
-        example_page = QWidget()
-        example_layout = QVBoxLayout(example_page)
-        example_layout.setContentsMargins(16, 16, 16, 16)
-        example_card = SectionCard("玻璃效果预览")
-        example_layout.addWidget(example_card)
-        example_layout.addStretch()
-        self._glass_preview.addWidget(example_page)
-        self._glass_preview.set_background(background_path(BUILTIN_BACKGROUNDS[0].reference), builtin=True)
+        sample = background_path(BUILTIN_BACKGROUNDS[0].reference, thumbnail=True)
+        self._glass_preview = WorkspacePreview("视频下载", background_pixmap(sample), "star_trail", builtin=True)
+        self._glass_preview.setAccessibleName("整窗液态玻璃效果预览")
+        self._glass_preview.setFixedHeight(180)
         glass.body.addWidget(self._glass_preview)
-        self._glass_blur.setToolTip("应用于所有工作区的图片背景。")
+        self._glass_blur.setToolTip("影响液态玻璃中底图的清晰度，保存后应用")
         self._glass_blur.valueChanged.connect(self._sync_glass_blur)
         appearance.addWidget(glass)
         self._background_grid = QGridLayout()
@@ -574,12 +573,10 @@ class SettingsDialog(AppDialog):
             self._background_cards.append(card)
             self._background_pickers[workspace] = picker
         self._layout_background_cards()
-        appearance.addWidget(help_text("背景保存后生效，四个页面独立设置。支持小流图库、PNG / JPEG / WebP 及深浅模式可见度调节。"))
         for column in (download, live, tools, updates, appearance):
             for card in column.parentWidget().findChildren(SectionCard):
-                if not self._glass_preview.isAncestorOf(card):
-                    card.setProperty("sectionStyle", "plain")
-                    card.body.setContentsMargins(0, 12, 0, 12)
+                card.set_plain()
+                card.body.setContentsMargins(0, 12, 0, 12)
             column.addStretch()
         self._notice = Notice()
         layout.addWidget(self._notice)
@@ -619,10 +616,13 @@ class SettingsDialog(AppDialog):
             button.setChecked(True)
         for picker in self._background_pickers.values():
             picker.set_theme(self._theme_combo.currentData())
+        self._glass_preview.theme_id = self._theme_combo.currentData()
+        self._glass_preview.update()
 
     def _sync_glass_blur(self, *_args):
         value = self._glass_blur.value()
-        self._glass_preview.set_glass_blur(value)
+        self._glass_preview.glass_blur = value
+        self._glass_preview.update()
         for picker in self._background_pickers.values():
             picker.set_glass_blur(value)
 
@@ -701,10 +701,13 @@ class SettingsDialog(AppDialog):
         wrapper.setContentsMargins(0, 0, 4, 0)
         form = SectionCard()
         form.setObjectName("SettingsForm")
+        form.setProperty("readingSurface", False)
         wrapper.addWidget(form)
         column = form.body
         column.setSpacing(20)
-        self._sections[section] = self.tabs.addTab(scroll_area(body), name)
+        scroll = scroll_area(body)
+        scroll._reading_surface = ScrollAreaSurface(scroll)
+        self._sections[section] = self.tabs.addTab(scroll, name)
         return column
 
     def show_section(self, section):

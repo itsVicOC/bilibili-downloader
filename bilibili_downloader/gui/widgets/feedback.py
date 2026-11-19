@@ -3,10 +3,14 @@
 from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QPushButton, QStatusBar
 
+from bilibili_downloader.gui.widgets.glass_surface import paint_widget_glass
+
 
 class FeedbackBar(QStatusBar):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setProperty("glassSurface", True)
+        self.setProperty("clearGlass", True)
         self.setFixedHeight(36)
         self._callback = None
         self.action = QPushButton()
@@ -43,3 +47,7 @@ class FeedbackBar(QStatusBar):
         if event.type() in (QEvent.FontChange, QEvent.StyleChange) and hasattr(self, "action"):
             self.setFixedHeight(max(36, self.fontMetrics().height() + 16))
             self.action.setFixedHeight(max(32, self.action.fontMetrics().height() + 12))
+
+    def paintEvent(self, event):
+        paint_widget_glass(self)
+        super().paintEvent(event)

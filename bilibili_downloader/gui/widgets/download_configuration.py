@@ -78,7 +78,7 @@ class DownloadConfiguration(SectionCard):
         self.fields = ResponsiveFields(column_width=280)
         self.fields_layout.addWidget(self.fields)
         self.advanced = CollapsibleSection("高级设置")
-        self.advanced.setProperty("sectionStyle", "plain")
+        self.advanced.set_plain()
         self.advanced_summary = ElidedLabel()
         self.advanced_summary.setObjectName("MetaLabel")
         # The summary remains visible when advanced controls are collapsed.

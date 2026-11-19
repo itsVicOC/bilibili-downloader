@@ -46,26 +46,30 @@ class BackgroundReadability(QObject):
     menus and ordinary theme surfaces retain their native appearance.
     """
 
-    def __init__(self, stack):
-        super().__init__(stack)
-        self.stack = stack
+    def __init__(self, host):
+        super().__init__(host)
         QApplication.instance().installEventFilter(self)
 
     def eventFilter(self, widget, event):
-        if event.type() != QEvent.Paint or not self.stack.property("customBackground"):
+        if event.type() != QEvent.Paint:
+            return False
+        host = self.parent()
+        if not host.property("customBackground"):
             return False
         if not isinstance(widget, (QLabel, QCheckBox, QPushButton)):
             return False
         if widget.objectName() == "DownloadOptionCard":
             return False
-        if widget.window() != self.stack.window() or not self.stack.isAncestorOf(widget):
+        if widget.window() != host.window() or not host.isAncestorOf(widget):
             return False
         text = widget.text()
         if not text or (isinstance(widget, QLabel) and not widget.pixmap().isNull()):
             return False
         current = widget
-        while current != self.stack:
-            if current.objectName() in {
+        while current != host:
+            if current.property("glassSurface") or current.property("readingSurface"):
+                return False
+            if current.property("sectionStyle") != "plain" and current.objectName() in {
                 "ActionBar", "OutputActionBar", "ToolSurface", "Notice", "StatusBadge",
                 "StatusPill", "EmptyCover", "LoginInstructions", "WarningBanner",
                 "Panel", "SectionCard", "ControlPanel", "SettingsSection", "HeroPanel",

@@ -71,7 +71,6 @@ from bilibili_downloader.gui.dialogs.update_dialog import UpdateDialog
 from bilibili_downloader.gui.live_controller import LiveUiController
 from bilibili_downloader.gui.main_window import MainWindow
 from bilibili_downloader.gui.resources.paths import asset_path
-from bilibili_downloader.gui.resources.styles import theme_palette
 from bilibili_downloader.gui.resources.theme import ThemeManager
 from bilibili_downloader.gui.settings_sections import SettingsSection
 from bilibili_downloader.gui.widgets.components import ElidedLabel
@@ -1127,7 +1126,7 @@ def _capture_builtin_backgrounds(app, theme, window, temp_root):
             window._settings_page.show_section(SettingsSection.APPEARANCE)
         window.show()
         _flush_events(app)
-        assert window._workspace_pages.property("mascotBackground")
+        assert window.property("mascotBackground")
         _save_widget(app, window, f"biliflow-background-{entry.id}-{mode}.png")
 
     for theme_id in ("star_trail", "bilibili_blue"):
@@ -1141,7 +1140,7 @@ def _capture_builtin_backgrounds(app, theme, window, temp_root):
                     window._show_workspace(page)
                     _flush_events(app)
                     assert window.size().width() == size[0] and window.size().height() == size[1]
-                    assert window._workspace_pages.property("mascotBackground")
+                    assert window.property("mascotBackground")
     theme.set_color_theme("bilibili_blue")
     theme.apply_theme(False)
     picker = window._settings_page._background_pickers["download"]
@@ -1522,17 +1521,41 @@ def _capture_interactions(app, theme, window):
         controller.dispose()
 
 
+def _grab_windows_client(window):
+    """Crop compositor pixels using the Win32 client origin at fractional DPI."""
+    from ctypes import byref, wintypes
+
+    native = window._chrome._native
+    point, rect = wintypes.POINT(), wintypes.RECT()
+    monitor = native._monitor_info()
+    if (monitor is None or not native.user32.ClientToScreen(native.hwnd, byref(point))
+            or not native.user32.GetClientRect(native.hwnd, byref(rect))):
+        raise RuntimeError("Cannot determine the Windows client bounds")
+    image = window.screen().grabWindow(0).toImage().copy(QRect(
+        point.x - monitor.monitor.left, point.y - monitor.monitor.top,
+        rect.right - rect.left, rect.bottom - rect.top,
+    ))
+    image.setDevicePixelRatio(window.devicePixelRatioF())
+    return image
+
+
 def _capture_native_chrome(app, theme, window):
     """Capture the desktop compositor, including the native frame boundaries.
 
     QWidget.grab() alone cannot catch a reappearing system titlebar or frame.
     Use only offline fixtures, and record the actual desktop/backend/DPI.
     """
+    from PySide6.QtGui import QCursor
     from PySide6.QtTest import QTest
+
+    from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
+    from bilibili_downloader.gui.resources.styles import contrast_ratio
 
     if app.platformName() not in ("windows", "cocoa"):
         raise RuntimeError("Chrome checks require a native desktop backend")
     checks = []
+    window._settings.appearance.backgrounds.download = BUILTIN_BACKGROUNDS[0].reference
+    window._refresh_workspace_background()
     window.resize(900, 640)
     window.move(window.screen().availableGeometry().topLeft() + QPoint(24, 40))
     for dark in (False, True):
@@ -1557,39 +1580,46 @@ def _capture_native_chrome(app, theme, window):
             handle = window.windowHandle()
             frame = window.frameGeometry()
             screen = window.screen()
-            pixmap = screen.grabWindow(0, *frame.getRect())
-            if pixmap.isNull():
+            controls = window._chrome.controls
+            if controls is not None:
+                QCursor.setPos(window.mapToGlobal(QPoint(300, 200)))
+                controls.hide()
+                reference = window.grab().toImage()
+                controls.show()
+                controls.reset()
+                QTest.qWait(100)
+            image = _grab_windows_client(window) if controls is not None else screen.grabWindow(0, *frame.getRect()).toImage()
+            if image.isNull():
                 raise AssertionError("Native frame capture is unavailable")
             filename = f"chrome-{mode}-{name}.png"
-            pixmap.save(str(OUTPUT_DIR / filename))
+            image.save(str(OUTPUT_DIR / filename))
             if sys.platform == "win32":
                 assert handle.flags() & Qt.FramelessWindowHint
                 assert not handle.flags() & Qt.ExpandedClientAreaHint
                 assert not handle.icon().isNull()
                 # The sidebar starts its brand below y=24. This previously
                 # empty strip contained the duplicate 16px caption icon.
-                origin = window.mapToGlobal(QPoint(12, 6)) - frame.topLeft()
-                dpr = pixmap.devicePixelRatio()
-                image = pixmap.toImage()
-                expected = theme_palette(dark, theme.theme_id).sidebar
-                sample = QColor(expected)
-                colors = [
-                    image.pixelColor(round((origin.x() + x) * dpr), round((origin.y() + y) * dpr))
-                    for x in range(48) for y in range(12)
-                ]
+                dpr = image.devicePixelRatio()
+
+                def painted(point):
+                    return image.pixelColor(round(point.x() * dpr), round(point.y() * dpr))
+
+                def backing(point):
+                    scale = reference.devicePixelRatio()
+                    return reference.pixelColor(round(point.x() * scale), round(point.y() * scale))
+
+                def matches(point):
+                    return max(abs(a - b) for a, b in zip(painted(point).getRgb()[:3], backing(point).getRgb()[:3])) <= 3
+
+                samples = [QPoint(x, y) for x in range(12, 60) for y in range(6, 18)]
                 matching = sum(
-                    max(abs(color.red() - sample.red()), abs(color.green() - sample.green()),
-                        abs(color.blue() - sample.blue())) <= 3 for color in colors
+                    matches(point) for point in samples
                 )
-                assert matching / len(colors) >= 0.98, "Duplicate native caption is visible over the sidebar"
-                buttons = window.mapToGlobal(QPoint(window.width() - 144, 6)) - frame.topLeft()
-                glyph_pixels = sum(
-                    (image.pixelColor(round((buttons.x() + x) * dpr), round((buttons.y() + y) * dpr)).lightness() > 200)
-                    if dark else
-                    (image.pixelColor(round((buttons.x() + x) * dpr), round((buttons.y() + y) * dpr)).lightness() < 70)
-                    for x in range(136) for y in range(20)
-                )
-                assert glyph_pixels >= 8, "Caption buttons do not contrast with the selected appearance mode"
+                assert matching / len(samples) >= 0.98, "Duplicate native caption is visible over the sidebar"
+                for button in controls.buttons.values():
+                    assert all(matches(button.mapTo(window, QPoint(x, 16))) for x in (2, 8, 35, 43))
+                    glyph = [button.mapTo(window, QPoint(x, y)) for x in range(15, 31) for y in range(9, 24)]
+                    assert sum(contrast_ratio(painted(point).name(), backing(point).name()) >= 3 for point in glyph) >= 4
             checks.append({
                 "mode": mode, "state": name, "image": filename,
                 "frame": frame.getRect(), "client": window.geometry().getRect(),
@@ -1627,7 +1657,7 @@ def _capture_glass(app, theme, window):
                     window._download_result_state = "待解析"
                     window._download_btn.setEnabled(False)
                     window._content_section.hide()
-                    window._empty_download.show()
+                    window._empty_download.setVisible(window.backdrop.image.isNull())
                     window._url_input.clear()
                     window._resolve_notice.set_message("")
                     window._refresh_download_summary()
@@ -1635,7 +1665,7 @@ def _capture_glass(app, theme, window):
                     window.show()
                     _flush_events(app)
                     hero = window._hero
-                    for control in (window._hero_title, window._url_input, window._resolve_btn, window._empty_download):
+                    for control in (window._url_input, window._resolve_btn):
                         assert hero.rect().contains(QRect(control.mapTo(hero, QPoint()), control.size()))
                     _save_widget(app, window, f"glass-{theme_id}-{source}-empty-{mode}-{width}.png")
                     _populate_main_window(window)
@@ -1646,7 +1676,7 @@ def _capture_glass(app, theme, window):
     (OUTPUT_DIR / "rendering-profile.json").write_text(json.dumps({
         "backend": app.platformName(), "qt": qVersion(), "dpr": screen.devicePixelRatio(),
         "physical_pixels": bool(app.property("capturePhysicalPixels")),
-        "material": "Qt wallpaper glass: cached blur, refraction rim and highlights; native text remains separate",
+        "material": "Qt liquid glass: one window crop, cached sampling, edge refraction and separate native text",
         "matrix": "2 palettes x 2 modes x 2 wallpaper sources x 3 sizes x 3 states",
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     _refresh_document_previews("glass")

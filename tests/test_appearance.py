@@ -237,7 +237,7 @@ def test_save_failure_preserves_background_and_draft(
     assert not window._save_settings()
     assert window._settings.appearance.backgrounds.download == old.reference
     assert window._settings_page.dirty
-    assert window._workspace_pages.property("customBackground")
+    assert window.property("customBackground")
     assert window._background_store.path(old.reference) is not None
 
 
@@ -254,14 +254,14 @@ def test_saved_appearance_applies_without_recreating_workspaces(
         lambda: all(not picker.busy for picker in panel._background_pickers.values())
     )
     panel._theme_combo.setCurrentIndex(1)
-    assert not pages.property("customBackground")
+    assert not window.property("customBackground")
     assert window._save_settings()
     assert window._theme_manager.theme_id == "bilibili_blue"
     assert not panel.dirty
     source.unlink()
     for index in range(4):
         window._show_workspace(index)
-        assert pages.property("customBackground")
+        assert window.property("customBackground")
     assert pages is window._workspace_pages
     assert service is window._live_controller.service
     panel._background_pickers["download"].set_reference("")
@@ -297,14 +297,14 @@ def test_each_workspace_uses_its_own_image_and_handles_corruption(workspace, tmp
     for index, color in enumerate(colors):
         window._show_workspace(index)
         assert (
-            window._workspace_pages._background.toImage().pixelColor(0, 0).name()
+            window.backdrop.image.toImage().pixelColor(0, 0).name()
             == color
         )
     reference = window._settings.appearance.backgrounds.download
     window._background_store.path(reference).write_bytes(b"broken")
     window._settings_page.load_settings(window._settings)
     window._show_workspace(0)
-    assert not window._workspace_pages.property("customBackground")
+    assert not window.property("customBackground")
     assert (
         "丢失或损坏"
         in window._settings_page._background_pickers["download"].status.text()
@@ -467,12 +467,12 @@ def test_full_settings_page_reveals_fixed_workspace_background(
         )
 
     def assert_backdrop(points):
-        actual = stack.grab().toImage()
+        actual = window.grab().toImage()
         expected = QImage(actual.size(), QImage.Format_ARGB32_Premultiplied)
         expected.setDevicePixelRatio(actual.devicePixelRatio())
         painter = QPainter(expected)
         paint_workspace_background(
-            painter, stack.rect(), stack._background, dark, theme_id, percent
+            painter, window.rect(), window.backdrop.image, dark, theme_id, percent
         )
         painter.end()
         for point in points:
@@ -494,28 +494,26 @@ def test_full_settings_page_reveals_fixed_workspace_background(
             for index in range(4):
                 window._show_workspace(index)
                 QApplication.processEvents()
-                assert_backdrop([QPoint(8, 80)])
+                assert_backdrop([stack.mapTo(window, QPoint(8, 80))])
             assert panel.property("embedded") is True
             for index in range(panel.tabs.count()):
                 panel.tabs.setCurrentIndex(index)
                 QApplication.processEvents()
                 scroll = panel.tabs.widget(index)
-                viewport = scroll.viewport()
                 for offset in (0, scroll.verticalScrollBar().maximum()):
                     scroll.verticalScrollBar().setValue(offset)
                     QApplication.processEvents()
                     assert_backdrop([
-                        panel.mapTo(stack, QPoint(panel.width() - 8, 8)),
-                        viewport.mapTo(stack, QPoint(viewport.width() - 2, viewport.height() // 2)),
+                        panel.mapTo(window, QPoint(panel.width() - 8, 8)),
+                        scroll.mapTo(window, QPoint(1, 1)),
+                        scroll.mapTo(window, QPoint(scroll.width() - 2, scroll.height() - 2)),
                     ])
                 scroll.verticalScrollBar().setValue(0)
                 QApplication.processEvents()
-                card = scroll.widget().layout().itemAt(0).widget()
-                # Decorative card space reveals the image; controls stay opaque.
-                assert widget_color(card, QPoint(card.width() - 24, 20)) != QColor(
+                assert widget_color(scroll, QPoint(12, 12)) != QColor(
                     theme_palette(dark, theme_id).surface
                 )
-            assert widget_color(panel._action_bar, QPoint(8, 36)) != QColor(
+            assert widget_color(panel._action_bar, QPoint(panel._action_bar.width() // 2, 2)) != QColor(
                 theme_palette(dark, theme_id).surface
             )
         for reference in ("", prepared.reference):
@@ -525,16 +523,14 @@ def test_full_settings_page_reveals_fixed_workspace_background(
             panel.load_settings(window._settings)
             window._refresh_workspace_background()
             QApplication.processEvents()
-            assert stack._background.isNull()
-            assert_backdrop([panel.mapTo(stack, QPoint(panel.width() - 8, 8))])
+            assert window.backdrop.image.isNull()
+            assert_backdrop([panel.mapTo(window, QPoint(panel.width() - 8, 8))])
         standalone = SettingsDialog(window._settings)
         qtbot.addWidget(standalone)
         standalone.show()
         QApplication.processEvents()
         assert standalone.property("embedded") is False
-        assert widget_color(standalone, QPoint(8, 8)) == QColor(
-            theme_palette(dark, theme_id).background
-        )
+        assert standalone.backdrop.image.isNull()
     finally:
         qapp.styleHints().colorSchemeChanged.disconnect(theme._on_color_scheme_changed)
         theme.deleteLater()
@@ -563,7 +559,7 @@ def test_visibility_drafts_merge_save_fail_retry_and_restore(workspace, qtbot, t
     # An unchanged mode merges independently instead of overwriting a newer value.
     picker.set_visibility(BackgroundVisibility(light=65))
     assert panel.merge_into(latest).appearance.background_visibility.download.dark == 55
-    assert window._workspace_pages._visibility == BackgroundVisibility()
+    assert window.backdrop.visibility == BackgroundVisibility()
 
     original_save = window._config.save
     def fail(_settings):
@@ -571,16 +567,16 @@ def test_visibility_drafts_merge_save_fail_retry_and_restore(workspace, qtbot, t
     monkeypatch.setattr(window._config, "save", fail)
     assert not window._save_settings()
     assert panel.dirty and picker.visibility.light == 65
-    assert window._workspace_pages._visibility == BackgroundVisibility()
+    assert window.backdrop.visibility == BackgroundVisibility()
     assert window._config.load().appearance.background_visibility.download.light is None
     monkeypatch.setattr(window._config, "save", original_save)
     assert window._save_settings()
     assert not panel.dirty
     window._show_workspace(0)
-    assert window._workspace_pages._visibility.light == 65
+    assert window.backdrop.visibility.light == 65
     assert window._config.load().appearance.background_visibility.download.light == 65
     window._show_workspace(1)
-    assert window._workspace_pages._visibility == BackgroundVisibility()
+    assert window.backdrop.visibility == BackgroundVisibility()
     assert len(list(window._background_store.directory.glob("*.png"))) == 1
     picker.set_visibility(BackgroundVisibility(light=90))
     panel._reset_btn.click()

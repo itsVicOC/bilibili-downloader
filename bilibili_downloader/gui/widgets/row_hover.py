@@ -17,6 +17,7 @@ from shiboken6 import isValid
 
 from bilibili_downloader.gui.resources.styles import UI_METRICS
 from bilibili_downloader.gui.widgets.components import palette
+from bilibili_downloader.gui.widgets.glass_surface import ItemViewSurface
 
 
 def row_option(option, index):
@@ -134,7 +135,7 @@ class RowHover(QObject):
             return
         painter = QPainter(view.viewport())
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(QPen(QColor(palette().focus), UI_METRICS.focus_width))
+        painter.setPen(QPen(QColor(palette(view).focus), UI_METRICS.focus_width))
         painter.setBrush(Qt.NoBrush)
         painter.drawRoundedRect(rect, 5, 5)
 
@@ -190,6 +191,7 @@ class RowHover(QObject):
 class RowHoverTable(QTableWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._reading_surface = ItemViewSurface(self)
         self._row_hover = RowHover(self)
         self.setItemDelegate(RowDelegate(self))
         self.verticalHeader().geometriesChanged.connect(self._row_hover.schedule)
@@ -211,6 +213,7 @@ class RowHoverTable(QTableWidget):
 class RowHoverTree(QTreeWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._reading_surface = ItemViewSurface(self)
         self._row_hover = RowHover(self)
         self.setItemDelegate(RowDelegate(self))
 

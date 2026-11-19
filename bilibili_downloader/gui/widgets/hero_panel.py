@@ -1,21 +1,18 @@
 """Plain, readable source input card used by the download workspace."""
 
-from PySide6.QtCore import QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPen
-from PySide6.QtWidgets import QSizePolicy, QWidget
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtWidgets import QSizePolicy
 
-from bilibili_downloader.gui.resources.styles import UI_METRICS
-from bilibili_downloader.gui.widgets.components import palette
-from bilibili_downloader.gui.widgets.glass_surface import paint_widget_glass
+from bilibili_downloader.gui.widgets.glass_surface import GlassWidget
 
 
-class HeroPanel(QWidget):
-    """Use the shared card surface, with local protection when a picture is set."""
+class HeroPanel(GlassWidget):
+    """Keep the source controls on a readable surface."""
 
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__(parent, glass=True, reading=True)
+        self.setProperty("clearGlass", True)
         self.setObjectName("HeroPanel")
-        self.setProperty("glassSurface", True)
         self.setAttribute(Qt.WA_StyledBackground, True)
         self._compact = False
         self._minimum_height = 190
@@ -42,22 +39,3 @@ class HeroPanel(QWidget):
     def minimumSizeHint(self):
         layout = self.layout()
         return QSize(0, max(self._minimum_height, layout.minimumSize().height() if layout else 0))
-
-    def paintEvent(self, event):
-        super().paintEvent(event)
-        if paint_widget_glass(self):
-            return
-        colors = palette()
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        surface = QColor(colors.surface)
-        if self.property("welcome"):
-            glow = QLinearGradient(0, 0, self.width(), self.height())
-            glow.setColorAt(0, surface)
-            glow.setColorAt(1, QColor(colors.subtle_selection))
-            painter.setBrush(glow)
-        else:
-            painter.setBrush(surface)
-        painter.setPen(Qt.NoPen if self.property("welcome") is not None else QPen(QColor(colors.card_border), 1))
-        painter.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), UI_METRICS.card_radius, UI_METRICS.card_radius)
-        painter.end()

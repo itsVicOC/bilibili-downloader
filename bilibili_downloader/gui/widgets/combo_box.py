@@ -211,7 +211,7 @@ class ComboBox(QComboBox):
             .subControlRect(QStyle.CC_ComboBox, opt, QStyle.SC_ComboBoxArrow, self)
             .center()
         )
-        p = palette()
+        p = palette(self)
         opened = self.property("popupOpen")
         color = (
             p.disabled

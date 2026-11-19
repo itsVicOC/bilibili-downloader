@@ -2,8 +2,8 @@
 
 import pytest
 from PIL import Image
-from PySide6.QtCore import QPoint, QRect, Qt
-from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPushButton, QTableWidget
+from PySide6.QtCore import QPoint, QRect
+from PySide6.QtWidgets import QApplication, QDialog, QPushButton, QTableWidget
 
 from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
 from bilibili_downloader.core.models import (
@@ -34,23 +34,21 @@ def flush():
 @pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])
 @pytest.mark.parametrize("dark", [False, True])
 @pytest.mark.parametrize("size", [(900, 640), (1120, 760), (1320, 860)])
-def test_empty_download_guidance_is_complete_and_does_not_overlap(workspace, qapp, theme_id, dark, size):
+def test_empty_download_controls_and_art_do_not_overlap(workspace, qapp, theme_id, dark, size):
     manager = ThemeManager(qapp, theme_id=theme_id, mode="dark" if dark else "light")
     workspace.resize(*size)
     workspace.show()
     flush()
     hero = workspace._hero
-    hint = workspace._empty_download.findChild(QLabel)
-    link = workspace._empty_download.findChild(QPushButton)
-    controls = (workspace._hero_title, workspace._url_input, workspace._resolve_btn, hint, link)
+    controls = (workspace._url_input, workspace._resolve_btn)
     bounds = [QRect(control.mapTo(hero, QPoint()), control.size()) for control in controls]
     for control, rect in zip(controls, bounds):
         assert hero.rect().adjusted(8, 8, -8, -8).contains(rect)
         assert control.visibleRegion().boundingRect().contains(control.rect())
-    assert bounds[0].bottom() < bounds[1].top()
-    assert max(bounds[1].bottom(), bounds[2].bottom()) < min(bounds[3].top(), bounds[4].top())
-    text = hint.fontMetrics().boundingRect(hint.contentsRect(), int(Qt.TextWordWrap), hint.text())
-    assert text.height() <= hint.height()
+    assert not bounds[0].intersects(bounds[1])
+    art = workspace._empty_download
+    assert not art.art.isNull()
+    assert art.isVisible() and art.y() > hero.geometry().bottom()
     assert workspace._download_actions.visibleRegion().boundingRect().contains(workspace._download_actions.rect())
     manager.deleteLater()
 

@@ -236,6 +236,11 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
             window._settings_page.tabs.currentWidget().horizontalScrollBar().maximum()
             == 0
         )
+        viewport = window._settings_page.tabs.currentWidget().viewport()
+        for key in ("default_output_mode", "default_quality", "default_audio_quality"):
+            control = window._settings_page._field_rows[key].control
+            left = control.mapTo(viewport, QPoint()).x()
+            assert 0 <= left and left + control.width() <= viewport.width()
         window._show_settings_tab(SettingsSection.APPEARANCE)
         flush()
         assert contained(window._settings_page._save_btn, window._settings_page)

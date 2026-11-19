@@ -20,7 +20,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from bilibili_downloader.gui.resources.styles import UI_METRICS, theme_palette
+from bilibili_downloader.gui.resources.styles import (
+    UI_METRICS,
+    theme_palette,
+    wallpaper_palette,
+)
+from bilibili_downloader.gui.widgets.background_readability import wallpaper_active
 from bilibili_downloader.gui.widgets.text_menu import text_context_menu
 
 
@@ -38,7 +43,10 @@ class _FocusRing(QWidget):
             return
         from PySide6.QtWidgets import QApplication
         app = QApplication.instance()
-        p = theme_palette(bool(app.property("darkTheme")), app.property("colorTheme"))
+        dark = bool(app.property("darkTheme"))
+        p = theme_palette(dark, app.property("colorTheme"))
+        if wallpaper_active(target):
+            p = wallpaper_palette(p, dark)
         primary = target.objectName() in {"PrimaryButton", "DownloadButton", "HeroButton", "OutputPrimaryButton"}
         color = p.primary_text if primary else p.focus
         rect = QRectF(target.tabRect(target.currentIndex()) if isinstance(target, QTabBar) else self.rect())

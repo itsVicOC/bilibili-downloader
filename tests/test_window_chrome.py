@@ -51,9 +51,18 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
     from PySide6.QtCore import QPoint, QRect
     from PySide6.QtGui import QColor, QFont, QPalette
 
-    from bilibili_downloader.gui.resources.styles import contrast_ratio, theme_palette
+    from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
+    from bilibili_downloader.gui.resources.styles import (
+        blend_color,
+        contrast_ratio,
+        theme_palette,
+    )
     from bilibili_downloader.gui.resources.theme import ThemeManager
-    from bilibili_downloader.gui.widgets.caption_controls import caption_rects
+    from bilibili_downloader.gui.widgets.caption_controls import (
+        CAPTION_HOVER_ALPHA,
+        CAPTION_PRESSED_ALPHA,
+        caption_rects,
+    )
 
     if qapp.platformName() != "windows":
         pytest.skip("Requires the Windows Qt backend")
@@ -63,6 +72,7 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
     theme = ThemeManager(qapp, theme_id)
     theme.setParent(window)
     theme.set_mode(mode)
+    colors = theme_palette(mode == "dark", theme_id)
     user32 = ctypes.windll.user32
     user32.ClientToScreen.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.POINT)]
     user32.ClientToScreen.restype = wintypes.BOOL
@@ -160,9 +170,39 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
         x, y, right, height, width = caption_bounds()
         return x + right - width * 3 // 2, y + height // 2
 
+    def bare_header():
+        controls = window._chrome.controls
+        controls.hide()
+        try:
+            return window.grab().toImage()
+        finally:
+            controls.show()
+
+    def qt_pixel(image, point):
+        dpr = image.devicePixelRatio()
+        return image.pixelColor(round(point.x() * dpr), round(point.y() * dpr))
+
+    def matches(actual, expected, tolerance=3):
+        return max(abs(a - b) for a, b in zip(actual.getRgb()[:3], expected.getRgb()[:3])) <= tolerance
+
+    def assert_button_fill(image, reference, action, pressed=False):
+        button = window._chrome.controls.buttons[action]
+        scale = window.devicePixelRatioF()
+        reference_pixel = lambda x, y: qt_pixel(reference, button.mapTo(window, QPoint(x, y)))
+        assert matches(image.pixelColor(round(2 * scale), round(14 * scale)), reference_pixel(2, 14))
+        local = reference_pixel(9, 14).name()
+        if action == "close":
+            expected = colors.caption_close_pressed if pressed else colors.caption_close_hover
+        else:
+            alpha = CAPTION_PRESSED_ALPHA if pressed else CAPTION_HOVER_ALPHA
+            expected = blend_color(local, colors.text, alpha / 255)
+        actual = image.pixelColor(round(9 * scale), round(14 * scale))
+        assert matches(actual, QColor(expected)), (action, actual.name(), expected)
+
     def assert_pressed():
         x, y, right, _, _ = caption_bounds()
         normal = window.geometry()
+        reference = bare_header()
         for action, rect in caption_rects(right, window.devicePixelRatioF()).items():
             control = window._chrome.controls.buttons[action]
             assert user32.SetCursorPos(x + rect.center().x(), y + rect.center().y())
@@ -188,9 +228,7 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
                     y - round(origin.y() * dpr), rect.width(), rect.height(),
                 ))
                 assert image.save(str(evidence / f"{theme_id}-{mode}-{action}-pressed.png"))
-                p = theme_palette(mode == "dark", theme_id)
-                color = p.caption_close_pressed if action == "close" else p.caption_pressed
-                assert image.pixelColor(4, image.height() // 2).name() == color
+                assert_button_fill(image, reference, action, pressed=True)
             finally:
                 release.set()
                 worker.join(timeout=3)
@@ -264,6 +302,7 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
 
     def assert_clear(stage):
         ensure_foreground()
+        reference = bare_header()
         origin = wintypes.POINT()
         assert user32.ClientToScreen(hwnd, ctypes.byref(origin))
         assert user32.SetCursorPos(origin.x + 300, origin.y + 200)
@@ -278,19 +317,16 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
                        "native_maximized": bool(user32.IsZoomed(hwnd)),
                        "qwindow_flags": int(window.windowHandle().flags())})
         (evidence / f"{theme_id}-{mode}.json").write_text(json.dumps(checks, indent=2), encoding="utf-8")
-        origin = window.mapToGlobal(QPoint(12, 6)) - frame.topLeft()
-        image, dpr = pixmap.toImage(), pixmap.devicePixelRatio()
-        expected = QColor(theme_palette(mode == "dark", theme_id).sidebar)
-        colors = [image.pixelColor(round((origin.x() + x) * dpr), round((origin.y() + y) * dpr))
-                  for x in range(48) for y in range(12)]
-        matching = sum(max(abs(c.red() - expected.red()), abs(c.green() - expected.green()),
-                           abs(c.blue() - expected.blue())) <= 3 for c in colors)
-        assert matching / len(colors) >= 0.98, f"Legacy caption repainted after {stage}"
-        for index in range(3):
-            sample = window.mapToGlobal(QPoint(window.width() - 138 + index * 46 + 3, 12)) - frame.topLeft()
-            actual = image.pixelColor(round(sample.x() * dpr), round(sample.y() * dpr))
-            expected = QColor(theme_palette(mode == "dark", theme_id).background)
-            assert max(abs(a - b) for a, b in zip(actual.getRgb()[:3], expected.getRgb()[:3])) <= 2
+        origin = window.mapToGlobal(QPoint()) - frame.topLeft()
+        image = pixmap.toImage()
+        samples = [QPoint(x, y) for x in range(12, 60) for y in range(6, 18)]
+        matching = sum(matches(qt_pixel(image, origin + point), qt_pixel(reference, point)) for point in samples)
+        assert matching / len(samples) >= 0.98, f"Legacy caption repainted after {stage}"
+        for button in window._chrome.controls.buttons.values():
+            for x in (2, 8, 35, 43):
+                point = button.mapTo(window, QPoint(x, 16))
+                actual, expected = qt_pixel(image, origin + point), qt_pixel(reference, point)
+                assert matches(actual, expected), (stage, button.action, actual.name(), expected.name())
         assert window.windowHandle().flags() & Qt.FramelessWindowHint
 
     def assert_hover(stage):
@@ -298,6 +334,7 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
         # layered titlebar HWND, which is where this regression occurs.
         assert not window.windowHandle().flags() & Qt.ExpandedClientAreaHint
         ensure_foreground()
+        reference = bare_header()
         x, y, right, height, width = caption_bounds()
         for button, rect in caption_rects(right, window.devicePixelRatioF()).items():
             left, width, height = x + rect.left(), rect.width(), rect.height()
@@ -324,18 +361,21 @@ def test_native_blank_click_activation_and_caption_maximize(qtbot, qapp, workspa
             # The button interior must be a neutral material plus a contrasting
             # glyph. Straight-alpha white hover pixels used to saturate this
             # entire area, leaving the white glyph invisible.
-            colors = [image.pixelColor(px, py)
-                      for px in range(4, width - 4) for py in range(4, height - 4)]
-            background = sorted(colors, key=lambda c: c.lightness())[len(colors) // 2]
-            palette = theme_palette(mode == "dark", theme_id)
-            expected = palette.caption_close_hover if button == "close" else palette.caption_hover
-            assert max(abs(a - b) for a, b in zip(background.getRgb()[:3], QColor(expected).getRgb()[:3])) <= 2, (stage, button, background.name(), expected)
-            foreground = [c for c in colors if contrast_ratio(c.name(), background.name()) >= 3.0]
-            assert len(foreground) >= 8, (stage, button, len(foreground))
-            assert contrast_ratio(foreground[0].name(), background.name()) >= 3.0
+            assert_button_fill(image, reference, button)
+            scale = window.devicePixelRatioF()
+            contrasting = 0
+            for px in range(round(width * .32), round(width * .68)):
+                for py in range(round(height * .28), round(height * .72)):
+                    point = control.mapTo(window, QPoint(round(px / scale), round(py / scale)))
+                    backing = qt_pixel(reference, point).name()
+                    tint = colors.caption_close_hover if button == "close" else blend_color(backing, colors.text, CAPTION_HOVER_ALPHA / 255)
+                    contrasting += contrast_ratio(image.pixelColor(px, py).name(), tint) >= 3
+            assert contrasting >= 8, (stage, button, contrasting)
         assert user32.SetCursorPos(x + 300, y + 200)
 
     try:
+        window._settings.appearance.backgrounds.download = BUILTIN_BACKGROUNDS[0].reference
+        window._refresh_workspace_background()
         window.resize(900, 640)
         # Keep the entire 900x640 client on the CI desktop at 150% Qt scale.
         window.move(window.screen().availableGeometry().topLeft() + QPoint(24, 8))

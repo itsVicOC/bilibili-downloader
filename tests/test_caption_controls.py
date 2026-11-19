@@ -5,14 +5,22 @@ from ctypes import wintypes
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import QAbstractAnimation, QEvent, Qt
-from PySide6.QtGui import QColor, QIcon
-from PySide6.QtWidgets import QDialog, QMainWindow
+from PySide6.QtCore import QAbstractAnimation, QEvent, QPoint, QRect, Qt
+from PySide6.QtGui import QIcon, QPainter
+from PySide6.QtWidgets import QDialog, QMainWindow, QWidget
 
 from bilibili_downloader.gui.resources.paths import asset_path
-from bilibili_downloader.gui.resources.styles import contrast_ratio, theme_palette
+from bilibili_downloader.gui.resources.styles import (
+    blend_color,
+    contrast_ratio,
+    theme_palette,
+)
 from bilibili_downloader.gui.resources.theme import ThemeManager
-from bilibili_downloader.gui.widgets.caption_controls import caption_rects
+from bilibili_downloader.gui.widgets.caption_controls import (
+    CAPTION_HOVER_ALPHA,
+    CAPTION_PRESSED_ALPHA,
+    caption_rects,
+)
 from bilibili_downloader.gui.window_chrome import WindowChrome
 from bilibili_downloader.gui.windows_frame import WindowsFrame, frame_hit_test
 from tests.test_ui_refresh import restore_theme as restore_theme
@@ -80,32 +88,71 @@ def test_caption_base_hover_glyphs_and_animation_settle(qapp, qtbot, theme_id, d
     manager = ThemeManager(qapp, theme_id, "dark" if dark else "light")
     window = ChromeWindow()
     qtbot.addWidget(window)
-    window.show()
-    window.activateWindow()
     controls = window.chrome.controls
     p = theme_palette(dark, theme_id)
+
+    class Backdrop(QWidget):
+        def paintEvent(self, event):
+            painter = QPainter(self)
+            for x in range(0, self.width(), 19):
+                painter.fillRect(x, 0, 19, self.height(), p.surface_raised if x // 19 % 2 else p.background)
+            painter.end()
+
+    window.setCentralWidget(Backdrop())
+    window.resize(480, 320)
+    window.show()
+    window.activateWindow()
+    qapp.processEvents()
+    controls.hide()
+    wallpaper = window.grab().toImage()
+    controls.show()
+
+    def snapshot(button, window_image=None):
+        image = window.grab().toImage() if window_image is None else window_image
+        dpr = image.devicePixelRatio()
+        top = button.mapTo(window, QPoint())
+        return image.copy(QRect(round(top.x() * dpr), round(top.y() * dpr),
+                                round(button.width() * dpr), round(button.height() * dpr)))
+
     for name, button in controls.buttons.items():
         button.reset()
-        image = button.grab().toImage()
-        assert image.pixelColor(3, 12).name() == p.background
+        reference = snapshot(button, wallpaper)
+        image = snapshot(button)
+        dpr = image.devicePixelRatio()
+
+        def pixel(image, x, y):
+            return image.pixelColor(round(x * dpr), round(y * dpr)).name()
+
+        for x in (2, 9, 35, 44):
+            assert pixel(image, x, 12) == pixel(reference, x, 12)
+
+        def assert_tint(pressed=False):
+            image = snapshot(button)
+            assert pixel(image, 2, 12) == pixel(reference, 2, 12)
+            alpha = CAPTION_PRESSED_ALPHA if pressed else CAPTION_HOVER_ALPHA
+            red = p.caption_close_pressed if pressed else p.caption_close_hover
+            expected = red if name == "close" else blend_color(pixel(reference, 9, 12), p.text, alpha / 255)
+            actual = pixel(image, 9, 12)
+            assert all(abs(int(actual[i:i + 2], 16) - int(expected[i:i + 2], 16)) <= 2 for i in (1, 3, 5))
+            return image
+
         button.set_hovered(True)
         qtbot.waitUntil(lambda: button._hover.animation.state() == QAbstractAnimation.Stopped)
-        image = button.grab().toImage()
-        color = p.caption_close_hover if name == "close" else p.caption_hover
-        assert image.pixelColor(3, 12).name() == color
-        foreground = "#ffffff" if name == "close" else p.text
-        assert contrast_ratio(foreground, color) >= 3
-        background = QColor(color)
-        pixels = [(x, y) for x in range(8, image.width() - 8) for y in range(6, image.height() - 6)
-                  if contrast_ratio(image.pixelColor(x, y).name(), background.name()) >= 3]
+        image = assert_tint()
+        pixels = []
+        for x in range(round(10 * dpr), image.width() - round(10 * dpr)):
+            for y in range(round(7 * dpr), image.height() - round(7 * dpr)):
+                color = p.caption_close_hover if name == "close" else blend_color(reference.pixelColor(x, y).name(), p.text, CAPTION_HOVER_ALPHA / 255)
+                if contrast_ratio(image.pixelColor(x, y).name(), color) >= 3:
+                    pixels.append((x, y))
         assert len(pixels) >= 8
-        assert abs((min(x for x, _ in pixels) + max(x for x, _ in pixels)) / 2 - (image.width() - 1) / 2) <= 1
-        assert abs((min(y for _, y in pixels) + max(y for _, y in pixels)) / 2 - (image.height() - 1) / 2) <= 1
         button.setDown(True)
-        image = button.grab().toImage()
-        assert image.pixelColor(3, 12).name() == (p.caption_close_pressed if name == "close" else p.caption_pressed)
+        assert_tint(pressed=True)
         button.reset()
         assert button._hover.value == 0
+        if name == "maximize":
+            button.restore = True
+            assert pixel(snapshot(button), 22, 17) == pixel(reference, 22, 17)
     manager.deleteLater()
 
 

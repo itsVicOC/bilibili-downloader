@@ -15,6 +15,7 @@ from bilibili_downloader.core.errors import (
     user_error_message,
 )
 from bilibili_downloader.core.models import DownloadItem
+from bilibili_downloader.core.progress import transfer_summary
 
 logger = logging.getLogger(__name__)
 
@@ -80,14 +81,31 @@ class DownloadWorker(QObject):
                 outcome_callback=lambda outcome: self.outcome_saved.emit(self._download_id, outcome),
             )
 
-            self._service.phase_callback = lambda phase: self.phase.emit(self._download_id, phase)
+            phase = None
+            last_progress = self._item.progress
+
+            def report_phase(current):
+                nonlocal phase
+                phase = current
+                self.phase.emit(self._download_id, current)
+
+            self._service.phase_callback = report_phase
 
             def progress_cb(pct: float, text: str):
+                nonlocal last_progress
                 if self._cancelled:
                     self._service.cancel()
                     raise RuntimeError("Cancelled")
                 metrics = self._service.transfer_metrics
                 transferring = text.startswith(("正在下载视频流", "正在下载音频流"))
+                starting_transfer = transferring and phase and phase.progress == 0.0
+                # Probing for streams or replaying an already complete stream
+                # does not invalidate the recorded download offset.
+                cached_transfer = transferring and phase and phase.progress == 1.0 and metrics.speed_bytes_per_second <= 0
+                if starting_transfer or cached_transfer or (phase and phase.stage == "prepare"):
+                    pct = max(last_progress, pct)
+                last_progress = pct
+                transferring = transferring and not starting_transfer
                 if metrics.speed_bytes_per_second > 0 and transferring:
                     text = _progress_text(
                         text,
@@ -152,12 +170,4 @@ class DownloadRunner(QRunnable):
 
 
 def _progress_text(text: str, speed: float, eta: int | None) -> str:
-    if speed >= 1024 * 1024:
-        speed_text = f"{speed / 1024 / 1024:.1f} MB/s"
-    else:
-        speed_text = f"{speed / 1024:.0f} KB/s"
-    if eta is None:
-        return f"{text.rstrip('.')} · {speed_text}"
-    minutes, seconds = divmod(max(0, eta), 60)
-    eta_text = f"{minutes:d}:{seconds:02d}"
-    return f"{text.rstrip('.')} · {speed_text} · 剩余 {eta_text}"
+    return f"{text.rstrip('.')} · {transfer_summary(speed, eta)}"

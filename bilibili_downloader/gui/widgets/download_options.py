@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from bilibili_downloader.gui.resources.styles import UI_METRICS, blend_color
+from bilibili_downloader.gui.widgets.background_readability import wallpaper_active
 from bilibili_downloader.gui.widgets.check_box import draw_check_indicator
 from bilibili_downloader.gui.widgets.components import palette
 from bilibili_downloader.gui.widgets.motion import StateTransition
@@ -71,7 +72,7 @@ class DownloadOptionCard(QCheckBox):
         return super().event(event)
 
     def paintEvent(self, event):
-        colors = palette()
+        colors = palette(self)
         enabled = self.isEnabled()
         checked = self.isChecked()
         foreground = colors.text if enabled else colors.disabled
@@ -84,7 +85,10 @@ class DownloadOptionCard(QCheckBox):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setPen(QPen(QColor(border), UI_METRICS.border_width))
-        painter.setBrush(QColor(fill))
+        tint = QColor(fill)
+        if wallpaper_active(self):
+            tint.setAlpha(round(85 + 90 * self._selection.value + 30 * self._hover.value))
+        painter.setBrush(tint)
         painter.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), UI_METRICS.radius, UI_METRICS.radius)
         size = UI_METRICS.indicator_size
         indicator = QRect(12, (self.height() - size) // 2, size, size)

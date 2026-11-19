@@ -13,7 +13,7 @@ from PySide6.QtCore import (
     QUrl,
 )
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QImage, QPalette
-from PySide6.QtWidgets import QApplication, QDialog, QLabel, QWidget
+from PySide6.QtWidgets import QApplication, QDialog, QLabel
 
 from bilibili_downloader.core.appearance import BackgroundStore
 from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
@@ -22,6 +22,7 @@ from bilibili_downloader.gui.dialogs.background_gallery import BackgroundGallery
 from bilibili_downloader.gui.resources.styles import contrast_ratio, theme_palette
 from bilibili_downloader.gui.resources.theme import ThemeManager
 from bilibili_downloader.gui.widgets.background_picker import BackgroundPicker
+from bilibili_downloader.gui.widgets.components import SectionCard
 from bilibili_downloader.gui.widgets.hero_panel import HeroPanel
 from bilibili_downloader.gui.widgets.workspace_background import WorkspaceStack
 from tests.test_builtin_backgrounds import restore_theme as restore_theme
@@ -30,15 +31,13 @@ from tests.test_builtin_backgrounds import restore_theme as restore_theme
 @pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])
 @pytest.mark.parametrize("dark", [False, True])
 @pytest.mark.parametrize("card_kind", ["section", "hero"])
-def test_real_labels_keep_contrast_without_covering_blank_card_space(qapp, qtbot, tmp_path, theme_id, dark, card_kind):
+def test_reading_surfaces_keep_contrast_over_wallpaper(qapp, qtbot, tmp_path, theme_id, dark, card_kind):
     theme = ThemeManager(qapp, theme_id)
     theme.apply_theme(dark)
     colors = theme_palette(dark, theme_id)
     stack = WorkspaceStack()
     qtbot.addWidget(stack)
-    page = HeroPanel() if card_kind == "hero" else QWidget()
-    if card_kind == "section":
-        page.setObjectName("SectionCard")
+    page = HeroPanel() if card_kind == "hero" else SectionCard()
     stack.addWidget(page)
     stack.resize(640, 360)
     labels = []
@@ -48,6 +47,7 @@ def test_real_labels_keep_contrast_without_covering_blank_card_space(qapp, qtbot
         label.setGeometry(20, 30 + i * 40, 300, 30)
         labels.append(label)
     stack.show()
+    samples = {}
     for pattern in ("black", "white", "checker"):
         source = QImage(640, 360, QImage.Format_RGB32)
         source.fill(Qt.black if pattern == "black" else Qt.white)
@@ -60,7 +60,7 @@ def test_real_labels_keep_contrast_without_covering_blank_card_space(qapp, qtbot
         stack.set_background(path)
         stack.set_visibility(BackgroundVisibility(light=100, dark=100))
         QApplication.processEvents()
-        assert stack.property("customBackground")
+        assert stack.backdrop.host.property("customBackground")
         for label in labels:
             label.hide()
         without_text = stack.grab().toImage()
@@ -75,13 +75,13 @@ def test_real_labels_keep_contrast_without_covering_blank_card_space(qapp, qtbot
             foreground = label.palette().color(QPalette.WindowText).name()
             assert contrast_ratio(foreground, background) >= 4.5
             assert background == without_text.pixelColor(round(point.x() * dpr), round(point.y() * dpr)).name()
-        if pattern != "white":
-            assert image.pixelColor(round(500 * dpr), round(200 * dpr)).name() != colors.surface
+        samples[pattern] = image.pixelColor(round(500 * dpr), round(200 * dpr)).lightness()
+    assert samples["white"] - samples["black"] >= 40
     stack.set_background(None)
     QApplication.processEvents()
-    assert not stack.property("customBackground")
+    assert not stack.backdrop.host.property("customBackground")
     image = stack.grab().toImage()
-    assert image.pixelColor(round(500 * image.devicePixelRatio()), round(200 * image.devicePixelRatio())).name() == colors.surface
+    assert image.pixelColor(round(500 * image.devicePixelRatio()), round(200 * image.devicePixelRatio())).name() == colors.surface_raised
     theme.deleteLater()
 
 

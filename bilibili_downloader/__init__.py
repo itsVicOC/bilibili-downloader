@@ -1,3 +1,3 @@
 """BiliFlow package metadata."""
 
-__version__ = "0.8.13"
+__version__ = "0.9.0b1"

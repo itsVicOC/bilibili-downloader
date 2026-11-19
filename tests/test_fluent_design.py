@@ -232,6 +232,7 @@ def test_tabs_keep_keyboard_focus_without_mouse_focus_ring(qapp, qtbot):
 @pytest.mark.parametrize("dark", [False, True])
 def test_wallpaper_tabs_keep_a_readable_surface(workspace, qapp, dark, theme_id):
     from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
+    from bilibili_downloader.gui.resources.styles import wallpaper_palette
 
     theme = ThemeManager(qapp, theme_id, "dark" if dark else "light")
     workspace._settings.appearance.backgrounds.download = BUILTIN_BACKGROUNDS[0].reference
@@ -245,8 +246,8 @@ def test_wallpaper_tabs_keep_a_readable_surface(workspace, qapp, dark, theme_id)
     dpr = image.devicePixelRatio()
     background = image.pixelColor(round(center.x() * dpr), round(center.y() * dpr)).name()
     colors = theme_palette(dark, theme_id)
-    assert background == colors.surface
-    assert contrast_ratio(colors.muted, background) >= 4.5
+    assert background != colors.surface
+    assert contrast_ratio(wallpaper_palette(colors, dark).muted, background) >= 4.5
     theme.deleteLater()
 
 

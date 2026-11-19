@@ -243,7 +243,7 @@ class VideoInfoWidget(GlassWidget):
     """Displays video metadata (title, author, duration, cover)."""
 
     def __init__(self):
-        super().__init__()
+        super().__init__(reading=True)
         self._featured = False
         self._cover_url = ""
         self._cover_pool = QThreadPool.globalInstance()
@@ -316,7 +316,6 @@ class VideoInfoWidget(GlassWidget):
         self._featured = featured
         self._cover_label.featured = featured
         self.setProperty("featured", featured)
-        self.setProperty("sectionStyle", "plain" if featured else "card")
         self.set_density(COMFORTABLE)
 
     def set_density(self, density):
