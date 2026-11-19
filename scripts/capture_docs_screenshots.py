@@ -1521,6 +1521,24 @@ def _capture_interactions(app, theme, window):
         controller.dispose()
 
 
+def _grab_windows_client(window):
+    """Crop compositor pixels using the Win32 client origin at fractional DPI."""
+    from ctypes import byref, wintypes
+
+    native = window._chrome._native
+    point, rect = wintypes.POINT(), wintypes.RECT()
+    monitor = native._monitor_info()
+    if (monitor is None or not native.user32.ClientToScreen(native.hwnd, byref(point))
+            or not native.user32.GetClientRect(native.hwnd, byref(rect))):
+        raise RuntimeError("Cannot determine the Windows client bounds")
+    image = window.screen().grabWindow(0).toImage().copy(QRect(
+        point.x - monitor.monitor.left, point.y - monitor.monitor.top,
+        rect.right - rect.left, rect.bottom - rect.top,
+    ))
+    image.setDevicePixelRatio(window.devicePixelRatioF())
+    return image
+
+
 def _capture_native_chrome(app, theme, window):
     """Capture the desktop compositor, including the native frame boundaries.
 
@@ -1570,23 +1588,20 @@ def _capture_native_chrome(app, theme, window):
                 controls.show()
                 controls.reset()
                 QTest.qWait(100)
-            pixmap = screen.grabWindow(0, *frame.getRect())
-            if pixmap.isNull():
+            image = _grab_windows_client(window) if controls is not None else screen.grabWindow(0, *frame.getRect()).toImage()
+            if image.isNull():
                 raise AssertionError("Native frame capture is unavailable")
             filename = f"chrome-{mode}-{name}.png"
-            pixmap.save(str(OUTPUT_DIR / filename))
+            image.save(str(OUTPUT_DIR / filename))
             if sys.platform == "win32":
                 assert handle.flags() & Qt.FramelessWindowHint
                 assert not handle.flags() & Qt.ExpandedClientAreaHint
                 assert not handle.icon().isNull()
                 # The sidebar starts its brand below y=24. This previously
                 # empty strip contained the duplicate 16px caption icon.
-                origin = window.mapToGlobal(QPoint()) - frame.topLeft()
-                dpr = pixmap.devicePixelRatio()
-                image = pixmap.toImage()
+                dpr = image.devicePixelRatio()
 
                 def painted(point):
-                    point = point + origin
                     return image.pixelColor(round(point.x() * dpr), round(point.y() * dpr))
 
                 def backing(point):
