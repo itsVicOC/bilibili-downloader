@@ -18,8 +18,8 @@ user32.EnumWindows.argtypes = [WindowCallback, wintypes.LPARAM]
 user32.IsWindowVisible.argtypes = [wintypes.HWND]
 user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
 user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
-user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
 user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+user32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
 user32.SetProcessDpiAwarenessContext.argtypes = [wintypes.HANDLE]
 user32.SetProcessDpiAwarenessContext(wintypes.HANDLE(-4))
 
@@ -43,18 +43,17 @@ def locate_window(pid):
 
 
 def capture_window(process):
-    for _ in range(15):
+    for _ in range(30):
         handle = locate_window(process.pid)
         if handle:
             try:
-                return ImageGrab.grab(window=handle).convert("RGB")
+                frame = ImageGrab.grab(window=handle).convert("RGB")
             except OSError:
                 # The hosted desktop can briefly deny a per-window device context.
-                rect = wintypes.RECT()
-                if user32.GetWindowRect(handle, ctypes.byref(rect)):
-                    user32.SetForegroundWindow(handle)
-                    time.sleep(0.25)
-                    return ImageGrab.grab(bbox=(rect.left, rect.top, rect.right, rect.bottom)).convert("RGB")
+                pass
+            else:
+                if frame.width > 400 and frame.height > 300 and frame.resize((132, 86)).getcolors() is None:
+                    return frame
         time.sleep(0.2)
     raise RuntimeError("Unable to capture the frozen application window")
 
@@ -76,16 +75,18 @@ def run(executable, theme, mode, screenshot):
                 for _ in range(160):
                     if process.poll() is not None:
                         raise RuntimeError(f"Frozen GUI exited with {process.returncode}")
-                    if locate_window(process.pid):
+                    if handle := locate_window(process.pid):
                         break
                     time.sleep(0.25)
                 else:
                     raise RuntimeError("Frozen GUI did not open a BiliFlow window")
+                user32.SetCursorPos(0, 0)
+                user32.SetForegroundWindow(handle)
                 time.sleep(0.75)
                 frame = capture_window(process)
                 assert frame.width > 400 and frame.height > 300 and frame.getbbox()
                 frame.save(screenshot)
-                print(executable, theme, mode, frame.size)
+                print(screenshot.stem, theme, mode, frame.size)
             finally:
                 if process.poll() is None:
                     process.terminate()
