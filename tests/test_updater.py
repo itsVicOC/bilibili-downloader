@@ -50,8 +50,8 @@ def zip_bytes(build, *, extra=()):
     return stream.getvalue()
 
 
-def installed_root(tmp_path, *, variant="lite", system="Windows"):
-    build = BuildInfo(__version__, system, "x86_64", variant)
+def installed_root(tmp_path, *, variant="lite", system="Windows", version=__version__):
+    build = BuildInfo(version, system, "x86_64", variant)
     root = tmp_path / "installation with spaces" / build.archive_root
     (root / build.resource_dir).mkdir(parents=True)
     (root / build.executable).parent.mkdir(parents=True, exist_ok=True)
@@ -268,11 +268,15 @@ def test_network_timeout_propagates(tmp_path):
 
 @pytest.mark.parametrize("variant", ["full", "lite"])
 def test_verified_download_stage_and_pending_reload(tmp_path, variant):
-    installation = installed_root(tmp_path, variant=variant)
+    installed_version = "0.8.13"
+    installation = installed_root(tmp_path, variant=variant, version=installed_version)
     build = replace(installation[1], version="0.9.0b1")
     release, transport = release_fixture(build)
     service = UpdateService(
-        tmp_path / "data", installation=installation, transport=transport
+        tmp_path / "data",
+        current_version=installed_version,
+        installation=installation,
+        transport=transport,
     )
     progress = []
     prepared = service.prepare(release, progress=progress.append)
