@@ -161,9 +161,14 @@ class _StatusDelegate(QStyledItemDelegate):
         style = opt.widget.style() if opt.widget else QApplication.style()
         content = style.subElementRect(QStyle.SE_ItemViewItemText, opt, opt.widget)
         text, opt.text = opt.text, ""
-        if tone == "active" and (stage := index.data(STATUS_PHASE_ROLE)):
-            metrics_text = index.data(STATUS_METRICS_ROLE)
-            text = f"{stage}\n{metrics_text}" if metrics_text else stage
+        stage = index.data(STATUS_PHASE_ROLE) if tone == "active" else None
+        transfer = index.data(STATUS_METRICS_ROLE) if stage else None
+        if stage:
+            text = stage
+        if transfer:
+            if opt.fontMetrics.horizontalAdvance(transfer) > content.width():
+                transfer = transfer.replace(" · 剩余 ", " · ")
+            text += "\n" + transfer
         style.drawControl(QStyle.CE_ItemViewItem, row_option(opt, index), painter, opt.widget)
         p = palette()
         color = {"active": p.active_text, "success": p.success, "warning": p.warning,
@@ -806,7 +811,7 @@ class DownloadListWidget(RowHoverTable):
     def resizeEvent(self, event):
         """Keep progress useful without starving title text on compact windows."""
         narrow = event.size().width() < 900
-        progress_width = 104 if narrow else 150
+        progress_width = 120 if narrow else 160
         self.horizontalHeader().resizeSection(
             1, 80 if narrow else 100
         )
