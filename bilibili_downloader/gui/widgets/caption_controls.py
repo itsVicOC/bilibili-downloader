@@ -1,18 +1,21 @@
 """Fluent caption controls in the same backing store as the page header."""
 
 from PySide6.QtCore import QEvent, QPointF, QRect, QRectF, Qt
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QAbstractButton, QApplication, QWidget
 
 from bilibili_downloader.gui.resources.styles import (
     UI_METRICS,
     blend_color,
     theme_palette,
+    wallpaper_palette,
 )
 from bilibili_downloader.gui.widgets.motion import StateTransition
 
 CAPTION_ACTIONS = ("minimize", "maximize", "close")
 CAPTION_LABELS = {"minimize": "最小化", "maximize": "最大化", "close": "关闭"}
+CAPTION_HOVER_ALPHA = 27
+CAPTION_PRESSED_ALPHA = 43
 
 
 def caption_rects(client_width, scale=1.0):
@@ -56,24 +59,32 @@ class CaptionButton(QAbstractButton):
 
     def paintEvent(self, event):
         app = QApplication.instance()
-        p = theme_palette(bool(app.property("darkTheme")), app.property("colorTheme"))
-        foreground = p.text if self.window().isActiveWindow() else p.muted
-        background = p.background
-        if self.isEnabled():
-            target = p.caption_close_pressed if self.action == "close" and self.isDown() else (
-                p.caption_close_hover if self.action == "close" else
-                p.caption_pressed if self.isDown() else p.caption_hover
-            )
-            amount = 1.0 if self.isDown() else self._hover.value
-            background = blend_color(background, target, amount)
-            if self.action == "close" and amount:
-                foreground = blend_color(foreground, "#ffffff", amount)
-        else:
-            foreground = p.disabled
+        dark = bool(app.property("darkTheme"))
+        colors = theme_palette(dark, app.property("colorTheme"))
+        if self.window().property("customBackground"):
+            colors = wallpaper_palette(colors, dark)
+        foreground = colors.text if self.window().isActiveWindow() else colors.muted
         painter = QPainter(self)
-        painter.fillRect(self.rect(), QColor(background))
+        painter.setRenderHint(QPainter.Antialiasing)
+        target = QRectF(self.rect()).adjusted(4, 3, -4, -3)
+        if self.isEnabled():
+            amount = 1.0 if self.isDown() else self._hover.value
+            if amount:
+                if self.action == "close":
+                    tint = QColor(colors.caption_close_pressed if self.isDown() else colors.caption_close_hover)
+                    tint.setAlphaF(amount)
+                    foreground = blend_color(foreground, "#ffffff", amount)
+                else:
+                    tint = QColor(colors.text)
+                    tint.setAlpha(round(amount * (CAPTION_PRESSED_ALPHA if self.isDown() else CAPTION_HOVER_ALPHA)))
+                painter.setPen(Qt.NoPen)
+                painter.setBrush(tint)
+                painter.drawRoundedRect(target, 8, 8)
+        else:
+            foreground = colors.disabled
         # Paint on physical pixel centres, without depending on an icon font.
         dpr = self.devicePixelRatioF()
+        painter.save()
         painter.scale(1 / dpr, 1 / dpr)
         stroke, size = max(1, round(dpr)), round(10 * dpr)
         x = round((self.width() * dpr - size) / 2) + stroke / 2
@@ -91,15 +102,21 @@ class CaptionButton(QAbstractButton):
             painter.drawLine(QPointF(x + size - stroke, y), QPointF(x, y + size - stroke))
         elif self.restore:
             offset = round(2 * dpr)
-            painter.drawRect(QRectF(x + offset, y, size - stroke - offset, size - stroke - offset))
-            painter.fillRect(QRectF(x - stroke / 2, y + offset - stroke / 2,
-                                    size - offset, size - offset), QColor(background))
-            painter.drawRect(QRectF(x, y + offset, size - stroke - offset, size - stroke - offset))
+            side = size - stroke - offset
+            back = QPainterPath(QPointF(x + offset, y + offset))
+            back.lineTo(x + offset, y)
+            back.lineTo(x + offset + side, y)
+            back.lineTo(x + offset + side, y + side)
+            back.lineTo(x + side, y + side)
+            painter.drawPath(back)
+            painter.drawRect(QRectF(x, y + offset, side, side))
         else:
             painter.drawRect(QRectF(x, y, size - stroke, size - stroke))
+        painter.restore()
         if self.hasFocus() and self.property("keyboardFocus"):
-            painter.setPen(QPen(QColor(p.focus), max(1, round(2 * dpr))))
-            painter.drawRect(QRectF(3 * dpr, 3 * dpr, (self.width() - 6) * dpr, (self.height() - 6) * dpr))
+            painter.setPen(QPen(QColor(colors.focus), 2))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRoundedRect(target, 8, 8)
         painter.end()
 
 

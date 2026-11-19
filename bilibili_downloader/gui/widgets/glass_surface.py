@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QApplication, QFrame, QTableView, QWidget
 
 from bilibili_downloader.core.models import DEFAULT_GLASS_BLUR
 from bilibili_downloader.gui.resources.styles import (
+    TABLE_HEADER_OPACITY,
     UI_METRICS,
     theme_palette,
     wallpaper_tones,
@@ -69,11 +70,12 @@ class GlassBackdrop:
         else:
             strength = blur * self.scale[0]
             softened = ImageEnhance.Color(picture).enhance(.95)
-            self.image = _material(softened, strength * .70, dark)
-            self.reading = _material(softened, strength * .35, dark) if strength else self.image
-            self.clear_image = _material(picture, strength * .30, dark, clear=True)
+            self.image = _material(softened, strength * .60, dark)
+            self.reading = _material(softened, strength * .32, dark) if strength else self.image
+            self.clear_image = _material(picture, strength * .24, dark, clear=True)
         self.key, self.dark = key, dark
         self.outline = QColor(colors.card_border)
+        self.outline.setAlpha(168)
 
     def _sampling_rect(self, source):
         sx, sy = self.scale
@@ -144,7 +146,7 @@ class GlassBackdrop:
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
-        painter.setPen(QPen(QColor(0, 0, 0, 44 if self.dark else 26), 2))
+        painter.setPen(QPen(QColor(0, 0, 0, 26 if self.dark else 17), 2))
         painter.setBrush(Qt.NoBrush)
         painter.drawRoundedRect(rect.translated(0, 1), radius, radius)
         painter.setClipPath(path, Qt.IntersectClip)
@@ -153,7 +155,7 @@ class GlassBackdrop:
         # Keep both bands outside the surface's reading area.
         if min(rect.width(), rect.height()) > 12:
             outer = path
-            for inset, displacement, opacity in ((2, 3.0, .34), (4, 1.5, .16)):
+            for inset, displacement, opacity in ((2, 2.5, .23), (4, 1.25, .10)):
                 inner = QPainterPath()
                 inner.addRoundedRect(rect.adjusted(inset, inset, -inset, -inset),
                                      max(0, radius - inset), max(0, radius - inset))
@@ -165,9 +167,9 @@ class GlassBackdrop:
                 painter.restore()
                 outer = inner
         rim = QLinearGradient(rect.topLeft(), rect.bottomLeft())
-        rim.setColorAt(0, QColor(255, 255, 255, 84 if self.dark else 190))
-        rim.setColorAt(.45, QColor(255, 255, 255, 26 if self.dark else 48))
-        rim.setColorAt(1, QColor(0, 0, 0, 65 if self.dark else 38))
+        rim.setColorAt(0, QColor(255, 255, 255, 60 if self.dark else 120))
+        rim.setColorAt(.45, QColor(255, 255, 255, 18 if self.dark else 32))
+        rim.setColorAt(1, QColor(0, 0, 0, 38 if self.dark else 27))
         painter.setBrush(Qt.NoBrush)
         painter.setPen(QPen(rim, 1))
         painter.drawPath(path)
@@ -315,7 +317,7 @@ class ItemViewSurface(ScrollAreaSurface):
         app = QApplication.instance()
         colors = theme_palette(bool(app.property("darkTheme")), app.property("colorTheme"))
         tint = QColor(colors.surface_raised)
-        tint.setAlpha(112)
+        tint.setAlpha(TABLE_HEADER_OPACITY)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setPen(Qt.NoPen)

@@ -11,6 +11,8 @@ from bilibili_downloader.gui.layout_policy import (
 )
 from bilibili_downloader.gui.resources.styles import (
     READING_FIELD_OPACITY,
+    TABLE_DIVIDER_OPACITY,
+    TABLE_HEADER_OPACITY,
     UI_METRICS,
     theme_palette,
     wallpaper_palette,
@@ -244,7 +246,7 @@ class WorkspacePreview(QWidget):
             rect = rect.adjusted(8, 8, -8, -8)
             cell = rect.width() / len(headers)
             header = QColor(p.surface_raised)
-            header.setAlpha(112)
+            header.setAlpha(TABLE_HEADER_OPACITY)
             painter.setPen(Qt.NoPen)
             painter.setBrush(header)
             painter.drawRoundedRect(QRectF(rect.left(), rect.top(), rect.width(), 40), UI_METRICS.radius, UI_METRICS.radius)
@@ -252,7 +254,9 @@ class WorkspacePreview(QWidget):
                 text(QRectF(rect.left() + column * cell + 12, rect.top(), cell - 24, 40), label, muted=True, protected=False)
             for row, values in enumerate(rows):
                 row_rect = QRectF(rect.left(), rect.top() + 40 + row * 56, rect.width(), 56)
-                painter.setPen(QColor(p.row_divider))
+                divider = QColor(p.row_divider)
+                divider.setAlpha(TABLE_DIVIDER_OPACITY)
+                painter.setPen(divider)
                 painter.drawLine(row_rect.bottomLeft(), row_rect.bottomRight())
                 for column, label in enumerate(values):
                     text(QRectF(rect.left() + column * cell + 12, row_rect.top(), cell - 24, 56), label, protected=False)

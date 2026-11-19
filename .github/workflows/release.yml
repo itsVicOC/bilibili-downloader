@@ -9,70 +9,51 @@ on:
 permissions:
   contents: read
 jobs:
-  wallpaper:
+  caption:
     if: "!inputs.publish"
     runs-on: windows-latest
     timeout-minutes: 18
     strategy:
       fail-fast: false
       matrix:
-        kind: [after, scales]
+        scale: ['1', '1.25', '1.5', '2']
     env:
       PYTHONUTF8: "1"
+      QT_SCALE_FACTOR: ${{ matrix.scale }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          fetch-depth: 3
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
           python-version: '3.12'
-      - name: Install dependencies
+      - name: Install project and test dependencies
         run: python -m pip install -c constraints.txt -e ".[dev]"
-      - name: Capture native Qt visuals
+      - name: Capture Windows compositor and verify caption pixels
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          $driver = "$PWD/.visual_matrix.py"
-          $kind = '${{ matrix.kind }}'
-          $output = "$env:RUNNER_TEMP/wallpaper"
-          if ($kind -eq 'before') {
-            $baseline = "$env:RUNNER_TEMP/biliflow-before"
-            git worktree add --detach $baseline HEAD~2
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            Set-Location $baseline
-          }
-          if ($kind -eq 'scales') {
-            foreach ($scale in @('1', '1.25', '1.5', '2')) {
-              $env:QT_SCALE_FACTOR = $scale
-              python -m scripts.capture_docs_screenshots --native --physical-pixels --checks-only --output-dir "$output/$scale/download"
-              if ($LASTEXITCODE -ne 0) { throw "Download geometry capture failed at $scale" }
-              python $driver --native --physical-pixels --glass-only --output-dir "$output/$scale/workspaces"
-              if ($LASTEXITCODE -ne 0) { throw "Workspace capture failed at $scale" }
-            }
-          } else {
-            python $driver --native --physical-pixels --glass-only --output-dir "$output"
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            $meter = "$PWD/.measure_stripes.py"
-            python $meter | Set-Content -Encoding utf8 "$output/stripes-after.json"
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            $baseline = "$env:RUNNER_TEMP/biliflow-before"
-            git worktree add --detach $baseline HEAD~2
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            Set-Location $baseline
-            python $meter | Set-Content -Encoding utf8 "$output/stripes-before.json"
+          foreach ($color in @('star_trail','bilibili_blue')) {
+            python -m scripts.capture_docs_screenshots --native --physical-pixels --chrome-only --color-theme $color --output-dir "$env:RUNNER_TEMP/immersive-caption/system/$color"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
-      - name: Verify real Windows Qt widgets
-        if: matrix.kind == 'after'
+      - name: Capture matching workspace screenshots
+        if: matrix.scale == '1'
+        run: python .visual_matrix.py --native --physical-pixels --glass-only --output-dir "$env:RUNNER_TEMP/immersive-caption/workspaces"
+      - name: Exercise real Windows hit targets and window transitions
+        if: matrix.scale == '1'
         env:
           QT_QPA_PLATFORM: windows
+        shell: pwsh
         run: |
-          python -m pytest -q tests/test_glass_surface.py tests/test_control_details.py tests/test_file_picker.py tests/test_dialog_placement.py tests/test_task_interactions.py tests/test_ui_polish.py::test_switch_login_keeps_whole_qr_visible tests/test_download_management.py::test_resume_uses_confirmed_progress_before_replacing_paused_readout
+          python -m pytest -q tests/test_window_chrome.py tests/test_caption_controls.py tests/test_glass_surface.py tests/test_control_details.py tests/test_file_picker.py
+          $result = $LASTEXITCODE
+          if (Test-Path 'build/ui-parity/chrome-regression') {
+            Copy-Item -Recurse 'build/ui-parity/chrome-regression' "$env:RUNNER_TEMP/immersive-caption/input"
+          }
+          exit $result
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
         with:
-          name: clear-glass-windows-${{ matrix.kind }}
-          path: ${{ runner.temp }}/wallpaper
+          name: immersive-caption-${{ matrix.scale }}
+          path: ${{ runner.temp }}/immersive-caption
           if-no-files-found: error
           compression-level: 0
           retention-days: 14

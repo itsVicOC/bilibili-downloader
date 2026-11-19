@@ -142,14 +142,6 @@ class ThemePalette:
     def popup(self):
         return blend_color(self.surface, self.surface_raised, .08)
 
-    @property
-    def caption_hover(self):
-        return blend_color(self.background, self.text, .08)
-
-    @property
-    def caption_pressed(self):
-        return blend_color(self.background, self.text, .14)
-
     caption_close_hover = "#c42b1c"
     caption_close_pressed = "#a1261b"
 
@@ -278,6 +270,9 @@ def glass_text_color(colors: ThemePalette) -> str:
 
 
 READING_FIELD_OPACITY = 44
+WALLPAPER_CONTROL_OPACITY = 204
+TABLE_HEADER_OPACITY = 76
+TABLE_DIVIDER_OPACITY = 120
 
 
 def wallpaper_tones(is_dark: bool, *, clear=False) -> tuple[int, int]:
@@ -519,6 +514,10 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
         background: transparent; border-color: transparent;
     }}
     QWidget[customBackground="true"] QWidget[readingView="true"] QHeaderView::section {{ color: {wallpaper_palette(p, is_dark, clear=False).muted}; }}
+    QWidget[customBackground="true"] QTableView[readingView="true"]::item,
+    QWidget[customBackground="true"] QTreeWidget[readingView="true"]::item {{
+        border-bottom-color: {translucent(p.row_divider, TABLE_DIVIDER_OPACITY)};
+    }}
     QProgressBar {{ min-height: 16px; max-height: 16px; border: none; border-radius: 5px; background: {p.surface_raised}; color: {p.text}; font-size: 9pt; text-align: center; }}
     QProgressBar::chunk {{ background: {p.accent}; border-radius: 5px; }}
     QProgressBar[captioned="true"] {{ min-height: 28px; max-height: 28px; background: transparent; }}
@@ -535,7 +534,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     }}
     QTabBar::tab:selected {{ background: {p.subtle_selection}; color: {p.active_text}; border-bottom-color: {p.accent}; }}
     QTabBar::tab:hover:!selected {{ background: {p.control_hover}; color: {p.text}; }}
-    QWidget[customBackground="true"] QTabBar::tab:!selected {{ background: {translucent(p.surface_raised, 228)}; color: {w.muted}; }}
+    QWidget[customBackground="true"] QTabBar::tab:!selected {{ background: {translucent(p.surface_raised, WALLPAPER_CONTROL_OPACITY)}; color: {w.muted}; }}
     QWidget[customBackground="true"] QTabBar::tab:hover:!selected {{ background: {p.control_hover}; color: {p.text}; }}
     QScrollArea, QScrollArea > QWidget > QWidget {{ background: transparent; border: none; }}
     QScrollArea[readingSurface="true"] {{ border: 8px solid transparent; border-radius: {m.card_radius}px; }}
@@ -598,7 +597,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QWidget[customBackground="true"] QLabel#FieldError {{ color: {w.danger}; }}
     QWidget[customBackground="true"] QPushButton#NavButton {{ color: {w.muted}; }}
     QWidget[customBackground="true"] #SelectionBar QPushButton:enabled {{
-        background: {translucent(p.surface_raised, 228)}; border-color: {w.control_border}; color: {w.muted};
+        background: {translucent(p.surface_raised, WALLPAPER_CONTROL_OPACITY)}; border-color: {w.control_border}; color: {w.muted};
     }}
     QWidget[customBackground="true"] #SelectionBar QPushButton:enabled:hover {{ background: {p.surface_raised}; }}
     QWidget[customBackground="true"] #SelectionBar QPushButton[keyboardFocus="true"]:enabled:focus {{ border-color: {w.focus}; }}

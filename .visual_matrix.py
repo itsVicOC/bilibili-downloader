@@ -49,7 +49,7 @@ def matrix(app, theme, window):
             for kind, reference in (("none", ""), ("builtin", BUILTIN_BACKGROUNDS[0].reference), ("custom", artwork.reference)):
                 for workspace in ("download", "live", "tasks", "settings"):
                     setattr(window._settings.appearance.backgrounds, workspace, reference)
-                sizes = ((900, 640), (1120, 760), (1320, 860))
+                sizes = ((1120, 760),)
                 if os.environ.get("QT_SCALE_FACTOR", "1") not in ("1", "1.0"):
                     sizes = ((900, 640),)
                 for width, height in sizes:

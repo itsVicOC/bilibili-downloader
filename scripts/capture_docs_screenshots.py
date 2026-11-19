@@ -71,7 +71,6 @@ from bilibili_downloader.gui.dialogs.update_dialog import UpdateDialog
 from bilibili_downloader.gui.live_controller import LiveUiController
 from bilibili_downloader.gui.main_window import MainWindow
 from bilibili_downloader.gui.resources.paths import asset_path
-from bilibili_downloader.gui.resources.styles import theme_palette
 from bilibili_downloader.gui.resources.theme import ThemeManager
 from bilibili_downloader.gui.settings_sections import SettingsSection
 from bilibili_downloader.gui.widgets.components import ElidedLabel
@@ -1528,11 +1527,17 @@ def _capture_native_chrome(app, theme, window):
     QWidget.grab() alone cannot catch a reappearing system titlebar or frame.
     Use only offline fixtures, and record the actual desktop/backend/DPI.
     """
+    from PySide6.QtGui import QCursor
     from PySide6.QtTest import QTest
+
+    from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
+    from bilibili_downloader.gui.resources.styles import contrast_ratio
 
     if app.platformName() not in ("windows", "cocoa"):
         raise RuntimeError("Chrome checks require a native desktop backend")
     checks = []
+    window._settings.appearance.backgrounds.download = BUILTIN_BACKGROUNDS[0].reference
+    window._refresh_workspace_background()
     window.resize(900, 640)
     window.move(window.screen().availableGeometry().topLeft() + QPoint(24, 40))
     for dark in (False, True):
@@ -1557,6 +1562,14 @@ def _capture_native_chrome(app, theme, window):
             handle = window.windowHandle()
             frame = window.frameGeometry()
             screen = window.screen()
+            controls = window._chrome.controls
+            if controls is not None:
+                QCursor.setPos(window.mapToGlobal(QPoint(300, 200)))
+                controls.hide()
+                reference = window.grab().toImage()
+                controls.show()
+                controls.reset()
+                QTest.qWait(100)
             pixmap = screen.grabWindow(0, *frame.getRect())
             if pixmap.isNull():
                 raise AssertionError("Native frame capture is unavailable")
@@ -1568,28 +1581,30 @@ def _capture_native_chrome(app, theme, window):
                 assert not handle.icon().isNull()
                 # The sidebar starts its brand below y=24. This previously
                 # empty strip contained the duplicate 16px caption icon.
-                origin = window.mapToGlobal(QPoint(12, 6)) - frame.topLeft()
+                origin = window.mapToGlobal(QPoint()) - frame.topLeft()
                 dpr = pixmap.devicePixelRatio()
                 image = pixmap.toImage()
-                expected = theme_palette(dark, theme.theme_id).sidebar
-                sample = QColor(expected)
-                colors = [
-                    image.pixelColor(round((origin.x() + x) * dpr), round((origin.y() + y) * dpr))
-                    for x in range(48) for y in range(12)
-                ]
+
+                def painted(point):
+                    point = point + origin
+                    return image.pixelColor(round(point.x() * dpr), round(point.y() * dpr))
+
+                def backing(point):
+                    scale = reference.devicePixelRatio()
+                    return reference.pixelColor(round(point.x() * scale), round(point.y() * scale))
+
+                def matches(point):
+                    return max(abs(a - b) for a, b in zip(painted(point).getRgb()[:3], backing(point).getRgb()[:3])) <= 3
+
+                samples = [QPoint(x, y) for x in range(12, 60) for y in range(6, 18)]
                 matching = sum(
-                    max(abs(color.red() - sample.red()), abs(color.green() - sample.green()),
-                        abs(color.blue() - sample.blue())) <= 3 for color in colors
+                    matches(point) for point in samples
                 )
-                assert matching / len(colors) >= 0.98, "Duplicate native caption is visible over the sidebar"
-                buttons = window.mapToGlobal(QPoint(window.width() - 144, 6)) - frame.topLeft()
-                glyph_pixels = sum(
-                    (image.pixelColor(round((buttons.x() + x) * dpr), round((buttons.y() + y) * dpr)).lightness() > 200)
-                    if dark else
-                    (image.pixelColor(round((buttons.x() + x) * dpr), round((buttons.y() + y) * dpr)).lightness() < 70)
-                    for x in range(136) for y in range(20)
-                )
-                assert glyph_pixels >= 8, "Caption buttons do not contrast with the selected appearance mode"
+                assert matching / len(samples) >= 0.98, "Duplicate native caption is visible over the sidebar"
+                for button in controls.buttons.values():
+                    assert all(matches(button.mapTo(window, QPoint(x, 16))) for x in (2, 8, 35, 43))
+                    glyph = [button.mapTo(window, QPoint(x, y)) for x in range(15, 31) for y in range(9, 24)]
+                    assert sum(contrast_ratio(painted(point).name(), backing(point).name()) >= 3 for point in glyph) >= 4
             checks.append({
                 "mode": mode, "state": name, "image": filename,
                 "frame": frame.getRect(), "client": window.geometry().getRect(),
