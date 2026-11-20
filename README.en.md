@@ -76,7 +76,7 @@ Path actions now sit beside the download directory, task views highlight whole r
 
 ## Download and install
 
-**`v0.9.0b3` prerelease** redraws the BiliFlow icon, simplifies tabs and toolbars, and makes the downloaded files list easier to scan. Existing installations can update through the channel that includes betas. [Download 0.9.0 Beta 3](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.9.0b3) · [Changelog](CHANGELOG.md#v090b3---2026-11-20)
+**`v0.9.0b4` prerelease** streams media continuously to reduce requests and automatically switches to bounded byte ranges after HTTP 403 or repeated body read failures. Existing installations can update through the channel that includes betas. [Download 0.9.0 Beta 4](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.9.0b4) · [Changelog](CHANGELOG.md#v090b4---2026-11-20)
 
 **Stable `v0.8.13`:** Fixes overseas CDN HTTP 403 download and resume failures, recording completion only after the entire stream is validated. Subtitle verification, 4:3 display copies, and the collection workspace remain available. [Download stable](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.13) · [Validation record](docs/BUILDING.md) (Chinese). Both update channels can upgrade.
 

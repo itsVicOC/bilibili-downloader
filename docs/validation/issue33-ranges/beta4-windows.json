@@ -1,0 +1,194 @@
+{
+  "bvid": "BV1GJ411x7h7",
+  "cid": 137649199,
+  "authenticated": false,
+  "expected_mode": "bounded",
+  "selected_cdn": "upos-hz-mirrorakam.akamaized.net",
+  "range_chunk_size": 4194304,
+  "downloader_sha256": "4c3f889282e4370421296ebdfb70e71d20fd46d685f866a771c944771b36e634",
+  "requests": [
+    {
+      "phase": "full",
+      "track": "video",
+      "host": "upos-hz-mirrorakam.akamaized.net",
+      "type": "full",
+      "range": null,
+      "status": 403,
+      "content_range": null
+    },
+    {
+      "phase": "full",
+      "track": "video",
+      "host": "upos-hz-mirrorakam.akamaized.net",
+      "type": "bounded",
+      "range": "bytes=0-4194303",
+      "status": 206,
+      "content_range": "bytes 0-4194303/20872903"
+    },
+    {
+      "phase": "full",
+      "track": "video",
+      "host": "upos-hz-mirrorakam.akamaized.net",
+      "type": "bounded",
+      "range": "bytes=4194304-8388607",
+      "status": 206,
+      "content_range": "bytes 4194304-8388607/20872903"
+    },
+    {
+      "phase": "full",
+      "track": "video",
+      "host": "upos-hz-mirrorakam.akamaized.net",
+      "type": "bounded",
+      "range": "bytes=8388608-12582911",
+      "status": 206,
+      "content_range": "bytes 8388608-12582911/20872903"
+    },
+    {
+      "phase": "full",
+      "track": "video",
+      "host": "upos-hz-mirrorakam.akamaized.net",
+      "type": "bounded",
+      "range": "bytes=12582912-16777215",
+      "status": 206,
+      "content_range": "bytes 12582912-16777215/20872903"
+    },
+    {
+      "phase": "full",
+      "track": "video",
+      "host": "upos-hz-mirrorakam.akamaized.net",
+      "type": "bounded",
+      "range": "bytes=16777216-20872902",
+      "status": 206,
+      "content_range": "bytes 16777216-20872902/20872903"
+    },
+    {
+      "phase": "full",
+      "track": "audio",
+      "host": "upos-hz-mirrorakam.akamaized.net",
+      "type": "full",
+      "range": null,
+      "status": 403,
+      "content_range": null
+    },
+    {
+      "phase": "full",
+      "track": "audio",
+      "host": "upos-hz-mirrorakam.akamaized.net",
+      "type": "bounded",
+      "range": "bytes=0-4194303",
+      "status": 206,
+      "content_range": "bytes 0-1167162/1167163"
+    },
+    {
+      "phase": "interruption",
+      "track": "resume",
+      "host": "upos-hz-mirrorakam.akamaized.net",
+      "type": "full",
+      "range": null,
+      "status": 403,
+      "content_range": null
+    },
+    {
+      "phase": "interruption",
+      "track": "resume",
+      "host": "upos-hz-mirrorakam.akamaized.net",
+      "type": "bounded",
+      "range": "bytes=0-4194303",
+      "status": 206,
+      "content_range": "bytes 0-4194303/20872903"
+    },
+    {
+      "phase": "resume",
+      "track": "resume",
+      "host": "upos-hz-mirrorakam.akamaized.net",
+      "type": "open",
+      "range": "bytes=2162688-",
+      "status": 403,
+      "content_range": null
+    },
+    {
+      "phase": "resume",
+      "track": "resume",
+      "host": "upos-hz-mirrorakam.akamaized.net",
+      "type": "bounded",
+      "range": "bytes=2162688-6356991",
+      "status": 206,
+      "content_range": "bytes 2162688-6356991/20872903"
+    },
+    {
+      "phase": "resume",
+      "track": "resume",
+      "host": "upos-hz-mirrorakam.akamaized.net",
+      "type": "bounded",
+      "range": "bytes=6356992-10551295",
+      "status": 206,
+      "content_range": "bytes 6356992-10551295/20872903"
+    },
+    {
+      "phase": "resume",
+      "track": "resume",
+      "host": "upos-hz-mirrorakam.akamaized.net",
+      "type": "bounded",
+      "range": "bytes=10551296-14745599",
+      "status": 206,
+      "content_range": "bytes 10551296-14745599/20872903"
+    },
+    {
+      "phase": "resume",
+      "track": "resume",
+      "host": "upos-hz-mirrorakam.akamaized.net",
+      "type": "bounded",
+      "range": "bytes=14745600-18939903",
+      "status": 206,
+      "content_range": "bytes 14745600-18939903/20872903"
+    },
+    {
+      "phase": "resume",
+      "track": "resume",
+      "host": "upos-hz-mirrorakam.akamaized.net",
+      "type": "bounded",
+      "range": "bytes=18939904-20872902",
+      "status": 206,
+      "content_range": "bytes 18939904-20872902/20872903"
+    }
+  ],
+  "step": "complete",
+  "country": "US",
+  "bilibili_country": "\u7f8e\u56fd",
+  "available_cdns": {
+    "video": [
+      "upos-hz-mirrorakam.akamaized.net",
+      "upos-sz-mirrorcosov.bilivideo.com"
+    ],
+    "audio": [
+      "upos-hz-mirrorakam.akamaized.net",
+      "upos-sz-mirrorcosov.bilivideo.com"
+    ]
+  },
+  "video": {
+    "bytes": 20872903,
+    "sha256": "f7fd3df01763cf6bfd8f7603e884d2dd47c48f8b868606cce7c9b906df86fdb1"
+  },
+  "audio": {
+    "bytes": 1167163,
+    "sha256": "e85ae22056823a8d760d7ebf830db194369ea1b5ec3ab7658442d1a5690d6ce6"
+  },
+  "merged": {
+    "bytes": 22096838,
+    "sha256": "28a06847b869f8fc80752ceba1dff5a6c488db7ae17b05dc1f8f44a04ea9ba37",
+    "duration": 212.39,
+    "has_video": true,
+    "has_audio": true,
+    "full_decode_passed": true
+  },
+  "resume": {
+    "offset": 2162688,
+    "bytes": 20872903,
+    "matches_full_download_sha256": true,
+    "progress_monotonic": true,
+    "range_honored": true,
+    "completion_marker_bytes": 20872903
+  },
+  "passed": true,
+  "temporary_media_removed": true
+}

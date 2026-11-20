@@ -19,9 +19,8 @@ import httpx
 from bilibili_downloader.api.client import BilibiliAPIClient
 from bilibili_downloader.core import downloader as downloader_module
 from bilibili_downloader.core.downloader import (
-    SSL_CONTEXT,
-    STREAM_HEADERS,
     StreamDownloader,
+    _stream_urls,
 )
 from bilibili_downloader.core.ffmpeg import FFmpegManager
 from bilibili_downloader.core.models import (
@@ -32,6 +31,8 @@ from bilibili_downloader.core.models import (
 )
 from bilibili_downloader.utils.network import BILIBILI_RESOURCE_HOSTS, trusted_https_url
 
+ISSUE33_HOST = "upos-hz-mirrorakam.akamaized.net"
+
 
 def sha256(path):
     digest = hashlib.sha256()
@@ -41,33 +42,63 @@ def sha256(path):
     return digest.hexdigest()
 
 
+def request_type(header):
+    if header is None:
+        return "full"
+    match = re.fullmatch(r"bytes=\d+-(\d*)", header)
+    if match is None:
+        raise AssertionError("Invalid media Range header")
+    return "bounded" if match.group(1) else "open"
+
+
+def verify_sequence(requests, expected, initial_type):
+    # Redirects forward the same Range policy and do not provide the media body.
+    transfers = [row for row in requests if row["status"] is None or not 300 <= row["status"] < 400]
+    assert transfers and transfers[0]["type"] == initial_type
+    if expected == "fast":
+        assert len(transfers) == 1
+        assert transfers[0]["status"] in ((200, 206) if initial_type == "full" else (206,))
+    if expected == "bounded":
+        assert len(transfers) > 1 and transfers[0]["status"] == 403
+        assert all(row["type"] == "bounded" and row["status"] == 206 for row in transfers[1:])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bvid", default="BV1GJ411x7h7")
     parser.add_argument("--cid", type=int, default=137649199)
     parser.add_argument("--require-country")
+    parser.add_argument("--expect", choices=("auto", "fast", "bounded"), default="auto",
+                        help="Check a single continuous transfer or a 403 followed by bounded ranges")
+    parser.add_argument("--cdn-host", help="Select one CDN host from the playback response")
     parser.add_argument("--ffmpeg")
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args()
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
+    cdn_host = args.cdn_host.lower() if args.cdn_host else (ISSUE33_HOST if args.expect == "bounded" else None)
     report = {"bvid": args.bvid, "cid": args.cid, "authenticated": False,
+              "expected_mode": args.expect, "selected_cdn": cdn_host,
               "range_chunk_size": downloader_module.RANGE_CHUNK_SIZE,
               "downloader_sha256": sha256(Path(downloader_module.__file__)), "requests": []}
     real_client = httpx.Client
     state = {"phase": "full", "track": ""}
 
     def observe_request(request):
-        assert re.fullmatch(r"bytes=\d+-\d+", request.headers["range"])
         assert request.headers["accept-encoding"] == "identity"
         assert "cookie" not in request.headers
+        byte_range = request.headers.get("range")
+        record = {**state, "host": request.url.host, "type": request_type(byte_range),
+                  "range": byte_range, "status": None, "content_range": None}
+        request.extensions["biliflow_smoke_record"] = record
+        report["requests"].append(record)
 
     def observe_response(response):
-        report["requests"].append({
-            **state, "host": response.request.url.host,
-            "range": response.request.headers["range"], "status": response.status_code,
-            "content_range": response.headers.get("content-range"),
-        })
+        record = response.request.extensions["biliflow_smoke_record"]
+        content_range = response.headers.get("content-range", "")
+        record["status"] = response.status_code
+        if re.fullmatch(r"bytes (?:\d+-\d+|\*)/(?:\d+|\*)", content_range, re.I):
+            record["content_range"] = content_range
 
     def recording_client(**kwargs):
         client = real_client(**kwargs)
@@ -84,28 +115,41 @@ def main():
 
     api = BilibiliAPIClient(request_timeout=20)
     try:
-        with real_client(timeout=20) as client:
-            trace = client.get("https://www.cloudflare.com/cdn-cgi/trace")
-            trace.raise_for_status()
-            fields = dict(line.split("=", 1) for line in trace.text.splitlines() if "=" in line)
-            report["country"] = fields.get("loc")
+        report["step"] = "location"
+        try:
+            with real_client(timeout=20) as client:
+                trace = client.get("https://www.cloudflare.com/cdn-cgi/trace")
+                trace.raise_for_status()
+                fields = dict(line.split("=", 1) for line in trace.text.splitlines() if "=" in line)
+                report["country"] = fields.get("loc")
+        except httpx.HTTPError:
+            report["country"] = None
         if args.require_country:
             assert report["country"] == args.require_country
-        zone = api._client.get("/x/web-interface/zone")
-        zone.raise_for_status()
-        report["bilibili_country"] = (zone.json().get("data") or {}).get("country")
+        try:
+            zone = api._client.get("/x/web-interface/zone")
+            zone.raise_for_status()
+            report["bilibili_country"] = (zone.json().get("data") or {}).get("country")
+        except (httpx.HTTPError, ValueError):
+            report["bilibili_country"] = None
+        report["step"] = "playback"
         streams = api.get_play_url(args.bvid, args.cid, VideoQuality.Q480P, preferred_codec=7)
         video = next(stream for stream in streams["video_streams"] if stream.id == 32 and stream.codecid == 7)
         audio = streams["audio_streams"][0]
-        selected = {}
-        for track, stream in (("video", video), ("audio", audio)):
-            url = next(url for url in [stream.base_url, *stream.backup_url]
-                       if httpx.URL(url).host == "upos-hz-mirrorakam.akamaized.net")
-            url = trusted_https_url(url, BILIBILI_RESOURCE_HOSTS)
-            selected[track] = stream.model_copy(update={"base_url": url, "backup_url": []})
-            with real_client(transport=httpx.HTTPTransport(verify=SSL_CONTEXT), timeout=20) as client:
-                with client.stream("GET", url, headers=STREAM_HEADERS, follow_redirects=False) as response:
-                    report[track + "_original_status"] = response.status_code
+        selected = {"video": video, "audio": audio}
+        report["available_cdns"] = {
+            track: sorted({httpx.URL(url).host for url in _stream_urls(stream)})
+            for track, stream in selected.items()
+        }
+        if cdn_host:
+            report["step"] = "select_cdn"
+            for track, stream in selected.items():
+                url = next((url for url in _stream_urls(stream) if httpx.URL(url).host == cdn_host), None)
+                if url is None:
+                    report["missing_cdn_for"] = track
+                    raise ValueError("Requested CDN was not offered for the public sample")
+                url = trusted_https_url(url, BILIBILI_RESOURCE_HOSTS)
+                selected[track] = stream.model_copy(update={"base_url": url, "backup_url": []})
 
         class Playback:
             def get_play_url(self, **kwargs):
@@ -114,10 +158,12 @@ def main():
         with tempfile.TemporaryDirectory(prefix="biliflow-cdn-smoke-") as temporary:
             directory = Path(temporary)
             with patch.object(downloader_module.httpx, "Client", recording_client):
+                report["step"] = "download"
                 downloader = RecordingDownloader(Playback(), temporary, max_retries=1, ffmpeg_path=args.ffmpeg)
                 item = DownloadItem(video_info=VideoInfo(bvid=args.bvid, cid=args.cid, title="CDN validation"),
                                     selected_quality=VideoQuality.Q480P, selected_video_codec=7)
                 output = Path(downloader.download(item, lambda fraction, text: None))
+                report["step"] = "decode"
                 state["phase"] = "decode"
                 inspection = FFmpegManager.inspect_media(output, OutputMode.VIDEO, custom_path=args.ffmpeg)
                 assert inspection["valid"] and inspection["has_video"] and inspection["has_audio"]
@@ -133,7 +179,7 @@ def main():
                                     "duration": inspection["duration"], "has_video": True, "has_audio": True,
                                     "full_decode_passed": True}
 
-                state["phase"] = "interruption"
+                report["step"] = state["phase"] = "interruption"
                 interrupted = RecordingDownloader(Playback(), temporary, max_retries=1)
                 partial = directory / "resume.m4s"
 
@@ -150,7 +196,7 @@ def main():
                 offset = partial.stat().st_size
                 assert 0 < offset < report["video"]["bytes"]
                 assert not partial.with_suffix(".m4s.complete").exists()
-                state["phase"] = "resume"
+                report["step"] = state["phase"] = "resume"
                 resumed = RecordingDownloader(Playback(), temporary, max_retries=1)
                 progress = []
                 resumed._download_stream(selected["video"], partial, progress.append)
@@ -159,19 +205,25 @@ def main():
                 assert sha256(partial) == report["video"]["sha256"]
                 assert int(partial.with_suffix(".m4s.complete").read_text()) == partial.stat().st_size
                 resume_requests = [request for request in report["requests"] if request["phase"] == "resume"]
-                assert resume_requests[0]["range"].startswith(f"bytes={offset}-")
+                assert resume_requests[0]["range"] == f"bytes={offset}-"
                 report["resume"] = {"offset": offset, "bytes": partial.stat().st_size,
                                     "matches_full_download_sha256": True, "progress_monotonic": True,
+                                    "range_honored": any(row["status"] == 206 for row in resume_requests),
                                     "completion_marker_bytes": int(partial.with_suffix(".m4s.complete").read_text())}
-        assert all(request["status"] == 206 for request in report["requests"])
+        report["step"] = "sequence"
+        verify_sequence(resume_requests, args.expect, "open")
         for track in ("video", "audio"):
             responses = [request for request in report["requests"] if request["phase"] == "full" and request["track"] == track]
-            assert int(responses[-1]["content_range"].split("/")[-1]) == report[track]["bytes"]
-        report.update(passed=True, temporary_media_removed=True)
+            verify_sequence(responses, args.expect, "full")
+            assert responses[-1]["status"] in (200, 206, 416)
+            if responses[-1]["content_range"] is not None:
+                assert int(responses[-1]["content_range"].split("/")[-1]) == report[track]["bytes"]
+        report.update(step="complete", passed=True, temporary_media_removed=True)
     except Exception as error:
         report.update(passed=False, error_type=type(error).__name__)
-        if isinstance(error, httpx.HTTPStatusError):
-            report.update(status=error.response.status_code, host=error.request.url.host)
+        http_error = error if isinstance(error, httpx.HTTPStatusError) else error.__cause__
+        if isinstance(http_error, httpx.HTTPStatusError):
+            report.update(status=http_error.response.status_code, host=http_error.request.url.host)
     finally:
         api.close()
         args.report.parent.mkdir(parents=True, exist_ok=True)

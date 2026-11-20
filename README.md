@@ -74,7 +74,7 @@
 
 ## 下载与安装
 
-**`v0.9.0b3` 预发布版**重绘 BiliFlow 图标，简化页签与工具栏，并改善下载文件列表的对齐和可读性。已安装的用户可通过「更新最新版」通道获取。[下载 0.9.0 Beta 3](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.9.0b3) · [更新日志](CHANGELOG.md#v090b3---2026-11-20)
+**`v0.9.0b4` 预发布版**优先连续下载以减少请求，并在 CDN 返回 HTTP 403 或连续读取失败时自动切换到有界分块。已安装的用户可通过「更新最新版」通道获取。[下载 0.9.0 Beta 4](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.9.0b4) · [更新日志](CHANGELOG.md#v090b4---2026-11-20)
 
 **`v0.8.13` 正式版：** 修复海外 CDN 下载与续传的 HTTP 403 问题，完整流校验通过后才记录完成；保留字幕核验、4:3 显示副本与收藏工作台。[下载正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.13) · [验证记录](docs/BUILDING.md)。正式版与包含 beta 的通道均可升级。
 

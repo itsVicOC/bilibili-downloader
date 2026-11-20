@@ -2,6 +2,17 @@
 
 本项目遵循语义化版本。日期使用 `YYYY-MM-DD` 格式。
 
+## v0.9.0b4 - 2026-11-20
+
+0.9.0 的第四个 beta。已安装的用户可在「设置 → 关于与更新」选择「更新最新版」通道体验。
+
+- 点播下载优先使用连续传输，续传从已写入的位置开始，减少正常 CDN 上的分块请求。
+- 首次传输或续传遇到 HTTP 403，或连续两次读取响应体失败时，自动切换到有界分块下载。继续校验字节范围与总大小，并在完整流校验通过后记录完成（#33）。
+
+美国 Windows／Linux 已用实际 Akamai 流验证 HTTP 403 自动回退、音视频完整解码与中断续传 SHA-256 一致性。[验证记录](https://github.com/itsVicOC/bilibili-downloader/blob/v0.9.0b4/docs/ISSUE33_RANGE_VALIDATION.md#v090b4-美国-akamai-实测)
+
+[完整提交记录](https://github.com/itsVicOC/bilibili-downloader/compare/v0.9.0b3...v0.9.0b4)
+
 ## v0.9.0b3 - 2026-11-20
 
 0.9.0 的第三个 beta。已安装的用户可在「设置 → 关于与更新」选择「更新最新版」通道体验。

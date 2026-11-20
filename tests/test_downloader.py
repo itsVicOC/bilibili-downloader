@@ -56,7 +56,7 @@ def test_download_stream_falls_back_to_backup_url(monkeypatch, tmp_path):
     downloader = StreamDownloader(api_client=object(), output_dir=str(tmp_path), max_retries=1)
     calls = []
 
-    def fake_download_url(client, url, dest, progress_callback):
+    def fake_download_url(client, url, dest, progress_callback, **_kwargs):
         calls.append(url)
         if url == "base":
             raise OSError("primary failed")
@@ -79,7 +79,7 @@ def test_download_stream_skips_untrusted_primary_url(monkeypatch, tmp_path):
     )
     calls = []
 
-    def fake_download_url(client, url, dest, progress_callback):
+    def fake_download_url(client, url, dest, progress_callback, **_kwargs):
         calls.append(url)
         if url == "https://mcdn.bilivideo.cn:8082/audio.m4s":
             raise UntrustedResourceURLError("仅允许 HTTPS 443 地址")
@@ -338,7 +338,7 @@ def test_download_stream_reuses_only_matching_completion_marker(
     monkeypatch.setattr(
         downloader,
         "_download_url",
-        lambda *_args: calls.append("downloaded"),
+        lambda *_args, **_kwargs: calls.append("downloaded"),
     )
 
     downloader._download_stream(

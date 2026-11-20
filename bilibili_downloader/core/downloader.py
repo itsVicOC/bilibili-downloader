@@ -64,6 +64,17 @@ class TransferMetrics:
     eta_seconds: Optional[int] = None
 
 
+@dataclass
+class _StreamTransfer:
+    expected_total: Optional[int] = None
+    started_at: Optional[float] = None
+    started_bytes: int = 0
+
+
+class _ResponseBodyError(httpx.ProtocolError):
+    """A validated media response stopped before its body was complete."""
+
+
 class StreamDownloader:
     """Downloads DASH video/audio streams and merges with FFmpeg."""
 
@@ -372,6 +383,7 @@ class StreamDownloader:
         if not urls:
             raise RuntimeError("下载失败：流地址为空")
 
+        transfer = _StreamTransfer()
         # Reuse a single httpx.Client across all retries for connection pooling
         transport = httpx.HTTPTransport(
             http2=False,
@@ -385,18 +397,9 @@ class StreamDownloader:
 
                 for candidate_index, url in enumerate(urls, start=1):
                     try:
-                        if referer == STREAM_HEADERS["Referer"]:
-                            self._download_url(
-                                client, url, dest, progress_callback
-                            )
-                        else:
-                            self._download_url(
-                                client,
-                                url,
-                                dest,
-                                progress_callback,
-                                referer=referer,
-                            )
+                        self._download_url(
+                            client, url, dest, progress_callback, referer=referer, transfer=transfer,
+                        )
                         try:
                             complete_marker.write_text(
                                 str(dest.stat().st_size), encoding="ascii"
@@ -439,25 +442,38 @@ class StreamDownloader:
         dest: Path,
         progress_callback: Callable[[float], None],
         referer: str = "https://www.bilibili.com/",
+        *,
+        transfer: Optional[_StreamTransfer] = None,
     ) -> None:
-        """Download finite byte ranges, resuming from the validated local prefix."""
+        """Stream from one CDN, falling back to finite ranges if necessary."""
+        transfer = transfer if transfer is not None else _StreamTransfer()
         resume_from = dest.stat().st_size if dest.exists() else 0
         headers = dict(STREAM_HEADERS)
         headers["Referer"] = referer
         # Range offsets describe encoded bytes. Never let transparent content
         # decompression change the offsets written to the partial file.
         headers["Accept-Encoding"] = "identity"
-        total_size = None
+        bounded = False
+        body_failures = 0
         current_url = trusted_https_url(url, BILIBILI_RESOURCE_HOSTS)
         while True:
             if self._cancelled:
                 raise RuntimeError("Download cancelled")
-            range_end = resume_from + RANGE_CHUNK_SIZE - 1
-            if total_size is not None:
-                range_end = min(range_end, total_size - 1)
-            # Some overseas CDNs reject both absent and open-ended Range headers.
-            headers["Range"] = f"bytes={resume_from}-{range_end}"
+            range_end = None
+            if bounded:
+                range_end = resume_from + RANGE_CHUNK_SIZE - 1
+                if transfer.expected_total is not None:
+                    # After a dropped EOF, a valid range starting at the local length
+                    # lets the server confirm completion with a 416 and its total.
+                    range_end = max(resume_from, min(range_end, transfer.expected_total - 1))
+                headers["Range"] = f"bytes={resume_from}-{range_end}"
+            elif resume_from:
+                headers["Range"] = f"bytes={resume_from}-"
+            else:
+                headers.pop("Range", None)
             for _ in range(8):
+                if self._cancelled:
+                    raise RuntimeError("Download cancelled")
                 with client.stream(
                     "GET",
                     current_url,
@@ -469,17 +485,33 @@ class StreamDownloader:
                         location = response.headers.get("location")
                         if not location:
                             response.raise_for_status()
-                        current_url = trusted_https_url(
+                        redirected_url = trusted_https_url(
                             urljoin(current_url, location), BILIBILI_RESOURCE_HOSTS,
                         )
+                        if redirected_url != current_url:
+                            body_failures = 0
+                        current_url = redirected_url
                         continue
-                    downloaded, total = self._write_response(
-                        response, dest, resume_from, progress_callback,
-                        range_end=range_end, expected_total=total_size,
-                    )
+                    # Some CDNs reject both absent and open-ended Range headers.
+                    if response.status_code == 403 and not bounded:
+                        bounded = True
+                        break
+                    try:
+                        downloaded, total = self._write_response(
+                            response, dest, resume_from, progress_callback,
+                            range_end=range_end, transfer=transfer,
+                        )
+                    except _ResponseBodyError:
+                        if bounded:
+                            raise
+                        body_failures += 1
+                        bounded = body_failures >= 2
+                        resume_from = dest.stat().st_size
+                        break
                     if response.status_code != 206 or downloaded == total:
                         return
-                    resume_from, total_size = downloaded, total
+                    resume_from = downloaded
+                    body_failures = 0
                     break
             else:
                 raise RuntimeError("下载失败：媒体地址重定向次数过多")
@@ -492,9 +524,11 @@ class StreamDownloader:
         progress_callback: Callable[[float], None],
         *,
         range_end: Optional[int] = None,
-        expected_total: Optional[int] = None,
+        transfer: Optional[_StreamTransfer] = None,
     ) -> tuple[int, int]:
         """Validate one response and return the saved offset and resource size."""
+        transfer = transfer if transfer is not None else _StreamTransfer()
+        expected_total = transfer.expected_total
         if response.status_code == 416 and _range_already_complete(response, dest):
             total = dest.stat().st_size
             if expected_total is not None and total != expected_total:
@@ -535,16 +569,20 @@ class StreamDownloader:
                 body_size = expected_total
         if expected_total is not None and total != expected_total:
             raise httpx.ProtocolError("服务器返回的媒体总大小发生变化", request=response.request)
+        transfer.expected_total = total if body_size is not None else None
         downloaded = resume_from if append else 0
         received = 0
         mode = "ab" if append else "wb"
 
         last_reported = -1.0
-        started_at = time.monotonic()
-        last_reported_at = started_at
-        started_bytes = downloaded
+        last_reported_at = time.monotonic()
+        if transfer.started_at is None or not append:
+            transfer.started_at = last_reported_at
+            transfer.started_bytes = downloaded
+        started_at = transfer.started_at
+        started_bytes = transfer.started_bytes
         with open(dest, mode) as f:
-            for chunk in response.iter_bytes(chunk_size=65536):
+            for chunk in _response_chunks(response):
                 if self._cancelled:
                     raise RuntimeError("Download cancelled")
                 if body_size is not None and received + len(chunk) > body_size:
@@ -552,7 +590,8 @@ class StreamDownloader:
                 f.write(chunk)
                 received += len(chunk)
                 downloaded += len(chunk)
-                elapsed = max(time.monotonic() - started_at, 0.001)
+                now = time.monotonic()
+                elapsed = max(now - started_at, 0.001)
                 speed = max(0.0, (downloaded - started_bytes) / elapsed)
                 eta = (
                     max(0, int((total - downloaded) / speed))
@@ -567,7 +606,6 @@ class StreamDownloader:
                 )
                 if total > 0:
                     pct = min(downloaded / total, 1.0)
-                    now = time.monotonic()
                     if (
                         pct - last_reported >= 0.05
                         or now - last_reported_at >= 0.5
@@ -581,7 +619,7 @@ class StreamDownloader:
                         last_reported_at = now
 
         if body_size is not None and received != body_size:
-            raise httpx.ProtocolError("媒体响应未达到声明的长度，已保留断点", request=response.request)
+            raise _ResponseBodyError("媒体响应未达到声明的长度，已保留断点", request=response.request)
         if self._cancelled:
             raise RuntimeError("Download cancelled")
         progress_callback(downloaded / total if total else 1.0)
@@ -594,6 +632,13 @@ class StreamDownloader:
             if self._cancelled:
                 raise RuntimeError("Download cancelled")
             time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
+
+
+def _response_chunks(response: httpx.Response):
+    try:
+        yield from response.iter_bytes(chunk_size=65536)
+    except (httpx.ReadTimeout, httpx.ReadError, httpx.RemoteProtocolError) as error:
+        raise _ResponseBodyError("读取媒体正文中断，已保留断点", request=response.request) from error
 
 
 def _stream_urls(stream: StreamInfo) -> list[str]:
