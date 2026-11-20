@@ -23,14 +23,63 @@ from bilibili_downloader.gui.resources.styles import (
     wallpaper_palette,
 )
 from bilibili_downloader.gui.resources.theme import ThemeManager
-from bilibili_downloader.gui.widgets.components import SectionCard
+from bilibili_downloader.gui.widgets.components import SectionCard, scroll_area
 from bilibili_downloader.gui.widgets.dialog_shell import AppDialog
-from bilibili_downloader.gui.widgets.glass_surface import GlassBackdrop
+from bilibili_downloader.gui.widgets.glass_surface import GlassBackdrop, ScrollEdge
 from bilibili_downloader.gui.widgets.row_hover import RowHoverTable, RowHoverTree
-from bilibili_downloader.gui.widgets.workspace_background import WorkspaceStack
+from bilibili_downloader.gui.widgets.workspace_background import (
+    WorkspaceStack,
+    paint_workspace_background,
+)
 from tests.test_ui_polish import flush
 from tests.test_ui_refresh import restore_theme as restore_theme
 from tests.test_workspaces import workspace as workspace
+
+
+@pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])
+@pytest.mark.parametrize("dark", [False, True])
+def test_ambient_materials_have_depth_without_wallpaper(qapp, theme_id, dark):
+    size = QSize(256, 160)
+    area = QRectF(QPoint(), size)
+    colors = theme_palette(dark, theme_id)
+    glass = GlassBackdrop()
+
+    def render(painter, rect):
+        paint_workspace_background(painter, rect, QPixmap(), dark, theme_id)
+
+    glass.prepare("ambient", size, render, dark, colors, ambient=True)
+    material_keys = (glass.image.cacheKey(), glass.reading.cacheKey())
+    glass.prepare("ambient", size, render, dark, colors, 32, ambient=True)
+    assert (glass.image.cacheKey(), glass.reading.cacheKey()) == material_keys
+    assert glass.original.isNull()
+    assert glass.image.cacheKey() == glass.clear_image.cacheKey()
+
+    def capture(edge=None, *, layer="glass"):
+        image = QImage(size, QImage.Format_RGB32)
+        painter = QPainter(image)
+        render(painter, area)
+        if layer == "reading":
+            glass.paint_reading(painter, area, area)
+        elif layer == "glass":
+            glass.paint(painter, area, area, edge=edge)
+        painter.end()
+        return image
+
+    canvas = capture(layer="canvas")
+    floating = capture()
+    rail = capture(Qt.RightEdge)
+    title_bar = capture(Qt.BottomEdge)
+    card = capture(layer="reading")
+    assert rail.pixelColor(0, 0) != floating.pixelColor(0, 0)
+    assert rail.pixelColor(255, 80) != title_bar.pixelColor(255, 80)
+    assert title_bar.pixelColor(128, 159) != rail.pixelColor(128, 159)
+    assert rail.pixelColor(128, 80) != card.pixelColor(128, 80)
+    assert floating.pixelColor(196, 12) != floating.pixelColor(24, 144)
+    for surface in (canvas, rail, title_bar, floating, card):
+        for x, y in ((24, 80), (195, 12), (64, 140)):
+            background = surface.pixelColor(x, y).name()
+            assert all(contrast_ratio(color, background) >= 4.5 for color in (colors.text, colors.muted))
+            assert all(contrast_ratio(color, background) >= 3 for color in (colors.control_border, colors.focus))
 
 
 @pytest.mark.parametrize("clear", [False, True])
@@ -74,6 +123,35 @@ def test_clear_chrome_preserves_more_stripe_detail(qapp, dark):
         return max(samples) - min(samples)
 
     assert brightness_spread(glass.clear_image) >= 1.20 * brightness_spread(glass.image) > 0
+
+
+def test_header_handoff_reuses_one_cached_fade_and_scroll_edge_is_mouse_transparent(qtbot):
+    glass = GlassBackdrop()
+    size = QSize(440, 240)
+    glass.prepare("fade", size, lambda p, rect: p.fillRect(rect, Qt.white), False, theme_palette(False))
+    band = QRectF(0, 0, size.width(), 44)
+    image = QImage(band.size().toSize(), QImage.Format_ARGB32_Premultiplied)
+    image.fill(Qt.transparent)
+    painter = QPainter(image)
+    glass.paint_header_handoff(painter, band, band.translated(0, 56))
+    cache_key = glass._handoff.cacheKey()
+    glass.paint_header_handoff(painter, band, band.translated(0, 56))
+    painter.end()
+    assert glass._handoff.cacheKey() == cache_key
+    assert image.pixelColor(50, 0).alpha() > image.pixelColor(50, 22).alpha() > image.pixelColor(50, 43).alpha()
+
+    body = QWidget()
+    body.setMinimumHeight(480)
+    scroll = scroll_area(body, scroll_edge=True)
+    scroll.resize(360, 210)
+    qtbot.addWidget(scroll)
+    scroll.show()
+    edge = scroll.viewport().findChild(ScrollEdge)
+    assert edge.isHidden() and edge.testAttribute(Qt.WA_TransparentForMouseEvents)
+    scroll.verticalScrollBar().setValue(10)
+    assert edge.isVisible() and edge.width() == scroll.viewport().width()
+    scroll.verticalScrollBar().setValue(0)
+    assert edge.isHidden()
 
 
 def test_dark_blue_wallpaper_keeps_semantic_text_colors():

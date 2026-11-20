@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from PySide6.QtCore import QEvent, QObject, QRect, Qt, Signal
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QLabel,
     QStyle,
     QStyledItemDelegate,
@@ -50,8 +51,11 @@ class SelectionBar(QWidget):
     clear_requested = Signal()
     review_requested = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, contextual=False):
         super().__init__(parent)
+        self._contextual = contextual
+        if contextual:
+            self.hide()
         from PySide6.QtWidgets import QBoxLayout
         self.setObjectName("SelectionBar")
         row = QBoxLayout(QBoxLayout.LeftToRight, self)
@@ -75,6 +79,8 @@ class SelectionBar(QWidget):
         row.addWidget(self.action_strip)
 
     def update_state(self, state):
+        if self._contextual:
+            self.setVisible(bool(state.selected) or state.reviewing)
         suffix = f"，筛选外 {state.outside} 项" if state.outside else ""
         self.summary.setText(f"显示 {len(state.visible)} / {len(state.order)} 项 · 已选 {len(state.selected)} 项{suffix}")
         self.review_button.setText("返回筛选" if state.reviewing else "查看已选")
@@ -162,16 +168,22 @@ class TableSelection(QObject):
     changed = Signal()
     focus_changed = Signal()
 
-    def __init__(self, table, content_delegate=None, *, paint_only=False):
+    def __init__(self, table, content_delegate=None, *, paint_only=False, distinguish_focus=False):
         super().__init__(table)
         self.table = table
         self.state = SelectionState()
         self.paint_only = paint_only
+        self.distinguish_focus = distinguish_focus
         self._keys = set()
         self._syncing = False
         table._selection_binding = self
         table.installEventFilter(self)
         table.setItemDelegateForColumn(0, CheckableRowDelegate(table, content_delegate, self))
+        if distinguish_focus:
+            # Qt's own row selection paints an additional background before the delegates.
+            table.setSelectionMode(QAbstractItemView.NoSelection)
+            self.changed.connect(table.viewport().update)
+            self.focus_changed.connect(table.viewport().update)
         table.itemChanged.connect(self._item_changed)
         table.currentItemChanged.connect(self._focus)
 

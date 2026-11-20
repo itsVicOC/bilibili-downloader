@@ -152,6 +152,7 @@ def test_empty_source_does_not_reserve_height_for_hidden_batch_results(workspace
     flush()
     summary = window._configuration.summary
     assert summary.isVisible() and summary.visibleRegion().boundingRect().contains(summary.rect())
+    assert summary.width() >= summary.fontMetrics().horizontalAdvance(summary.text())
     assert window._workspace_scroll.verticalScrollBar().maximum() == 0
 
 

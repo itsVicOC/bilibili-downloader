@@ -7,13 +7,23 @@ from PySide6.QtCore import (
     QEvent,
     QObject,
     QPointF,
+    QRect,
     QRectF,
     QSize,
     Qt,
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtGui import (
+    QColor,
+    QIcon,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPixmap,
+    QTextLayout,
+    QTextOption,
+)
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication,
@@ -31,6 +41,8 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QSpinBox,
     QStackedWidget,
+    QTabBar,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -49,7 +61,11 @@ from bilibili_downloader.gui.widgets.dialog_shell import (
     prepare_dialog,
     remember_focus,
 )
-from bilibili_downloader.gui.widgets.glass_surface import GlassFrame
+from bilibili_downloader.gui.widgets.glass_surface import (
+    GlassFrame,
+    ScrollEdge,
+    paint_widget_glass,
+)
 from bilibili_downloader.gui.widgets.header_backdrop import HEADER_HEIGHT
 from bilibili_downloader.gui.widgets.motion import StateTransition
 from bilibili_downloader.gui.widgets.popup_menu import PopupMenu as PopupMenu
@@ -123,6 +139,10 @@ class IconButton(QPushButton):
         self.setToolTip(text)
         self._sync_icon()
         self._nav_transition = StateTransition(self, float(role == "NavButtonActive"))
+        if role in {"NavButton", "NavButtonActive"}:
+            self._press_transition = StateTransition(self)
+            self.pressed.connect(lambda: self._press_transition.to(1))
+            self.released.connect(lambda: self._press_transition.to(0))
 
     def setObjectName(self, name):
         super().setObjectName(name)
@@ -130,7 +150,8 @@ class IconButton(QPushButton):
             self._nav_transition.to(name == "NavButtonActive")
 
     def _sync_icon(self):
-        color = palette().active_text if self.objectName() == "NavButtonActive" else None
+        colors = palette(self)
+        color = colors.active_text if self.objectName() == "NavButtonActive" else colors.muted
         self.setIcon(line_icon(self.icon_name, color))
 
     def event(self, event):
@@ -141,18 +162,21 @@ class IconButton(QPushButton):
         return super().event(event)
 
     def paintEvent(self, event):
+        if hasattr(self, "_press_transition"):
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setPen(Qt.NoPen)
+            colors = palette(self)
+            rect = QRectF(self.rect()).adjusted(1, 1, -1, -1)
+            for shade, opacity in ((colors.subtle_selection, self._nav_transition.value),
+                                   (colors.control_pressed, self._press_transition.value)):
+                if opacity > 0:
+                    color = QColor(shade)
+                    color.setAlphaF(opacity)
+                    painter.setBrush(color)
+                    painter.drawRoundedRect(rect, UI_METRICS.radius, UI_METRICS.radius)
+            painter.end()
         super().paintEvent(event)
-        if not hasattr(self, "_nav_transition") or self._nav_transition.value <= 0:
-            return
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        color = QColor(palette().accent)
-        color.setAlphaF(self._nav_transition.value)
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(color)
-        height = 8 + 12 * self._nav_transition.value
-        painter.drawRoundedRect(QRectF(2, (self.height() - height) / 2, 3, height), 1.5, 1.5)
-        painter.end()
 
     def set_compact(self, compact):
         self.setText("" if compact else self.full_text)
@@ -240,6 +264,72 @@ class ElidedLabel(QLabel):
         super().resizeEvent(event)
 
 
+class PreviewTitle(QLabel):
+    """Keep the full plain-text title while bounding its painted preview."""
+
+    def __init__(self, text, parent=None):
+        super().__init__(text, parent)
+        self.setTextFormat(Qt.PlainText)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        self.compact = False
+        self.line_limit = 2
+
+    def set_full_text(self, text):
+        self.setText(text)
+        self.setToolTip(text)
+        self.setAccessibleName(text)
+        self.updateGeometry()
+        self.update()
+
+    def sizeHint(self):
+        return QSize(280, self.heightForWidth(self.width()))
+
+    def minimumSizeHint(self):
+        return QSize(0, self.fontMetrics().lineSpacing() * (1 if self.compact else self.line_limit))
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, width):
+        lines = 1 if self.compact and self.fontMetrics().horizontalAdvance(self.text()) <= width else 2
+        return self.fontMetrics().lineSpacing() * min(lines, self.line_limit)
+
+    def resizeEvent(self, event):
+        if self.compact:
+            self.updateGeometry()
+        super().resizeEvent(event)
+
+    def paintEvent(self, event):
+        text = " ".join(self.text().splitlines())
+        rect = self.contentsRect()
+        metrics = self.fontMetrics()
+        layout = QTextLayout(text, self.font())
+        option = QTextOption()
+        option.setWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
+        layout.setTextOption(option)
+        layout.beginLayout()
+        first = layout.createLine()
+        if not first.isValid():
+            layout.endLayout()
+            return
+        first.setLineWidth(max(1, rect.width()))
+        length = first.textLength()
+        layout.endLayout()
+        encoded = text.encode("utf-16-le")
+        lines = [encoded[:length * 2].decode("utf-16-le").rstrip()]
+        remaining = encoded[length * 2:].decode("utf-16-le").strip()
+        if self.line_limit == 1:
+            lines = [metrics.elidedText(text, Qt.ElideRight, rect.width())]
+        elif remaining:
+            lines.append(metrics.elidedText(remaining, Qt.ElideRight, rect.width()))
+        painter = QPainter(self)
+        painter.setPen(self.palette().color(self.foregroundRole()))
+        for index, line in enumerate(lines):
+            painter.drawText(QRect(rect.left(), rect.top() + index * metrics.lineSpacing(),
+                                   rect.width(), metrics.lineSpacing()),
+                             Qt.AlignLeft | Qt.AlignVCenter, line)
+
+
 class ActionBar(GlassFrame):
     """A stable, readable surface for workspace confirmation actions."""
 
@@ -307,7 +397,7 @@ class ActionBarStack(QStackedWidget):
 class ReadOnlyPath(QLineEdit):
     """Selectable full path, with a whole-value copy action even when clipped."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, show_end=False):
         super().__init__(parent)
         self.setObjectName("FooterPath")
         self.setReadOnly(True)
@@ -317,6 +407,9 @@ class ReadOnlyPath(QLineEdit):
         self.setAccessibleName("完整保存目录")
         self._full_text = ""
         self._copy_value = ""
+        self._show_end = show_end
+        if show_end:
+            self.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self._update_height()
 
     def _update_height(self):
@@ -336,7 +429,10 @@ class ReadOnlyPath(QLineEdit):
             return
         self._full_text = text
         self.setText(text)
-        self.setCursorPosition(0)
+        if self._show_end:
+            self.end(False)
+        else:
+            self.setCursorPosition(0)
         self.updateGeometry()
 
     def sizeHint(self):
@@ -486,7 +582,7 @@ class WindowDragSurface(GlassFrame):
 class PageHeader(WindowDragSurface):
     def __init__(self, title, caption, parent=None):
         super().__init__(parent)
-        self.setProperty("clearGlass", True)
+        self.setProperty("glassEdge", Qt.BottomEdge)
         self.setObjectName("PageHeader")
         self.setAccessibleName(title)
         self.setAccessibleDescription(caption)
@@ -578,12 +674,32 @@ class DisclosureButton(QPushButton):
         painter.end()
 
 
+class _WorkspaceTabBar(QTabBar):
+    def __init__(self):
+        super().__init__()
+        self.setObjectName("WorkspaceTabBar")
+        self.setProperty("glassSurface", True)
+        self.setExpanding(False)
+
+    def paintEvent(self, event):
+        paint_widget_glass(self)
+        super().paintEvent(event)
+
+
+class WorkspaceTabs(QTabWidget):
+    """Use a shared material behind the workspace's adjacent tabs."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("WorkspaceTabs")
+        self.setTabBar(_WorkspaceTabBar())
+
+
 class CommandBar(GlassFrame):
     """Keep filters before actions in visual and keyboard order when wrapped."""
 
     def __init__(self, parent=None):
         super().__init__(parent, glass=True)
-        self.setProperty("clearGlass", True)
         self.setObjectName("ToolSurface")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self._grid = QGridLayout(self)
@@ -591,6 +707,7 @@ class CommandBar(GlassFrame):
         self._grid.setSpacing(8)
         self._filters = QWidget()
         self._actions = ResponsiveActions()
+        self.compact_actions = ()
         self.filters = FlowLayout(self._filters)
         self.actions = self._actions.row
         for row in (self.filters, self.actions):
@@ -601,7 +718,12 @@ class CommandBar(GlassFrame):
         self._grid.setColumnStretch(0, 1)
         self.wrapped = False
 
+    def set_context(self, widget):
+        self._grid.addWidget(widget, 2, 0, 1, 2)
+
     def _reflow(self, width):
+        for button in self.compact_actions:
+            self._actions.force_overflow(button, width < 880)
         required = self._filters.sizeHint().width() + self._actions.sizeHint().width() + 32
         wrapped = width < max(UI_METRICS.toolbar_wrap_width, required)
         if self.wrapped != wrapped:
@@ -713,10 +835,14 @@ class TaskDetailPanel(SectionCard):
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self._full_text = ""
-        self._result_item = self._result_outcome = None
+        self._result_item = self._result_outcome = self._result_repair = None
+        self._result_media_state = ""
         self.body.setSpacing(8)
-        heading = QHBoxLayout()
-        self.title = ElidedLabel()
+        heading = QBoxLayout(QBoxLayout.LeftToRight)
+        self._heading_layout = heading
+        self.title = PreviewTitle("")
+        self.title.compact = True
+        self.title.line_limit = 1
         self.title.setObjectName("SectionTitle")
         self.status = StatusBadge()
         heading.addWidget(self.title, 1)
@@ -740,6 +866,7 @@ class TaskDetailPanel(SectionCard):
         self.body.addWidget(self.specs)
         self._detail_footer = QWidget()
         footer = QBoxLayout(QBoxLayout.LeftToRight, self._detail_footer)
+        self._footer_layout = footer
         footer.setContentsMargins(0, 0, 0, 0)
         footer.addWidget(self.path, 1)
         self.action_strip = ResponsiveActions()
@@ -759,11 +886,28 @@ class TaskDetailPanel(SectionCard):
         footer.addWidget(self.action_strip)
         self.body.addWidget(self._detail_footer)
         self.body.addWidget(self.diagnostics)
+        self.body.addStretch(1)
+
+    def set_docked(self, docked):
+        direction = QBoxLayout.TopToBottom if docked else QBoxLayout.LeftToRight
+        self.title.line_limit = 2 if docked else 1
+        self.title.updateGeometry()
+        self.title.update()
+        self._heading_layout.setDirection(direction)
+        self._heading_layout.setAlignment(self.status, Qt.AlignLeft if docked else Qt.Alignment())
+        self._footer_layout.setDirection(direction)
+        self.setMinimumWidth(UI_METRICS.queue_detail_width if docked else 0)
+        self.setMaximumWidth(UI_METRICS.queue_detail_width if docked else 16777215)
 
     def show_details(self):
         from bilibili_downloader.gui.dialogs.result_details import ResultDetailsDialog
-        ResultDetailsDialog("保存与处理详情", self._full_text, self,
-                            item=self._result_item, outcome=self._result_outcome).exec()
+        repair = self._result_repair
+        dialog = ResultDetailsDialog("保存与处理详情", self._full_text, self,
+                                     item=self._result_item, outcome=self._result_outcome,
+                                     media_state=self._result_media_state,
+                                     can_supplement=repair is not None)
+        if dialog.exec() and dialog.repair_requested:
+            repair()
 
     def set_actions(self, primary=None, secondary=None, *, secondary_required=False):
         self.secondary_action.setProperty("alwaysVisible", secondary_required)
@@ -777,9 +921,11 @@ class TaskDetailPanel(SectionCard):
                 button.clicked.connect(action[1])
         self.action_strip.schedule()
 
-    def set_result(self, item, outcome, *, media_state=""):
+    def set_result(self, item, outcome, *, media_state="", supplement=None):
         from bilibili_downloader.gui.dialogs.result_details import result_summary
         self._result_item, self._result_outcome = item, outcome
+        self._result_repair = supplement
+        self._result_media_state = media_state
         issues = len(outcome.warnings) + len(outcome.spec_warnings) if outcome else 0
         self.details_button.setText(f"完整详情（{issues}）" if issues else "完整详情")
         summaries = list(result_summary(item, outcome))
@@ -798,6 +944,8 @@ class TaskDetailPanel(SectionCard):
 
     def set_details(self, title, status, specs, path, diagnostics="", tone="muted"):
         self._result_item = self._result_outcome = None
+        self._result_repair = None
+        self._result_media_state = ""
         self.details_button.setText("完整详情")
         self.result_row.hide()
         self.status.show()
@@ -1057,7 +1205,7 @@ class EmptyState(QWidget):
 
 
 class FieldRow(QWidget):
-    def __init__(self, label, control, parent=None, *, stacked=False):
+    def __init__(self, label, control, parent=None, *, stacked=False, label_width=92):
         super().__init__(parent)
         self.control = control
         focus = control.focusProxy()
@@ -1089,14 +1237,14 @@ class FieldRow(QWidget):
                     button.setAccessibleName(action + label)
                     button.setToolTip(action + label)
         if not stacked:
-            self.label.setFixedWidth(92)
+            self.label.setFixedWidth(label_width)
         row.addWidget(self.label)
         row.addWidget(control, 1)
         column.addLayout(row)
         self._error_row = QWidget()
         errors = QHBoxLayout(self._error_row)
         self._errors_layout = errors
-        errors.setContentsMargins(0 if stacked else 104, 0, 0, 0)
+        errors.setContentsMargins(0 if stacked else label_width + row.spacing(), 0, 0, 0)
         self.error = QLabel()
         self.error.setObjectName("FieldError")
         self.error.setWordWrap(True)
@@ -1123,13 +1271,15 @@ class FieldRow(QWidget):
         self._error_control.setAccessibleDescription("\n".join(filter(None, (self._field_description, message))))
 
 
-def scroll_area(body):
+def scroll_area(body, *, scroll_edge=False):
     scroll = QScrollArea()
     scroll.setObjectName("WorkspaceScroll")
     scroll.setWidgetResizable(True)
     scroll.setFrameShape(QFrame.NoFrame)
     scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
     scroll.setWidget(body)
+    if scroll_edge:
+        ScrollEdge(scroll)
     return scroll
 
 

@@ -95,6 +95,7 @@ from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
     AccountButton,
     ActionBarStack,
+    ElidedLabel,
     FieldRow,
     IconButton,
     InlineNotice,
@@ -285,7 +286,8 @@ class MainWindow(QMainWindow):
         shell.setSpacing(0)
         self._sidebar = WindowDragSurface()
         self._sidebar.setObjectName("Sidebar")
-        self._sidebar.setFixedWidth(208)
+        self._sidebar.setProperty("glassEdge", Qt.RightEdge)
+        self._sidebar.setFixedWidth(UI_METRICS.sidebar_width)
         self._side_layout = QVBoxLayout(self._sidebar)
         self._side_layout.setContentsMargins(16, 24, 16, 16)
         self._side_layout.setSpacing(12)
@@ -433,24 +435,45 @@ class MainWindow(QMainWindow):
         self._hero_layout = QVBoxLayout(self._hero)
         self._hero_layout.setContentsMargins(16, 16, 16, 16)
         self._hero_layout.setSpacing(10)
-        row = QHBoxLayout()
+        self._editing_download_source = False
+        self._source_editor = QWidget()
+        row = QHBoxLayout(self._source_editor)
+        row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(12)
         self._url_input = ChineseLineEdit()
         self._url_input.setPlaceholderText("粘贴 B 站链接、BV / AV / ep 号或 b23.tv 短链")
         self._url_input.setAccessibleName("视频链接或作品编号")
         self._url_input.returnPressed.connect(self._on_resolve_clicked)
         self._url_input.textChanged.connect(self._source_changed)
+        self._empty_download = StarArt(workspace="download")
+        self._empty_download.setFixedSize(112, 63)
+        row.addWidget(self._empty_download)
         row.addWidget(self._url_input, 1)
         self._resolve_btn = QPushButton("解析")
         self._resolve_btn.setObjectName("PrimaryButton")
         self._resolve_btn.clicked.connect(self._on_resolve_clicked)
         row.addWidget(self._resolve_btn)
-        self._hero_layout.addLayout(row)
+        self._collapse_source = QPushButton("收起")
+        self._collapse_source.setObjectName("TextButton")
+        self._collapse_source.setAccessibleName("收起来源编辑")
+        self._collapse_source.clicked.connect(lambda: self._set_download_source_editing(False))
+        row.addWidget(self._collapse_source)
+        self._hero_layout.addWidget(self._source_editor)
         self._workspace_layout.addWidget(self._hero)
+        self._resolved_source_row = QWidget()
+        summary = QHBoxLayout(self._resolved_source_row)
+        summary.setContentsMargins(8, 0, 8, 0)
+        self._resolved_source = ElidedLabel()
+        self._resolved_source.setObjectName("MetaLabel")
+        self._resolved_source.setAccessibleName("已解析的来源")
+        summary.addWidget(self._resolved_source, 1)
+        self._edit_source = QPushButton("编辑来源")
+        self._edit_source.setObjectName("TextButton")
+        self._edit_source.clicked.connect(lambda: self._set_download_source_editing(True))
+        summary.addWidget(self._edit_source)
+        self._workspace_layout.addWidget(self._resolved_source_row)
         self._resolve_notice = Notice(callback=self._route_current_source)
         self._workspace_layout.addWidget(self._resolve_notice)
-        self._empty_download = StarArt(workspace="download")
-        self._workspace_layout.addWidget(self._empty_download, alignment=Qt.AlignHCenter)
         self._content_section = QWidget()
         self._content_layout = QVBoxLayout(self._content_section)
         self._content_layout.setContentsMargins(0, 0, 0, 0)
@@ -479,7 +502,10 @@ class MainWindow(QMainWindow):
         self._source_surface.body.setContentsMargins(0, 0, 0, 0)
         self._source_surface.body.addWidget(self._download_tabs)
         self._output_sections = DownloadWorkspace(self._source_surface, self._configuration)
-        self._workspace_scroll = scroll_area(self._output_sections)
+        self._configuration.preview_requested.connect(
+            lambda: self._show_download_configuration(batch=self._download_tabs.currentIndex() == 1)
+        )
+        self._workspace_scroll = scroll_area(self._output_sections, scroll_edge=True)
         layout.addWidget(self._workspace_scroll, 1)
         self._download_footers = ActionBarStack()
         self._download_footers.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -648,15 +674,38 @@ class MainWindow(QMainWindow):
         self._download_fields.set_field_visible(self._parts_row, not batch)
         self._batch_parts.setVisible(batch)
         ready = bool(self._batch_page._resolved_items) if batch else self._current_video is not None
+        self._configuration.set_summary_host(None if batch else self._hero_layout)
         self._configuration.set_context(ready)
         editable = ready or self._configuration._preconfigured
         self._subtitle_check.setEnabled(editable)
         self._all_subtitles_check.setEnabled(editable and self._subtitle_check.isChecked())
         self._content_section.setVisible(self._current_video is not None)
-        welcome = self._current_video is None
-        if welcome and self._resolve_btn.isEnabled():
-            self._resolve_btn.setText("解析")
-        self._empty_download.setVisible(welcome and self.backdrop.image.isNull())
+        self._sync_download_source()
+
+    def _sync_download_source(self):
+        resolved = self._current_video is not None
+        editing = not resolved or self._editing_download_source
+        self._hero.setVisible(editing)
+        self._collapse_source.setVisible(resolved)
+        self._resolved_source_row.setVisible(not editing)
+        if resolved:
+            self._resolved_source.set_full_text(self._url_input.text() or self._current_video.bvid)
+        if self._resolve_btn.isEnabled():
+            self._resolve_btn.setText("重新解析" if resolved else "解析")
+        name = "OutputSecondaryButton" if resolved else "PrimaryButton"
+        if self._resolve_btn.objectName() != name:
+            self._resolve_btn.setObjectName(name)
+            repolish(self._resolve_btn)
+        self._empty_download.setVisible(not resolved and self.backdrop.image.isNull())
+
+    def _set_download_source_editing(self, editing, reason=Qt.OtherFocusReason):
+        self._editing_download_source = editing
+        self._sync_download_source()
+        if editing:
+            self._url_input.setFocus(reason)
+            self._url_input.selectAll()
+        else:
+            self._edit_source.setFocus(reason)
 
     def _refresh_download_summary(self, *_args):
         if not hasattr(self, "_download_hint"):
@@ -696,27 +745,14 @@ class MainWindow(QMainWindow):
             advanced_summary += " · 严格匹配"
         brief = f"{'视频 · ' + quality if not audio else '音频 · ' + self._audio_combo.currentText()}"
         if extras:
-            brief += "\n一起保存：" + "、".join(extras)
+            brief += " · " + "、".join(extras)
         if not audio and self._aspect_combo.currentData() == "4:3":
             brief += " · 显示 4:3"
         if self._strict_match_check.isChecked():
             brief += " · 严格匹配"
         self._configuration.set_summary(brief, advanced_summary)
         self._sync_download_presentation()
-        directory = f"保存至 {self._settings.output_dir}"
-        full_path = self._settings.output_dir
-        if self._current_video:
-            info = self._current_video
-            if hasattr(selection, "cid"):
-                info = info.for_page(selection)
-            elif selection == "selected" and self._selected_pages:
-                info = info.for_page(self._selected_pages[0])
-            elif selection == "all" and info.pages:
-                info = info.for_page(info.pages[0])
-            item = self._make_download_item(info)
-            directory = f"预计：{item.relative_output_path}" + (f" · 共 {count} 个任务" if count > 1 else "")
-            full_path = str(Path(item.output_dir) / item.relative_output_path)
-        self._download_path_hint.set_full_text(directory, copy_value=full_path)
+        self._download_path_hint.set_full_text(f"保存至 {self._settings.output_dir}", copy_value=self._settings.output_dir)
         if self._current_video:
             self._schedule_download_inventory([self._make_download_item(info) for info in self._selected_video_infos()])
         else:
@@ -794,9 +830,17 @@ class MainWindow(QMainWindow):
         from bilibili_downloader.gui.dialogs.workflow import WorkflowDialog
         from bilibili_downloader.gui.widgets.components import ReadOnlyPath
         infos = self._batch_page.get_video_infos() if batch else self._selected_video_infos()
-        dialog = WorkflowDialog("下载配置", "核对内容与位置，返回后可修改。", self, confirm="返回")
+        dialog = WorkflowDialog("输出预览", parent=self, confirm="关闭")
         dialog.cancel_button.hide()
+        dialog.confirm_button.setObjectName("OutputSecondaryButton")
         dialog.body.addWidget(help_text(self._batch_page._selected_label.text() if batch else self._download_actions.status.text()))
+        if infos:
+            item = self._make_download_item(infos[0])
+            path = ReadOnlyPath()
+            path.setAccessibleName("预计首项保存位置")
+            path.set_full_text(str(Path(item.output_dir) / item.relative_output_path))
+            dialog.body.addWidget(help_text("预计首项保存位置"))
+            dialog.body.addWidget(path)
         group = SectionCard("输出规格")
         group.body.addWidget(help_text(self._batch_page._action_bar.specs._full_text if batch else self._download_hint._full_text))
         group.body.addWidget(help_text("规格不满足时：" + self._match_policy.currentText()))
@@ -807,12 +851,6 @@ class MainWindow(QMainWindow):
             dialog.body.addWidget(help_text("字幕语言：全部可用语言"))
         elif self._subtitle_check.isChecked():
             dialog.body.addWidget(help_text("字幕语言：中文和英文（含 AI），各自保存为独立 SRT"))
-        if infos:
-            path = ReadOnlyPath()
-            item = self._make_download_item(infos[0])
-            path.set_full_text(str(Path(item.output_dir) / item.relative_output_path))
-            dialog.body.addWidget(help_text("预计首项保存位置"))
-            dialog.body.addWidget(path)
         dialog.body.addWidget(help_text(self._inventory_notice.message if not batch else self._batch_page._result_label.text()))
         dialog.body.addStretch()
         dialog.resize(660, 480)
@@ -923,8 +961,7 @@ class MainWindow(QMainWindow):
     def _focus_download_input(self):
         if self._show_workspace(0):
             self._download_tabs.setCurrentIndex(0)
-            self._url_input.setFocus(Qt.ShortcutFocusReason)
-            self._url_input.selectAll()
+            self._set_download_source_editing(True, Qt.ShortcutFocusReason)
 
     def _set_shell_enabled(self, enabled):
         """Include the native toolbar, menus and shortcuts in update isolation."""
@@ -1176,10 +1213,12 @@ class MainWindow(QMainWindow):
     def _update_responsive_layout(self, width):
         if not hasattr(self, "_sidebar"):
             return
-        compact = width < 1120
+        compact = width < UI_METRICS.sidebar_breakpoint
         if hasattr(self, "_batch_page"):
             self._batch_page._preview.setMinimumHeight(140 if width < 1000 else 264)
-        self._sidebar.setFixedWidth(72 if compact else 208)
+        self._sidebar.setFixedWidth(UI_METRICS.sidebar_compact_width if compact else UI_METRICS.sidebar_width)
+        art_size = QSize(112, 63) if compact else QSize(144, 81)
+        self._empty_download.setFixedSize(art_size)
         if hasattr(self, "_header_stack"):
             for index in range(self._header_stack.count()):
                 self._header_stack.widget(index).set_shell_geometry(
@@ -1796,7 +1835,9 @@ class MainWindow(QMainWindow):
         self._download_btn.setEnabled(True)
         self._status_bar.showMessage(f"已解析：{info.title}")
 
+        focus_source = self._url_input.hasFocus() or self._resolve_btn.hasFocus()
         self._current_video = info
+        self._editing_download_source = False
         self._resolve_btn.setText("重新解析")
         self._download_result_state = "已解析"
         self._content_section.show()
@@ -1808,6 +1849,8 @@ class MainWindow(QMainWindow):
         self._populate_page_combo(info)
 
         self._apply_stream_options(video_streams, audio_streams, playurl_ok, preferred_quality)
+        if focus_source and self._workspace_pages.currentIndex() == 0 and self._download_tabs.currentIndex() == 0:
+            self._edit_source.setFocus(Qt.OtherFocusReason)
 
     def _apply_stream_options(self, video_streams, audio_streams, playurl_ok, preferred_quality):
 

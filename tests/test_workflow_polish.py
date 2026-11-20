@@ -429,7 +429,8 @@ def test_total_progress_is_independent_of_stages_and_reserved_completion(workspa
     assert bar.value() == 99
     table.mark_done(key, DownloadOutcome(video_path="/demo/video.mp4", missing_artifacts=["subtitle"]))
     assert bar.value() == bar._fill.value == 100
-    assert bar.objectName() == "WarningProgress"
+    assert bar.objectName() == "CompletedProgress"
+    assert status.text() == "媒体已保存 · 附件待补全"
 
 
 def test_late_library_read_after_widget_deletion_is_ignored(qapp, qtbot, tmp_path, monkeypatch):

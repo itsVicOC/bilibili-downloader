@@ -158,7 +158,7 @@ class FileTable(QTableView):
         self.itemSelectionChanged.emit()
 
     def selectRow(self, row):
-        super().selectRow(row)
+        self.setCurrentCell(row, 0)
         if hasattr(self, "_selection_binding"):
             self._selection_binding.select_only_row(row)
 

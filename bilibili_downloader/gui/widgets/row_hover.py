@@ -26,6 +26,11 @@ def row_option(option, index):
     # Keyboard focus is painted once across the row by its owning view.
     opt.state &= ~QStyle.State_HasFocus
     view = opt.widget
+    binding = getattr(view, "_selection_binding", None)
+    if binding and binding.distinguish_focus:
+        opt.state &= ~QStyle.State_Selected
+        if index.siblingAtColumn(0).data(Qt.UserRole) in binding.state.selected:
+            opt.state |= QStyle.State_Selected
     feedback = getattr(view, "_row_hover", None)
     if feedback is not None:
         opt.state &= ~QStyle.State_MouseOver
@@ -125,7 +130,9 @@ class RowHover(QObject):
 
     def paint_focus(self):
         view = self.view
-        if not view.hasFocus() or not view.property("keyboardFocus"):
+        keyboard = view.hasFocus() and view.property("keyboardFocus")
+        binding = getattr(view, "_selection_binding", None)
+        if not keyboard and not (binding and binding.distinguish_focus and binding.state.focused is not None):
             return
         index = view.currentIndex()
         if not index.isValid():
@@ -135,7 +142,7 @@ class RowHover(QObject):
             return
         painter = QPainter(view.viewport())
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(QPen(QColor(palette(view).focus), UI_METRICS.focus_width))
+        painter.setPen(QPen(QColor(palette(view).focus), UI_METRICS.focus_width if keyboard else 1))
         painter.setBrush(Qt.NoBrush)
         painter.drawRoundedRect(rect, 5, 5)
 

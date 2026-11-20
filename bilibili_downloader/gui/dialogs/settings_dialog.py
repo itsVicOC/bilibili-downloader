@@ -3,13 +3,13 @@
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal
+from PySide6.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, Signal
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
     QCheckBox,
     QComboBox,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLayout,
@@ -18,13 +18,16 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSpinBox,
-    QTabWidget,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from bilibili_downloader import __version__
-from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
+from bilibili_downloader.core.builtin_backgrounds import (
+    WORKSPACE_TITLES,
+    builtin_background,
+)
 from bilibili_downloader.core.errors import redact_sensitive_text
 from bilibili_downloader.core.ffmpeg import FFmpegManager
 from bilibili_downloader.core.models import (
@@ -41,7 +44,7 @@ from bilibili_downloader.core.models import (
 )
 from bilibili_downloader.core.recorder import check_recorder, find_recorder
 from bilibili_downloader.gui.dialogs.file_picker import file_picker
-from bilibili_downloader.gui.resources.paths import background_path
+from bilibili_downloader.gui.dialogs.workflow import WorkflowDialog
 from bilibili_downloader.gui.resources.styles import UI_METRICS
 from bilibili_downloader.gui.settings_sections import APPEARANCE_MODES, SettingsSection
 from bilibili_downloader.gui.widgets.appearance_preview import (
@@ -62,6 +65,7 @@ from bilibili_downloader.gui.widgets.components import (
     ResponsiveActions,
     ResponsiveFields,
     SectionCard,
+    WorkspaceTabs,
     help_text,
     reveal_field,
     scroll_area,
@@ -73,7 +77,6 @@ from bilibili_downloader.gui.widgets.download_options import (
     DownloadOptions,
 )
 from bilibili_downloader.gui.widgets.glass_surface import ScrollAreaSurface
-from bilibili_downloader.gui.widgets.workspace_background import background_pixmap
 from bilibili_downloader.utils.validators import render_path_template
 
 NAMING_FIELDS = {
@@ -202,7 +205,7 @@ class SettingsDialog(AppDialog):
             0, 0, 0, 0
         ) if self._embedded else layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
-        self.tabs = QTabWidget()
+        self.tabs = WorkspaceTabs()
         layout.addWidget(self.tabs, 1)
         self._sections = {}
         download, live, appearance, tools, updates = [
@@ -499,7 +502,9 @@ class SettingsDialog(AppDialog):
         update_card.body.addWidget(release_page, alignment=Qt.AlignLeft)
         updates.addWidget(update_card)
         updates.addWidget(identity)
-        mode_card = SectionCard("显示模式")
+        appearance.setSpacing(12)
+        mode_card = SectionCard()
+        mode_card.body.setSpacing(8)
         self._mode_buttons = QButtonGroup(self)
         modes = QHBoxLayout()
         for index, (label, mode) in enumerate(APPEARANCE_MODES):
@@ -514,9 +519,6 @@ class SettingsDialog(AppDialog):
         self._mode_buttons.idClicked.connect(
             lambda index: self.appearance_mode_requested.emit(APPEARANCE_MODES[index][1])
         )
-        modes.addStretch()
-        mode_card.body.addLayout(modes)
-        appearance.addWidget(mode_card)
         if self._desktop_platform == "win32":
             window_card = SectionCard("窗口")
             self._combo(
@@ -526,9 +528,8 @@ class SettingsDialog(AppDialog):
                  ("彻底退出", WindowCloseAction.QUIT)],
             )
             appearance.addWidget(window_card)
-        theme = SectionCard("配色")
         self._theme_combo = self._combo(
-            "appearance.theme", theme, "主题",
+            "appearance.theme", mode_card, "主题",
             [("星河", "star_trail"), ("晴海", "bilibili_blue")],
         )
         self._theme_combo.setItemData(0, "粉紫星空，支持日间与夜间", Qt.ToolTipRole)
@@ -545,38 +546,50 @@ class SettingsDialog(AppDialog):
             previews.addWidget(button, 1)
         self._theme_buttons.idClicked.connect(self._theme_combo.setCurrentIndex)
         self._theme_combo.currentIndexChanged.connect(self._sync_appearance_preview)
-        theme.body.addLayout(previews)
-        appearance.addWidget(theme)
-        glass = SectionCard()
-        self._glass_card = glass
+        modes.addStretch()
+        modes.addLayout(previews)
+        mode_card.body.addLayout(modes)
         self._glass_blur = GlassBlurControl()
         self._controls["appearance.glass_blur"] = self._glass_blur
-        glass.body.addWidget(self._glass_blur)
-        sample = background_path(BUILTIN_BACKGROUNDS[0].reference, thumbnail=True)
-        self._glass_preview = WorkspacePreview("视频下载", background_pixmap(sample), "star_trail", builtin=True)
-        self._glass_preview.setAccessibleName("整窗液态玻璃效果预览")
-        self._glass_preview.setFixedHeight(180)
-        glass.body.addWidget(self._glass_preview)
-        self._glass_blur.setToolTip("影响液态玻璃中底图的清晰度，保存后应用")
+        self._glass_blur.setToolTip("所有工作区共用，保存后应用")
         self._glass_blur.valueChanged.connect(self._sync_glass_blur)
-        appearance.addWidget(glass)
-        self._background_grid = QGridLayout()
-        self._background_grid.setSpacing(16)
-        self._background_cards = []
-        self._appearance_columns = 0
-        appearance.addLayout(self._background_grid)
-        for workspace, title in zip(WORKSPACE_NAMES, ("视频下载", "直播录制", "任务中心", "设置")):
-            card = SectionCard(f"{title}背景")
-            picker = BackgroundPicker(title, self._background_store, workspace=workspace)
-            picker.changed.connect(self._draft_changed)
-            card.body.addWidget(picker)
-            self._background_cards.append(card)
+        mode_card.body.addWidget(self._glass_blur)
+        appearance.insertWidget(0, mode_card)
+        glass = SectionCard()
+        self._glass_card = glass
+        self._preview_workspace = ComboBox()
+        self._preview_workspace.setAccessibleName("外观预览工作区")
+        self._preview_pickers = QStackedWidget()
+        for workspace in WORKSPACE_NAMES:
+            title = WORKSPACE_TITLES[workspace]
+            self._preview_workspace.addItem(title, workspace)
+            picker = BackgroundPicker(title, self._background_store, workspace=workspace, compact=True)
+            self._preview_pickers.addWidget(picker)
             self._background_pickers[workspace] = picker
-        self._layout_background_cards()
+            picker.changed.connect(self._draft_changed)
+            picker.changed.connect(self._sync_workspace_preview)
+        preview_controls = QHBoxLayout()
+        preview_controls.addWidget(self._preview_workspace, alignment=Qt.AlignTop)
+        preview_controls.addWidget(self._preview_pickers, 1)
+        self._enlarge_preview = ActionButton("放大预览")
+        self._enlarge_preview.setObjectName("TextButton")
+        self._enlarge_preview.clicked.connect(self._show_enlarged_preview)
+        preview_controls.addWidget(self._enlarge_preview, alignment=Qt.AlignTop)
+        glass.body.addLayout(preview_controls)
+        self._glass_preview = WorkspacePreview("视频下载", QPixmap(), "star_trail")
+        self._glass_preview.setAccessibleName("整窗液态玻璃效果预览")
+        self._glass_preview.setFixedHeight(176)
+        glass.body.addWidget(self._glass_preview)
+        self._preview_workspace.currentIndexChanged.connect(self._sync_workspace_preview)
+        appearance.insertWidget(1, glass)
         for column in (download, live, tools, updates, appearance):
             for card in column.parentWidget().findChildren(SectionCard):
                 card.set_plain()
                 card.body.setContentsMargins(0, 12, 0, 12)
+            for index in range(1, column.count()):
+                group = column.itemAt(index).widget()
+                if isinstance(group, SectionCard):
+                    group.setProperty("settingsDivider", True)
             column.addStretch()
         self._notice = Notice()
         layout.addWidget(self._notice)
@@ -617,7 +630,21 @@ class SettingsDialog(AppDialog):
         for picker in self._background_pickers.values():
             picker.set_theme(self._theme_combo.currentData())
         self._glass_preview.theme_id = self._theme_combo.currentData()
-        self._glass_preview.update()
+        self._sync_workspace_preview()
+
+    def _sync_workspace_preview(self, *_args):
+        workspace = self._preview_workspace.currentData()
+        picker = self._background_pickers[workspace]
+        self._preview_pickers.setCurrentWidget(picker)
+        preview = self._glass_preview
+        preview.title = WORKSPACE_TITLES[workspace]
+        preview.workspace = workspace
+        preview.pixmap = picker.preview.pixmap()
+        preview.visibility = picker.visibility
+        preview.builtin = builtin_background(picker.reference) is not None
+        preview.pixel_art = picker.preview.pixel_art
+        preview.viewport_size = self.window().size()
+        preview.update()
 
     def _sync_glass_blur(self, *_args):
         value = self._glass_blur.value()
@@ -625,6 +652,26 @@ class SettingsDialog(AppDialog):
         self._glass_preview.update()
         for picker in self._background_pickers.values():
             picker.set_glass_blur(value)
+
+    def _show_enlarged_preview(self):
+        source = self._glass_preview
+        dialog = WorkflowDialog(f"{source.title}预览", parent=self, confirm="关闭")
+        dialog.cancel_button.hide()
+        dialog.confirm_button.setObjectName("OutputSecondaryButton")
+        preview = WorkspacePreview(
+            source.title, source.pixmap, source.theme_id, visibility=source.visibility,
+            builtin=source.builtin, pixel_art=source.pixel_art, workspace=source.workspace,
+        )
+        preview.setAccessibleName(source.accessibleName())
+        preview.viewport_size = QSize(source.viewport_size)
+        preview.glass_blur = source.glass_blur
+        preview.is_dark = source.is_dark
+        dialog.body.addWidget(preview, 1)
+        screen = self.screen().availableGeometry()
+        size = source.viewport_size.scaled(screen.size() - QSize(110, 160), Qt.KeepAspectRatio)
+        dialog.resize(size + QSize(48, 105))
+        dialog.exec()
+        dialog.deleteLater()
 
     def _insert_naming_field(self, entry, variables):
         from bilibili_downloader.gui.dialogs.naming_fields import insert_naming_field
@@ -667,20 +714,9 @@ class SettingsDialog(AppDialog):
                 self._template_paths.pop(key, None)
                 self._template_copy_buttons[key].setEnabled(False)
 
-    def _layout_background_cards(self):
-        columns = 2 if self.width() >= 960 else 1
-        if columns == self._appearance_columns:
-            return
-        self._appearance_columns = columns
-        for index, card in enumerate(self._background_cards):
-            self._background_grid.removeWidget(card)
-            self._background_grid.addWidget(card, index // columns, index % columns)
-        self._background_grid.setColumnStretch(0, 1)
-        self._background_grid.setColumnStretch(1, 1 if columns == 2 else 0)
-
     def resizeEvent(self, event):
-        if hasattr(self, "_background_grid"):
-            self._layout_background_cards()
+        if hasattr(self, "_glass_preview"):
+            self._sync_workspace_preview()
         super().resizeEvent(event)
 
     def set_update_busy(self, busy, kind):
@@ -705,7 +741,7 @@ class SettingsDialog(AppDialog):
         wrapper.addWidget(form)
         column = form.body
         column.setSpacing(20)
-        scroll = scroll_area(body)
+        scroll = scroll_area(body, scroll_edge=True)
         scroll._reading_surface = ScrollAreaSurface(scroll)
         self._sections[section] = self.tabs.addTab(scroll, name)
         return column
@@ -725,7 +761,13 @@ class SettingsDialog(AppDialog):
         self._draft_changed()
 
     def _field(self, key, card, label, control):
-        row = FieldRow(label, control)
+        row = FieldRow(label, control, label_width=132)
+        row.setObjectName("SettingsField")
+        row.setAttribute(Qt.WA_StyledBackground, True)
+        row.setProperty("settingsDivider", any(
+            isinstance(card.body.itemAt(index).widget(), FieldRow) for index in range(card.body.count())
+        ))
+        row.layout().setContentsMargins(0, 4, 0, 0)
         self._field_rows[key] = row
         card.body.addWidget(row)
         return row

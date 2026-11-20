@@ -1,6 +1,6 @@
 """Fixed status feedback with a single optional contextual action."""
 
-from PySide6.QtCore import QEvent
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtWidgets import QPushButton, QStatusBar
 
 from bilibili_downloader.gui.widgets.glass_surface import paint_widget_glass
@@ -11,6 +11,7 @@ class FeedbackBar(QStatusBar):
         super().__init__(parent)
         self.setProperty("glassSurface", True)
         self.setProperty("clearGlass", True)
+        self.setProperty("glassEdge", Qt.TopEdge)
         self.setFixedHeight(36)
         self._callback = None
         self.action = QPushButton()

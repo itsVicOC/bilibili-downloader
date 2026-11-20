@@ -211,10 +211,13 @@ def test_blur_failure_retry_runtime_and_immediate_mode_preserve_drafts(workspace
 
 
 def test_blur_slider_changes_preview_without_saving_or_blurring_text(workspace, qtbot):
+    from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
+
     panel = workspace._settings_page
     workspace._show_settings_tab(SettingsSection.APPEARANCE)
     workspace.show()
     flush()
+    panel._background_pickers["download"].set_reference(BUILTIN_BACKGROUNDS[0].reference)
     panel._glass_blur.setValue(0)
     panel._glass_preview.grab()
     first = panel._glass_preview._glass.image.cacheKey()
@@ -225,3 +228,31 @@ def test_blur_slider_changes_preview_without_saving_or_blurring_text(workspace, 
     assert panel._glass_blur.display.text() == "40 px"
     assert workspace._settings.appearance.glass_blur == 18
     assert panel._glass_preview.graphicsEffect() is None
+
+
+def test_enlarged_preview_uses_unsaved_workspace_and_keeps_aspect_ratio(workspace, monkeypatch):
+    from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
+    from bilibili_downloader.gui.dialogs.workflow import WorkflowDialog
+    from bilibili_downloader.gui.widgets.appearance_preview import WorkspacePreview
+
+    workspace.resize(900, 640)
+    workspace.show()
+    workspace._show_settings_tab(SettingsSection.APPEARANCE)
+    flush()
+    panel = workspace._settings_page
+    preview = panel._glass_preview
+    assert preview.visibleRegion().boundingRect().contains(preview.rect())
+    combo = panel._preview_workspace
+    combo.setCurrentIndex(combo.findData("tasks"))
+    panel._background_pickers["tasks"].set_reference(BUILTIN_BACKGROUNDS[0].reference)
+    panel._glass_blur.setValue(32)
+    captured = []
+
+    def inspect(dialog):
+        enlarged = dialog.findChild(WorkspacePreview)
+        captured.append((enlarged.workspace, enlarged.viewport_size, enlarged.glass_blur, enlarged.pixmap.cacheKey()))
+
+    monkeypatch.setattr(WorkflowDialog, "exec", inspect)
+    panel._enlarge_preview.click()
+    assert captured == [("tasks", workspace.size(), 32, preview.pixmap.cacheKey())]
+    assert panel.dirty and workspace._settings.appearance.glass_blur == 18

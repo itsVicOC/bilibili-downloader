@@ -37,7 +37,9 @@ def test_resolved_download_is_complete_in_standard_window(workspace, qapp, qtbot
     workspace.show()
     flush()
     assert workspace._resolve_btn.text() == "重新解析"
-    assert workspace._hero.height() < 90
+    assert workspace._hero.isHidden()
+    assert workspace._resolved_source_row.isVisible()
+    assert workspace._resolved_source_row.height() < 52
     assert workspace._video_info._cover_label.width() >= 240
     assert workspace._workspace_scroll.horizontalScrollBar().maximum() == 0
     for control in (workspace._video_info, workspace._choose_pages_btn, workspace._quality_combo,
@@ -52,6 +54,26 @@ def test_resolved_download_is_complete_in_standard_window(workspace, qapp, qtbot
         qtbot.waitUntil(lambda: control.visibleRegion().boundingRect().contains(control.rect()), timeout=1000)
         assert workspace._download_btn.visibleRegion().boundingRect().contains(workspace._download_btn.rect())
     theme.deleteLater()
+
+
+def test_resolved_source_can_be_edited_without_losing_selection_until_changed(workspace, qtbot):
+    source = workspace._url_input
+    source.setText("BV1GJ411x7h7")
+    resolve(workspace)
+    workspace.resize(900, 640)
+    workspace.show()
+    flush()
+    assert workspace._hero.isHidden()
+    assert workspace._resolved_source.toolTip() == source.text()
+    old = workspace._current_video
+    workspace._focus_download_input()
+    assert source.isVisible() and source.selectedText() == source.text()
+    workspace._collapse_source.click()
+    assert workspace._current_video is old and workspace._download_btn.isEnabled()
+    workspace._edit_source.click()
+    qtbot.keyClicks(source, "BV1xxx")
+    assert not workspace._download_btn.isEnabled() and workspace._current_video is None
+    assert workspace._hero.isVisible() and workspace._resolved_source_row.isHidden()
 
 
 def test_reflow_uses_viewport_and_preserves_controls_selection_and_audio_mode(workspace):

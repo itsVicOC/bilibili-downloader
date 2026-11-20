@@ -31,6 +31,46 @@ def sample(image, x, y):
     return image.pixelColor(round(x * scale), round(y * scale))
 
 
+def test_download_details_follow_width_without_replacing_row_state(workspace, qtbot):
+    window = workspace
+    window.resize(900, 640)
+    window.show()
+    window._show_tasks(0)
+    page = window._task_page
+    table, detail = page.downloads, page.download_detail
+    for index in range(1, 31):
+        item = DownloadItem(video_info=VideoInfo(bvid=f"BVdemo{index}", title=f"离线任务 {index}"))
+        table.add_item(item, download_id=index, status=TaskStatus.PAUSED)
+    table.setCurrentCell(table._row_for(9), 0)
+    table.selection.toggle(11)
+    flush()
+    scroll = table.verticalScrollBar()
+    scroll.setValue(5)
+    original = (table.currentRow(), table.selected_ids(), scroll.value())
+    assert detail.y() > page._download_stack.y()
+
+    window.resize(1320, 860)
+    qtbot.waitUntil(lambda: detail.x() > page._download_stack.x())
+    assert page.download_detail is detail and detail.width() == 280
+    assert table.horizontalScrollBar().maximum() == 0
+    assert (table.currentRow(), table.selected_ids(), scroll.value()) == original
+    button_cell = table.cellWidget(table.rowAt(table.rowHeight(0) + 8), 4)
+    for button in button_cell.findChildren(QPushButton):
+        assert button.visibleRegion().boundingRect().contains(button.rect())
+
+    actions = table.horizontalHeader()
+    width = actions.sectionSize(4)
+    actions.resizeSection(4, 310)
+    qtbot.waitUntil(lambda: detail.y() > page._download_stack.y())
+    actions.resizeSection(4, width)
+    qtbot.waitUntil(lambda: detail.x() > page._download_stack.x())
+
+    window.resize(900, 640)
+    qtbot.waitUntil(lambda: detail.y() > page._download_stack.y())
+    assert (table.currentRow(), table.selected_ids(), scroll.value()) == original
+    assert detail.details_button.isVisible()
+
+
 @pytest.mark.parametrize('size', [(900, 640), (1120, 760), (1320, 860)])
 def test_directory_button_follows_text_and_long_path_preserves_selection(workspace, size):
     workspace.resize(*size)
@@ -91,6 +131,26 @@ def test_hover_crosses_cells_progress_and_buttons_with_one_row_color(workspace, 
     assert sample(image, 10, y).name() == theme_palette(dark, theme_id).selection
     qtbot.mouseMove(table.horizontalHeader(), QPoint(12, 8))
     qtbot.waitUntil(lambda: not table._row_hover.index.isValid())
+    manager.deleteLater()
+
+
+def test_queue_focus_uses_outline_and_checking_uses_fill(workspace, qtbot, qapp):
+    manager = ThemeManager(qapp, "star_trail", "light")
+    table = workspace._download_list
+    for identity in (1, 2):
+        table.add_item(DownloadItem(video_info=VideoInfo(bvid=f"BV{identity}", title=f"测试作品 {identity}")),
+                       download_id=identity, status=TaskStatus.PAUSED)
+    workspace._show_tasks(0)
+    activate(workspace, qtbot)
+    table.selection.toggle(2)
+    table.setCurrentCell(0, 0)
+    flush()
+    assert table.selection.state.focused == 1
+    assert table.selected_ids() == [2]
+    image = table.viewport().grab().toImage()
+    first, second = (table.visualItemRect(table.item(row, 0)).top() + 8 for row in (0, 1))
+    assert sample(image, 60, first).name() != theme_palette(False).selection
+    assert sample(image, 60, second).name() == theme_palette(False).selection
     manager.deleteLater()
 
 

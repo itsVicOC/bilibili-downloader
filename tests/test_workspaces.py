@@ -125,7 +125,7 @@ def contained(widget, ancestor):
 @pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])
 @pytest.mark.parametrize("size", [(900, 640), (1120, 760), (1320, 860)])
 def test_all_workspaces_fit_and_fixed_actions_remain_visible(
-    workspace, qapp, dark, size, theme_id
+    workspace, qapp, qtbot, dark, size, theme_id
 ):
     previous_style, previous_font, previous_palette = (
         qapp.styleSheet(),
@@ -181,9 +181,13 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
             assert contained(batch._add_btn, window._download_footers)
         window._show_workspace(1)
         flush()
+        window._live_page.select_room(1)
+        qtbot.waitUntil(lambda: not window._live_page._pending_inline_reveal)
         assert contained(window._live_page.start_stop, window._live_page)
         live_bar = window._live_page._action_bar
-        assert live_bar.height() >= 72
+        assert window._live_page._detail_card.isAncestorOf(live_bar)
+        assert live_bar.visibleRegion().boundingRect().contains(live_bar.rect())
+        assert window._live_page.start_stop.visibleRegion().boundingRect().contains(window._live_page.start_stop.rect())
         assert contained(window._live_page.monitor, live_bar)
         assert contained(window._live_page.room_settings, live_bar)
         assert window._live_page.start_stop.x() > window._live_page.room_settings.x()
@@ -211,7 +215,8 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
         flush()
         assert contained(window._task_page._download_tools, window._task_page.tabs.currentWidget())
         for button in window._task_page._download_tools.findChildren(QPushButton):
-            assert contained(button, window._task_page._download_tools)
+            if button.isVisible():
+                assert contained(button, window._task_page._download_tools)
         table.update_progress(1, 0.73, "下载中")
         assert table._progress_at(table._row_for(1)).value() == 73
         table.mark_paused(1)
@@ -338,7 +343,7 @@ def test_batch_partial_failure_fits_the_small_workspace(workspace):
     assert not panel._add_btn.isEnabled()
 
 
-def test_many_live_rooms_use_one_scroll_area_when_details_are_stacked(workspace):
+def test_many_live_rooms_use_one_scroll_area_when_details_are_stacked(workspace, qtbot):
     workspace.resize(900, 640)
     workspace._show_workspace(1)
     workspace.show()
@@ -351,7 +356,9 @@ def test_many_live_rooms_use_one_scroll_area_when_details_are_stacked(workspace)
     assert page._scroll.verticalScrollBar().maximum() > 0
     page.select_room(12)
     assert page._room_id() == 12
-    assert page._scroll.verticalScrollBar().value() > 0
+    qtbot.waitUntil(lambda: page._scroll.verticalScrollBar().value() > 0)
+    qtbot.waitUntil(lambda: page._action_bar.visibleRegion().boundingRect().contains(page._action_bar.rect()))
+    assert page.rooms.verticalScrollBar().maximum() == 0
 
 
 def test_settings_merge_preserves_external_updates(qtbot):
@@ -950,7 +957,7 @@ def test_remove_failure_does_not_hide_existing_task(workspace, monkeypatch):
     assert errors
 
 
-def test_live_actions_keep_selected_room_identity_visible(workspace):
+def test_live_actions_keep_selected_room_identity_visible(workspace, qtbot):
     window = workspace
     first, second = room("recording", room_id=1), room("waiting", room_id=2)
     first["author"], second["author"] = "主播甲", "主播乙"
@@ -961,12 +968,16 @@ def test_live_actions_keep_selected_room_identity_visible(workspace):
     window._show_workspace(1)
     window._live_page.select_room(2)
     flush()
-    assert "主播乙" in window._live_page._action_target.toolTip()
+    assert "主播乙" in window._live_page._action_bar.accessibleName()
     assert "主播乙" in window._live_page.start_stop.accessibleName()
-    assert contained(window._live_page._action_bar, window._live_page)
+    page = window._live_page
+    bar = page._action_bar
+    qtbot.waitUntil(lambda: not page._pending_inline_reveal)
+    assert bar.visibleRegion().boundingRect().contains(bar.rect())
+    assert contained(bar, page)
 
 
-def test_theme_cards_are_drafts_and_background_grid_adapts(workspace, qapp):
+def test_theme_cards_and_background_workspace_are_drafts(workspace, qapp):
     window = workspace
     previous = qapp.property("colorTheme")
     window.resize(1320, 860)
@@ -974,7 +985,7 @@ def test_theme_cards_are_drafts_and_background_grid_adapts(workspace, qapp):
     window._show_settings_tab(SettingsSection.APPEARANCE)
     flush()
     panel = window._settings_page
-    assert panel._appearance_columns == 2
+    assert panel._glass_preview.workspace == "download"
     panel._theme_buttons.button(1).click()
     assert panel._theme_combo.currentData() == "bilibili_blue"
     assert panel.dirty
@@ -988,7 +999,10 @@ def test_theme_cards_are_drafts_and_background_grid_adapts(workspace, qapp):
     assert selected.accessibleDescription() == "已选，保存设置后应用"
     window.resize(900, 640)
     flush()
-    assert panel._appearance_columns == 1
+    panel._preview_workspace.setCurrentIndex(panel._preview_workspace.findData("tasks"))
+    assert panel._glass_preview.workspace == "tasks"
+    assert panel._preview_pickers.currentWidget() is panel._background_pickers["tasks"]
+    assert panel._glass_preview.pixmap.isNull()
     panel._reset_btn.click()
     assert not panel.dirty and panel._theme_buttons.button(0).isChecked()
 

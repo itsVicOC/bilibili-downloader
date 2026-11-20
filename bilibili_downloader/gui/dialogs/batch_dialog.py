@@ -281,8 +281,7 @@ class BatchDialog(AppDialog):
 
     def set_output_summary(self, specs, directory):
         self._output_specs.set_full_text(specs)
-        self._default_directory = directory
-        self._output_directory.set_full_text(directory)
+        self._output_directory.set_full_text(directory, copy_value=directory.removeprefix("保存至 "))
         self._path_cache_rows = None
         self.update_path_previews()
         self.schedule_inventory()
@@ -314,7 +313,6 @@ class BatchDialog(AppDialog):
                 first, full = first or relative, full or absolute
         self._path_preview.set_full_text(f"路径示例：{first}" if count else "选择作品后预览保存路径")
         self._path_preview.setToolTip(full)
-        self._output_directory.set_full_text(f"预计：{first}" if full else getattr(self, "_default_directory", ""), copy_value=full or getattr(self, "_default_directory", ""))
         self._selected_label.setText(f"{count} 个任务")
         self._add_btn.setText(f"加入队列（{count} 项）" if count else "加入队列")
 

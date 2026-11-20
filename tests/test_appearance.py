@@ -419,7 +419,7 @@ def test_preview_and_workspace_render_identical_visibility(qapp, qtbot, tmp_path
         # Sample logical workspace coordinates at the backend's actual DPR.
         actual_dpr, draft_dpr = actual_image.devicePixelRatio(), draft_image.devicePixelRatio()
         actual = actual_image.pixelColor(QPoint(round(8 * actual_dpr), round(8 * actual_dpr)))
-        draft = draft_image.pixelColor(QPoint(round(80 * draft_dpr), round(78 * draft_dpr)))
+        draft = draft_image.pixelColor(QPoint(round(80 * draft_dpr), round(112 * draft_dpr)))
         assert actual == draft
         colors.append(actual.name())
     assert len(set(colors)) == 3
@@ -480,7 +480,12 @@ def test_full_settings_page_reveals_fixed_workspace_background(
                 round(point.x() * actual.devicePixelRatio()),
                 round(point.y() * actual.devicePixelRatio()),
             )
-            assert actual.pixelColor(pixel) == expected.pixelColor(pixel)
+            actual_color, expected_color = actual.pixelColor(pixel), expected.pixelColor(pixel)
+            if window.backdrop.image.isNull():
+                # The default gradient is sampled from a small cached field.
+                assert max(abs(a - b) for a, b in zip(actual_color.getRgb(), expected_color.getRgb())) <= 2
+            else:
+                assert actual_color == expected_color, (point, actual_color.name(), expected_color.name())
 
     try:
         for percent in (0, 50, 100):
@@ -503,11 +508,13 @@ def test_full_settings_page_reveals_fixed_workspace_background(
                 for offset in (0, scroll.verticalScrollBar().maximum()):
                     scroll.verticalScrollBar().setValue(offset)
                     QApplication.processEvents()
-                    assert_backdrop([
-                        panel.mapTo(window, QPoint(panel.width() - 8, 8)),
-                        scroll.mapTo(window, QPoint(1, 1)),
+                    points = [
+                        panel.mapTo(window, QPoint(panel.width() - 8, 40)),
                         scroll.mapTo(window, QPoint(scroll.width() - 2, scroll.height() - 2)),
-                    ])
+                    ]
+                    if offset == 0:
+                        points.append(scroll.mapTo(window, QPoint(1, 1)))
+                    assert_backdrop(points)
                 scroll.verticalScrollBar().setValue(0)
                 QApplication.processEvents()
                 assert widget_color(scroll, QPoint(12, 12)) != QColor(
@@ -524,7 +531,7 @@ def test_full_settings_page_reveals_fixed_workspace_background(
             window._refresh_workspace_background()
             QApplication.processEvents()
             assert window.backdrop.image.isNull()
-            assert_backdrop([panel.mapTo(window, QPoint(panel.width() - 8, 8))])
+            assert_backdrop([panel.mapTo(window, QPoint(panel.width() - 8, 40))])
         standalone = SettingsDialog(window._settings)
         qtbot.addWidget(standalone)
         standalone.show()

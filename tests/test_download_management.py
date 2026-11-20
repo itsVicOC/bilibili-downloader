@@ -853,7 +853,8 @@ def test_batch_summary_counts_expanded_pages(workspace):
     assert batch._selected_label.text() == "110 个任务"
     assert "已选 1 项" in batch.selection_bar.summary.text()
     assert batch._path_preview.isHidden()
-    assert batch._output_directory.toolTip() == batch._path_preview.toolTip()
+    assert batch._output_directory.toolTip() == workspace._settings.output_dir
+    assert batch._path_preview.toolTip().endswith(".mp4")
     assert "001 -" in batch._path_preview._full_text
     assert "路径示例" in batch._path_preview._full_text
     assert workspace._settings.output_dir not in batch._path_preview._full_text
@@ -902,18 +903,59 @@ def test_file_select_all_shortcut_respects_filter(workspace, tmp_path, qtbot):
     assert page._file()["path"] == absolute_path(other)
 
 
-def test_single_preview_copy_value_is_absolute_and_has_no_count_suffix(workspace):
+def test_result_dialog_offers_repair_only_when_media_is_available(qtbot, tmp_path):
+    from PySide6.QtWidgets import QLabel
+
+    from bilibili_downloader.gui.dialogs.result_details import ResultDetailsDialog
+    from bilibili_downloader.gui.widgets.components import CollapsibleSection
+
+    item, outcome = saved(tmp_path)
+    item.download_cover = False
+    outcome.missing_artifacts = ["subtitle"]
+    outcome.warnings = ["字幕下载失败：连接超时"]
+    dialog = ResultDetailsDialog("保存结果", "", item=item, outcome=outcome, can_supplement=True)
+    qtbot.addWidget(dialog)
+    dialog.show()
+    unrequested = next(label for label in dialog.findChildren(QLabel) if label.text() == "封面 · 本次未选择")
+    assert not unrequested.isVisible()
+    section = next(section for section in dialog.findChildren(CollapsibleSection) if section.isAncestorOf(unrequested))
+    section.toggle.click()
+    assert unrequested.isVisible()
+    reason = next(label for label in dialog.findChildren(QLabel) if label.text() == outcome.warnings[0])
+    assert reason.isVisible()
+    assert dialog.confirm_button.text() == "关闭"
+    assert dialog.repair_button.text() == "补全附件…"
+    assert dialog.content.isAncestorOf(dialog.repair_button)
+    dialog.repair_button.click()
+    assert dialog.repair_requested
+
+    outcome.video_path = str(tmp_path / "offline.mp4")
+    offline = ResultDetailsDialog("保存结果", "", item=item, outcome=outcome, can_supplement=True)
+    qtbot.addWidget(offline)
+    assert offline.confirm_button.text() == "关闭"
+    assert offline.repair_button is None
+    offline.confirm_button.click()
+    assert not offline.repair_requested
+
+
+def test_single_preview_copy_value_is_absolute_and_has_no_count_suffix(workspace, monkeypatch):
+    from bilibili_downloader.gui.dialogs.workflow import WorkflowDialog
+    from bilibili_downloader.gui.widgets.components import ReadOnlyPath
+
     window = workspace
     info = multipart()
     window._current_video = info
     window._populate_page_combo(info)
     window._page_combo.setCurrentIndex(window._page_combo.findData("all"))
     window._refresh_download_summary()
-    hint = window._download_path_hint
-    assert hint._copy_value.startswith(window._settings.output_dir)
-    assert hint._copy_value.endswith(".mp4")
-    assert "110 个任务" not in hint._copy_value
-    assert "预计" in hint.text()
+    assert window._download_path_hint._copy_value == window._settings.output_dir
+    captured = []
+    monkeypatch.setattr(WorkflowDialog, "exec", lambda dialog: captured.append(dialog.findChild(ReadOnlyPath)._copy_value))
+    window._configuration.preview.click()
+    hint, = captured
+    assert hint.startswith(window._settings.output_dir)
+    assert hint.endswith(".mp4")
+    assert "110 个任务" not in hint
 
 
 def test_responsive_columns_preserve_file_and_attachment_selection(

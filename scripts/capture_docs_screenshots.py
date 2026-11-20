@@ -123,11 +123,12 @@ def _save_widget(app: QApplication, widget, filename: str, popup=None) -> None:
             continue
         text = entry.text() if isinstance(entry, QLineEdit) else entry.toPlainText()
         if temp_root in text:
-            masked.append((entry, text))
+            cursor = entry.cursorPosition() if isinstance(entry, QLineEdit) else None
+            masked.append((entry, text, cursor))
             visible = text.replace(temp_root, "~/BiliFlow-demo")
             if isinstance(entry, QLineEdit):
                 entry.setText(visible)
-                entry.setCursorPosition(0)
+                entry.setCursorPosition(len(visible) if entry.alignment() & Qt.AlignRight else 0)
             else:
                 entry.setPlainText(visible)
     _flush_events(app)
@@ -164,10 +165,10 @@ def _save_widget(app: QApplication, widget, filename: str, popup=None) -> None:
     result = captured if app.property("capturePhysicalPixels") and popup is None else flattened
     if not result.save(str(output), "PNG"):
         raise RuntimeError(f"无法保存截图：{output}")
-    for entry, text in masked:
+    for entry, text, cursor in masked:
         if isinstance(entry, QLineEdit):
             entry.setText(text)
-            entry.setCursorPosition(0)
+            entry.setCursorPosition(cursor)
         else:
             entry.setPlainText(text)
     for entry, text in masked_labels:
@@ -1709,6 +1710,7 @@ def _capture_appearance_controls(app, theme, window):
                 _flush_events(app)
                 panel.tabs.currentWidget().ensureWidgetVisible(panel._glass_card, 0, 8)
                 _save_widget(app,window,f"controls-{theme_id}-glass-{mode}-{width}.png")
+            panel._background_pickers["download"].set_reference(BUILTIN_BACKGROUNDS[0].reference)
             for value in (0,40):
                 panel._glass_blur.setValue(value)
                 _save_widget(app,window,f"controls-{theme_id}-blur-{value}-{mode}.png")

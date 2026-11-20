@@ -8,6 +8,7 @@ from PySide6.QtCore import QSize, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
+    QBoxLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -19,7 +20,6 @@ from PySide6.QtWidgets import (
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
-    QTabWidget,
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -42,6 +42,7 @@ from bilibili_downloader.gui.widgets.components import (
     SectionCard,
     StatusBadge,
     TaskDetailPanel,
+    WorkspaceTabs,
     repolish,
 )
 from bilibili_downloader.gui.widgets.download_list import (
@@ -50,6 +51,7 @@ from bilibili_downloader.gui.widgets.download_list import (
 )
 from bilibili_downloader.gui.widgets.live_page import _duration, _size, live_tone
 from bilibili_downloader.gui.widgets.row_hover import RowHoverTable, RowHoverTree
+from bilibili_downloader.gui.widgets.selection import SelectionBar
 
 CURRENT_STATES = {
     "preparing",
@@ -68,7 +70,49 @@ def _local_time(value):
         return value
 
 
-from bilibili_downloader.gui.widgets.selection import SelectionBar
+class _DownloadPanels(QWidget):
+    """Move the existing task details between a side pane and a summary row."""
+
+    def __init__(self, table, stack, detail):
+        super().__init__()
+        self.table = table
+        self.detail = detail
+        self._docked = False
+        self._row = QBoxLayout(QBoxLayout.TopToBottom, self)
+        self._row.setContentsMargins(0, 0, 0, 0)
+        self._row.setSpacing(12)
+        self._row.addWidget(stack, 1)
+        self._row.addWidget(detail)
+        self.table.horizontalHeader().sectionResized.connect(self._column_resized)
+
+    def _column_resized(self, column, _old, _new):
+        if column == 4:
+            self._reflow()
+
+    def set_details_visible(self, visible):
+        if visible == self.detail.isHidden():
+            self.detail.setVisible(visible)
+            self._reflow()
+
+    def _reflow(self):
+        metrics = UI_METRICS
+        available = self.width() - metrics.queue_detail_width - metrics.queue_detail_gap
+        docked = (not self.detail.isHidden() and self.width() >= metrics.queue_detail_breakpoint
+                  and self.table.fits_detail_layout(available))
+        if docked == self._docked:
+            return
+        self._docked = docked
+        scroll = self.table.verticalScrollBar()
+        position = scroll.value()
+        self._row.setDirection(QBoxLayout.LeftToRight if docked else QBoxLayout.TopToBottom)
+        self._row.setSpacing(metrics.queue_detail_gap if docked else 12)
+        self.detail.set_docked(docked)
+        self._row.activate()
+        scroll.setValue(position)
+
+    def resizeEvent(self, event):
+        self._reflow()
+        super().resizeEvent(event)
 
 
 class TaskPage(QWidget):
@@ -96,7 +140,7 @@ class TaskPage(QWidget):
         layout.setSpacing(16)
         self.header = PageHeader("任务中心", "查看下载、录制与历史")
         layout.addWidget(self.header)
-        self.tabs = QTabWidget()
+        self.tabs = WorkspaceTabs()
         layout.addWidget(self.tabs, 1)
         self._download_tab()
         self._current_tab()
@@ -180,14 +224,15 @@ class TaskPage(QWidget):
         self.undo_action.setEnabled(False)
         more.setMenu(menu)
         actions.addWidget(more)
+        self._download_tools.compact_actions = self._bulk_buttons[:2]
         layout.addWidget(self._download_tools)
-        self.selection_bar = SelectionBar()
+        self.selection_bar = SelectionBar(contextual=True)
         self.selection_bar.select_visible.connect(self.downloads.select_visible)
         self.selection_bar.clear_requested.connect(self.downloads.clear_checked)
         self.selection_bar.review_requested.connect(self.downloads.selection.toggle_review)
         self.downloads.selection.changed.connect(self._download_checked_changed)
         self.downloads.selection.focus_changed.connect(self._download_selection)
-        layout.addWidget(self.selection_bar)
+        self._download_tools.set_context(self.selection_bar)
         self._download_stack = QStackedWidget()
         self._download_stack.addWidget(self.downloads)
         self._download_stack.addWidget(
@@ -198,10 +243,10 @@ class TaskPage(QWidget):
         self._download_stack.addWidget(
             EmptyState("没有匹配的任务", action="清除筛选", callback=self.clear_download_filters)
         )
-        layout.addWidget(self._download_stack, 1)
         self.download_detail = TaskDetailPanel()
         self.download_detail.hide()
-        layout.addWidget(self.download_detail)
+        self._download_panels = _DownloadPanels(self.downloads, self._download_stack, self.download_detail)
+        layout.addWidget(self._download_panels, 1)
         self.recovery_action = QPushButton()
         self.recovery_action.setObjectName("TextButton")
         self.recovery_action.clicked.connect(self._request_recovery)
@@ -312,7 +357,7 @@ class TaskPage(QWidget):
         focused = self.downloads.selection.state.focused
         selected = [focused] if focused in self.downloads._states else self.downloads.selected_ids()
         if len(selected) != 1:
-            self.download_detail.hide()
+            self._download_panels.set_details_visible(False)
             return
         row = self.downloads._row_for(selected[0])
         item = self.downloads.item(row, 0)
@@ -321,7 +366,7 @@ class TaskPage(QWidget):
             or item.data(Qt.UserRole) is None
             or self.downloads.isRowHidden(row)
         ):
-            self.download_detail.hide()
+            self._download_panels.set_details_visible(False)
             return
         task_id = item.data(Qt.UserRole)
         status = self.downloads.item(row, 3)
@@ -338,14 +383,15 @@ class TaskPage(QWidget):
         outcome = self.downloads._outcomes.get(task_id)
         task = self.downloads.get_item(task_id)
         if outcome:
-            self.download_detail.set_result(task, outcome)
+            repair = (lambda: self.downloads.supplement_requested.emit(task_id)) if outcome.missing_artifacts else None
+            self.download_detail.set_result(task, outcome, supplement=repair)
             self.download_detail.status.setText("保存结果")
-            secondary = ("补全附件…", lambda: self.downloads.supplement_requested.emit(task_id)) if outcome.missing_artifacts else None
+            secondary = ("补全附件…", repair) if repair else None
             self.download_detail.set_actions(("打开文件夹", lambda: self.downloads.open_requested.emit(task_id)), secondary)
         elif task and task.retry_at:
             self.download_detail.set_actions(("立即重试", lambda: self.downloads.retry_requested.emit(task_id)),
                                             ("停止等待", lambda: self.downloads._on_pause_clicked(task_id)), secondary_required=True)
-        self.download_detail.show()
+        self._download_panels.set_details_visible(True)
         label = {"authentication": "登录后重试…", "permission": "核对权限后重试…", "storage": "更换目录并重试…", "rate_limit": "查看冷却说明"}.get(task.error_category if task else "")
         if label and self.downloads._states.get(task_id) == TaskStatus.FAILED:
             self.recovery_action.setText(label)

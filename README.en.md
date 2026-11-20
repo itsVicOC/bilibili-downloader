@@ -76,7 +76,7 @@ Path actions now sit beside the download directory, task views highlight whole r
 
 ## Download and install
 
-**`v0.9.0b1` prerelease** adds full-window wallpapers, layered Liquid Glass, integrated Windows title bar buttons, clearer download stages, and smaller packages. Existing installations can update through the channel that includes betas. [Download 0.9.0 Beta 1](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.9.0b1) · [Changelog](CHANGELOG.md#v090b1---2026-11-19)
+**`v0.9.0b2` prerelease** refines the full-window glass, sidebar, and toolbars, improves progress and task details in the download queue, and updates the appearance preview. Existing installations can update through the channel that includes betas. [Download 0.9.0 Beta 2](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.9.0b2) · [Changelog](CHANGELOG.md#v090b2---2026-11-20)
 
 **Stable `v0.8.13`:** Fixes overseas CDN HTTP 403 download and resume failures, recording completion only after the entire stream is validated. Subtitle verification, 4:3 display copies, and the collection workspace remain available. [Download stable](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.13) · [Validation record](docs/BUILDING.md) (Chinese). Both update channels can upgrade.
 

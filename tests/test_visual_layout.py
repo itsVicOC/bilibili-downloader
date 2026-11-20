@@ -183,7 +183,7 @@ def _paint_status(table, column, scale=1):
         ("😀🛰️" * 18 + "弹幕与视频下载", 2),
     ],
 )
-def test_download_status_is_centered_and_bounded(qtbot, width, scale, text, count):
+def test_download_status_is_left_aligned_and_vertically_centered(qtbot, width, scale, text, count):
     table = DownloadListWidget()
     qtbot.addWidget(table)
     table.setStyleSheet(build_component_overrides(False))
@@ -200,14 +200,13 @@ def test_download_status_is_centered_and_bounded(qtbot, width, scale, text, coun
     QApplication.processEvents()
     lines, content = _paint_status(table, 3, scale)
     assert len(lines) == count
-    assert table.horizontalHeaderItem(3).textAlignment() == Qt.AlignCenter
+    assert table.horizontalHeaderItem(3).textAlignment() == Qt.AlignLeft | Qt.AlignVCenter
     assert table.item(0, 3).toolTip() == text
     block = QRect()
     for rect, flags, line in lines:
-        assert flags & Qt.AlignHCenter
+        assert flags & Qt.AlignLeft
         assert table.visualRect(table.model().index(0, 3)).contains(rect)
         assert rect.left() == content.left() and rect.width() == content.width()
-        assert abs(rect.center().x() - content.center().x()) <= 1
         block = block.united(rect)
     assert abs(block.center().y() - content.center().y()) <= 1
     if text.startswith("失败："):
@@ -235,7 +234,7 @@ def test_resolution_errors_and_resumed_status_keep_alignment_and_tooltips(qtbot)
     table = DownloadListWidget()
     qtbot.addWidget(table)
     error_id = table.add_resolution_error("无法解析作品")
-    assert table.item(table._row_for(error_id), 3).textAlignment() == Qt.AlignCenter
+    assert table.item(table._row_for(error_id), 3).textAlignment() == Qt.AlignLeft | Qt.AlignVCenter
     task_id = table.add_item(
         DownloadItem(video_info=VideoInfo(bvid="BV1VISUAL01", cid=1, title="示例"))
     )
@@ -244,4 +243,4 @@ def test_resolution_errors_and_resumed_status_keep_alignment_and_tooltips(qtbot)
         table.update_progress(task_id, .3, "下载中 · 旧进度详情")
         transition(task_id)
         assert table.item(row, 3).toolTip() == table.item(row, 3).text()
-        assert table.item(row, 3).textAlignment() == Qt.AlignCenter
+        assert table.item(row, 3).textAlignment() == Qt.AlignLeft | Qt.AlignVCenter

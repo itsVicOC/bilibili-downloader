@@ -19,7 +19,7 @@ from bilibili_downloader.core.appearance import BackgroundStore
 from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
 from bilibili_downloader.core.models import BackgroundVisibility
 from bilibili_downloader.gui.dialogs.background_gallery import BackgroundGallery
-from bilibili_downloader.gui.resources.styles import contrast_ratio, theme_palette
+from bilibili_downloader.gui.resources.styles import contrast_ratio
 from bilibili_downloader.gui.resources.theme import ThemeManager
 from bilibili_downloader.gui.widgets.background_picker import BackgroundPicker
 from bilibili_downloader.gui.widgets.components import SectionCard
@@ -34,7 +34,6 @@ from tests.test_builtin_backgrounds import restore_theme as restore_theme
 def test_reading_surfaces_keep_contrast_over_wallpaper(qapp, qtbot, tmp_path, theme_id, dark, card_kind):
     theme = ThemeManager(qapp, theme_id)
     theme.apply_theme(dark)
-    colors = theme_palette(dark, theme_id)
     stack = WorkspaceStack()
     qtbot.addWidget(stack)
     page = HeroPanel() if card_kind == "hero" else SectionCard()
@@ -47,6 +46,8 @@ def test_reading_surfaces_keep_contrast_over_wallpaper(qapp, qtbot, tmp_path, th
         label.setGeometry(20, 30 + i * 40, 300, 30)
         labels.append(label)
     stack.show()
+    QApplication.processEvents()
+    default = stack.grab().toImage()
     samples = {}
     for pattern in ("black", "white", "checker"):
         source = QImage(640, 360, QImage.Format_RGB32)
@@ -81,7 +82,9 @@ def test_reading_surfaces_keep_contrast_over_wallpaper(qapp, qtbot, tmp_path, th
     QApplication.processEvents()
     assert not stack.backdrop.host.property("customBackground")
     image = stack.grab().toImage()
-    assert image.pixelColor(round(500 * image.devicePixelRatio()), round(200 * image.devicePixelRatio())).name() == colors.surface_raised
+    dpr = image.devicePixelRatio()
+    for x, y in ((500, 200), (560, 260)):
+        assert image.pixelColor(round(x * dpr), round(y * dpr)) == default.pixelColor(round(x * dpr), round(y * dpr))
     theme.deleteLater()
 
 

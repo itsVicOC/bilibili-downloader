@@ -1,16 +1,20 @@
 """A viewport-fixed backdrop shared by all persistent workspaces."""
 
 from PySide6.QtCore import QObject, QPoint, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QImageReader, QPainter, QPixmap
+from PySide6.QtGui import QColor, QImageReader, QPainter, QPixmap, QRadialGradient
 from PySide6.QtWidgets import QApplication, QStackedWidget, QWidget
 
 from bilibili_downloader.core.models import DEFAULT_GLASS_BLUR, BackgroundVisibility
 from bilibili_downloader.gui.resources.styles import (
     background_overlay_alpha,
+    blend_color,
     theme_palette,
 )
 from bilibili_downloader.gui.widgets.background_readability import BackgroundReadability
-from bilibili_downloader.gui.widgets.glass_surface import GlassBackdrop
+from bilibili_downloader.gui.widgets.glass_surface import (
+    HEADER_BLEND_HEIGHT,
+    GlassBackdrop,
+)
 
 
 def background_pixmap(path, size=None, *, pixel_art=False):
@@ -28,10 +32,25 @@ def background_pixmap(path, size=None, *, pixel_art=False):
 
 def paint_workspace_background(painter, rect, pixmap, is_dark, theme_id, visibility=None, *, builtin=False, pixel_art=False):
     """Use the same crop and readability mask in workspaces and draft previews."""
-    colors = theme_palette(is_dark, theme_id)
-    painter.fillRect(rect, QColor(colors.background))
-    if pixmap.isNull() or rect.isEmpty():
+    if rect.isEmpty():
         return
+    colors = theme_palette(is_dark, theme_id)
+    if pixmap.isNull():
+        painter.fillRect(rect, QColor(blend_color(colors.background, colors.surface_raised, .22)))
+        glow = QColor("#72c2f2" if theme_id == "bilibili_blue" else "#a593df")
+        for x, y, radius, color, opacity in (
+            (.77, .03, .83, glow, 40 if is_dark else 32),
+            (.10, .90, .65, QColor(colors.accent), 20 if is_dark else 13),
+        ):
+            light = QRadialGradient(rect.x() + x * rect.width(), rect.y() + y * rect.height(),
+                                    radius * max(rect.width(), rect.height()))
+            color.setAlpha(opacity)
+            light.setColorAt(0, color)
+            color.setAlpha(0)
+            light.setColorAt(1, color)
+            painter.fillRect(rect, light)
+        return
+    painter.fillRect(rect, QColor(colors.background))
     painter.setRenderHint(QPainter.SmoothPixmapTransform, not pixel_art)
     source = QRectF(pixmap.rect())
     ratio = max(rect.width() / source.width(), rect.height() / source.height())
@@ -123,12 +142,20 @@ class WindowBackdrop(QObject):
         colors = theme_palette(dark, theme_id)
         if viewport_key != self._viewport_key:
             self._viewport = QPixmap()
-            if not self.image.isNull() and not host.size().isEmpty():
-                self._viewport = QPixmap(QSize(round(host.width() * dpr), round(host.height() * dpr)))
-                self._viewport.setDevicePixelRatio(dpr)
+            if not host.size().isEmpty():
+                # The untextured scene only needs a small cached color field.
+                size = host.size()
+                wallpaper = not self.image.isNull()
+                if wallpaper:
+                    size = QSize(round(size.width() * dpr), round(size.height() * dpr))
+                elif size.width() > 240 or size.height() > 180:
+                    size = size.scaled(QSize(240, 180), Qt.KeepAspectRatio).expandedTo(QSize(1, 1))
+                self._viewport = QPixmap(size)
+                self._viewport.setDevicePixelRatio(dpr if wallpaper else 1)
                 painter = QPainter(self._viewport)
+                rect = QRectF(host.rect() if wallpaper else self._viewport.rect())
                 paint_workspace_background(
-                    painter, QRectF(host.rect()), self.image, dark, theme_id, visible,
+                    painter, rect, self.image, dark, theme_id, visible,
                     builtin=self._builtin, pixel_art=self._pixel_art,
                 )
                 painter.end()
@@ -142,20 +169,23 @@ class WindowBackdrop(QObject):
             painter.setRenderHint(QPainter.SmoothPixmapTransform, not self._pixel_art)
             painter.drawPixmap(QRectF(rect), self._viewport, QRectF(self._viewport.rect()))
 
-    def paint_glass(self, painter, widget, radius=18, *, reading=False, clear=False, clear_below=None):
+    def _prepare_glass(self):
         key, dark, colors = self._scene()
-        host = self.host
         self.glass.prepare(
-            key, host.size(),
+            key, self.host.size(),
             lambda p, rect: self._paint_viewport(p, rect, QColor(colors.background)),
-            dark, colors, self.blur, flat=self.image.isNull(),
+            dark, colors, self.blur, ambient=self.image.isNull(),
         )
+
+    def paint_glass(self, painter, widget, radius=18, *, reading=False, clear=False, edge=None, clear_below=None):
+        self._prepare_glass()
+        host = self.host
         offset = QPoint() if widget is host else widget.mapTo(host, QPoint())
         source = QRectF(offset, widget.size())
         if reading:
             self.glass.paint_reading(painter, widget.rect(), source, clear_below=clear_below)
         else:
-            self.glass.paint(painter, widget.rect(), source, radius=radius, clear=clear)
+            self.glass.paint(painter, widget.rect(), source, radius=radius, clear=clear, edge=edge)
 
     def set_glass_blur(self, value):
         if self.blur != value:
@@ -183,7 +213,12 @@ class WorkspaceStack(QStackedWidget):
 
     def paintEvent(self, event):
         super().paintEvent(event)
+        painter = QPainter(self)
         if self.backdrop.host is self:
-            painter = QPainter(self)
             self.backdrop.paint(painter)
-            painter.end()
+        else:
+            band = QRectF(0, 0, self.width(), min(self.height(), HEADER_BLEND_HEIGHT))
+            source = band.translated(self.mapTo(self.backdrop.host, QPoint()))
+            self.backdrop._prepare_glass()
+            self.backdrop.glass.paint_header_handoff(painter, band, source)
+        painter.end()

@@ -40,7 +40,11 @@ from bilibili_downloader.gui.resources.styles import (
 )
 from bilibili_downloader.gui.widgets.components import PopupMenu, line_icon, palette
 from bilibili_downloader.gui.widgets.motion import StateTransition
-from bilibili_downloader.gui.widgets.row_hover import RowHoverTable, row_option
+from bilibili_downloader.gui.widgets.row_hover import (
+    RowDelegate,
+    RowHoverTable,
+    row_option,
+)
 from bilibili_downloader.gui.widgets.selection import SelectionItem, TableSelection
 
 ACTION_BUTTON_MIN_WIDTH = 60
@@ -58,8 +62,48 @@ _TABLE_BUTTON_NAMES = {
 }
 
 
+def _split_line(text, font, widget, width):
+    layout = QTextLayout(text, font, widget)
+    options = QTextOption()
+    options.setWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
+    layout.setTextOption(options)
+    layout.beginLayout()
+    line = layout.createLine()
+    length = 0
+    if line.isValid():
+        line.setLineWidth(max(1, width))
+        length = line.textLength()
+    layout.endLayout()
+    # QTextLine offsets count UTF-16 units, including surrogate pairs.
+    encoded = text.encode("utf-16-le")
+    return encoded[:length * 2].decode("utf-16-le").rstrip(), encoded[length * 2:].decode("utf-16-le").lstrip()
+
+
+class _TitleDelegate(QStyledItemDelegate):
+    def paint(self, painter, option, index):
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        rect = opt.rect.adjusted(8, 2, -8, -2)
+        if rect.isEmpty():
+            return
+        painter.save()
+        painter.setClipRect(rect, Qt.IntersectClip)
+        painter.setFont(opt.font)
+        painter.setPen(QColor(palette(opt.widget).text))
+        metrics = painter.fontMetrics()
+        title = " ".join(opt.text.splitlines())
+        lines = (title,)
+        if rect.height() >= 2 * metrics.height() and metrics.horizontalAdvance(title) > rect.width():
+            lines = _split_line(title, opt.font, opt.widget, rect.width())
+        y = rect.top() + (rect.height() - len(lines) * metrics.height()) // 2 + metrics.ascent()
+        for line in lines:
+            painter.drawText(rect.left(), y, metrics.elidedText(line, Qt.ElideRight, rect.width()))
+            y += metrics.height()
+        painter.restore()
+
+
 class _SpecificationDelegate(QStyledItemDelegate):
-    """Compact, two-line media tags keep the title column readable."""
+    """Keep media specifications readable without a separate badge per row."""
 
     def paint(self, painter, option, index):
         opt = QStyleOptionViewItem(option)
@@ -68,22 +112,15 @@ class _SpecificationDelegate(QStyledItemDelegate):
         style = opt.widget.style() if opt.widget else QApplication.style()
         style.drawControl(QStyle.CE_ItemViewItem, row_option(opt, index), painter, opt.widget)
         painter.save()
-        painter.setRenderHint(QPainter.Antialiasing)
         p = palette(opt.widget)
         font = QFont(opt.font)
-        font.setPointSizeF(font.pointSizeF() * 0.86)
+        font.setPointSizeF(font.pointSizeF() * .94)
         painter.setFont(font)
         lines = text.splitlines()[:2]
         metrics = painter.fontMetrics()
-        width = min(opt.rect.width() - 10, max((metrics.horizontalAdvance(line) for line in lines), default=0) + 20)
-        height = min(opt.rect.height() - 16, metrics.height() * max(1, len(lines)) + 8)
-        rect = QRect(0, 0, width, height)
-        rect.moveCenter(opt.rect.center())
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(p.control_fill))
-        painter.drawRoundedRect(rect, 6, 6)
+        rect = opt.rect.adjusted(3, 0, -3, 0)
         painter.setPen(QColor(p.muted))
-        label = "\n".join(painter.fontMetrics().elidedText(line, Qt.ElideRight, max(1, rect.width() - 6)) for line in lines[:2])
+        label = "\n".join(metrics.elidedText(line, Qt.ElideRight, rect.width()) for line in lines)
         painter.drawText(rect, Qt.AlignCenter, label)
         painter.restore()
 
@@ -121,7 +158,6 @@ class _ReadableProgressBar(QProgressBar):
         painter.drawText(number, Qt.AlignRight | Qt.AlignVCenter, text)
         fill = {
             "CompletedProgress": p.success,
-            "WarningProgress": p.warning,
             "ErrorProgress": p.danger_border,
             "PausedProgress": p.border,
             "CancelledProgress": p.border,
@@ -151,6 +187,11 @@ class _ProgressCell(QWidget):
         layout.addWidget(bar, 1, Qt.AlignVCenter)
 
 
+class _ActionCellDelegate(RowDelegate):
+    def updateEditorGeometry(self, editor, option, index):
+        editor.setGeometry(option.rect)
+
+
 class _StatusDelegate(QStyledItemDelegate):
     """Paint semantic task tones from the live light/dark theme."""
 
@@ -174,7 +215,6 @@ class _StatusDelegate(QStyledItemDelegate):
         color = {"active": p.active_text, "success": p.success, "warning": p.warning,
                  "danger": p.danger, "muted": p.muted}.get(tone, p.text)
         painter.save()
-        painter.setPen(QColor(color))
         painter.setFont(opt.font)
         metrics = painter.fontMetrics()
         height = metrics.height()
@@ -189,31 +229,19 @@ class _StatusDelegate(QStyledItemDelegate):
         paragraphs = text.replace(" · ", "\n", 1).splitlines() or [""]
         lines = [" · ".join(paragraphs)]
         if content.height() >= height * 2:
-            layout = QTextLayout(paragraphs[0], opt.font, opt.widget)
-            text_option = QTextOption()
-            text_option.setWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
-            layout.setTextOption(text_option)
-            layout.beginLayout()
-            first = layout.createLine()
-            length = 0
-            if first.isValid():
-                first.setLineWidth(max(1, content.width()))
-                length = first.textLength()
-            layout.endLayout()
-            # QTextLine offsets count UTF-16 units, including surrogate pairs.
-            encoded = paragraphs[0].encode("utf-16-le")
-            lines = [encoded[:length * 2].decode("utf-16-le").rstrip()]
-            remaining = " · ".join(
-                part for part in [
-                    encoded[length * 2:].decode("utf-16-le").lstrip(), *paragraphs[1:]
-                ]
-                if part
-            )
+            first, remainder = _split_line(paragraphs[0], opt.font, opt.widget, content.width())
+            lines = [first]
+            remaining = " · ".join(filter(None, (remainder, *paragraphs[1:])))
             if remaining:
                 lines.append(remaining)
         top = content.top() + (content.height() - len(lines) * height) // 2
         alignment = (opt.displayAlignment & Qt.AlignHorizontal_Mask) | Qt.AlignVCenter
-        for line in lines:
+        for position, line in enumerate(lines):
+            # The measurement line belongs to the transfer, but does not carry its status color.
+            line_color = p.muted if transfer and position == 1 else color
+            if tone == "warning" and position == 0 and line == "媒体已保存" and len(lines) > 1:
+                line_color = p.text
+            painter.setPen(QColor(line_color))
             rect = QRect(content.left(), top, max(1, content.width()), height)
             painter.drawText(
                 rect, alignment, metrics.elidedText(line, Qt.ElideRight, rect.width())
@@ -320,14 +348,14 @@ class DownloadListWidget(RowHoverTable):
         self.removing_ids = set()
         self._placeholder_active = False
         self._setup_ui()
-        self.selection = TableSelection(self, paint_only=True)
+        self.selection = TableSelection(self, _TitleDelegate(self), paint_only=True, distinguish_focus=True)
         self.selection.changed.connect(self.itemSelectionChanged.emit)
 
     def _setup_ui(self):
         self.setAccessibleName("下载任务列表")
         self.setColumnCount(5)
         self.setHorizontalHeaderLabels(["作品", "规格", "进度", "状态", "操作"])
-        self.horizontalHeaderItem(3).setTextAlignment(Qt.AlignCenter)
+        self.horizontalHeaderItem(3).setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
         self.horizontalHeader().resizeSection(1, 110)
@@ -353,6 +381,7 @@ class DownloadListWidget(RowHoverTable):
         self.setTextElideMode(Qt.ElideRight)
         self.setItemDelegateForColumn(3, _StatusDelegate(self))
         self.setItemDelegateForColumn(1, _SpecificationDelegate(self))
+        self.setItemDelegateForColumn(4, _ActionCellDelegate(self))
         self._show_placeholder()
 
     def add_item(
@@ -414,9 +443,7 @@ class DownloadListWidget(RowHoverTable):
         _set_progress_state(
             progress_bar,
             {
-                TaskStatus.COMPLETED: "WarningProgress"
-                if warnings
-                else "CompletedProgress",
+                TaskStatus.COMPLETED: "CompletedProgress",
                 TaskStatus.FAILED: "ErrorProgress",
                 TaskStatus.PAUSED: "PausedProgress",
                 TaskStatus.CANCELLED: "CancelledProgress",
@@ -424,7 +451,7 @@ class DownloadListWidget(RowHoverTable):
         )
 
         status_item = QTableWidgetItem(status_text or _status_label(status))
-        status_item.setTextAlignment(Qt.AlignCenter)
+        status_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         status_item.setData(Qt.UserRole, download_id)
         status_item.setData(STATUS_TONE_ROLE, _status_tone(status, bool(warnings)))
         status_item.setToolTip(status_text or _status_label(status))
@@ -454,7 +481,7 @@ class DownloadListWidget(RowHoverTable):
         _set_progress_state(progress, "ErrorProgress")
         self.setCellWidget(row, 2, _ProgressCell(progress))
         status = QTableWidgetItem("未加入队列")
-        status.setTextAlignment(Qt.AlignCenter)
+        status.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         status.setData(STATUS_TONE_ROLE, "danger")
         status.setToolTip(error)
         self.setItem(row, 3, status)
@@ -575,12 +602,7 @@ class DownloadListWidget(RowHoverTable):
             self._output_paths[download_id] = outcome.video_path
         progress_bar = self._progress_at(row)
         if progress_bar:
-            _set_progress_state(
-                progress_bar,
-                "WarningProgress"
-                if getattr(outcome, "warnings", None) or getattr(outcome, "missing_artifacts", None) or getattr(outcome, "spec_warnings", None)
-                else "CompletedProgress",
-            )
+            _set_progress_state(progress_bar, "CompletedProgress")
             progress_bar.set_progress(100)
         status_item = self.item(row, 3)
         if status_item:
@@ -808,15 +830,24 @@ class DownloadListWidget(RowHoverTable):
             self._placeholder_active = False
             self.content_state_changed.emit(True)
 
+    @staticmethod
+    def _column_widths(width):
+        narrow = width < 900
+        return (60 if narrow else 82, max(132, min(232, round(width * .17))), 146 if narrow else 186)
+
+    def fits_detail_layout(self, width):
+        header = self.horizontalHeader()
+        # Reserve space for the scrollbar even when the current filter has few rows.
+        title = max(184, self.fontMetrics().horizontalAdvance("作品标题作品标题作品") + 40)
+        inset = self.frameWidth() * 2 + self.style().pixelMetric(QStyle.PM_ScrollBarExtent, None, self)
+        return width >= sum(self._column_widths(width)) + header.sectionSize(4) + title + inset
+
     def resizeEvent(self, event):
         """Keep progress useful without starving title text on compact windows."""
-        narrow = event.size().width() < 900
-        progress_width = 120 if narrow else 160
-        self.horizontalHeader().resizeSection(
-            1, 80 if narrow else 100
-        )
-        self.horizontalHeader().resizeSection(2, progress_width)
-        self.horizontalHeader().resizeSection(3, 156 if narrow else 220)
+        for index, width in enumerate(self._column_widths(event.size().width()), start=1):
+            self.horizontalHeader().resizeSection(index, width)
+        font_height = self.fontMetrics().height()
+        self.verticalHeader().setDefaultSectionSize(max(UI_METRICS.row_height, font_height * 2 + 12))
         super().resizeEvent(event)
 
     def selected_ids(self):
@@ -829,7 +860,7 @@ class DownloadListWidget(RowHoverTable):
         self.selection.clear()
 
     def selectRow(self, row):
-        super().selectRow(row)
+        self.setCurrentCell(row, 0)
         if hasattr(self, "selection"):
             self.selection.select_only_row(row)
 

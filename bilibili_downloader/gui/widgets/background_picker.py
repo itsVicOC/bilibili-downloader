@@ -48,7 +48,7 @@ class _ImageRunner(QRunnable):
 class BackgroundPicker(QWidget):
     changed = Signal()
 
-    def __init__(self, title, store=None, parent=None, *, workspace=None):
+    def __init__(self, title, store=None, parent=None, *, workspace=None, compact=False):
         super().__init__(parent)
         self.store = store
         self._title = title
@@ -69,11 +69,9 @@ class BackgroundPicker(QWidget):
         self.preview.setToolTip("选择背景并预览浅色、深色效果")
         self.preview.clicked.connect(self._show_preview)
         row.addWidget(self.preview)
-        column = QVBoxLayout()
         self.status = QLabel("使用主题默认背景")
         self.status.setObjectName("MetaLabel")
         self.status.setWordWrap(True)
-        column.addWidget(self.status)
         buttons = QHBoxLayout()
         self.choose = QPushButton("选择背景…")
         self.choose.clicked.connect(self._choose)
@@ -81,9 +79,16 @@ class BackgroundPicker(QWidget):
         self.reset.clicked.connect(self._restore_default)
         buttons.addWidget(self.choose)
         buttons.addWidget(self.reset)
-        buttons.addStretch()
-        column.addLayout(buttons)
-        row.addLayout(column, 1)
+        if compact:
+            self.preview.hide()
+            row.addLayout(buttons)
+            row.addWidget(self.status, 1)
+        else:
+            column = QVBoxLayout()
+            column.addWidget(self.status)
+            buttons.addStretch()
+            column.addLayout(buttons)
+            row.addLayout(column, 1)
 
     def set_reference(self, reference):
         self._generation += 1
@@ -101,7 +106,7 @@ class BackgroundPicker(QWidget):
             pixmap.loadFromData(self.prepared.preview)
         elif self.reference:
             try:
-                pixmap = background_pixmap(background_path(self.reference, self.store, thumbnail=entry is not None), QSize(160, 90), pixel_art=self.preview.pixel_art)
+                pixmap = background_pixmap(background_path(self.reference, self.store), QSize(640, 420), pixel_art=self.preview.pixel_art)
             except OSError:
                 pass
         if not pixmap.isNull():

@@ -3,10 +3,10 @@
 from PySide6.QtCore import QEvent, QSize, Qt, Signal
 from PySide6.QtWidgets import (
     QBoxLayout,
+    QHBoxLayout,
     QLabel,
     QScrollArea,
     QSizePolicy,
-    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -18,12 +18,13 @@ from bilibili_downloader.gui.widgets.components import (
     ElidedLabel,
     ResponsiveFields,
     SectionCard,
+    WorkspaceTabs,
     repolish,
     reveal_field,
 )
 
 
-class SourceTabs(QTabWidget):
+class SourceTabs(WorkspaceTabs):
     """Size the current source view without reserving space for hidden results."""
 
     def __init__(self, parent=None):
@@ -56,21 +57,36 @@ class SourceTabs(QTabWidget):
 
 class DownloadConfiguration(SectionCard):
     opened = Signal()
+    preview_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__("下载设置", parent)
         self.setObjectName("ControlPanel")
         self._preconfigured = False
+        self._summary_host = self.body
         self._error_field = None
         self._error_control = None
+        self._title = self.header.itemAt(0).widget()
+        self.preview = ActionButton("预览文件名")
+        self.preview.setObjectName("TextButton")
+        self.preview.clicked.connect(self.preview_requested.emit)
+        self.header.addWidget(self.preview)
+        self.preview.hide()
+        self._summary_row = QWidget()
+        summary_row = QHBoxLayout(self._summary_row)
+        summary_row.setContentsMargins(0, 0, 0, 0)
         self.summary = QLabel()
         self.summary.setObjectName("MetaLabel")
-        self.summary.setWordWrap(True)
-        self.body.addWidget(self.summary)
+        self.summary.setTextFormat(Qt.PlainText)
+        self.summary.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+        summary_row.addWidget(self.summary)
         self.edit = ActionButton("修改")
         self.edit.setObjectName("TextButton")
+        self.edit.setAccessibleName("修改下载设置")
         self.edit.clicked.connect(self.open)
-        self.header.addWidget(self.edit)
+        summary_row.addWidget(self.edit)
+        summary_row.addStretch(1)
+        self.body.addWidget(self._summary_row)
         self.content = QWidget()
         self.fields_layout = QVBoxLayout(self.content)
         self.fields_layout.setContentsMargins(0, 0, 0, 0)
@@ -94,8 +110,16 @@ class DownloadConfiguration(SectionCard):
     def set_context(self, ready):
         expanded = ready or self._preconfigured
         self.content.setVisible(expanded)
-        self.summary.setVisible(not expanded)
-        self.edit.setVisible(not expanded)
+        self._title.setVisible(expanded)
+        self.preview.setVisible(ready)
+        self._summary_row.setVisible(not expanded)
+        self.setVisible(expanded or self._summary_host is self.body)
+
+    def set_summary_host(self, host):
+        host = self.body if host is None else host
+        if host is not self._summary_host:
+            host.insertWidget(1 if host is self.body else host.count(), self._summary_row)
+            self._summary_host = host
 
     def set_summary(self, summary, advanced):
         self.summary.setText(summary)

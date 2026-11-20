@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtCore import QEvent, QPoint, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QBoxLayout,
@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSpinBox,
     QStackedWidget,
+    QStyledItemDelegate,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -30,14 +31,15 @@ from bilibili_downloader.gui.widgets.check_box import CheckBox
 from bilibili_downloader.gui.widgets.chinese_input import ChineseLineEdit
 from bilibili_downloader.gui.widgets.combo_box import ComboBox
 from bilibili_downloader.gui.widgets.components import (
-    ActionBar,
+    ActionButton,
     CollapsibleSection,
-    ElidedLabel,
     EmptyState,
     FieldRow,
     Notice,
     PageHeader,
     PopupMenu,
+    ReadOnlyPath,
+    ResponsiveActions,
     SectionCard,
     StatusBadge,
     repolish,
@@ -77,6 +79,18 @@ def live_tone(state):
     return "muted"
 
 
+class _RoomDelegate(QStyledItemDelegate):
+    """Use stable insets for the inline details widget within a spanned row."""
+
+    horizontal_inset = 8
+    vertical_inset = 4
+
+    def updateEditorGeometry(self, editor, option, index):
+        editor.setGeometry(option.rect.adjusted(
+            self.horizontal_inset, self.vertical_inset, -self.horizontal_inset, -self.vertical_inset,
+        ))
+
+
 class LiveSettingsDialog(SettingsDialog):
     """Compatibility dialog using the same settings content as the page."""
 
@@ -104,6 +118,12 @@ class LivePage(QWidget):
         self._selected_id = None
         self._rows = []
         self._quality_fingerprint = None
+        self._inline_row = None
+        self._pending_inline_reveal = False
+        self._inline_reveal_timer = QTimer(self)
+        self._inline_reveal_timer.setSingleShot(True)
+        self._inline_reveal_timer.setInterval(16)
+        self._inline_reveal_timer.timeout.connect(self._reveal_inline_actions)
         root = QVBoxLayout(self)
         root.setContentsMargins(24, 24, 24, 24)
         root.setSpacing(16)
@@ -119,7 +139,7 @@ class LivePage(QWidget):
         root.addWidget(header)
         body = QWidget()
         column = QVBoxLayout(body)
-        column.setContentsMargins(0, 0, 4, 0)
+        column.setContentsMargins(0, 0, 4, 12)
         column.setSpacing(16)
         hero = HeroPanel()
         hero.set_compact(True, minimum_height=UI_METRICS.source_resolved_height)
@@ -155,6 +175,7 @@ class LivePage(QWidget):
         self._content_layout.setContentsMargins(0, 0, 0, 0)
         self._content_layout.setSpacing(16)
         self._rooms_card = SectionCard()
+        self._rooms_card.set_plain()
         self._count = StatusBadge("0 个直播间")
         self._rooms_card.body.addWidget(self._count, alignment=Qt.AlignRight)
         self.rooms = QTableWidget(0, 4)
@@ -163,6 +184,7 @@ class LivePage(QWidget):
         self.rooms.setHorizontalHeaderLabels(
             ["直播间", "状态 / 监控", "已录时长", "大小 / 速度"]
         )
+        self.rooms.setColumnHidden(3, True)
         self.rooms.setSelectionBehavior(QTableWidget.SelectRows)
         self.rooms.setSelectionMode(QTableWidget.SingleSelection)
         self.rooms.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -175,8 +197,10 @@ class LivePage(QWidget):
         for index, width in ((1, 142), (2, 110), (3, 120)):
             table_header.setSectionResizeMode(index, QHeaderView.Fixed)
             table_header.resizeSection(index, width)
+        self.rooms.setItemDelegateForColumn(0, _RoomDelegate(self.rooms))
         self.rooms.setItemDelegateForColumn(1, _StatusDelegate(self.rooms))
         self.rooms.itemSelectionChanged.connect(self._selection_changed)
+        self.rooms.itemClicked.connect(self._expand_selected_room)
         self._room_stack = QStackedWidget()
         self._room_stack.addWidget(self.rooms)
         self._room_stack.addWidget(
@@ -186,6 +210,7 @@ class LivePage(QWidget):
         self._rooms_card.body.addWidget(self._room_stack, 1)
         self._content_layout.addWidget(self._rooms_card, 1)
         self._detail_card = SectionCard("房间详情")
+        self._detail_card.installEventFilter(self)
         self._detail_card.setMinimumWidth(300)
         self._detail_badge = StatusBadge("未选择房间")
         self._detail_card.header.addWidget(self._detail_badge)
@@ -219,12 +244,12 @@ class LivePage(QWidget):
         self._room_configuration.set_plain()
         self._room_configuration.body.setContentsMargins(0, 8, 0, 8)
         options = self._room_configuration.body
-        details.addWidget(self._room_configuration)
         self.quality = ComboBox()
         self.quality.activated.connect(self._set_quality)
         options.addWidget(FieldRow("下次拉流画质", self.quality))
-        self._directory = QLineEdit()
-        self._directory.setReadOnly(True)
+        self._directory = ReadOnlyPath(show_end=True)
+        self._directory.setAccessibleName("当前房间保存目录")
+        self._directory.setSizePolicy(self.source.sizePolicy())
         directory_row = QWidget()
         directory_layout = QHBoxLayout(directory_row)
         directory_layout.setContentsMargins(0, 0, 0, 0)
@@ -234,7 +259,8 @@ class LivePage(QWidget):
             QUrl.fromLocalFile(str(Path(self._directory.text()).expanduser()))
         ) if Path(self._directory.text()).expanduser().is_dir() else self.controller.notify("保存目录未创建或不可用。", "warning"))
         directory_layout.addWidget(self._open_directory)
-        options.addWidget(FieldRow("保存目录", directory_row))
+        details.addWidget(FieldRow("保存目录", directory_row))
+        details.addWidget(self._room_configuration)
         self._directory_hint = QLabel()
         self._directory_hint.setObjectName("MetaLabel")
         self._directory_hint.setWordWrap(True)
@@ -251,15 +277,15 @@ class LivePage(QWidget):
         self._monitor_hint.setObjectName("MetaLabel")
         self._monitor_hint.setWordWrap(True)
         options.addWidget(self._monitor_hint)
-        buttons = QHBoxLayout()
-        buttons.setSpacing(8)
-        self.start_stop = QPushButton("立即开始")
+        buttons = ResponsiveActions()
+        self.start_stop = ActionButton("立即开始")
+        self.start_stop.setProperty("alwaysVisible", True)
         self.start_stop.setObjectName("PrimaryButton")
         self.start_stop.clicked.connect(self._start_stop)
-        self.room_settings = QPushButton("房间设置")
+        self.room_settings = ActionButton("房间设置")
         self.room_settings.setObjectName("OutputSecondaryButton")
         self.room_settings.clicked.connect(self._room_settings)
-        buttons.addWidget(self.room_settings)
+        buttons.row.addWidget(self.room_settings)
         more = QPushButton("更多")
         more.setObjectName("OutputSecondaryButton")
         more.setProperty("menuButton", True)
@@ -267,24 +293,26 @@ class LivePage(QWidget):
         self.remove_action = menu.addAction("移除直播间")
         self.remove_action.triggered.connect(lambda: self._command("remove"))
         more.setMenu(menu)
-        buttons.addWidget(more)
-        self.start_stop.setMinimumWidth(128)
-        buttons.addWidget(self.start_stop)
+        buttons.row.addWidget(more)
+        self.start_stop.setMinimumWidth(108)
+        buttons.row.addWidget(self.start_stop)
+        self._action_bar = QWidget()
+        self._action_bar.installEventFilter(self)
+        self._action_bar.setAccessibleName("直播间录制操作")
+        action_bar = QVBoxLayout(self._action_bar)
+        action_bar.setContentsMargins(0, 4, 0, 0)
+        action_bar.setSpacing(8)
+        action_bar.addWidget(self.monitor)
+        action_bar.addWidget(buttons, alignment=Qt.AlignRight)
+        details.addWidget(self._action_bar)
         self._detail_card.body.addWidget(self._detail_controls)
         self._detail_card.body.addStretch()
         self._content_layout.addWidget(self._detail_card)
         column.addWidget(self._content, 1)
-        self._scroll = scroll_area(body)
+        self._scroll = scroll_area(body, scroll_edge=True)
+        self._scroll.verticalScrollBar().rangeChanged.connect(self._schedule_inline_reveal)
+        self._scroll.viewport().installEventFilter(self)
         root.addWidget(self._scroll, 1)
-        self._action_bar = ActionBar()
-        self._action_bar.setAccessibleName("直播间录制操作")
-        action_bar = self._action_bar.row
-        self._action_target = ElidedLabel()
-        self._action_target.setObjectName("MetaLabel")
-        action_bar.addWidget(self._action_target, 1)
-        action_bar.addWidget(self.monitor)
-        action_bar.addLayout(buttons)
-        root.addWidget(self._action_bar)
         self._notice = Notice()
         self.message = self._notice.label
         root.addWidget(self._notice)
@@ -318,15 +346,12 @@ class LivePage(QWidget):
     def resizeEvent(self, event):
         # Both panes include their own padding; the 900px shell stays stacked.
         narrow = event.size().width() < 880
-        previous = getattr(self, "_stacked_details", None)
         self._stacked_details = narrow
         self._content_layout.setDirection(
             QBoxLayout.TopToBottom if narrow else QBoxLayout.LeftToRight
         )
         self._detail_card.setMaximumWidth(16777215 if narrow else 320)
         self._detail_toggle.setVisible(narrow)
-        if previous != narrow:
-            self._detail_toggle.setChecked(not narrow)
         self._room_stack.setMinimumHeight(160 if narrow else 200)
         duration_width = max(80, self.rooms.fontMetrics().horizontalAdvance("000:00:00") + 24)
         for index, width in ((1, 108), (2, duration_width), (3, 92)):
@@ -336,25 +361,108 @@ class LivePage(QWidget):
         super().resizeEvent(event)
 
     def _sync_detail_visibility(self, *_args):
-        expanded = not getattr(self, "_stacked_details", True) or self._detail_toggle.isChecked()
+        stacked = getattr(self, "_stacked_details", True)
+        expanded = not stacked or self._detail_toggle.isChecked()
         selected = self._selected_row() is not None
+        index = self.rooms.currentRow()
+        if self._inline_row is not None and index > self._inline_row:
+            index -= 1
+        inline = stacked and expanded and selected
+        moved = self._inline_row != (index + 1 if inline else None)
+        self._place_inline_detail(index + 1 if inline else None)
+        self._detail_badge.setVisible(not inline)
+        self._room_name.setVisible(not inline)
+        self._room_id_label.setVisible(not inline)
         self._detail_card.setVisible(selected)
         self._detail_controls.setVisible(expanded and selected)
         self._detail_toggle.setText("收起" if expanded else "展开")
+        if moved:
+            self._pending_inline_reveal = inline
+        self._update_table_height()
+        self._schedule_inline_reveal()
+
+    def _schedule_inline_reveal(self, *_args):
+        if self._pending_inline_reveal:
+            self._inline_reveal_timer.start()
+
+    def _reveal_inline_actions(self):
+        if self._pending_inline_reveal and self._inline_row is not None:
+            viewport = self._scroll.viewport()
+            scroll = self._scroll.verticalScrollBar()
+            top = self._action_bar.mapTo(viewport, QPoint()).y()
+            bottom = top + self._action_bar.height()
+            previous = scroll.value()
+            # Scroll the whole action bar into view; Qt may reveal only its focus target.
+            if bottom + 8 > viewport.height():
+                scroll.setValue(previous + bottom + 8 - viewport.height())
+            elif top < 8:
+                scroll.setValue(previous + top - 8)
+            if scroll.value() != previous:
+                # Scrolling can trigger another geometry pass for the spanned table row.
+                self._schedule_inline_reveal()
+            else:
+                visible = self._action_bar.visibleRegion().boundingRect()
+                self._pending_inline_reveal = not visible.contains(self._action_bar.rect())
+
+    def _place_inline_detail(self, index):
+        if index == self._inline_row:
+            return
+        blocked = self.rooms.blockSignals(True)
+        if self._inline_row is not None:
+            self._detail_card.setParent(self._content)
+            self.rooms.removeRow(self._inline_row)
+        self._inline_row = index
+        if index is None:
+            self._content_layout.addWidget(self._detail_card)
+        else:
+            self.rooms.insertRow(index)
+            for column in range(self.rooms.columnCount()):
+                item = QTableWidgetItem()
+                item.setFlags(Qt.NoItemFlags)
+                self.rooms.setItem(index, column, item)
+            self.rooms.setSpan(index, 0, 1, self.rooms.columnCount())
+            host = QWidget()
+            layout = QVBoxLayout(host)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.addWidget(self._detail_card)
+            self.rooms.setCellWidget(index, 0, host)
+        self.rooms.blockSignals(blocked)
+
+    def _expand_selected_room(self, _item):
+        self._detail_toggle.setChecked(True)
+
+    def eventFilter(self, watched, event):
+        if self._inline_row is not None:
+            kind = event.type()
+            if watched is self._detail_card and kind == QEvent.LayoutRequest:
+                self._update_table_height()
+                self._schedule_inline_reveal()
+            elif watched is self._action_bar and kind in (QEvent.Move, QEvent.Resize):
+                self._schedule_inline_reveal()
+            elif watched is self._scroll.viewport() and kind == QEvent.Resize:
+                self._schedule_inline_reveal()
+        return super().eventFilter(watched, event)
 
     def _update_table_height(self):
+        if self._inline_row is not None:
+            card = self._detail_card
+            padding = card.frameWidth() * 2
+            width = max(1, self.rooms.viewport().width() - _RoomDelegate.horizontal_inset * 2 - padding)
+            hint = max(card.sizeHint().height(), card.body.totalHeightForWidth(width) + padding)
+            self.rooms.setRowHeight(self._inline_row, hint + _RoomDelegate.vertical_inset * 2)
         stacked = getattr(self, "_stacked_details", True)
         self.rooms.setVerticalScrollBarPolicy(
             Qt.ScrollBarAlwaysOff if stacked else Qt.ScrollBarAsNeeded
         )
-        height = (
-            max(40, self.rooms.horizontalHeader().height())
-            + sum(self.rooms.rowHeight(i) for i in range(self.rooms.rowCount()))
-            + self.rooms.frameWidth() * 2
-        )
+        chrome = max(40, self.rooms.horizontalHeader().height()) + self.rooms.frameWidth() * 2
+        if self.rooms.isVisible() and self.rooms.viewport().height() > 0:
+            chrome = max(chrome, self.rooms.height() - self.rooms.viewport().height())
+        height = chrome + sum(self.rooms.rowHeight(i) for i in range(self.rooms.rowCount()))
         # Stacked content scrolls as one page; never nest the room table's scroll.
         self.rooms.setMinimumHeight(max(140, height) if stacked else 140)
         self._room_stack.setMinimumHeight(max(160, height) if stacked and self.rooms.rowCount() else 200)
+        if stacked:
+            self.rooms.verticalScrollBar().setValue(0)
 
     def _room_id(self):
         item = self.rooms.item(self.rooms.currentRow(), 0)
@@ -407,15 +515,13 @@ class LivePage(QWidget):
         row = self._selected_row()
         self._selected_id = row["room_id"] if row else None
         self._sync_detail_visibility()
-        self._action_bar.setVisible(row is not None)
         if not row:
             self._detail_badge.setText("未选择房间")
             self._detail_badge.set_tone("muted")
             self._quality_fingerprint = None
             return
         self._room_name.setText(row["author"] or "未命名直播间")
-        self._action_target.set_full_text(f"当前房间：{row['author'] or row['room_id']}")
-        self._action_target.setToolTip(f"{row['author']} · 房间 {row['room_id']}")
+        self._action_bar.setAccessibleName(f"{row['author'] or row['room_id']}的录制操作")
         self._room_id_label.setText(f"房间 {row['room_id']} · {row['title']}")
         self._room_id_label.setWordWrap(True)
         self._room_id_label.setTextFormat(Qt.PlainText)
@@ -423,17 +529,16 @@ class LivePage(QWidget):
         self._detail_badge.set_tone(live_tone(row["state"]))
         self._detail.setText(row["detail"] or "等待直播状态更新")
         self._detail.setVisible(bool(row["detail"] and row["detail"] != row["state_label"]))
-        self._recording_metrics.setText(f"{_duration(row['duration'])} · {_size(row['size'])} · {_size(row['speed'])}/s")
+        self._recording_metrics.setText(f"{_size(row['size'])} · {_size(row['speed'])}/s")
+        self._recording_metrics.setVisible(bool(row['size'] or row['speed']))
         actual = row.get("active_output_dir") or row["output_dir"]
-        self._directory.setText(actual)
-        self._directory.setToolTip(actual)
+        self._directory.set_full_text(actual)
         mode = {"default": "跟随全局", "custom": "独立目录", None: "旧目录待核对"}.get(row.get("output_dir_mode"), "独立目录")
         self._directory_hint.setText(
             f"{mode} · 下一场将使用新目录" if row.get("active_output_dir")
             else f"{mode} · 按主播和场次建立子目录"
         )
         self._directory_hint.setToolTip(f"下一场保存位置：{row['output_dir']}")
-        self._directory.setCursorPosition(0)
         self._segment.setText(
             f"分段时长 {row['segment_seconds'] // 60} 分钟 · 画质修改在下次拉流生效"
         )
@@ -601,8 +706,13 @@ class LivePage(QWidget):
         scroll = self.rooms.verticalScrollBar().value()
         self._rows = rows
         self.rooms.blockSignals(True)
-        self.rooms.setRowCount(len(rows))
-        for index, row in enumerate(rows):
+        if self._inline_row is not None and (
+            self._inline_row > len(rows) or rows[self._inline_row - 1]["room_id"] != selected
+        ):
+            self._place_inline_detail(None)
+        self.rooms.setRowCount(len(rows) + int(self._inline_row is not None))
+        for position, row in enumerate(rows):
+            index = position + int(self._inline_row is not None and position >= self._inline_row)
             values = [
                 f"{row['author']} · {row['room_id']}\\n{row['title']}",
                 row["state_label"]
@@ -637,19 +747,22 @@ class LivePage(QWidget):
             self.rooms.setCurrentCell(-1, -1)
         self.rooms.blockSignals(False)
         self._update_table_height()
-        self.rooms.verticalScrollBar().setValue(scroll)
+        if not getattr(self, "_stacked_details", True):
+            self.rooms.verticalScrollBar().setValue(scroll)
         self._room_stack.setCurrentIndex(0 if rows else 1)
         self._count.setText(f"{len(rows)} 个直播间")
         self._selection_changed()
 
     def select_room(self, room_id):
-        for index, row in enumerate(self._rows):
-            if row["room_id"] == room_id:
+        for index in range(self.rooms.rowCount()):
+            item = self.rooms.item(index, 0)
+            if item is not None and item.data(Qt.UserRole) == room_id:
                 self.rooms.selectRow(index)
-                self.rooms.scrollToItem(self.rooms.item(index, 0))
+                self.rooms.scrollToItem(item)
+                self._detail_toggle.setChecked(True)
                 if getattr(self, "_stacked_details", False):
-                    self._detail_toggle.setChecked(True)
-                    self._scroll.ensureWidgetVisible(self._detail_card)
+                    self._pending_inline_reveal = True
+                    self._schedule_inline_reveal()
                 break
 
     def refresh(self):

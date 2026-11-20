@@ -324,7 +324,7 @@ def test_builtin_defaults_and_manual_visibility_match_preview(qtbot, qapp, dark)
         paint_workspace_background(painter, preview.background_rect(), pixmap, dark,
                                    "bilibili_blue", visibility, builtin=True, pixel_art=True)
         painter.end()
-        assert actual.pixelColor(round(80 * dpr), round(78 * dpr)) == expected.pixelColor(round(80 * dpr), round(78 * dpr))
+        assert actual.pixelColor(round(80 * dpr), round(112 * dpr)) == expected.pixelColor(round(80 * dpr), round(112 * dpr))
     assert background_overlay_alpha(dark, builtin=True) == round(
         255 * (20 if dark else 10) / 100
     )

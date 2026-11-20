@@ -145,9 +145,12 @@ class LoginDialog(AppDialog):
         title = QLabel("当前账号" if self._management else "登录 B 站")
         self._title = title
         title.setObjectName("DialogTitle")
+        title.setAlignment(Qt.AlignCenter)
         caption = QLabel("登录已失效，请重新验证" if self._account_expired else "管理当前 B 站账号" if self._management else "登录后可解析账号有完整播放权限的内容")
         self._caption = caption
         caption.setObjectName("DialogCaption")
+        caption.setAlignment(Qt.AlignCenter)
+        caption.setWordWrap(True)
         layout.addWidget(title)
         layout.addWidget(caption)
         title.setVisible(not self._management)
@@ -156,8 +159,7 @@ class LoginDialog(AppDialog):
         rights_notice.setObjectName("MetaLabel")
         rights_notice.setWordWrap(True)
         self._rights_notice = rights_notice
-        if self._management:
-            rights_notice.setAlignment(Qt.AlignCenter)
+        rights_notice.setAlignment(Qt.AlignCenter)
 
         if self._management:
             self._account_card = QFrame()
@@ -221,6 +223,7 @@ class LoginDialog(AppDialog):
             self.set_account(self._account, self._avatar_icon, account_state=self._account_state)
 
         self._tabs = QTabWidget()
+        self._tabs.setObjectName("LoginMethods")
 
         # -- Manual Cookie Tab --
         cookie_tab = QWidget()
@@ -288,7 +291,7 @@ class LoginDialog(AppDialog):
         qr_hint = QLabel("用哔哩哔哩客户端扫码并确认。")
         qr_hint.setWordWrap(True)
         qr_hint.setObjectName("DialogCaption")
-        qr_layout.addWidget(qr_hint)
+        qr_hint.setAlignment(Qt.AlignCenter)
 
         self._qr_label = QLabel()
         self._qr_label.setObjectName("EmptyCover")
@@ -298,6 +301,7 @@ class LoginDialog(AppDialog):
         self._qr_label.setWordWrap(True)
         self._qr_label.setText("点击下方生成二维码")
         qr_layout.addWidget(self._qr_label, alignment=Qt.AlignCenter)
+        qr_layout.addWidget(qr_hint)
 
         self._qr_status = QLabel("")
         self._qr_status.setAlignment(Qt.AlignCenter)
@@ -318,7 +322,7 @@ class LoginDialog(AppDialog):
         self._refresh_btn.hide()
         qr_layout.addWidget(self._refresh_btn, alignment=Qt.AlignCenter)
 
-        qr_layout.setAlignment(Qt.AlignTop)
+        qr_layout.setAlignment(Qt.AlignVCenter)
         self._tabs.addTab(self._make_scroll_tab(qr_tab), "扫码登录")
         self._tabs.setCurrentIndex(1)
 
@@ -433,7 +437,7 @@ class LoginDialog(AppDialog):
         self.setWindowTitle("切换账号")
         self._title.show()
         self._caption.show()
-        self._rights_notice.setAlignment(Qt.AlignLeft)
+        self._rights_notice.setAlignment(Qt.AlignCenter)
         self.layout().setContentsMargins(20, 20, 20, 20)
         self.layout().setSpacing(8)
         self.layout().setStretch(self._overview_stretch, 0)

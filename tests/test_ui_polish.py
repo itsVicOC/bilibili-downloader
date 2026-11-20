@@ -48,7 +48,9 @@ def test_empty_download_controls_and_art_do_not_overlap(workspace, qapp, theme_i
     assert not bounds[0].intersects(bounds[1])
     art = workspace._empty_download
     assert not art.art.isNull()
-    assert art.isVisible() and art.y() > hero.geometry().bottom()
+    illustration = QRect(art.mapTo(hero, QPoint()), art.size())
+    assert art.isVisible() and hero.rect().contains(illustration)
+    assert not any(illustration.intersects(rect) for rect in bounds)
     assert workspace._download_actions.visibleRegion().boundingRect().contains(workspace._download_actions.rect())
     manager.deleteLater()
 
@@ -126,13 +128,29 @@ def test_live_details_stay_beside_list_then_collapse_in_narrow_window(workspace)
     assert not page._stacked_details
     assert page._detail_card.x() > page._rooms_card.x()
     assert page._detail_controls.isVisible()
+    assert page._detail_card.isAncestorOf(page._action_bar)
     workspace.resize(900, 640)
     flush()
     assert page._stacked_details
+    assert page._detail_controls.isVisible()
+    assert page._inline_row == page.rooms.currentRow() + 1
+    page._detail_toggle.click()
+    flush()
     assert page._detail_controls.isHidden()
     page._detail_toggle.click()
+    flush()
     assert page._detail_controls.isVisible()
     assert page._action_bar.isVisible()
+    assert page._inline_row == page.rooms.currentRow() + 1
+    assert page._detail_card.isAncestorOf(page._action_bar)
+    assert page.rooms.rowCount() == 2
+    page._update_rows(page._rows)
+    assert page.rooms.rowCount() == 2
+    workspace.resize(1120, 760)
+    flush()
+    assert page.rooms.rowCount() == 1
+    assert page._detail_controls.isVisible()
+    assert page._detail_card.isAncestorOf(page._action_bar)
 
 
 def test_advanced_templates_keep_draft_and_open_for_validation(qtbot):

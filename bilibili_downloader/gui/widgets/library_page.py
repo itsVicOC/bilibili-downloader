@@ -243,7 +243,7 @@ class LibraryPage(QWidget):
         more.setMenu(menu)
         self.tools.actions.addWidget(more)
         layout.addWidget(self.tools)
-        self.selection_bar = SelectionBar()
+        self.selection_bar = SelectionBar(contextual=True)
         layout.addWidget(self.selection_bar)
         summary = QHBoxLayout()
         self.count_label = QLabel()
@@ -276,7 +276,7 @@ class LibraryPage(QWidget):
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.selection = TableSelection(self.table, _FileLabelDelegate(self.table), paint_only=True)
+        self.selection = TableSelection(self.table, _FileLabelDelegate(self.table), paint_only=True, distinguish_focus=True)
         self.selection.changed.connect(self._checked_changed)
         self.selection.focus_changed.connect(self._selection)
         self.selection_bar.select_visible.connect(self.select_visible)
@@ -609,14 +609,15 @@ class LibraryPage(QWidget):
                     + "\n".join(asset["outcome"].warnings)
                 )
             outcome = self._presented_outcome(asset)
-            self.detail.set_result(asset["item"], outcome, media_state=_media_state(media, outcome))
+            missing = media and media["state"] in {"missing", "inaccessible"}
+            repair = self.request_supplement if outcome.missing_artifacts and not missing else None
+            self.detail.set_result(asset["item"], outcome, media_state=_media_state(media, outcome), supplement=repair)
             if not hint and outcome.media_verification.get("valid") is False:
                 hint = outcome.media_verification.get("message", "")
             self.detail_hint.set_full_text(hint)
             self.detail_hint.setVisible(bool(hint))
-            missing = media and media["state"] in {"missing", "inaccessible"}
             primary = ("重新选择位置…", self.relocate) if missing else ("打开文件", lambda: self.open_file(False))
-            secondary = ("补全附件…", self.request_supplement) if outcome.missing_artifacts and not missing else ("打开文件夹", lambda: self.open_file(True))
+            secondary = ("补全附件…", repair) if repair else ("打开文件夹", lambda: self.open_file(True))
             self.detail.set_actions(primary, secondary)
             labels = {
                 "subtitle": "字幕",
