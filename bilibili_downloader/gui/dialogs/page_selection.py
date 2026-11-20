@@ -58,7 +58,6 @@ class PageSelectionDialog(WorkflowDialog):
         self.list.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.list.setSelectionMode(QAbstractItemView.SingleSelection)
         self.list.setMinimumHeight(140)
-        self.list.setShowGrid(False)
         for index, page in enumerate(pages):
             item = QTableWidgetItem(f"{index + 1:03d} · {page.part or '未命名'}")
             item.setData(Qt.UserRole, page.cid)

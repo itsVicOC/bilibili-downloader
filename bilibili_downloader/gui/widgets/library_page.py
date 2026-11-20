@@ -6,12 +6,11 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, QUrl, Signal
-from PySide6.QtGui import QColor, QDesktopServices
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetrics
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QDialog,
-    QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
@@ -61,24 +60,29 @@ class _FileLabelDelegate(QStyledItemDelegate):
         self.initStyleOption(opt, index)
         opt.features &= ~QStyleOptionViewItem.HasCheckIndicator
         lines, opt.text = opt.text.splitlines()[:2], ""
-        style = opt.widget.style() if opt.widget else QApplication.style()
-        style.drawControl(
-            QStyle.CE_ItemViewItem, row_option(opt, index), painter, opt.widget
-        )
+        if index.column() != 0:
+            style = opt.widget.style() if opt.widget else QApplication.style()
+            style.drawControl(QStyle.CE_ItemViewItem, row_option(opt, index), painter, opt.widget)
         painter.save()
         painter.setClipRect(opt.rect)
-        painter.setFont(opt.font)
-        metrics = painter.fontMetrics()
-        height = metrics.height()
-        top = opt.rect.center().y() - height * len(lines) // 2
+        secondary = QFont(opt.font)
+        if secondary.pixelSize() > 0:
+            secondary.setPixelSize(max(1, round(secondary.pixelSize() * .9)))
+        else:
+            secondary.setPointSizeF(secondary.pointSizeF() * .9)
+        fonts = (opt.font, secondary)
+        metrics = [QFontMetrics(font, painter.device()) for font in fonts[:len(lines)]]
+        top = opt.rect.center().y() - sum(font.height() for font in metrics) // 2
         colors = palette(opt.widget)
-        for number, line in enumerate(lines):
+        for number, (line, font_metrics) in enumerate(zip(lines, metrics)):
+            painter.setFont(fonts[number])
             painter.setPen(QColor(colors.text if number == 0 else colors.muted))
             painter.drawText(
                 opt.rect.left() + 10,
-                top + metrics.ascent() + number * height,
-                metrics.elidedText(line, Qt.ElideRight, max(1, opt.rect.width() - 20)),
+                top + font_metrics.ascent(),
+                font_metrics.elidedText(line, Qt.ElideRight, max(1, opt.rect.width() - 20)),
             )
+            top += font_metrics.height()
         painter.restore()
 
 
@@ -245,15 +249,14 @@ class LibraryPage(QWidget):
         layout.addWidget(self.tools)
         self.selection_bar = SelectionBar(contextual=True)
         layout.addWidget(self.selection_bar)
-        summary = QHBoxLayout()
         self.count_label = QLabel()
         self.count_label.setObjectName("MetaLabel")
         self.progress_label = QLabel()
         self.progress_label.setObjectName("MetaLabel")
+        self.progress_label.setWordWrap(True)
         self.count_label.hide()
-        summary.addStretch()
-        summary.addWidget(self.progress_label)
-        layout.addLayout(summary)
+        self.progress_label.hide()
+        layout.addWidget(self.progress_label, alignment=Qt.AlignRight)
         self.table = FileTable()
         self.table.setAccessibleName("下载文件列表")
         self.table.setHorizontalHeaderLabels(
@@ -267,11 +270,10 @@ class LibraryPage(QWidget):
             ]
         )
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        for column, width in ((1, 120), (2, 132), (3, 80), (4, 100), (5, 190)):
+        for column, width in ((1, 120), (2, 132), (4, 100), (5, 190)):
             self.table.setColumnWidth(column, width)
         self.table.verticalHeader().hide()
-        self.table.verticalHeader().setDefaultSectionSize(54)
-        for column in (0, 1, 2):
+        for column in (1, 2):
             self.table.setItemDelegateForColumn(column, _FileLabelDelegate(self.table))
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
@@ -916,6 +918,7 @@ class LibraryPage(QWidget):
                 "relocate": "正在更新文件位置…",
             }[kind]
         )
+        self.progress_label.show()
         self.cancel_button.setVisible(kind in {"check", "verify"})
         self._actions()
         job.signals.progress.connect(self._progress)
@@ -927,6 +930,7 @@ class LibraryPage(QWidget):
                 return
             self.cancel_button.hide()
             self.progress_label.clear()
+            self.progress_label.hide()
             if not isinstance(result, Exception):
                 result, assets = result
                 self._last_operation_report = result

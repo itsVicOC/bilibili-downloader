@@ -70,7 +70,7 @@ class BackgroundReadability(QObject):
             if current.property("glassSurface") or current.property("readingSurface"):
                 return False
             if current.property("sectionStyle") != "plain" and current.objectName() in {
-                "ActionBar", "OutputActionBar", "ToolSurface", "Notice", "StatusBadge",
+                "ActionBar", "OutputActionBar", "Notice", "StatusBadge",
                 "StatusPill", "EmptyCover", "LoginInstructions", "WarningBanner",
                 "Panel", "SectionCard", "ControlPanel", "SettingsSection", "HeroPanel",
             }:
@@ -78,6 +78,7 @@ class BackgroundReadability(QObject):
             current = current.parentWidget()
         if isinstance(widget, QPushButton) and widget.objectName() not in {
             "GhostButton", "TextButton", "TableRemoveButton", "ActivityButton",
+            "TablePrimaryButton", "TableSubtleButton",
         }:
             return False
         rect = widget.contentsRect()

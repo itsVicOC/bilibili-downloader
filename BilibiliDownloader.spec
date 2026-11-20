@@ -19,7 +19,7 @@ excludes = ['numpy']
 if sys.platform in ('darwin', 'win32'):
     # The .app gets its Finder icon from BUNDLE. The Windows tray loads the ICO at runtime.
     unused_assets = {
-        'alien.png', 'app_icon.icns', 'app_icon_source.png', 'artist_palette.png',
+        'alien.png', 'app_icon.icns', 'artist_palette.png',
         'chevron.svg', 'clapper.png', 'nebula.jpg', 'sparkle.png',
     }
     if sys.platform == 'darwin':

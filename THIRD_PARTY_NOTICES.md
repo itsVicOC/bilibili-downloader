@@ -36,15 +36,11 @@ Release 中名称带 `full` 的 macOS 与 Windows 包包含独立的 FFmpeg 7.1 
 
 ## Microsoft Fluent Emoji
 
-应用图标主体：
+历史版本的应用图标及对应截图包含以下素材：
 
-- `bilibili_downloader/gui/assets/app_icon_source.png`
-- 派生文件：`app_icon.png`、`app_icon.icns`、`app_icon.ico`
 - 素材：Clapper board, 3D
 - 来源：[microsoft/fluentui-emoji](https://github.com/microsoft/fluentui-emoji/blob/main/assets/Clapper%20board/3D/clapper_board_3d.png)
 - 许可证：[MIT License](https://github.com/microsoft/fluentui-emoji/blob/main/LICENSE)
-
-派生图标由 `scripts/build_app_icons.py` 添加 BiliFlow 品牌底板和角标后生成。
 
 ## OpenMoji
 

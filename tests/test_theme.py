@@ -88,7 +88,7 @@ def test_theme_applies_same_font_to_body_and_native_bold_labels(qapp, qtbot):
             # Compare actual paint-device metrics against the intended size.
             expected = QFont(qapp.font())
             if points is None:
-                expected.setPixelSize(20)
+                expected.setPixelSize(UI_METRICS.page_title_size)
             else:
                 expected.setPointSizeF(points * reference_dpi / dpi)
             expected.setWeight(widget.font().weight())

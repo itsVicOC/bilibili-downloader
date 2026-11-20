@@ -269,6 +269,7 @@ class VideoInfoWidget(GlassWidget):
         self._featured = featured
         self._cover_label.featured = featured
         self.setProperty("featured", featured)
+        self.setProperty("readingOutline", not featured)
         self.set_density(COMFORTABLE)
 
     def set_density(self, density):

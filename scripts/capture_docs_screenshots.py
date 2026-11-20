@@ -1835,6 +1835,109 @@ def _capture_download_management(app, theme, window, temp_root):
             panel.load_settings(window._settings)
 
 
+def _capture_lightweight(app, theme, window, temp_root, *, smoke=False):
+    """Compare the same offline scenes on the beta baseline and the current code."""
+    from PySide6.QtTest import QTest
+
+    from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
+
+    source = temp_root / "contrast.png"
+    picture = QImage(640, 440, QImage.Format_RGB32)
+    painter = QPainter(picture)
+    swatches = ("#08081a", "#ffffff", "#e44277", "#00abd4")
+    for row in range(11):
+        for column in range(16):
+            painter.fillRect(column * 40, row * 40, 40, 40, QColor(swatches[(column + row * 3) % 4]))
+    painter.end()
+    if not picture.save(str(source)):
+        raise RuntimeError("无法保存高反差演示壁纸")
+    custom = prepare_background(source)
+    window._background_store.install(custom)
+    themes = ("star_trail",) if smoke else ("star_trail", "bilibili_blue")
+    modes = ("dark",) if smoke else ("dark", "light")
+    sizes = ((900, 640),) if smoke else ((900, 640), (1120, 760), (1320, 860))
+    backgrounds = (("default", ""), ("builtin", BUILTIN_BACKGROUNDS[0].reference), ("contrast", custom.reference))
+
+    def scenarios():
+        for theme_id in themes:
+            window._settings.appearance.theme = theme_id
+            theme.set_color_theme(theme_id)
+            for mode in modes:
+                window._settings.appearance.mode = mode
+                theme.set_mode(mode)
+                for background, reference in backgrounds:
+                    for workspace in ("download", "live", "tasks", "settings"):
+                        setattr(window._settings.appearance.backgrounds, workspace, reference)
+                    for width, height in sizes:
+                        window.resize(width, height)
+                        yield f"{theme_id}-{mode}-{background}-{width}"
+
+    for scene in scenarios():
+        window._show_workspace(0)
+        _save_widget(app, window, f"download-empty-{scene}.png")
+
+    _populate_main_window(window)
+    _populate_live_page(window, temp_root / "lightweight-live")
+    library = window._library_page
+    files = library.table
+    titles = ("城市夜航", "数据整理与可视化", "连续拍摄的幕后", "从需求到实现的完整课程")
+    for index in range(20):
+        title = f"{titles[index % len(titles)]}（第 {index + 1} 集）"
+        media = temp_root / f"{title}.mp4"
+        media.write_bytes(b"offline demonstration media")
+        item = DownloadItem(video_info=VideoInfo(bvid=f"BVexample{index:02d}", cid=100 + index,
+                                                  title=title, author="演示作者", collection_title="系列示例"))
+        window._library.record_download(item, DownloadOutcome(video_path=str(media), actual_quality=80,
+                                                               actual_video_codec=12))
+    library.refresh()
+    for row in range(files.rowCount()):
+        files.item(row, 3).setText(("391.5 MB", "1023.9 GB", "21.4 MB", "138.1 MB")[row % 4])
+        files.item(row, 5).setText("~/BiliFlow-demo")
+
+    for scene in scenarios():
+        window._show_workspace(0)
+        window._workspace_scroll.verticalScrollBar().setValue(0)
+        _save_widget(app, window, f"download-resolved-{scene}.png")
+        window._show_tasks(3)
+        files.verticalScrollBar().setValue(0)
+        files.clearSelection()
+        QTest.mouseMove(window, QPoint(12, 70))
+        _save_widget(app, window, f"file-inventory-{scene}.png")
+        window._show_settings_tab(SettingsSection.APPEARANCE)
+        window._settings_page.tabs.currentWidget().verticalScrollBar().setValue(0)
+        _save_widget(app, window, f"appearance-{scene}.png")
+        if "-1120" in scene and "-default-" in scene:
+            window._show_tasks(0)
+            _save_widget(app, window, f"queue-{scene}.png")
+            window._show_workspace(1)
+            _save_widget(app, window, f"live-{scene}.png")
+
+    window._settings.appearance.backgrounds.tasks = ""
+    window._settings.appearance.theme = "star_trail"
+    theme.set_color_theme("star_trail")
+    theme.set_mode("dark")
+    window.resize(900, 640)
+    window._show_tasks(3)
+    window.show()
+    _flush_events(app)
+    selected = files.model().index(0, 0)
+    QTest.mouseMove(files.viewport(), QPoint(52, files.visualRect(selected).center().y()))
+    QTest.qWait(70)
+    _save_widget(app, window, "file-inventory-hover.png")
+    files.selectRow(0)
+    files.setFocus(Qt.TabFocusReason)
+    _save_widget(app, window, "file-inventory-selection.png")
+    files.verticalScrollBar().setValue(files.verticalScrollBar().maximum())
+    _save_widget(app, window, "file-inventory-scroll-end.png")
+
+    screen = window.screen()
+    profile = {"backend": app.platformName(), "qt": qVersion(), "dpr": window.devicePixelRatioF(),
+               "logical_dpi": screen.logicalDotsPerInch(), "qt_scale": os.environ.get("QT_SCALE_FACTOR", ""),
+               "physical_pixels": bool(app.property("capturePhysicalPixels")), "file_grid": files.showGrid(),
+               "tab_base": window._download_tabs.tabBar().drawBase()}
+    (OUTPUT_DIR / "lightweight-profile.json").write_text(json.dumps(profile, indent=2) + "\n", encoding="utf-8")
+
+
 def _capture_archive(app, theme, window, temp_root):
     """New archive workflow, using offline data in both modes and three sizes."""
     from bilibili_downloader.gui.dialogs.page_selection import PageSelectionDialog
@@ -2181,6 +2284,8 @@ def main(argv=None) -> int:
     parser.add_argument("--chrome-only", action="store_true", help="Check native captions using desktop compositor captures")
     parser.add_argument("--glass-only", action="store_true", help="Capture glass wallpaper and complete download guidance in both modes")
     parser.add_argument("--appearance-controls-only", action="store_true", help="Capture centered account, five settings sections and blur controls")
+    parser.add_argument("--lightweight-only", nargs="?", choices=("full", "smoke"), const="full",
+                        help="Capture matched lightweight UI scenes, or just the narrow-window smoke matrix")
     parser.add_argument("--physical-pixels", action="store_true", help="Preserve native pixels for typography review")
     parser.add_argument("--updates-only", action="store_true", help="Capture settings tabs and update dialogs only")
     parser.add_argument("--appearance-only", action="store_true", help="Capture both color themes and custom background workspaces")
@@ -2245,6 +2350,9 @@ def main(argv=None) -> int:
         window._settings.appearance.theme = args.color_theme
         theme.set_color_theme(args.color_theme)
         cleanup.callback(window._live_controller.shutdown)
+        if args.lightweight_only:
+            _capture_lightweight(app, theme, window, temp_root, smoke=args.lightweight_only == "smoke")
+            return 0
         if args.dialog_placement_only:
             _capture_dialog_placement(app, theme, window)
             window.request_quit(confirmed=True)

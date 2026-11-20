@@ -23,7 +23,12 @@ from bilibili_downloader.gui.resources.styles import (
     wallpaper_palette,
 )
 from bilibili_downloader.gui.resources.theme import ThemeManager
-from bilibili_downloader.gui.widgets.components import SectionCard, scroll_area
+from bilibili_downloader.gui.widgets.components import (
+    SectionCard,
+    WorkspaceTabs,
+    paint_segment_track,
+    scroll_area,
+)
 from bilibili_downloader.gui.widgets.dialog_shell import AppDialog
 from bilibili_downloader.gui.widgets.glass_surface import GlassBackdrop, ScrollEdge
 from bilibili_downloader.gui.widgets.row_hover import RowHoverTable, RowHoverTree
@@ -72,7 +77,7 @@ def test_ambient_materials_have_depth_without_wallpaper(qapp, theme_id, dark):
     card = capture(layer="reading")
     assert rail.pixelColor(0, 0) != floating.pixelColor(0, 0)
     assert rail.pixelColor(255, 80) != title_bar.pixelColor(255, 80)
-    assert title_bar.pixelColor(128, 159) != rail.pixelColor(128, 159)
+    assert title_bar.pixelColor(128, 159) == rail.pixelColor(128, 159)
     assert rail.pixelColor(128, 80) != card.pixelColor(128, 80)
     assert floating.pixelColor(196, 12) != floating.pixelColor(24, 144)
     for surface in (canvas, rail, title_bar, floating, card):
@@ -80,6 +85,29 @@ def test_ambient_materials_have_depth_without_wallpaper(qapp, theme_id, dark):
             background = surface.pixelColor(x, y).name()
             assert all(contrast_ratio(color, background) >= 4.5 for color in (colors.text, colors.muted))
             assert all(contrast_ratio(color, background) >= 3 for color in (colors.control_border, colors.focus))
+
+
+@pytest.mark.parametrize("theme_id", ["star_trail", "bilibili_blue"])
+@pytest.mark.parametrize("dark", [False, True])
+def test_workspace_tab_track_has_one_fill_and_protects_text(qtbot, theme_id, dark):
+    colors = theme_palette(dark, theme_id)
+    tabs = WorkspaceTabs()
+    qtbot.addWidget(tabs)
+    tabs.addTab(QWidget(), "单个解析")
+    tabs.addTab(QWidget(), "批量导入")
+    bar = tabs.tabBar()
+    assert not bar.drawBase() and not bar.property("glassSurface")
+    for background in ("black", "white", "magenta"):
+        image = QImage(180, 40, QImage.Format_RGB32)
+        image.fill(QColor(background))
+        painter = QPainter(image)
+        paint_segment_track(painter, image.rect(), colors, dark=dark, wallpaper=True)
+        painter.end()
+        center = image.pixelColor(90, 20)
+        assert image.pixelColor(0, 20) == center == image.pixelColor(179, 20)
+        assert image.pixelColor(0, 0) == QColor(background)
+        assert contrast_ratio(wallpaper_palette(colors, dark).muted, center.name()) >= 4.5
+        assert contrast_ratio(wallpaper_palette(colors, dark).focus, center.name()) >= 3
 
 
 @pytest.mark.parametrize("clear", [False, True])

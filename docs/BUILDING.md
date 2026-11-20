@@ -156,6 +156,7 @@ pyinstaller --noconfirm --clean BiliFlowUpdater.spec
 - Windows：生成 `dist/BilibiliDownloader/BilibiliDownloader.exe`。
 - 视觉素材会收集到冻结应用中；运行时路径统一由 `gui/resources/paths.py` 解析。
 - spec 根据平台选择 `app_icon.icns`、`app_icon.ico` 或 `app_icon.png`。
+- 修改 `design/branding/` 中的图标源稿后，运行 `python -m scripts.build_app_icons` 更新三种格式。使用 `--output-dir` 可将生成结果写到单独的目录以供比较。
 - `packaging_hooks/hook-keyring.py` 只收集目标系统的凭据库后端，避免携带其他平台实现。
 
 ### 原生安装包（full）

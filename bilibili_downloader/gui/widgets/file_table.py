@@ -1,10 +1,12 @@
 """A file view backed by row data, with cells materialized only for callers."""
 
-from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal
-from PySide6.QtWidgets import QTableView
+from PySide6.QtCore import QAbstractTableModel, QEvent, QModelIndex, Qt, Signal
+from PySide6.QtWidgets import QHeaderView, QStyle, QTableView
 
 from bilibili_downloader.gui.widgets.glass_surface import ItemViewSurface
 from bilibili_downloader.gui.widgets.row_hover import RowDelegate, RowHover
+
+_SIZE_COLUMN = 3
 
 
 class _FileModel(QAbstractTableModel):
@@ -25,6 +27,8 @@ class _FileModel(QAbstractTableModel):
         row, col = index.row(), index.column()
         if role == Qt.DisplayRole:
             return self.rows[row][col]
+        if role == Qt.TextAlignmentRole:
+            return self.alignment(col)
         if role == Qt.ToolTipRole:
             return self.rows[row][col] + ("\n" + self.titles[row] if col == 0 else "")
         if col == 0:
@@ -35,9 +39,16 @@ class _FileModel(QAbstractTableModel):
         return None
 
     def headerData(self, section, orientation, role=Qt.DisplayRole):
-        if role == Qt.DisplayRole and orientation == Qt.Horizontal and 0 <= section < len(self.headers):
-            return self.headers[section]
+        if orientation == Qt.Horizontal and 0 <= section < len(self.headers):
+            if role == Qt.DisplayRole:
+                return self.headers[section]
+            if role == Qt.TextAlignmentRole:
+                return self.alignment(section)
         return None
+
+    @staticmethod
+    def alignment(column):
+        return Qt.AlignVCenter | (Qt.AlignRight if column == _SIZE_COLUMN else Qt.AlignLeft)
 
     def flags(self, index):
         if not index.isValid():
@@ -104,13 +115,45 @@ class FileTable(QTableView):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._cells = {}
+        self.setObjectName("FileInventory")
         self.setModel(_FileModel(self))
+        self.horizontalHeader().setSectionResizeMode(_SIZE_COLUMN, QHeaderView.Fixed)
+        self.model().dataChanged.connect(self._fit_updated_columns)
+        self.model().modelReset.connect(self._fit_size_column)
         self._reading_surface = ItemViewSurface(self)
         self._row_hover = RowHover(self)
         self.setItemDelegate(RowDelegate(self))
         self.verticalHeader().geometriesChanged.connect(self._row_hover.schedule)
         self.horizontalHeader().geometriesChanged.connect(self._row_hover.schedule)
         self.doubleClicked.connect(lambda index: self.itemDoubleClicked.emit(self.item(index.row(), index.column())))
+        self._fit_row_height()
+        self._fit_size_column()
+
+    def _fit_row_height(self):
+        self.verticalHeader().setDefaultSectionSize(max(54, self.fontMetrics().height() * 2 + 16))
+
+    def _fit_size_column(self):
+        model = self.model()
+        if model.columnCount() <= _SIZE_COLUMN:
+            return
+        metrics = self.fontMetrics()
+        sizes = {row[_SIZE_COLUMN] for row in model.rows}
+        sizes.add(model.headers[_SIZE_COLUMN])
+        item_padding = 16
+        native_margin = 2 * (self.style().pixelMetric(QStyle.PM_FocusFrameHMargin, None, self) + 1)
+        header_padding = 20
+        width = max(metrics.horizontalAdvance(size) for size in sizes)
+        self.setColumnWidth(_SIZE_COLUMN, width + max(item_padding + native_margin, header_padding) + 4)
+
+    def _fit_updated_columns(self, start, end, _roles):
+        if start.column() <= _SIZE_COLUMN <= end.column():
+            self._fit_size_column()
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() in (QEvent.FontChange, QEvent.StyleChange) and isinstance(self.model(), _FileModel):
+            self._fit_row_height()
+            self._fit_size_column()
 
     def replace_rows(self, rows, ids, titles):
         model = self.model()
@@ -127,6 +170,7 @@ class FileTable(QTableView):
     def setHorizontalHeaderLabels(self, labels):
         self.model().headers = labels
         self.model().headerDataChanged.emit(Qt.Horizontal, 0, len(labels) - 1)
+        self._fit_size_column()
 
     def rowCount(self):
         return self.model().rowCount()

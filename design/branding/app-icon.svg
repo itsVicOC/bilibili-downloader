@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>BiliFlow application icon</title>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#393047"/>
+      <stop offset=".55" stop-color="#27233B"/>
+      <stop offset="1" stop-color="#1C2736"/>
+    </linearGradient>
+    <linearGradient id="tile-rim" x1="0" y1="0" x2=".8" y2="1">
+      <stop stop-color="#D9A8D1" stop-opacity=".48"/>
+      <stop offset=".45" stop-color="#B29DBF" stop-opacity=".08"/>
+      <stop offset=".72" stop-color="#94C3D7" stop-opacity="0"/>
+      <stop offset="1" stop-color="#96CDDF" stop-opacity=".25"/>
+    </linearGradient>
+    <linearGradient id="body" x1=".07" y1="0" x2=".92" y2="1">
+      <stop stop-color="#E6CFEA"/>
+      <stop offset=".29" stop-color="#CAC0E5"/>
+      <stop offset=".72" stop-color="#9E9DC7"/>
+      <stop offset="1" stop-color="#90BDCD"/>
+    </linearGradient>
+    <linearGradient id="body-edge" x1="0" y1=".15" x2="1" y2=".92">
+      <stop stop-color="#A88DB8"/>
+      <stop offset=".62" stop-color="#827BA8"/>
+      <stop offset="1" stop-color="#6E9AAC"/>
+    </linearGradient>
+    <linearGradient id="lid" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#EDC9DC"/>
+      <stop offset=".56" stop-color="#C1B2DD"/>
+      <stop offset="1" stop-color="#A3B6D4"/>
+    </linearGradient>
+    <linearGradient id="stripe" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFF4FA"/>
+      <stop offset="1" stop-color="#E5DBF5"/>
+    </linearGradient>
+    <linearGradient id="light" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFF5FC" stop-opacity=".84"/>
+      <stop offset="1" stop-color="#FFF5FC" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="reflection" x1="0" y1="1" x2="1" y2="0">
+      <stop stop-color="#BEF1F7" stop-opacity="0"/>
+      <stop offset="1" stop-color="#BEF1F7" stop-opacity=".67"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="80" y="80" width="864" height="864" rx="202" fill="url(#tile)"/>
+  <rect x="83" y="83" width="858" height="858" rx="199" fill="none" stroke="url(#tile-rim)" stroke-width="6"/>
+
+  <!-- The lower edge gives the rounded plate a shallow profile. -->
+  <rect x="255" y="483" width="514" height="295" rx="59" fill="#151424" opacity=".41"/>
+  <rect x="255" y="477" width="514" height="287" rx="56" fill="url(#body-edge)"/>
+  <rect x="255" y="468" width="514" height="282" rx="56" fill="url(#body)"/>
+  <path d="M 259,522 Q 262,472 310,472 H 522" fill="none" stroke="url(#light)"
+        stroke-width="5" stroke-linecap="round"/>
+  <path d="M 548,747 H 711 Q 761,745 765,695" fill="none" stroke="url(#reflection)"
+        stroke-width="5" stroke-linecap="round"/>
+
+  <!-- A single inset stripe keeps the lid easy to recognize at a glance. -->
+  <g transform="rotate(-13 277 444)">
+    <rect x="255" y="344" width="514" height="103" rx="29" fill="#151424" opacity=".35"/>
+    <rect x="255" y="337" width="514" height="104" rx="28" fill="url(#body-edge)"/>
+    <rect x="255" y="332" width="514" height="100" rx="28" fill="url(#lid)"/>
+    <path d="M 440,332 H 539 L 467,432 H 368 Z" fill="url(#stripe)" opacity=".86"/>
+    <path d="M 259,357 Q 261,336 284,336 H 430" fill="none" stroke="url(#light)"
+          stroke-width="4" stroke-linecap="round"/>
+  </g>
+</svg>

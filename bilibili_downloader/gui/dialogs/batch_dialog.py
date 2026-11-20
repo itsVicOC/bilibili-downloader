@@ -216,7 +216,6 @@ class BatchDialog(AppDialog):
         self._preview.verticalHeader().setDefaultSectionSize(UI_METRICS.compact_row_height)
         self._preview.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._preview.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self._preview.setShowGrid(False)
         self._preview.setMinimumHeight(100)
         self._preview_stack = QStackedWidget()
         self._preview_stack.addWidget(self._preview)

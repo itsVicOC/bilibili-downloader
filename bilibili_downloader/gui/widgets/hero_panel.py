@@ -10,8 +10,8 @@ class HeroPanel(GlassWidget):
     """Keep the source controls on a readable surface."""
 
     def __init__(self, parent=None):
-        super().__init__(parent, glass=True, reading=True)
-        self.setProperty("clearGlass", True)
+        super().__init__(parent, reading=True)
+        self.setProperty("readingOutline", False)
         self.setObjectName("HeroPanel")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self._compact = False

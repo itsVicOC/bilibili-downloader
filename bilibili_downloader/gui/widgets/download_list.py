@@ -376,7 +376,6 @@ class DownloadListWidget(RowHoverTable):
         self.setSelectionBehavior(QTableWidget.SelectRows)
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.setShowGrid(False)
         self.setIconSize(QSize(20, 20))
         self.setTextElideMode(Qt.ElideRight)
         self.setItemDelegateForColumn(3, _StatusDelegate(self))

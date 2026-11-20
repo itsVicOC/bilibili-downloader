@@ -407,7 +407,8 @@ def _launch_gui():
     app = QApplication(sys.argv)
     app.setApplicationName("BiliFlow")
     app.setOrganizationName("bilibili-downloader")
-    app.setWindowIcon(QIcon(asset_path("app_icon.png")))
+    icon_name = "app_icon.ico" if sys.platform == "win32" else "app_icon.png"
+    app.setWindowIcon(QIcon(asset_path(icon_name)))
     config = ConfigManager()
     theme_manager = ThemeManager(app)
 

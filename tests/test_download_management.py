@@ -703,6 +703,37 @@ def test_file_record_undo_survives_notice_replacement(workspace, tmp_path):
     assert Path(outcome.video_path).read_bytes() == b"media"
 
 
+def test_file_inventory_has_no_column_grid_and_keeps_size_units_visible(workspace, qtbot, tmp_path):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QStyle, QStyleOptionViewItem
+
+    page = workspace._library_page
+    item, outcome = saved(tmp_path)
+    page.repository.record_download(item, outcome)
+    page.refresh()
+    workspace.resize(900, 640)
+    workspace._show_tasks(3)
+    workspace.show()
+    table = page.table
+    model = table.model()
+    index = model.index(0, 3)
+    for value in ("391.5 MB", "1023.9 GB"):
+        table.item(0, 3).setText(value)
+        qtbot.waitUntil(lambda: table.columnWidth(3) >= table.fontMetrics().horizontalAdvance(value) + 16)
+        option = QStyleOptionViewItem()
+        option.rect = table.visualRect(index)
+        option.widget = table
+        table.itemDelegateForIndex(index).initStyleOption(option, index)
+        content = table.style().subElementRect(QStyle.SE_ItemViewItemText, option, table)
+        margin = 2 * (table.style().pixelMetric(QStyle.PM_FocusFrameHMargin, None, table) + 1)
+        assert content.width() - margin >= table.fontMetrics().horizontalAdvance(value)
+    assert not table.showGrid()
+    assert model.headerData(0, Qt.Horizontal, Qt.TextAlignmentRole) & Qt.AlignLeft
+    assert model.headerData(3, Qt.Horizontal, Qt.TextAlignmentRole) & Qt.AlignRight
+    assert model.data(index, Qt.TextAlignmentRole) & Qt.AlignRight
+    assert page.progress_label.isHidden()
+
+
 def test_refresh_preserves_attachment_and_main_actions_target_media(
     workspace, tmp_path, monkeypatch
 ):
@@ -764,6 +795,7 @@ def test_check_can_cancel_while_open_and_search_remain_available(
     monkeypatch.setattr(page.repository, "check_files", check)
     page.check()
     qtbot.waitUntil(started.is_set)
+    assert not page.progress_label.isHidden()
     assert page.open_action.isEnabled() and page.search.isEnabled()
     assert not page.hide_action.isEnabled() and not page.recycle_action.isEnabled()
     page.cancel_button.click()
@@ -771,6 +803,7 @@ def test_check_can_cancel_while_open_and_search_remain_available(
     assert "检查已取消" in page.notice.label.text()
     assert "1 个文件" in page.notice.label.text()
     assert page.progress_label.text() == ""
+    assert page.progress_label.isHidden()
 
 
 def test_recycle_summary_stays_short_with_long_errors_and_lists(

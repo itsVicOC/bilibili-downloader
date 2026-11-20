@@ -27,6 +27,7 @@ class UiMetrics:
     radius: int = 10
     card_radius: int = 18
     surface_inset: int = 8
+    page_title_size: int = 18
     small_radius: int = 4
     border_width: int = 1
     focus_width: int = 2
@@ -278,8 +279,8 @@ def glass_text_color(colors: ThemePalette) -> str:
 
 READING_FIELD_OPACITY = 44
 WALLPAPER_CONTROL_OPACITY = 204
-TABLE_HEADER_OPACITY = 76
-TABLE_DIVIDER_OPACITY = 120
+TABLE_HEADER_OPACITY = 42
+TABLE_DIVIDER_OPACITY = 28
 
 
 def wallpaper_tones(is_dark: bool, *, clear=False) -> tuple[int, int]:
@@ -360,9 +361,9 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QDialog#SettingsEditor[embedded="true"] {{ background: transparent; }}
     #Sidebar {{ background: transparent; border: none; }}
     QLabel#BrandTitle {{ font-size: 15pt; font-weight: 600; }}
-    QLabel#PageTitle {{ font-size: 20px; font-weight: 600; }}
+    QLabel#PageTitle {{ font-size: {m.page_title_size}px; font-weight: 600; }}
     QLabel#DialogTitle {{ font-size: 18pt; font-weight: 600; }}
-    QLabel#SectionTitle {{ font-size: 12pt; font-weight: 600; }}
+    QLabel#SectionTitle {{ font-size: 14px; font-weight: 600; }}
     QLabel#VideoTitle {{ font-size: 18px; font-weight: 600; }}
     QLabel#RecordingSummary {{ font-size: 18px; font-weight: 600; }}
     #Panel[featured="true"] QLabel#VideoTitle {{ font-size: 20px; }}
@@ -390,6 +391,9 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     #Panel, #SectionCard, #ControlPanel, #MascotCard, #DownloadSource, #SettingsForm, #HeroPanel {{
         background: {p.surface_raised}; border: 1px solid {p.card_border}; border-radius: {m.card_radius}px;
     }}
+    #Panel[readingSurface="true"], #SectionCard[readingSurface="true"], #HeroPanel[readingSurface="true"] {{
+        background: transparent; border-color: transparent;
+    }}
     QLabel#InfoChip {{ background: transparent; border: none; padding: 0; }}
     QLabel#EmptyCover {{ background: {p.surface_raised}; border: 1px solid {p.divider}; border-radius: 10px; }}
     QLabel#LoginInstructions {{ background: {p.surface_raised}; border: 1px solid {p.divider}; border-radius: 10px; padding: 12px; }}
@@ -399,8 +403,8 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     }}
     QGroupBox#SettingsSection::title {{ subcontrol-origin: margin; left: 16px; padding: 0 4px; }}
     QLabel#StatusPill, QLabel#StatusBadge {{
-        background: {p.control_fill}; color: {p.muted}; border: 1px solid transparent;
-        border-radius: 10px; padding: 3px 10px; font-size: 9pt;
+        background: {p.control_fill}; color: {p.muted}; border: none;
+        border-radius: 8px; padding: 2px 7px; font-size: 9pt;
     }}
     QLabel[tone="active"], QLabel#StatusBadge[tone="active"] {{ background: {p.tone_surface("active")}; color: {p.active_text}; }}
     QLabel[tone="success"], QLabel#StatusBadge[tone="success"], QLabel#StatusSuccess {{ color: {p.success}; }}
@@ -420,9 +424,13 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QPushButton:pressed {{ background: {p.control_pressed}; border-color: {p.card_border}; }}
     QPushButton[keyboardFocus="true"]:focus {{ border-color: {p.focus}; }}
     QPushButton:disabled {{ background: {p.surface_raised}; color: {p.disabled}; }}
-    QPushButton#SegmentButton {{ min-height: 30px; padding: 0 8px; font-weight: 500; border: 1px solid transparent; }}
-    QPushButton#SegmentButton:checked {{ background: {p.selection}; color: {p.active_text}; border-color: {p.focus}; }}
-    QPushButton#SegmentButton:focus {{ border-color: {p.focus}; }}
+    QPushButton#SegmentButton {{
+        min-height: 30px; padding: 0 8px; font-weight: 400; border: 1px solid transparent;
+        background: {p.control_fill}; color: {p.muted};
+    }}
+    QPushButton#SegmentButton:hover {{ background: {p.control_hover}; color: {p.text}; }}
+    QPushButton#SegmentButton:checked {{ background: {p.selection}; color: {p.active_text}; font-weight: 600; }}
+    QPushButton#SegmentButton:disabled {{ color: {p.disabled}; }}
     QPushButton#PrimaryButton, QPushButton#DownloadButton, QPushButton#HeroButton {{
         min-height: {m.primary_height - 2}px; background: {primary}; color: {primary_text}; border: 1px solid transparent; font-weight: 600;
     }}
@@ -446,9 +454,9 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QPushButton#DangerButton:disabled, QPushButton#TableDangerButton:disabled {{ color: {p.disabled}; background: {p.surface_raised}; }}
     QPushButton#TablePrimaryButton, QPushButton#TableSubtleButton, QPushButton#TableDangerButton, QPushButton#TableRemoveButton,
     QPushButton#ActivityButton {{ min-height: 30px; padding: 0 10px; font-size: 9pt; }}
-    QPushButton#TablePrimaryButton, QPushButton#TableSubtleButton {{ background: transparent; }}
+    QPushButton#TablePrimaryButton, QPushButton#TableSubtleButton {{ background: transparent; border-color: transparent; }}
     QPushButton#TablePrimaryButton:hover, QPushButton#TableSubtleButton:hover {{ background: {p.control_hover}; }}
-    QPushButton#TableSubtleButton:pressed, QPushButton#TablePrimaryButton:pressed {{ border-color: {p.border}; }}
+    QPushButton#TableSubtleButton:pressed, QPushButton#TablePrimaryButton:pressed {{ background: {p.control_pressed}; }}
     QPushButton#TablePrimaryButton:disabled, QPushButton#TableSubtleButton:disabled {{ color: {p.disabled}; }}
     QPushButton#TablePrimaryButton[keyboardFocus="true"]:focus,
     QPushButton#TableSubtleButton[keyboardFocus="true"]:focus {{ border-color: {p.focus}; }}
@@ -523,10 +531,10 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QWidget[readingView="true"] QHeaderView::section, QWidget[readingView="true"] QTableCornerButton::section {{
         background: transparent; border-color: transparent;
     }}
+    QTableView#FileInventory QHeaderView::section:first {{ padding-left: 40px; }}
     QWidget[customBackground="true"] QWidget[readingView="true"] QHeaderView::section {{ color: {wallpaper_palette(p, is_dark, clear=False).muted}; }}
-    QWidget[customBackground="true"] QTableView[readingView="true"]::item,
-    QWidget[customBackground="true"] QTreeWidget[readingView="true"]::item {{
-        border-bottom-color: {translucent(p.row_divider, TABLE_DIVIDER_OPACITY)};
+    QTableView[readingView="true"]::item, QTreeWidget[readingView="true"]::item {{
+        border-bottom: 1px solid {translucent(p.text, TABLE_DIVIDER_OPACITY)};
     }}
     QProgressBar {{ min-height: 16px; max-height: 16px; border: none; border-radius: 5px; background: {p.surface_raised}; color: {p.text}; font-size: 9pt; text-align: center; }}
     QProgressBar::chunk {{ background: {p.accent}; border-radius: 5px; }}
@@ -548,17 +556,18 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QWidget[customBackground="true"] QTabBar::tab:!selected {{ background: {translucent(p.surface_raised, WALLPAPER_CONTROL_OPACITY)}; color: {w.muted}; }}
     QWidget[customBackground="true"] QTabBar::tab:hover:!selected {{ background: {p.control_hover}; color: {p.text}; }}
     QTabWidget#WorkspaceTabs::pane {{ padding-top: 12px; }}
+    QTabBar#WorkspaceTabBar {{ border: none; background: transparent; outline: none; }}
     QTabBar#WorkspaceTabBar::tab {{
         min-height: 30px; margin: 4px 2px; padding: 0 13px; border: 1px solid transparent;
-        background: transparent; color: {w.muted};
+        border-radius: {m.radius}px; background: transparent; color: {p.muted}; font-weight: 400;
     }}
     QTabBar#WorkspaceTabBar::tab:hover:!selected {{ background: {p.control_hover}; color: {p.text}; }}
     QTabBar#WorkspaceTabBar::tab:selected {{
-        background: {p.subtle_selection}; color: {p.active_text}; font-weight: 600;
-        border: 1px solid transparent; border-radius: {m.radius}px;
+        background: {p.selection}; color: {p.active_text}; font-weight: 600;
     }}
-    QWidget[customBackground="true"] QTabBar#WorkspaceTabBar::tab:!selected {{ background: transparent; }}
+    QWidget[customBackground="true"] QTabBar#WorkspaceTabBar::tab:!selected {{ background: transparent; color: {w.muted}; }}
     QWidget[customBackground="true"] QTabBar#WorkspaceTabBar::tab:hover:!selected {{ background: {p.control_hover}; color: {p.text}; }}
+    QTabBar#WorkspaceTabBar::tab:disabled {{ color: {p.disabled}; }}
     QScrollArea, QScrollArea > QWidget > QWidget {{ background: transparent; border: none; }}
     QScrollArea[readingSurface="true"] {{ border: {m.surface_inset}px solid transparent; border-radius: {m.card_radius}px; }}
     QScrollBar:vertical {{ width: 10px; background: transparent; margin: 4px 1px; }}
@@ -608,9 +617,9 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     }}
     QPushButton#StepperButton {{ min-width: 32px; max-width: 32px; padding: 0; }}
     #ActionBar, #OutputActionBar {{ background: {p.surface}; border: 1px solid {p.confirmation_border}; border-radius: {m.card_radius}px; }}
-    #ToolSurface {{ background: {p.surface}; border: none; border-radius: {m.radius}px; }}
+    #ToolSurface {{ background: transparent; border: none; }}
     #ActionBar[glassSurface="true"], #OutputActionBar[glassSurface="true"],
-    #ToolSurface[glassSurface="true"], #SectionCard[glassSurface="true"],
+    #SectionCard[glassSurface="true"],
     #HeroPanel[glassSurface="true"] {{ background: transparent; border: none; }}
     QWidget[customBackground="true"] QWidget[readingSurface="true"] {{ background: transparent; }}
     QWidget[customBackground="true"] QLabel#FieldLabel,
@@ -633,7 +642,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     #SettingsForm {{ background: transparent; border: none; }}
     #SettingsForm #SectionCard {{ background: transparent; border: none; border-radius: 0; }}
     #SettingsForm #SectionCard[settingsDivider="true"], #SettingsForm #SettingsField[settingsDivider="true"] {{
-        border-top: 1px solid {p.card_border};
+        border-top: 1px solid {translucent(p.text, TABLE_DIVIDER_OPACITY)};
     }}
     #WorkflowFooter {{ border-top: 1px solid {p.card_border}; }}
     QLabel#OutputSelection {{ font-weight: 600; color: {p.text}; }}

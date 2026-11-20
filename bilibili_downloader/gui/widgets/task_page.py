@@ -420,7 +420,6 @@ class TaskPage(QWidget):
         self.current.setEditTriggers(QTableWidget.NoEditTriggers)
         self.current.setSelectionBehavior(QTableWidget.SelectRows)
         self.current.setSelectionMode(QTableWidget.SingleSelection)
-        self.current.setShowGrid(False)
         header = self.current.horizontalHeader()
         header.setMinimumSectionSize(40)
         header.setSectionResizeMode(0, QHeaderView.Stretch)

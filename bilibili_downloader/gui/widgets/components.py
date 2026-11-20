@@ -52,6 +52,7 @@ from bilibili_downloader.gui.layout_policy import path_preferred_width
 from bilibili_downloader.gui.resources.paths import background_path
 from bilibili_downloader.gui.resources.styles import (
     UI_METRICS,
+    background_reading_alpha,
     theme_palette,
     wallpaper_palette,
 )
@@ -64,7 +65,6 @@ from bilibili_downloader.gui.widgets.dialog_shell import (
 from bilibili_downloader.gui.widgets.glass_surface import (
     GlassFrame,
     ScrollEdge,
-    paint_widget_glass,
 )
 from bilibili_downloader.gui.widgets.header_backdrop import HEADER_HEIGHT
 from bilibili_downloader.gui.widgets.motion import StateTransition
@@ -674,36 +674,54 @@ class DisclosureButton(QPushButton):
         painter.end()
 
 
+def paint_segment_track(painter, rect, colors, *, dark, wallpaper):
+    fill = QColor(colors.surface_raised)
+    opacity = 144
+    if wallpaper:
+        foreground = wallpaper_palette(colors, dark).muted
+        opacity = max(opacity, background_reading_alpha(colors.surface_raised, foreground, colors.text))
+    fill.setAlpha(opacity)
+    painter.save()
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setPen(Qt.NoPen)
+    painter.setBrush(fill)
+    painter.drawRoundedRect(QRectF(rect).adjusted(0, 2, 0, -2), UI_METRICS.radius + 2, UI_METRICS.radius + 2)
+    painter.restore()
+
+
 class _WorkspaceTabBar(QTabBar):
     def __init__(self):
         super().__init__()
         self.setObjectName("WorkspaceTabBar")
-        self.setProperty("glassSurface", True)
         self.setExpanding(False)
 
     def paintEvent(self, event):
-        paint_widget_glass(self)
+        painter = QPainter(self)
+        paint_segment_track(painter, self.rect(), palette(), dark=bool(QApplication.instance().property("darkTheme")),
+                            wallpaper=wallpaper_active(self))
+        painter.end()
         super().paintEvent(event)
 
 
 class WorkspaceTabs(QTabWidget):
-    """Use a shared material behind the workspace's adjacent tabs."""
+    """Group the workspace's adjacent tabs with a single quiet fill."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("WorkspaceTabs")
         self.setTabBar(_WorkspaceTabBar())
+        self.tabBar().setDrawBase(False)
 
 
-class CommandBar(GlassFrame):
+class CommandBar(QWidget):
     """Keep filters before actions in visual and keyboard order when wrapped."""
 
     def __init__(self, parent=None):
-        super().__init__(parent, glass=True)
+        super().__init__(parent)
         self.setObjectName("ToolSurface")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self._grid = QGridLayout(self)
-        self._grid.setContentsMargins(12, 8, 12, 8)
+        self._grid.setContentsMargins(0, 4, 0, 4)
         self._grid.setSpacing(8)
         self._filters = QWidget()
         self._actions = ResponsiveActions()

@@ -740,7 +740,7 @@ class SettingsDialog(AppDialog):
         form.setProperty("readingSurface", False)
         wrapper.addWidget(form)
         column = form.body
-        column.setSpacing(20)
+        column.setSpacing(16)
         scroll = scroll_area(body, scroll_edge=True)
         scroll._reading_surface = ScrollAreaSurface(scroll)
         self._sections[section] = self.tabs.addTab(scroll, name)

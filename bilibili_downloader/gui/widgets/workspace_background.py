@@ -183,7 +183,10 @@ class WindowBackdrop(QObject):
         offset = QPoint() if widget is host else widget.mapTo(host, QPoint())
         source = QRectF(offset, widget.size())
         if reading:
-            self.glass.paint_reading(painter, widget.rect(), source, clear_below=clear_below)
+            self.glass.paint_reading(
+                painter, widget.rect(), source, clear_below=clear_below,
+                outline=widget.property("readingOutline") is not False,
+            )
         else:
             self.glass.paint(painter, widget.rect(), source, radius=radius, clear=clear, edge=edge)
 

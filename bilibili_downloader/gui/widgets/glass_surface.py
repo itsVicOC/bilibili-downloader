@@ -74,7 +74,7 @@ class GlassBackdrop:
             raised = Image.new("RGB", picture.size, colors.surface_raised)
             paper = blend_color(colors.surface_raised, colors.text, .035) if dark else colors.surface
             reading = Image.new("RGB", picture.size, paper)
-            self.image = _pixmap(Image.blend(picture, raised, .65 if dark else .57))
+            self.image = _pixmap(Image.blend(picture, raised, .42 if dark else .38))
             self.reading = _pixmap(Image.blend(picture, reading, .64 if dark else .78))
             self.clear_image = self.image
             self.original = QPixmap()
@@ -87,14 +87,14 @@ class GlassBackdrop:
             self.clear_image = _material(picture, strength * .24, dark, clear=True)
         self.key, self.dark, self.ambient = key, dark, ambient
         self.outline = QColor(colors.text if ambient else colors.card_border)
-        self.outline.setAlpha(24 if ambient else 168)
+        self.outline.setAlpha(15 if ambient else 108)
         self._handoff_key = None
 
     def _sampling_rect(self, source):
         sx, sy = self.scale
         return QRectF(source.x() * sx, source.y() * sy, source.width() * sx, source.height() * sy)
 
-    def paint_reading(self, painter, rect, source_rect, *, clear_below=None):
+    def paint_reading(self, painter, rect, source_rect, *, clear_below=None, outline=True):
         rect = QRectF(rect).adjusted(.5, .5, -.5, -.5)
         if self.reading.isNull() or rect.isEmpty():
             return
@@ -111,9 +111,10 @@ class GlassBackdrop:
         if not self.ambient and clear_below is not None and clear_below < rect.bottom():
             self._paint_blank(painter, rect, source_rect, clear_below)
         painter.restore()
-        painter.setPen(self.outline)
-        painter.setBrush(Qt.NoBrush)
-        painter.drawPath(path)
+        if outline:
+            painter.setPen(self.outline)
+            painter.setBrush(Qt.NoBrush)
+            painter.drawPath(path)
         painter.restore()
 
     def _paint_blank(self, painter, rect, source_rect, top):
@@ -148,22 +149,22 @@ class GlassBackdrop:
         painter.save()
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
         painter.drawPixmap(rect, material, self._sampling_rect(source_rect))
+        if edge == Qt.BottomEdge:
+            # The workspace already fades the same title material below the header.
+            painter.restore()
+            return
         if edge == Qt.RightEdge:
-            depth = min(10, rect.width())
+            depth = min(8, rect.width())
             band = QRectF(rect.right() - depth, rect.top(), depth, rect.height())
             start, end = band.topLeft(), band.topRight()
         else:
-            depth = min(10, rect.height())
-            top = rect.top() if edge == Qt.TopEdge else rect.bottom() - depth
-            band = QRectF(rect.left(), top, rect.width(), depth)
-            start, end = band.topLeft(), band.bottomLeft()
-            if edge == Qt.TopEdge:
-                start, end = end, start
+            depth = min(8, rect.height())
+            band = QRectF(rect.left(), rect.top(), rect.width(), depth)
+            start, end = band.bottomLeft(), band.topLeft()
         shadow = QLinearGradient(start, end)
         shadow.setColorAt(0, QColor(0, 0, 0, 0))
-        shadow.setColorAt(1, QColor(0, 0, 0, 32 if self.dark else 21))
+        shadow.setColorAt(1, QColor(0, 0, 0, 17 if self.dark else 13))
         painter.fillRect(band, shadow)
-        painter.fillRect(QRectF(rect.x(), rect.y(), rect.width(), 1), QColor(255, 255, 255, 30 if self.dark else 95))
         painter.restore()
 
     def paint_header_handoff(self, painter, rect, source_rect):
@@ -209,7 +210,7 @@ class GlassBackdrop:
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
-        painter.setPen(QPen(QColor(0, 0, 0, 26 if self.dark else 17), 2))
+        painter.setPen(QPen(QColor(0, 0, 0, 12 if self.dark else 9), 2))
         painter.setBrush(Qt.NoBrush)
         painter.drawRoundedRect(rect.translated(0, 1), radius, radius)
         painter.setClipPath(path, Qt.IntersectClip)
@@ -231,7 +232,7 @@ class GlassBackdrop:
                 outer = inner
         # One directional highlight and a smaller reflection across the opposite rim.
         rim = QLinearGradient(rect.topLeft(), rect.bottomRight())
-        highlight = (98 if self.dark else 212) if self.ambient else (78 if self.dark else 152)
+        highlight = (58 if self.dark else 126) if self.ambient else (70 if self.dark else 132)
         rim.setColorAt(0, QColor(255, 255, 255, highlight))
         rim.setColorAt(.34, QColor(255, 255, 255, round(highlight * .36)))
         rim.setColorAt(.66, QColor(0, 0, 0, 38 if self.dark else 26))
@@ -280,7 +281,7 @@ def _paint_reading_fallback(widget):
     colors = theme_palette(bool(app.property("darkTheme")), app.property("colorTheme"))
     painter = QPainter(widget)
     painter.setRenderHint(QPainter.Antialiasing)
-    painter.setPen(QColor(colors.card_border))
+    painter.setPen(Qt.NoPen if widget.property("readingOutline") is False else QColor(colors.card_border))
     painter.setBrush(QColor(colors.surface_raised))
     rect = QRectF(widget.rect()).adjusted(.5, .5, -.5, -.5)
     painter.drawRoundedRect(rect, UI_METRICS.card_radius, UI_METRICS.card_radius)
@@ -361,7 +362,7 @@ class ScrollEdge(QWidget):
         app = QApplication.instance()
         colors = theme_palette(bool(app.property("darkTheme")), app.property("colorTheme"))
         tint = QColor(colors.background)
-        tint.setAlpha(min(200, 80 + 8 * (self._scrollbar.value() - self._scrollbar.minimum())))
+        tint.setAlpha(84)
         fade = QLinearGradient(0, 0, 0, self.height())
         fade.setColorAt(0, tint)
         tint.setAlpha(0)
@@ -376,6 +377,8 @@ class ItemViewSurface(ScrollAreaSurface):
 
     def __init__(self, view):
         super().__init__(view)
+        if isinstance(view, QTableView):
+            view.setShowGrid(False)
         self._scroll_edge = ScrollEdge(view, 9)
         self._headers = ((view.horizontalHeader(), view.verticalHeader()) if isinstance(view, QTableView)
                          else (view.header(),))
