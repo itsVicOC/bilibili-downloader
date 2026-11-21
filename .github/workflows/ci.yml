@@ -46,7 +46,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -c constraints.txt -e ".[dev]"
 
-      - name: Check native desktop UI
+      - name: Check native desktop shell
         timeout-minutes: 10
         if: runner.os != 'Linux' && matrix.python-version == '3.12'
         shell: bash
@@ -55,6 +55,15 @@ jobs:
         run: |
           python -m scripts.configure_ui_test_display
           python -X faulthandler -m pytest -vv -s --maxfail=1 tests/test_caption_controls.py tests/test_release_notes.py tests/test_theme.py::test_theme_applies_same_font_to_body_and_native_bold_labels tests/test_ui_refresh.py::test_initial_focus_is_the_source_field tests/test_fluent_design.py tests/test_fluent_refinement.py tests/test_window_state.py tests/test_fluent_window_polish.py tests/test_task_interactions.py tests/test_live_history_removal.py tests/test_clipboard_monitor.py tests/test_clipboard_native.py
+
+      # This suite can take around eight minutes on Windows runners.
+      - name: Check native desktop workflows
+        timeout-minutes: 15
+        if: runner.os != 'Linux' && matrix.python-version == '3.12'
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
+        run: |
           python -X faulthandler -m pytest -vv -s --maxfail=1 tests/test_download_management.py tests/test_issue_regressions.py tests/test_archive_workflow.py tests/test_workflow_polish.py tests/test_ui_feedback.py tests/test_dialog_placement.py tests/test_control_details.py tests/test_warm_workspaces.py
 
       - name: Capture native desktop UI evidence
