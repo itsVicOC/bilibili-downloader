@@ -441,7 +441,7 @@ class MainWindow(QMainWindow):
 
     def _build_download_page(self):
         page = QWidget()
-        layout = QVBoxLayout(page)
+        layout = self._download_page_layout = QVBoxLayout(page)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
         self._download_header = PageHeader("视频下载", "收藏喜欢的作品")
@@ -751,11 +751,16 @@ class MainWindow(QMainWindow):
             and self.height() <= 680 and not self._ranking_panel.isHidden()
         )
         density = getattr(self, "_density", None)
+        page_margin = density.page_margin if density else 24
         padding = density.card_padding if density else 16
         section_gap = density.section_gap if density else 16
+        page_vertical = min(page_margin, 6) if compact_rankings else page_margin
         vertical = max(8, padding - 7) if compact_rankings else padding
-        self._workspace_layout.setSpacing(min(section_gap, 10) if compact_rankings else section_gap)
+        self._download_page_layout.setContentsMargins(page_margin, page_vertical, page_margin, page_vertical)
+        self._download_page_layout.setSpacing(min(section_gap, 6) if compact_rankings else section_gap)
+        self._workspace_layout.setSpacing(min(section_gap, 8) if compact_rankings else section_gap)
         self._hero_layout.setContentsMargins(padding, vertical, padding, vertical)
+        self._hero_layout.setSpacing(6 if compact_rankings else 10)
         self._empty_download.setVisible(
             self._current_video is None and self.backdrop.image.isNull() and not compact_rankings
         )

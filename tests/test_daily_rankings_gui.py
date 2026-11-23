@@ -72,6 +72,10 @@ def test_video_workspace_loads_on_first_show_with_independent_actions(workspace,
     theme = ThemeManager(qapp)
     theme.setParent(workspace)
     theme.apply_theme(dark)
+    # Linux keeps the menu bar inside the window. Exercise the same height
+    # constraint on both native and offscreen test hosts.
+    workspace.menuBar().setNativeMenuBar(False)
+    workspace.menuBar().show()
     workspace.resize(900, 640)
     workspace._download_tabs.setCurrentIndex(1)
     workspace.show()
