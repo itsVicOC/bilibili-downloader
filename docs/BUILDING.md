@@ -85,7 +85,7 @@ git diff --check
 
 CI 在 Ubuntu 和 Windows 上使用 Python 3.11、3.12 运行测试，并在 macOS/Python 3.12 做冒烟验证。GUI 测试使用 `QT_QPA_PLATFORM=offscreen`；Ubuntu runner 会先安装 PySide6 需要的 `libegl1` 与 `libgl1`，独立任务使用 `pip-audit` 检查已安装依赖。
 
-Windows 与 macOS 的 Python 3.12 任务另使用原生后端检查标题栏和字体，并生成两套配色、深浅模式、三种尺寸的页面、账号与背景截图。`ui-parity-Windows` / `ui-parity-macOS` 附件保留七天。标题栏专项可在对应桌面运行 `python -m scripts.capture_docs_screenshots --native --physical-pixels --chrome-only --output-dir build/ui-parity/chrome`；它捕获目标窗口的合成画面，能够发现控件截图遗漏的 Windows 标题绘制层。原生截图需要可用桌面和截屏权限，不能用离屏结果代替。
+Windows 与 macOS 的 Python 3.12 测试任务另使用原生后端检查标题栏和字体，测试生成的截图存入 `ui-parity-native-tests-Windows` / `ui-parity-native-tests-macOS`。独立的原生截图任务分别采集专项场景、星河和晴海，覆盖深浅模式、三种尺寸、账号与背景，输出到 `ui-parity-Windows` / `ui-parity-macOS`。这些附件保留七天。标题栏专项可在对应桌面运行 `python -m scripts.capture_docs_screenshots --native --physical-pixels --chrome-only --output-dir build/ui-parity/chrome`；它捕获目标窗口的合成画面，能够发现控件截图遗漏的 Windows 标题绘制层。原生截图需要可用桌面和截屏权限，不能用离屏结果代替。
 
 源码最低版本为 Python 3.11，以使用包含安全修复的 Pillow 13；同时要求 certifi 2026.10.19 或更高版本。安装依赖时使用约束文件。预构建应用内置 Python，用户无需单独安装或升级 Python。
 

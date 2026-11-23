@@ -66,27 +66,11 @@ jobs:
         run: |
           python -X faulthandler -m pytest -vv -s --maxfail=1 tests/test_download_management.py tests/test_issue_regressions.py tests/test_archive_workflow.py tests/test_workflow_polish.py tests/test_ui_feedback.py tests/test_dialog_placement.py tests/test_control_details.py tests/test_warm_workspaces.py
 
-      - name: Capture native desktop UI evidence
-        timeout-minutes: 30
-        if: runner.os != 'Linux' && matrix.python-version == '3.12'
-        shell: bash
-        env:
-          QT_QPA_PLATFORM: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
-        run: |
-          for scene in chrome ui-refresh appearance-controls glass refinement interactions download-management dialog-placement audit-fonts; do
-            python -m scripts.capture_docs_screenshots --native --physical-pixels "--${scene}-only" --output-dir "build/ui-parity/$scene"
-          done
-          for color in star_trail bilibili_blue; do
-            python -m scripts.capture_docs_screenshots --native --physical-pixels --color-theme "$color" --output-dir "build/ui-parity/full/$color"
-            python -m scripts.capture_docs_screenshots --native --physical-pixels --color-theme "$color" --workflow-polish-only --output-dir "build/ui-parity/workflow/$color"
-            python -m scripts.capture_ui_feedback --native --color-theme "$color" --output-dir "build/ui-parity/feedback/$color"
-          done
-
-      - name: Upload native desktop UI evidence
+      - name: Upload native pytest UI evidence
         if: always() && runner.os != 'Linux' && matrix.python-version == '3.12'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: ui-parity-${{ runner.os }}
+          name: ui-parity-native-tests-${{ runner.os }}
           path: build/ui-parity
           retention-days: 7
 
@@ -105,6 +89,59 @@ jobs:
 
       - name: Run static checks
         run: ruff check bilibili_downloader tests packaging_hooks scripts
+
+  ui-evidence:
+    name: Native UI evidence (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    env:
+      QT_QPA_PLATFORM: ${{ matrix.os == 'windows-latest' && 'windows' || 'cocoa' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install -c constraints.txt -e ".[dev]"
+      - name: Configure native test desktop
+        run: python -m scripts.configure_ui_test_display
+
+      - name: Capture native UI scenes
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          for scene in chrome ui-refresh appearance-controls glass refinement interactions download-management dialog-placement audit-fonts; do
+            echo "Capturing $scene"
+            python -m scripts.capture_docs_screenshots --native --physical-pixels "--${scene}-only" --output-dir "build/ui-parity/$scene"
+          done
+
+      # A Windows gallery can take over ten minutes on a hosted runner.
+      - name: Capture Star Trail galleries
+        timeout-minutes: 25
+        shell: bash
+        run: |
+          python -m scripts.capture_docs_screenshots --native --physical-pixels --color-theme star_trail --output-dir build/ui-parity/full/star_trail
+          python -m scripts.capture_docs_screenshots --native --physical-pixels --color-theme star_trail --workflow-polish-only --output-dir build/ui-parity/workflow/star_trail
+          python -m scripts.capture_ui_feedback --native --color-theme star_trail --output-dir build/ui-parity/feedback/star_trail
+
+      - name: Capture Bilibili Blue galleries
+        timeout-minutes: 25
+        shell: bash
+        run: |
+          python -m scripts.capture_docs_screenshots --native --physical-pixels --color-theme bilibili_blue --output-dir build/ui-parity/full/bilibili_blue
+          python -m scripts.capture_docs_screenshots --native --physical-pixels --color-theme bilibili_blue --workflow-polish-only --output-dir build/ui-parity/workflow/bilibili_blue
+          python -m scripts.capture_ui_feedback --native --color-theme bilibili_blue --output-dir build/ui-parity/feedback/bilibili_blue
+
+      - name: Upload native desktop UI evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ui-parity-${{ runner.os }}
+          path: build/ui-parity
+          retention-days: 7
 
   caption:
     name: Windows caption (${{ matrix.scale }}x)
