@@ -5,6 +5,7 @@ from PySide6.QtCore import QMimeData, Qt
 from PySide6.QtWidgets import QApplication
 
 from bilibili_downloader.gui.clipboard_controller import ClipboardController
+from bilibili_downloader.gui.threads.resolve_worker import ResolveRunner
 from tests.test_workspaces import workspace as workspace
 
 
@@ -18,7 +19,8 @@ def test_native_clipboard_preexisting_hide_restore_and_confirmation(workspace, q
         for name in mime.formats():
             original.setData(name, mime.data(name))
     calls = []
-    monkeypatch.setattr(workspace._service_pool, 'start', lambda runner: calls.append(runner))
+    monkeypatch.setattr(workspace._service_pool, 'start',
+                        lambda runner: calls.append(runner) if isinstance(runner, ResolveRunner) else None)
     clipboard.setText('BV1GJ411x7h7')
     manager = ClipboardController(workspace)
     workspace._clipboard = manager
