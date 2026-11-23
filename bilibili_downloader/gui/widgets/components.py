@@ -90,6 +90,7 @@ _ICON_PATHS = {
     "warning": '<path d="M12 3 2 21h20zM12 9v5m0 3v1"/>',
     "danger": '<circle cx="12" cy="12" r="9"/><path d="m8 8 8 8m0-8-8 8"/>',
     "folder": '<path d="M3 6h7l2 3h9v11H3z"/>',
+    "external": '<path d="M13 4h7v7m0-7-9 9m0-8H5v14h14v-6"/>',
 }
 
 
@@ -689,11 +690,12 @@ def paint_segment_track(painter, rect, colors, *, dark, wallpaper):
     painter.restore()
 
 
-class _WorkspaceTabBar(QTabBar):
+class WorkspaceTabBar(QTabBar):
     def __init__(self):
         super().__init__()
         self.setObjectName("WorkspaceTabBar")
         self.setExpanding(False)
+        self.setDrawBase(False)
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -709,8 +711,7 @@ class WorkspaceTabs(QTabWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("WorkspaceTabs")
-        self.setTabBar(_WorkspaceTabBar())
-        self.tabBar().setDrawBase(False)
+        self.setTabBar(WorkspaceTabBar())
 
 
 class CommandBar(QWidget):

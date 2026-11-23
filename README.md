@@ -74,7 +74,7 @@
 
 ## 下载与安装
 
-**`v0.9.0b4` 预发布版**优先连续下载以减少请求，并在 CDN 返回 HTTP 403 或连续读取失败时自动切换到有界分块。已安装的用户可通过「更新最新版」通道获取。[下载 0.9.0 Beta 4](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.9.0b4) · [更新日志](CHANGELOG.md#v090b4---2026-11-20)
+**`v0.9.0b5` 预发布版**新增侧栏官网入口和下载页「每日 Top 10」。点击封面或标题打开原视频，点击「解析下载」选择规格并确认入队。已安装的用户可通过「更新最新版」通道获取。[下载 0.9.0 Beta 5](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.9.0b5) · [更新日志](CHANGELOG.md#v090b5---2026-11-23)
 
 **`v0.8.13` 正式版：** 修复海外 CDN 下载与续传的 HTTP 403 问题，完整流校验通过后才记录完成；保留字幕核验、4:3 显示副本与收藏工作台。[下载正式版](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.13) · [验证记录](docs/BUILDING.md)。正式版与包含 beta 的通道均可升级。
 
@@ -139,6 +139,8 @@ Release 还包含 FFmpeg 固定源码归档、各安装包的 CycloneDX SBOM 和
 6. 第一次真正创建下载任务时阅读版权提示；确认后才会建立任务和媒体临时文件。
 
 部分高画质、会员内容或账号专属视频需要登录。BiliFlow 只使用当前账号已经拥有的播放权限；接口只返回试看、地区受限、DRM 或无完整未加密流时会停止。
+
+侧栏「BiliFlow 官网」可打开项目网站。下载输入区下方的「每日 Top 10」以卡片展示 B 站全站榜。点击封面或标题打开视频，点击「解析下载」进入下载流程。源码运行时，登录可预览关注榜与直播页的关注卡片，直播卡片可录制本场或添加监控。
 
 更完整的界面说明、任务状态、目录模板和配置位置见[用户指南](docs/USER_GUIDE.md)。遇到启动、解析、FFmpeg 或登录问题时查看[故障排查](docs/TROUBLESHOOTING.md)。
 

@@ -45,6 +45,7 @@ from PySide6.QtWidgets import (
 )
 
 from bilibili_downloader.core.appearance import prepare_background
+from bilibili_downloader.core.daily_rankings import beijing_now
 from bilibili_downloader.core.live_models import (
     LiveRoom,
     RecordingSegment,
@@ -220,6 +221,19 @@ def _make_main_window(workdir: Path, *, desktop_platform=None) -> MainWindow:
             live={"output_dir": "~/Downloads/BiliFlow/live"},
         )
     )
+    # The landing page loads the daily list on first show. Seed its local
+    # snapshot so the documentation capture remains independent of Bilibili.
+    (workdir / "video-ranking.json").write_text(json.dumps({
+        "fetched_at": beijing_now().isoformat(),
+        "videos": [
+            {"bvid": f"BV{index:010}", "title": title, "author": "示例 UP 主", "play_text": views}
+            for index, (title, views) in enumerate((
+                ("城市夜航 · 星轨旅记", "12.8万"),
+                ("海边的午后 · 影像手记", "9.4万"),
+                ("云上列车 · 周末漫游", "6.8万"),
+            ), 1)
+        ],
+    }, ensure_ascii=False), encoding="utf-8")
     repository = TaskRepository(workdir / "tasks.sqlite3")
     controller = LiveUiController(config, service_factory=DemoLiveService)
     window = MainWindow(

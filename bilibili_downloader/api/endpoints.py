@@ -33,6 +33,12 @@ FAVORITE_LIST_ENDPOINT = "/x/v3/fav/resource/list"
 SERIES_ARCHIVES_ENDPOINT = "/x/series/archives"
 SEASON_ARCHIVES_ENDPOINT = "/x/polymer/web-space/seasons_archives_list"
 
+# Public video rankings and the signed-in account's video feed
+VIDEO_RANKING_ENDPOINT = "/x/web-interface/ranking/v2"
+FOLLOWING_FEED_ENDPOINT = "/x/polymer/web-dynamic/v1/feed/all"
+VIDEO_RANKING_PAGE = "https://www.bilibili.com/v/popular/rank/all"
+FOLLOWING_FEED_PAGE = "https://t.bilibili.com/"
+
 # Navigation / user info (for WBI key extraction)
 NAV_ENDPOINT = "/x/web-interface/nav"
 

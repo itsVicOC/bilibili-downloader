@@ -109,11 +109,13 @@ class LivePage(QWidget):
     settings_requested = Signal(str)
     history_requested = Signal()
 
-    def __init__(self, config, confirm_copyright, parent=None, controller=None):
+    def __init__(self, config, confirm_copyright, parent=None, controller=None, *, discovery_pool=None, thumbnails=None):
         super().__init__(parent)
         self._config = config
         self._confirm_copyright = confirm_copyright
         self._own_controller = controller is None
+        self._has_following = discovery_pool is not None
+        self.following = None
         self.controller = controller or LiveUiController(config, self)
         self._selected_id = None
         self._rows = []
@@ -205,6 +207,10 @@ class LivePage(QWidget):
         self._room_stack.addWidget(
             EmptyState("暂无直播间", action="添加房间", callback=self.source.setFocus, workspace="live")
         )
+        if self._has_following:
+            empty = QLabel("暂无监控的直播间")
+            empty.setObjectName("MetaLabel")
+            self._room_stack.addWidget(empty)
         self._room_stack.setMinimumHeight(240)
         self._rooms_card.body.addWidget(self._room_stack, 1)
         self._content_layout.addWidget(self._rooms_card, 1)
@@ -308,8 +314,22 @@ class LivePage(QWidget):
         self._detail_card.body.addWidget(self._detail_controls)
         self._detail_card.body.addStretch()
         self._content_layout.addWidget(self._detail_card)
-        column.addWidget(self._content, 1)
+        if self._has_following:
+            from bilibili_downloader.gui.widgets.live_following import (
+                LiveFollowingWidget,
+            )
+
+            self.following = LiveFollowingWidget(self.controller, discovery_pool, thumbnails)
+            self.following.view_room.connect(self._view_followed_room)
+            self.following.shortcut_requested.connect(self._followed_room_shortcut)
+            self.following.rooms_changed.connect(self._sync_room_stack)
+        column.addWidget(self._content, 0 if self.following else 1)
+        if self.following:
+            column.addWidget(self.following)
+            column.addStretch()
         self._scroll = scroll_area(body, scroll_edge=True)
+        if self.following:
+            self.following.grid.set_scroll_area(self._scroll)
         self._scroll.verticalScrollBar().rangeChanged.connect(self._schedule_inline_reveal)
         self._scroll.viewport().installEventFilter(self)
         root.addWidget(self._scroll, 1)
@@ -460,9 +480,22 @@ class LivePage(QWidget):
         height = chrome + sum(self.rooms.rowHeight(i) for i in range(self.rooms.rowCount()))
         # Stacked content scrolls as one page; never nest the room table's scroll.
         self.rooms.setMinimumHeight(max(140, height) if stacked else 140)
-        self._room_stack.setMinimumHeight(max(160, height) if stacked and self.rooms.rowCount() else 200)
+        compact_empty = self._compact_empty_room_list()
+        self._room_stack.setMaximumHeight(40 if compact_empty else 16777215)
+        self._room_stack.setMinimumHeight(
+            32 if compact_empty else max(160, height) if stacked and self.rooms.rowCount() else 200
+        )
         if stacked:
             self.rooms.verticalScrollBar().setValue(0)
+
+    def _compact_empty_room_list(self):
+        return not self._rows and self.following is not None and self.following.has_rooms
+
+    def _sync_room_stack(self):
+        compact_empty = self._compact_empty_room_list()
+        self._room_stack.setCurrentIndex(0 if self._rows else 2 if compact_empty else 1)
+        self._count.setVisible(not compact_empty)
+        self._update_table_height()
 
     def _room_id(self):
         item = self.rooms.item(self.rooms.currentRow(), 0)
@@ -481,6 +514,15 @@ class LivePage(QWidget):
             and self._confirm_copyright()
         ):
             self.controller.add(self.source.text().strip())
+
+    def _view_followed_room(self, room_id):
+        self.select_room(room_id)
+        if not getattr(self, "_stacked_details", False):
+            self._scroll.ensureWidgetVisible(self.rooms, 0, 12)
+
+    def _followed_room_shortcut(self, room_id, intent):
+        if self.service and not self.controller.shortcut_pending(room_id) and self._confirm_copyright():
+            self.controller.quick_room(room_id, intent)
 
     def _addition_changed(self, adding):
         self.add_button.setEnabled(
@@ -749,7 +791,7 @@ class LivePage(QWidget):
         self._update_table_height()
         if not getattr(self, "_stacked_details", True):
             self.rooms.verticalScrollBar().setValue(scroll)
-        self._room_stack.setCurrentIndex(0 if rows else 1)
+        self._sync_room_stack()
         self._count.setText(f"{len(rows)} 个直播间")
         self._selection_changed()
 

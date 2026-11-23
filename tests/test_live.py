@@ -515,6 +515,89 @@ def test_automatic_recording_normalizes_and_deduplicates(service):
     ).read_text(encoding="utf-8")
 
 
+def request_shortcut(service, intent, room_id=2):
+    completion = Future()
+    service.command("shortcut", source=str(room_id), room_id=room_id, intent=intent, completion=completion)
+    service.tick()
+    return completion.result()
+
+
+def test_followed_room_api_includes_offline_rooms_and_paginates():
+    def handle(request):
+        assert request.url.path == "/xlive/web-ucenter/user/following"
+        assert request.url.params["page"] == "2"
+        assert request.headers["cookie"] == "SESSDATA=fixture-session"
+        return httpx.Response(200, json={"code": 0, "data": {"totalPage": 3, "list": [
+            {"roomid": 4, "live_status": 0, "uname": "未开播", "room_cover": "https://i0.hdslb.com/room.jpg"},
+            {"roomid": 5, "live_status": 1, "uname": "主播", "face": "https://i0.hdslb.com/avatar.jpg"},
+            {"roomid": 0, "live_status": 0},
+        ]}})
+
+    with closing(BilibiliLiveClient({"SESSDATA": "fixture-session"}, transport=httpx.MockTransport(handle))) as client:
+        rooms, more = client.get_followed_rooms(2)
+    assert more
+    assert [(room.room_id, room.status) for room in rooms] == [(4, 0), (5, 1)]
+    assert rooms[0].cover.endswith("room.jpg") and rooms[1].avatar.endswith("avatar.jpg")
+
+
+def test_shortcut_records_one_broadcast_and_deduplicates_canonical_id(service, tmp_path, monkeypatch):
+    service.settings.output_dir = str(tmp_path / "quick")
+    service.command("disable", room_id=1)
+    monkeypatch.setattr(service, "_resolve", lambda source: LiveRoom(room_id=2, live_status=1, live_time="123"))
+    ok, message = request_shortcut(service, "record")
+    assert ok and "本场" in message
+    service.tick()
+    runtime = service._rooms[2]
+    backend = runtime.backend
+    assert backend is not None and runtime.state == LiveState.RECORDING
+    assert not runtime.subscription.enabled
+    assert request_shortcut(service, "record", 3)[0]
+    assert runtime.backend is backend
+    assert len(service.repository.subscriptions()) == 2
+    service.client_state["live_time"] = "124"
+    service.test_clock[0] += 100
+    service.tick()
+    service.tick()
+    assert backend.stopping and not runtime.manual
+    backend.exit_code = 0
+    service.tick()
+    assert runtime.state == LiveState.DISABLED and runtime.backend is None
+
+
+def test_shortcut_queued_record_expires_after_broadcast_change(service, tmp_path, monkeypatch):
+    service.settings.output_dir = str(tmp_path / "quick")
+    service.settings.max_concurrent = 1
+    connect(service)
+    monkeypatch.setattr(service, "_resolve", lambda source: LiveRoom(room_id=2, live_status=1, live_time="123"))
+    assert request_shortcut(service, "record")[0]
+    service.tick()
+    runtime = service._rooms[2]
+    assert runtime.state == LiveState.QUEUED and runtime.manual_broadcast == "2:123"
+    service.client_state["live_time"] = "124"
+    service.test_clock[0] += 11
+    service.tick()
+    service.tick()
+    assert runtime.state == LiveState.DISABLED
+    assert not runtime.manual and runtime.session is None
+    assert any("场次已结束或变更" in message for message in service.messages())
+
+
+def test_offline_shortcut_requires_monitor_intent_and_preserves_existing_settings(service, monkeypatch):
+    runtime = service._rooms[1]
+    directory = runtime.subscription.output_dir
+    service.command("disable", room_id=1)
+    service.command("quality", room_id=1, quality=400)
+    service.client_state["status"] = 0
+    monkeypatch.setattr(service, "_resolve", lambda source: LiveRoom(room_id=1, live_status=0))
+    ok, message = request_shortcut(service, "record")
+    assert not ok and "已下播" in message and not runtime.subscription.enabled
+    ok, message = request_shortcut(service, "monitor")
+    assert ok and "已添加监控" in message
+    persisted = service.repository.subscriptions()[0]
+    assert persisted.enabled and persisted.quality == 400 and persisted.output_dir == directory
+    assert not runtime.manual
+
+
 def test_stop_current_does_not_restart_until_new_broadcast(service):
     runtime = connect(service)
     service.command("stop", room_id=1)

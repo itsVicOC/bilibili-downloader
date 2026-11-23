@@ -1,6 +1,7 @@
 """Small, replaceable Bilibili live API adapter. No media requests carry cookies."""
 
 import re
+from dataclasses import dataclass
 from urllib.parse import urlparse
 
 import httpx
@@ -23,20 +24,60 @@ class LiveAccessError(ValueError):
     pass
 
 
+@dataclass(frozen=True)
+class FollowedLiveRoom:
+    room_id: int
+    author: str
+    title: str
+    status: int
+    cover: str
+    avatar: str
+
+
 class BilibiliLiveClient:
-    def __init__(self, auth_cookies=None, transport=None, *, wbi_cache=None):
+    def __init__(self, auth_cookies=None, transport=None, *, wbi_cache=None, timeout=15):
         self._wbi_keys = wbi_cache if wbi_cache is not None else _WBI_KEYS
         self._client = httpx.Client(
             base_url=BASE,
             headers={"User-Agent": USER_AGENT, "Referer": "https://live.bilibili.com/"},
             cookies=filter_auth_cookies(auth_cookies),
-            timeout=15,
+            timeout=timeout,
             follow_redirects=False,
             transport=transport,
         )
 
     def close(self):
         self._client.close()
+
+    def get_followed_rooms(self, page: int) -> tuple[tuple[FollowedLiveRoom, ...], bool]:
+        """Read the account's live directory, including offline rooms."""
+        if not self._client.cookies.get("SESSDATA"):
+            raise BilibiliAPIError(-101, "请先登录 B 站")
+        data = self._get(
+            "/xlive/web-ucenter/user/following",
+            page=page, page_size=10, ignoreRecord=1, hit_ab="true",
+        )
+        items = data.get("list")
+        if items is None and data.get("totalPage") == 0:
+            items = []
+        if not isinstance(items, list):
+            raise LiveAccessError("直播关注列表暂不可用")
+        rooms = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            room_id = str(item.get("roomid", ""))
+            if not re.fullmatch(r"[0-9]{1,18}", room_id) or int(room_id) == 0:
+                continue
+            status = item.get("live_status")
+            rooms.append(FollowedLiveRoom(
+                int(room_id), str(item.get("uname") or ""), str(item.get("title") or ""),
+                status if type(status) is int and status in (0, 1, 2) else -1,
+                str(item.get("room_cover") or ""), str(item.get("face") or ""),
+            ))
+        total_pages = data.get("totalPage")
+        has_more = page < total_pages if type(total_pages) is int else len(items) == 10
+        return tuple(rooms), has_more
 
     def _get(self, endpoint, *, signed=False, **params):
         if not signed:

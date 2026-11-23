@@ -57,6 +57,7 @@ class SourceTabs(WorkspaceTabs):
 
 class DownloadConfiguration(SectionCard):
     opened = Signal()
+    closed = Signal()
     preview_requested = Signal()
 
     def __init__(self, parent=None):
@@ -72,6 +73,11 @@ class DownloadConfiguration(SectionCard):
         self.preview.clicked.connect(self.preview_requested.emit)
         self.header.addWidget(self.preview)
         self.preview.hide()
+        self.done = ActionButton("完成")
+        self.done.setObjectName("TextButton")
+        self.done.clicked.connect(self.close_preconfiguration)
+        self.header.addWidget(self.done)
+        self.done.hide()
         self._summary_row = QWidget()
         summary_row = QHBoxLayout(self._summary_row)
         summary_row.setContentsMargins(0, 0, 0, 0)
@@ -107,11 +113,17 @@ class DownloadConfiguration(SectionCard):
         self.set_context(True)
         self.opened.emit()
 
+    def close_preconfiguration(self):
+        self._preconfigured = False
+        self.set_context(False)
+        self.closed.emit()
+
     def set_context(self, ready):
         expanded = ready or self._preconfigured
         self.content.setVisible(expanded)
         self._title.setVisible(expanded)
         self.preview.setVisible(ready)
+        self.done.setVisible(self._preconfigured and not ready)
         self._summary_row.setVisible(not expanded)
         self.setVisible(expanded or self._summary_host is self.body)
 

@@ -74,6 +74,7 @@ class ControlPolish(QObject):
             return
         if not isinstance(target, (QPushButton, QLineEdit, QAbstractSpinBox, QComboBox)):
             return
+        discovery_action = target.objectName() in {"DiscoveryAction", "DiscoveryHeaderAction"}
         base = getattr(target, "_detail_base_height", None)
         if base is None:
             role = target.objectName()
@@ -82,10 +83,13 @@ class ControlPolish(QObject):
             compact = compact or bool(target.parentWidget() and target.parentWidget().objectName() == "PageHeader")
             primary = role in {"PrimaryButton", "DownloadButton", "HeroButton", "OutputPrimaryButton", "NavButton", "NavButtonActive"}
             base = UI_METRICS.primary_height if primary else UI_METRICS.compact_button_height if compact else UI_METRICS.control_height
+            if discovery_action:
+                base = 28
             base = max(base, target.minimumHeight())
             target._detail_base_height = base
             target._detail_was_fixed = target.maximumHeight() == target.minimumHeight()
-        height = max(base, target.fontMetrics().height() + (12 if base <= 32 else 16))
+        padding = 8 if discovery_action else 12 if base <= 32 else 16
+        height = max(base, target.fontMetrics().height() + padding)
         changed = target.minimumHeight() != height
         if changed:
             target.setMinimumHeight(height)

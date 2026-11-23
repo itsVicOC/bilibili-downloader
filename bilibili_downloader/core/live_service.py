@@ -62,6 +62,7 @@ class _Runtime:
     backend: RecorderBackend | None = None
     session: RecordingSession | None = None
     manual: bool = False
+    manual_broadcast: str = ""
     blocked: bool = False
     blocked_broadcast: str = ""
     retries: int = 0
@@ -292,7 +293,14 @@ class LiveService:
             except queue.Empty:
                 return
             try:
-                if action == "add":
+                if action in {"add", "shortcut"}:
+                    if action == "shortcut":
+                        room_id = args["room_id"]
+                        existing = self._rooms.get(room_id)
+                        if existing and self._clock() < existing.cooldown_until:
+                            raise ValueError(existing.detail or "直播间正在冷却，请稍后重试")
+                        if any(item.get("room_id") == room_id for _, item in self._additions):
+                            raise ValueError("正在处理此直播间")
                     self._additions.append(
                         (self._pool.submit(self._resolve, args["source"]), args)
                     )
@@ -328,6 +336,7 @@ class LiveService:
                 if action == "remove" and runtime.backend:
                     raise ValueError("请先停止录制，收尾完成后再移除直播间")
                 if action in {"start", "enable"}:
+                    runtime.manual_broadcast = ""
                     runtime.blocked = False
                     runtime.blocked_broadcast = ""
                     runtime.rejected_streams.clear()
@@ -345,6 +354,7 @@ class LiveService:
                         runtime.subscription.enabled = True
                 elif action in {"stop", "disable", "remove"}:
                     runtime.manual = False
+                    runtime.manual_broadcast = ""
                     if action == "stop":
                         runtime.skip_pending_broadcast = (
                             runtime.future is not None and runtime.backend is None
@@ -405,7 +415,17 @@ class LiveService:
             except Exception as exc:
                 if action == "settings" and args.get("completion"):
                     args["completion"].set_result((False, f"房间目录规则保存失败：{redact_sensitive_text(str(exc))}"))
+                if action == "shortcut":
+                    args["completion"].set_result((False, user_error_message(exc)))
+                    continue
                 self._messages.put(redact_sensitive_text(str(exc)))
+
+    def _new_subscription(self, room, enabled):
+        return LiveSubscription(
+            room=room, enabled=enabled,
+            output_dir=self.settings.output_dir, output_dir_mode="default",
+            segment_seconds=self.settings.segment_seconds,
+        )
 
     def _complete_additions(self):
         for future, args in self._additions[:]:
@@ -414,15 +434,13 @@ class LiveService:
             self._additions.remove((future, args))
             try:
                 room = future.result()
+                if args.get("completion") is not None:
+                    message = self._apply_shortcut(room, args["intent"])
+                    args["completion"].set_result((True, message))
+                    continue
                 if room.room_id in self._rooms:
                     raise ValueError(f"直播间 {room.room_id} 已在列表中")
-                subscription = LiveSubscription(
-                    room=room,
-                    enabled=args.get("enabled", True),
-                    output_dir=self.settings.output_dir,
-                    output_dir_mode="default",
-                    segment_seconds=self.settings.segment_seconds,
-                )
+                subscription = self._new_subscription(room, args.get("enabled", True))
                 self.repository.save_subscription(subscription)
                 self._rooms[room.room_id] = _Runtime(
                     subscription,
@@ -431,7 +449,55 @@ class LiveService:
                     else LiveState.DISABLED,
                 )
             except Exception as exc:
-                self._messages.put(user_error_message(exc))
+                if args.get("completion") is not None:
+                    args["completion"].set_result((False, user_error_message(exc)))
+                else:
+                    self._messages.put(user_error_message(exc))
+
+    def _apply_shortcut(self, room, intent):
+        runtime = self._rooms.get(room.room_id)
+        if runtime and (runtime.backend or runtime.session or (runtime.manual and not runtime.blocked) or runtime.state in {
+            LiveState.PREPARING, LiveState.QUEUED, LiveState.RECONNECTING, LiveState.FINALIZING,
+        }):
+            return "该房间已有录制请求，可在监控列表查看"
+
+        monitor = intent == "monitor"
+        if not monitor:
+            if room.live_status != 1:
+                raise ValueError("该直播间已下播，可刷新关注列表后添加监控")
+            if not room.live_time or room.live_time == "0" or room.live_time.startswith("0000-"):
+                raise ValueError("暂时无法确认当前直播场次，请稍后重试")
+        if runtime and self._clock() < runtime.cooldown_until:
+            raise ValueError(runtime.detail or "直播间正在冷却，请稍后重试")
+        if runtime:
+            subscription = runtime.subscription.model_copy(update={
+                "room": room,
+                "enabled": monitor or runtime.subscription.enabled,
+                "skipped_broadcast": "",
+            })
+        else:
+            subscription = self._new_subscription(room, monitor)
+        self.repository.save_subscription(subscription)
+
+        if runtime is None:
+            runtime = self._rooms[room.room_id] = _Runtime(subscription)
+        else:
+            runtime.subscription = subscription
+            if runtime.future:
+                runtime.future.cancel()
+                runtime.future = None
+        runtime.manual = not monitor
+        runtime.manual_broadcast = "" if monitor else room.broadcast_key
+        runtime.state = LiveState.WAITING if monitor else LiveState.PREPARING
+        runtime.detail = "" if monitor else "正在准备录制本场"
+        runtime.blocked = False
+        runtime.blocked_broadcast = ""
+        runtime.rejected_streams.clear()
+        runtime.skip_pending_broadcast = False
+        runtime.retries = 0
+        runtime.offline_checks = 0
+        runtime.next_check = 0
+        return "已添加监控" if monitor else "已提交本场录制请求"
 
     def _apply_query(self, runtime, room, streams):
         old_room = runtime.subscription.room
@@ -446,6 +512,23 @@ class LiveService:
             )
             runtime.skip_pending_broadcast = False
         self.repository.save_subscription(runtime.subscription)
+        if runtime.manual_broadcast and (
+            (room.live_status == 1 and room.broadcast_key != runtime.manual_broadcast)
+            or (room.live_status != 1 and runtime.session is None)
+        ):
+            runtime.manual = False
+            runtime.manual_broadcast = ""
+            runtime.detail = "直播场次已结束或变更，本次手动录制请求已结束"
+            self._messages.put(runtime.detail)
+            if runtime.backend:
+                runtime.stop_reason = "completed"
+                runtime.state = LiveState.FINALIZING
+                runtime.backend.stop()
+            else:
+                if runtime.session:
+                    self._finish(runtime, "completed")
+                runtime.state = LiveState.WAITING if runtime.subscription.enabled else LiveState.DISABLED
+            return
         if not runtime.subscription.enabled and not runtime.manual:
             return
         if runtime.blocked_broadcast:
@@ -472,6 +555,7 @@ class LiveService:
             runtime.subscription.skipped_broadcast = ""
             self.repository.save_subscription(runtime.subscription)
             runtime.manual = False
+            runtime.manual_broadcast = ""
             if runtime.backend:
                 runtime.stop_reason = "completed"
                 runtime.state = LiveState.FINALIZING

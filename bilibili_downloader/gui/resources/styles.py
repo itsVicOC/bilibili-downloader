@@ -424,6 +424,30 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QPushButton:pressed {{ background: {p.control_pressed}; border-color: {p.card_border}; }}
     QPushButton[keyboardFocus="true"]:focus {{ border-color: {p.focus}; }}
     QPushButton:disabled {{ background: {p.surface_raised}; color: {p.disabled}; }}
+    QWidget#DiscoveryCard {{
+        background: {p.surface}; border: 1px solid {p.card_border}; border-radius: 9px;
+    }}
+    QPushButton#DiscoveryVideo {{
+        padding: 0; border-radius: 8px; border-color: transparent; background: transparent;
+    }}
+    QPushButton#DiscoveryVideo:hover {{ background: {p.control_hover}; }}
+    QPushButton#DiscoveryVideo:pressed {{ background: {p.control_pressed}; }}
+    QPushButton#DiscoveryVideo[keyboardFocus="true"]:focus {{ border-color: {p.focus}; }}
+    QLabel#DiscoveryTitle {{ color: {p.text}; font-weight: 600; }}
+    QPushButton#DiscoveryAction {{
+        min-height: 24px; padding: 0 8px; border-radius: 6px; border-color: {p.card_border};
+        background: {p.subtle_selection}; color: {p.active_text}; font-weight: 600;
+    }}
+    QPushButton#DiscoveryAction:hover {{ background: {p.selection}; }}
+    QPushButton#DiscoveryAction:pressed {{ background: {p.control_pressed}; }}
+    QPushButton#DiscoveryAction:disabled {{ background: {p.control_fill}; color: {p.disabled}; }}
+    QPushButton#DiscoveryAction[keyboardFocus="true"]:focus {{ border-color: {p.focus}; }}
+    QPushButton#DiscoveryHeaderAction {{
+        min-height: 26px; padding: 0 8px; border: 1px solid transparent;
+        border-radius: 6px; background: transparent; color: {p.muted};
+    }}
+    QPushButton#DiscoveryHeaderAction:hover {{ background: {p.control_hover}; color: {p.text}; }}
+    QPushButton#DiscoveryHeaderAction[keyboardFocus="true"]:focus {{ border-color: {p.focus}; }}
     QPushButton#SegmentButton {{
         min-height: 30px; padding: 0 8px; font-weight: 400; border: 1px solid transparent;
         background: {p.control_fill}; color: {p.muted};
@@ -639,6 +663,8 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     #DownloadSource[sectionStyle="plain"] {{ background: transparent; border: none; }}
     #DownloadSource QTabWidget::pane {{ padding-top: 8px; }}
     #DownloadSource QTabBar {{ margin: 8px 12px 0; }}
+    #DownloadSource #DailyRankingHeader QTabBar {{ margin: 0; }}
+    #DailyRankingHeader QTabBar::tab {{ min-height: 26px; margin: 2px; padding: 0 10px; }}
     #SettingsForm {{ background: transparent; border: none; }}
     #SettingsForm #SectionCard {{ background: transparent; border: none; border-radius: 0; }}
     #SettingsForm #SectionCard[settingsDivider="true"], #SettingsForm #SettingsField[settingsDivider="true"] {{

@@ -5,6 +5,14 @@ import gc
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def offline_public_ranking(monkeypatch):
+    """Visible workspaces stay offline unless a test supplies its own ranking."""
+    from bilibili_downloader.api.client import BilibiliAPIClient
+
+    monkeypatch.setattr(BilibiliAPIClient, "get_video_ranking", staticmethod(lambda: {"list": []}))
+
+
 @pytest.hookimpl(hookwrapper=True, tryfirst=True)
 def pytest_runtest_teardown(item):
     yield

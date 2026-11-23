@@ -23,6 +23,7 @@ class LiveUiController(QObject):
     message_changed = Signal(str, str)
     export_changed = Signal(bool, str)
     addition_changed = Signal(bool)
+    shortcuts_changed = Signal()
     settings_applied = Signal(bool, str)
     history_undo_changed = Signal(bool)
     history_feedback = Signal(str, bool)
@@ -44,6 +45,7 @@ class LiveUiController(QObject):
         self.exporting = False
         self.adding = False
         self._addition_ids = set()
+        self._shortcuts = {}
         self._revision = -1
         self._closed = False
         self._background_enabled = autostart
@@ -104,6 +106,17 @@ class LiveUiController(QObject):
         self.notify("正在查询直播间…")
         self.command("add", source=source)
 
+    def shortcut_pending(self, room_id):
+        return room_id in self._shortcuts
+
+    def quick_room(self, room_id, intent):
+        if self._closed or not self.service or self.shortcut_pending(room_id):
+            return
+        completion = Future()
+        self._shortcuts[room_id] = completion
+        self.command("shortcut", room_id=room_id, source=str(room_id), intent=intent, completion=completion)
+        self.shortcuts_changed.emit()
+
     def apply_live_settings(self, settings, directory_modes):
         if directory_modes:
             self._settings_result = Future()
@@ -120,6 +133,12 @@ class LiveUiController(QObject):
         messages = self.service.messages()
         for message in messages:
             self.notify(message, "warning")
+        for room_id, completion in list(self._shortcuts.items()):
+            if completion.done():
+                self._shortcuts.pop(room_id)
+                ok, message = completion.result()
+                self.notify(message, "success" if ok else "warning")
+                self.shortcuts_changed.emit()
         if self._settings_result and self._settings_result.done():
             ok, message = self._settings_result.result()
             self.settings_applied.emit(ok, message)
@@ -294,6 +313,9 @@ class LiveUiController(QObject):
     def shutdown(self):
         self.timer.stop()
         self._closed = True
+        if self._shortcuts:
+            self._shortcuts.clear()
+            self.shortcuts_changed.emit()
         self._cancel.set()
         if self.service:
             self.service.request_shutdown()

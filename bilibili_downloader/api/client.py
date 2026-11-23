@@ -161,7 +161,8 @@ class BilibiliAPIClient:
             self._ensure_wbi_keys()
         return self._wbi_signer.sign(params, self._wbi_mixin_key)
 
-    def _parse_response(self, resp: httpx.Response) -> dict:
+    @staticmethod
+    def _parse_response(resp: httpx.Response) -> dict:
         """Parse API response, raise on error."""
         resp.raise_for_status()
         data = resp.json()
@@ -171,6 +172,36 @@ class BilibiliAPIClient:
         return data.get("data") or {}
 
     # -- API Methods --
+
+    @staticmethod
+    def get_video_ranking() -> dict:
+        """Fetch the public ranking with a separate, anonymous HTTP session."""
+        with httpx.Client(base_url=ep.BASE_URL, timeout=6.0) as guest:
+            response = guest.get(
+                ep.VIDEO_RANKING_ENDPOINT,
+                params={"rid": 0, "type": "all", "web_location": "333.934"},
+                headers={"User-Agent": USER_AGENT, "Referer": ep.VIDEO_RANKING_PAGE},
+            )
+            return BilibiliAPIClient._parse_response(response)
+
+    def get_following_video_feed(self, offset: str = "") -> dict:
+        """Read one page of the signed-in account's video feed."""
+        if not self.sessdata:
+            raise BilibiliAPIError(-101, "请先登录 B 站")
+        params = {
+            "type": "video",
+            "web_location": "333.1365",
+            "features": "itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote,decorationCard,onlyfansAssetsV2,forwardListHidden,ugcDelete",
+        }
+        if offset:
+            params["offset"] = offset
+        response = self._client.get(
+            ep.FOLLOWING_FEED_ENDPOINT,
+            params=params,
+            headers={"Referer": ep.FOLLOWING_FEED_PAGE, "Origin": ep.FOLLOWING_FEED_PAGE.rstrip("/")},
+            timeout=6.0,
+        )
+        return self._parse_response(response)
 
     def get_video_info(self, bvid: str) -> VideoInfo:
         """Fetch video metadata by BV number from /x/web-interface/view."""

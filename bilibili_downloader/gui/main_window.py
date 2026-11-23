@@ -112,6 +112,11 @@ from bilibili_downloader.gui.widgets.components import (
     repolish,
     scroll_area,
 )
+from bilibili_downloader.gui.widgets.daily_rankings import (
+    DailyRankingsWidget,
+    enabled_ranking_tabs,
+)
+from bilibili_downloader.gui.widgets.discovery_cards import ThumbnailLoader
 from bilibili_downloader.gui.widgets.download_configuration import (
     DownloadConfiguration,
     DownloadWorkspace,
@@ -124,6 +129,7 @@ from bilibili_downloader.gui.widgets.download_options import (
 )
 from bilibili_downloader.gui.widgets.hero_panel import HeroPanel
 from bilibili_downloader.gui.widgets.library_page import LibraryPage
+from bilibili_downloader.gui.widgets.live_following import live_following_enabled
 from bilibili_downloader.gui.widgets.live_page import LivePage
 from bilibili_downloader.gui.widgets.pixel_mascot import MascotCard
 from bilibili_downloader.gui.widgets.task_page import TaskPage
@@ -141,6 +147,8 @@ from bilibili_downloader.utils.config import ConfigManager
 from bilibili_downloader.utils.validators import is_bilibili_url
 
 logger = logging.getLogger(__name__)
+
+WEBSITE_URL = "https://1008.si/"
 
 
 class MainWindow(QMainWindow):
@@ -181,15 +189,19 @@ class MainWindow(QMainWindow):
         self._download_pool = QThreadPool()
         self._service_pool = QThreadPool()
         self._service_pool.setMaxThreadCount(4)
+        self._thumbnails = ThumbnailLoader(self)
         self._apply_thread_pool_settings()
 
         # State
         self._current_video: VideoInfo | None = None
+        self._resolving_video = False
         self._login_status_request_id = 0
         self._user_profile = {}
         self._login_verified = None
         self._account_state = "unknown"
         self._account_dialog = None
+        self._ranking_panel = None
+        self._ranking_tabs = enabled_ranking_tabs()
         self._removed_task_records = []
         self._download_attempts = {}
         self._retry_pending = {}
@@ -273,6 +285,8 @@ class MainWindow(QMainWindow):
         self._api_client = self._create_api_client()
         self._retired_api_clients.append(previous)
         self._batch_page._api_client = self._api_client
+        self._thumbnails.clear()
+        self._set_discovery_account(self._api_client if self._api_client.sessdata else None)
         if self._live_page.service:
             self._live_page.service.command("auth", cookies=self._config.auth_cookies)
 
@@ -320,6 +334,8 @@ class MainWindow(QMainWindow):
         self._settings_nav = IconButton("设置", "settings", "NavButton")
         self._settings_nav.clicked.connect(self._on_settings_triggered)
         self._side_layout.addWidget(self._settings_nav)
+        self._website_button = IconButton("BiliFlow 官网", "external", "SidebarAction")
+        self._side_layout.addWidget(self._website_button)
         self._side_layout.addStretch()
         self._mascot_card = MascotCard(self._sidebar)
         self._side_layout.addWidget(self._mascot_card)
@@ -356,7 +372,12 @@ class MainWindow(QMainWindow):
             self._confirm_copyright_acknowledgement,
             self,
             self._live_controller,
+            discovery_pool=self._service_pool if live_following_enabled() else None,
+            thumbnails=self._thumbnails,
         )
+        if self._live_page.following is not None:
+            self._live_page.following.login_requested.connect(self._on_login_triggered)
+            self._live_page.following.set_account(self._api_client if self._api_client.sessdata else None)
         self._live_page.settings_requested.connect(self._show_settings_tab)
         self._live_page.history_requested.connect(lambda: self._show_tasks(2))
         self._workspace_pages.addWidget(self._live_page)
@@ -471,6 +492,11 @@ class MainWindow(QMainWindow):
         self._edit_source.setObjectName("TextButton")
         self._edit_source.clicked.connect(lambda: self._set_download_source_editing(True))
         summary.addWidget(self._edit_source)
+        self._return_to_rankings = QPushButton("返回榜单")
+        self._return_to_rankings.setObjectName("TextButton")
+        self._return_to_rankings.clicked.connect(self._reset_download_source)
+        self._return_to_rankings.setVisible(bool(self._ranking_tabs))
+        summary.addWidget(self._return_to_rankings)
         self._workspace_layout.addWidget(self._resolved_source_row)
         self._resolve_notice = Notice(callback=self._route_current_source)
         self._workspace_layout.addWidget(self._resolve_notice)
@@ -484,6 +510,17 @@ class MainWindow(QMainWindow):
         self._build_output_card()
         self._workspace_layout.addWidget(self._content_section)
         self._content_section.hide()
+        if self._ranking_tabs:
+            self._ranking_panel = DailyRankingsWidget(
+                self._ranking_tabs, self._service_pool,
+                self._config.data_dir / "video-ranking.json", self._thumbnails,
+            )
+            self._ranking_panel.set_account(self._api_client if self._api_client.sessdata else None)
+            self._ranking_panel.login_requested.connect(self._on_login_triggered)
+            self._ranking_panel.parse_requested.connect(self._parse_ranked_video)
+            self._ranking_panel.open_video_requested.connect(self._open_ranked_video)
+            self._ranking_panel.cards_changed.connect(self._sync_download_art)
+            self._workspace_layout.addWidget(self._ranking_panel)
         self._workspace_layout.addStretch()
         self._download_tabs.addTab(body, "单个解析")
         self._batch_page = BatchDialog(
@@ -506,6 +543,8 @@ class MainWindow(QMainWindow):
             lambda: self._show_download_configuration(batch=self._download_tabs.currentIndex() == 1)
         )
         self._workspace_scroll = scroll_area(self._output_sections, scroll_edge=True)
+        if self._ranking_panel is not None:
+            self._ranking_panel.set_scroll_area(self._workspace_scroll)
         layout.addWidget(self._workspace_scroll, 1)
         self._download_footers = ActionBarStack()
         self._download_footers.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -532,6 +571,7 @@ class MainWindow(QMainWindow):
         controls = DownloadConfiguration()
         self._configuration = controls
         controls.opened.connect(self._sync_download_presentation)
+        controls.closed.connect(self._sync_download_presentation)
         self._output_card = controls
         controls.body.setSpacing(8)
         fields = controls.fields
@@ -680,6 +720,11 @@ class MainWindow(QMainWindow):
         self._subtitle_check.setEnabled(editable)
         self._all_subtitles_check.setEnabled(editable and self._subtitle_check.isChecked())
         self._content_section.setVisible(self._current_video is not None)
+        if self._ranking_panel is not None:
+            self._ranking_panel.setVisible(
+                not batch and not ready and not self._resolving_video
+                and not self._configuration._preconfigured
+            )
         self._sync_download_source()
 
     def _sync_download_source(self):
@@ -696,7 +741,24 @@ class MainWindow(QMainWindow):
         if self._resolve_btn.objectName() != name:
             self._resolve_btn.setObjectName(name)
             repolish(self._resolve_btn)
-        self._empty_download.setVisible(not resolved and self.backdrop.image.isNull())
+        self._sync_download_art()
+
+    def _sync_download_art(self):
+        if not hasattr(self, "_empty_download"):
+            return
+        compact_rankings = (
+            self._ranking_panel is not None and self._ranking_panel.has_cards
+            and self.height() <= 680 and not self._ranking_panel.isHidden()
+        )
+        density = getattr(self, "_density", None)
+        padding = density.card_padding if density else 16
+        section_gap = density.section_gap if density else 16
+        vertical = max(8, padding - 7) if compact_rankings else padding
+        self._workspace_layout.setSpacing(min(section_gap, 10) if compact_rankings else section_gap)
+        self._hero_layout.setContentsMargins(padding, vertical, padding, vertical)
+        self._empty_download.setVisible(
+            self._current_video is None and self.backdrop.image.isNull() and not compact_rankings
+        )
 
     def _set_download_source_editing(self, editing, reason=Qt.OtherFocusReason):
         self._editing_download_source = editing
@@ -892,7 +954,7 @@ class MainWindow(QMainWindow):
             getattr(self._settings.appearance.background_visibility, workspace)
         )
         self._workspace_pages.set_glass_blur(self._settings.appearance.glass_blur)
-        self._empty_download.setVisible(self._current_video is None and self.backdrop.image.isNull())
+        self._sync_download_art()
 
     def paintEvent(self, event):
         super().paintEvent(event)
@@ -966,6 +1028,12 @@ class MainWindow(QMainWindow):
     def _set_shell_enabled(self, enabled):
         """Include the native toolbar, menus and shortcuts in update isolation."""
         self._shell_enabled = enabled
+        if self._ranking_panel is not None:
+            self._ranking_panel.set_loading_enabled(enabled)
+        if self._live_page.following is not None:
+            self._live_page.following.set_loading_enabled(enabled)
+        if not enabled:
+            self._thumbnails.clear()
         for widget in (self.centralWidget(), self._workspace_toolbar, self.menuBar(), self._status_bar):
             widget.setEnabled(enabled)
         for item in self._actions.values():
@@ -1231,7 +1299,7 @@ class MainWindow(QMainWindow):
         )
         for widget in (self._brand_copy, self._mascot_card):
             widget.setVisible(not compact)
-        for button in [*self._nav_buttons, self._settings_nav, self._mode_button, self._header_login]:
+        for button in [*self._nav_buttons, self._settings_nav, self._website_button, self._mode_button, self._header_login]:
             button.set_compact(compact)
         if not compact:
             self._header_login.setText(
@@ -1243,6 +1311,7 @@ class MainWindow(QMainWindow):
     def resizeEvent(self, event):
         self._update_responsive_layout(event.size().width())
         self._update_density(event.size().height())
+        self._sync_download_art()
         super().resizeEvent(event)
 
     def _update_density(self, height):
@@ -1268,7 +1337,6 @@ class MainWindow(QMainWindow):
         for layout in (self._workspace_layout, self._content_layout, self._output_sections.row,
                        self._live_page._content_layout):
             layout.setSpacing(gap)
-        self._hero_layout.setContentsMargins(padding, padding, padding, padding)
         for index in range(self._settings_page.tabs.count()):
             self._settings_page.tabs.widget(index).widget().layout().setSpacing(gap)
         for field in [*self._download_fields._rows, *self._advanced_fields._rows, self._audio_row]:
@@ -1333,6 +1401,10 @@ class MainWindow(QMainWindow):
         tools_menu.addAction(action("ffmpeg", "检查 FFmpeg", self._on_check_ffmpeg))
         tools_menu.addAction(action("updates", "检查更新…", self._check_updates_from_menu))
         help_menu = menubar.addMenu("帮助(&H)")
+        website = action("website", "BiliFlow 官网", self._open_website)
+        help_menu.addAction(website)
+        self._website_button.clicked.connect(website.trigger)
+        website.changed.connect(lambda: self._website_button.setEnabled(website.isEnabled()))
         help_menu.addAction(action("about", "关于 BiliFlow", self._on_about_triggered, role=QAction.AboutRole))
         # Buttons consume the same QAction; signals already connected above are
         # disconnected to avoid executing an operation twice.
@@ -1347,6 +1419,42 @@ class MainWindow(QMainWindow):
             editor.selectionChanged.connect(self._sync_edit_actions)
             editor.textChanged.connect(self._sync_edit_actions)
         self._sync_edit_actions()
+
+    def _open_website(self):
+        if not QDesktopServices.openUrl(QUrl(WEBSITE_URL)):
+            self._status_bar.showMessage("无法打开浏览器，请访问 1008.si。")
+
+    def _set_discovery_account(self, client):
+        if self._ranking_panel is not None:
+            self._ranking_panel.set_account(client)
+        if self._live_page.following is not None:
+            self._live_page.following.set_account(client)
+
+    def _parse_ranked_video(self, url):
+        if self._resolve_btn.isEnabled() and self._show_workspace(0):
+            self._download_tabs.setCurrentIndex(0)
+            self._url_input.setText(url)
+            self._url_input.setFocus()
+            self._on_resolve_clicked()
+
+    def _open_ranked_video(self, url):
+        if not QDesktopServices.openUrl(QUrl(url)):
+            self._status_bar.showMessage("无法在浏览器打开视频，请重试。")
+
+    def _reset_download_source(self):
+        self._current_video = None
+        self._resolved_url = ""
+        self._resolve_request_url = ""
+        self._selected_pages = []
+        self._download_result_state = "待解析"
+        self._configuration.clear_error()
+        self._configuration.close_preconfiguration()
+        self._url_input.clear()
+        self._download_btn.setEnabled(False)
+        self._resolve_notice.set_message("")
+        self._refresh_download_summary()
+        self._workspace_scroll.verticalScrollBar().setValue(0)
+        self._url_input.setFocus()
 
     def _sync_edit_actions(self, *_args):
         editor = QApplication.focusWidget()
@@ -1494,7 +1602,8 @@ class MainWindow(QMainWindow):
         if time.monotonic() > self._update_deadline:
             self._abort_update_install("后台任务未能及时停止，更新已中止；已下载更新包仍保留。")
             return
-        if not (self._download_pool.waitForDone(0) and self._service_pool.waitForDone(0) and self._live_controller.background_stopped):
+        if not (self._download_pool.waitForDone(0) and self._service_pool.waitForDone(0)
+                and self._thumbnails.pool.waitForDone(0) and self._live_controller.background_stopped):
             return
         if self._update_helper is None:
             try:
@@ -1753,6 +1862,7 @@ class MainWindow(QMainWindow):
             return
 
         self._resolve_request_url = url
+        self._resolving_video = True
         self._clipboard_resolve_source = url if from_clipboard else None
         self._current_video = None
         self._download_btn.setEnabled(False)
@@ -1776,6 +1886,8 @@ class MainWindow(QMainWindow):
     def _on_resolve_route(self, target, source):
         clipboard_route = getattr(self, "_clipboard_resolve_source", None) == self._resolve_request_url
         self._clipboard_resolve_source = None
+        self._resolving_video = False
+        self._sync_download_presentation()
         self._resolve_btn.setEnabled(True)
         self._resolve_btn.setText("解析")
         self._video_info._state_label.setText("等待解析")
@@ -1818,6 +1930,7 @@ class MainWindow(QMainWindow):
         self._aspect_source_identity = identity
         """Handle successful URL resolution."""
         self._resolve_btn.setEnabled(True)
+        self._resolving_video = False
         self._clipboard_resolve_source = None
         self._resolve_btn.setText("解析")
         if (
@@ -1827,6 +1940,7 @@ class MainWindow(QMainWindow):
             self._resolve_notice.set_message(
                 "解析期间来源已改，请重新解析。", "warning"
             )
+            self._sync_download_presentation()
             return
         self._resolved_url = self._url_input.text().strip()
         self._configuration.clear_error()
@@ -1900,7 +2014,9 @@ class MainWindow(QMainWindow):
     def _on_resolve_error(self, error: str):
         """Handle resolution error."""
         self._resolve_btn.setEnabled(True)
+        self._resolving_video = False
         self._clipboard_resolve_source = None
+        self._configuration.close_preconfiguration()
         self._resolve_btn.setText("解析")
         self._status_bar.showMessage("解析失败")
         self._download_btn.setEnabled(False)
@@ -2633,6 +2749,11 @@ class MainWindow(QMainWindow):
             return
         if nav_info.get("isLogin"):
             self._account_state = "valid"
+            previous_uid = self._user_profile.get("mid")
+            if previous_uid and previous_uid != nav_info.get("mid"):
+                self._thumbnails.clear()
+                self._set_discovery_account(None)
+            self._set_discovery_account(self._api_client)
             if self._user_profile.get("mid") != nav_info.get("mid") or self._user_face != nav_info.get("face", ""):
                 self._header_login.set_avatar()
             self._user_profile = {key: nav_info.get(key) for key in ("uname", "mid", "vipStatus", "vip")}
@@ -2650,6 +2771,8 @@ class MainWindow(QMainWindow):
             )
         else:
             self._account_state = "expired"
+            self._thumbnails.clear()
+            self._set_discovery_account(None)
             self._set_login_status_label("未登录", "MutedLabel")
         self._sync_account_dialog()
 
@@ -2906,6 +3029,7 @@ class MainWindow(QMainWindow):
         if not (self._live_controller.background_stopped
                 and self._download_pool.waitForDone(0)
                 and self._service_pool.waitForDone(0)
+                and self._thumbnails.pool.waitForDone(0)
                 and self._updates.pool.waitForDone(0)
                 and not self._batch_page._busy):
             return
