@@ -9,6 +9,7 @@ from PIL import Image, ImageOps
 from PySide6.QtCore import (
     QEvent,
     QObject,
+    QPoint,
     QRect,
     QRectF,
     QRunnable,
@@ -29,11 +30,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from bilibili_downloader.gui.widgets.components import (
-    ElidedLabel,
-    PreviewTitle,
-    palette,
-)
+from bilibili_downloader.gui.widgets.components import PreviewTitle, palette
 from bilibili_downloader.utils.network import BILIBILI_RESOURCE_HOSTS, trusted_https_url
 
 
@@ -311,10 +308,14 @@ class _CardWidget(QWidget):
         layout.addWidget(content)
 
         footer = QHBoxLayout()
+        self._footer_layout = footer
         footer.setContentsMargins(8, 0, 6, 4)
         footer.setSpacing(6)
-        author = ElidedLabel(card.author)
+        author = PreviewTitle(card.author)
+        author.line_limit = 1
         author.setObjectName("MetaLabel")
+        author.setToolTip(card.author)
+        author.setAccessibleName(card.author)
         footer.addWidget(author, 1)
         if card.action:
             action = self.action_button = _CardButton(card.action)
@@ -328,6 +329,12 @@ class _CardWidget(QWidget):
             action.clicked.connect(lambda: act(card.key))
             footer.addWidget(action)
         layout.addLayout(footer)
+
+    def row_height(self, width):
+        return (
+            self.cover.heightForWidth(width - 4) + self.title.heightForWidth(width - 18)
+            + self._footer_layout.sizeHint().height() + 8
+        )
 
 
 class DiscoveryGrid(QWidget):
@@ -349,7 +356,7 @@ class DiscoveryGrid(QWidget):
         self._expanded = False
         self._layout_timer = QTimer(self)
         self._layout_timer.setSingleShot(True)
-        self._layout_timer.timeout.connect(self._load_visible)
+        self._layout_timer.timeout.connect(self._settle_layout)
 
     def set_scroll_area(self, scroll):
         self._viewport = scroll.viewport()
@@ -365,12 +372,15 @@ class DiscoveryGrid(QWidget):
         self._expanded = expanded
         self._reflow()
 
-    def focusNextPrevChild(self, forward):
-        # Keep the two card actions reachable with macOS text-only Tab navigation.
-        controls = [
+    def _focus_controls(self):
+        return [
             button for card in self._widgets for button in (card.video_button, card.action_button)
             if button is not None and button.isEnabled() and button.isVisible()
         ]
+
+    def focusNextPrevChild(self, forward):
+        # Keep the card actions reachable with macOS text-only Tab navigation.
+        controls = self._focus_controls()
         focused = QApplication.focusWidget()
         if focused in controls:
             index = controls.index(focused) + (1 if forward else -1)
@@ -379,19 +389,35 @@ class DiscoveryGrid(QWidget):
                 return True
         return super().focusNextPrevChild(forward)
 
+    def _columns(self):
+        return 4 if self.width() >= 970 else 3 if self.width() >= 695 else 2
+
+    def _visible_cards(self, columns):
+        return self._cards if self._expanded else self._cards[:columns]
+
     def _reflow(self, *, force=False):
-        columns = 4 if self.width() >= 970 else 3 if self.width() >= 695 else 2
-        visible = self._cards if self._expanded else self._cards[:columns]
+        columns = self._columns()
+        visible = self._visible_cards(columns)
         shape = (columns, visible)
         if not force and shape == self._shape:
             return
+        old_columns = self._shape[0] if self._shape is not None else columns
         self._shape = shape
-        for widget in self._widgets:
+        keep = 0
+        for widget, card in zip(self._widgets, visible):
+            if widget.card != card:
+                break
+            keep += 1
+        for widget in self._widgets[keep:]:
             self._layout.removeWidget(widget)
             widget.hide()
             widget.deleteLater()
-        self._widgets = []
-        for index, card in enumerate(visible):
+        del self._widgets[keep:]
+        if columns != old_columns:
+            for index, widget in enumerate(self._widgets):
+                self._layout.removeWidget(widget)
+                self._layout.addWidget(widget, index // columns, index % columns)
+        for index, card in enumerate(visible[keep:], keep):
             widget = _CardWidget(card, self.action_requested.emit, self.video_requested.emit)
             self._layout.addWidget(widget, index // columns, index % columns)
             self._widgets.append(widget)
@@ -399,6 +425,10 @@ class DiscoveryGrid(QWidget):
             self._layout.setColumnStretch(index, int(index < columns))
         self.can_expand.emit(len(self._cards) > columns)
         self._layout_timer.start(0)
+
+    def _settle_layout(self):
+        self._reflow()
+        self._load_visible()
 
     def _load_visible(self, *_args):
         if self.isVisible():
@@ -412,9 +442,116 @@ class DiscoveryGrid(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self._reflow()
         self._layout_timer.start(0)
 
     def showEvent(self, event):
         super().showEvent(event)
         self._layout_timer.start(0)
+
+
+class ProgressiveDiscoveryGrid(DiscoveryGrid):
+    """Materialize a viewport of cards at a time while keeping the earlier rows."""
+
+    def __init__(self, thumbnails, parent=None):
+        super().__init__(thumbnails, parent)
+        self._limit = None
+        self._bar = None
+        self._scroll_value = 0
+        self._footer_position = None
+        self._append_timer = QTimer(self)
+        self._append_timer.setSingleShot(True)
+        self._append_timer.timeout.connect(self._append_screen)
+        self.more = _CardButton("加载更多")
+        self.more.setParent(self)
+        self.more.setObjectName("DiscoveryHeaderAction")
+        self.more.setAutoDefault(False)
+        self.more.clicked.connect(self._append_screen)
+        self.more.hide()
+
+    def set_scroll_area(self, scroll):
+        super().set_scroll_area(scroll)
+        self._viewport.installEventFilter(self)
+        self._bar = scroll.verticalScrollBar()
+        self._scroll_value = self._bar.value()
+        self._bar.valueChanged.connect(self._on_scroll)
+
+    def set_cards(self, cards):
+        cards = tuple(cards)
+        if cards != self._cards:
+            self._limit = None
+            self._append_timer.stop()
+        super().set_cards(cards)
+
+    def _screen_size(self, columns, *, initial=False):
+        if self._viewport is None or not self._widgets:
+            return columns
+        gap = self._layout.verticalSpacing()
+        width = (self.width() - (columns - 1) * self._layout.horizontalSpacing()) // columns
+        row = self._widgets[0].row_height(width)
+        height = self._viewport.height()
+        if initial:
+            top = self.mapTo(self._viewport, QPoint()).y() + self._bar.value()
+            height -= max(0, top)
+        return max(1, (height + gap) // (row + gap)) * columns
+
+    def _visible_cards(self, columns):
+        if not self.isVisible():
+            return self._cards[:len(self._widgets)]
+        limit = self._limit if self._limit is not None else self._screen_size(columns, initial=True)
+        return self._cards[:limit]
+
+    def _reflow(self, *, force=False):
+        super()._reflow(force=force)
+        columns = self._columns()
+        count = len(self._widgets)
+        has_more = 0 < count < len(self._cards)
+        position = ((count + columns - 1) // columns, columns)
+        if has_more and position != self._footer_position:
+            self._layout.removeWidget(self.more)
+            self._layout.addWidget(self.more, position[0], 0, 1, columns, Qt.AlignHCenter)
+            self._footer_position = position
+        self.more.setVisible(has_more)
+
+    def event(self, event):
+        if event.type() == QEvent.LayoutRequest:
+            self._layout_timer.start(0)
+        return super().event(event)
+
+    def _focus_controls(self):
+        controls = super()._focus_controls()
+        if self.more.isVisible():
+            controls.append(self.more)
+        return controls
+
+    def _on_scroll(self, value):
+        previous = self._scroll_value
+        self._scroll_value = value
+        if value > previous and value == self._bar.maximum():
+            self._queue_append()
+
+    def _queue_append(self):
+        if self.more.isVisible():
+            self._append_timer.start(0)
+
+    def _append_screen(self):
+        self._append_timer.stop()
+        if not self.more.isVisible():
+            return
+        previous_count = len(self._widgets)
+        keyboard = self.more.hasFocus() and self.more.property("keyboardFocus")
+        columns = self._columns()
+        next_row = ((previous_count + columns - 1) // columns) * columns
+        self._limit = next_row + self._screen_size(columns)
+        self._reflow()
+        if keyboard:
+            self._widgets[previous_count].video_button.setFocus(Qt.TabFocusReason)
+
+    def eventFilter(self, watched, event):
+        if watched is self._viewport:
+            if event.type() == QEvent.Resize:
+                self._layout_timer.start(0)
+            elif event.type() == QEvent.Wheel and self._bar.value() == self._bar.maximum():
+                delta = event.pixelDelta().y() or event.angleDelta().y()
+                if delta < 0:
+                    self._queue_append()
+        return super().eventFilter(watched, event)

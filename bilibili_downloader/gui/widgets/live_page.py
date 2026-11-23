@@ -205,7 +205,7 @@ class LivePage(QWidget):
         self._room_stack = QStackedWidget()
         self._room_stack.addWidget(self.rooms)
         self._room_stack.addWidget(
-            EmptyState("暂无直播间", action="添加房间", callback=self.source.setFocus, workspace="live")
+            EmptyState("暂无直播间", action="添加房间", callback=self.source.setFocus, scene="live_empty")
         )
         if self._has_following:
             empty = QLabel("暂无监控的直播间")

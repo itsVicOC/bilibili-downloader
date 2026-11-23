@@ -45,7 +45,7 @@ from PySide6.QtWidgets import (
 )
 
 from bilibili_downloader.core.appearance import prepare_background
-from bilibili_downloader.core.daily_rankings import beijing_now
+from bilibili_downloader.core.daily_rankings import PUBLIC_CACHE_VERSION, beijing_now
 from bilibili_downloader.core.live_models import (
     LiveRoom,
     RecordingSegment,
@@ -224,6 +224,7 @@ def _make_main_window(workdir: Path, *, desktop_platform=None) -> MainWindow:
     # The landing page loads the daily list on first show. Seed its local
     # snapshot so the documentation capture remains independent of Bilibili.
     (workdir / "video-ranking.json").write_text(json.dumps({
+        "version": PUBLIC_CACHE_VERSION,
         "fetched_at": beijing_now().isoformat(),
         "videos": [
             {"bvid": f"BV{index:010}", "title": title, "author": "示例 UP 主", "play_text": views}

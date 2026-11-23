@@ -76,7 +76,7 @@ Path actions now sit beside the download directory, task views highlight whole r
 
 ## Download and install
 
-**`v0.9.0b5` prerelease** adds a website link to the sidebar and a Daily Top 10 to the download page. Open the original video from its cover or title, or use the download action to choose options and confirm the queue entry. Existing installations can update through the channel that includes betas. [Download 0.9.0 Beta 5](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.9.0b5) · [Changelog](CHANGELOG.md#v090b5---2026-11-23)
+**`v0.9.0b6` prerelease** expands the download page rankings to a Daily Top 100 with on-demand loading. Sign in to sort videos from followed creators by publication time or views and see followed channels in the live workspace. Existing installations can update through the channel that includes betas. [Download 0.9.0 Beta 6](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.9.0b6) · [Changelog](CHANGELOG.md#v090b6---2026-11-23)
 
 **Stable `v0.8.13`:** Fixes overseas CDN HTTP 403 download and resume failures, recording completion only after the entire stream is validated. Subtitle verification, 4:3 display copies, and the collection workspace remain available. [Download stable](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.13) · [Validation record](docs/BUILDING.md) (Chinese). Both update channels can upgrade.
 
@@ -144,7 +144,7 @@ Single parsing and batch import use the same fixed output card, with media setti
 
 Some higher-quality streams, member content, or account-specific videos require login. BiliFlow uses only playback permissions your account already has. It stops if the API returns only a preview, regional restrictions, DRM, or no complete unencrypted stream.
 
-Open the project website from the sidebar (`BiliFlow 官网`). Daily Top 10 (`每日 Top 10`) displays video cards below the download input. Select a cover or title to open the video in your browser, or use Parse for download (`解析下载`) to choose download settings. When running from source, sign in to preview the Following video ranking and the followed channels in the live workspace. Their cards have buttons for recording the current broadcast or enabling monitoring.
+Open the project website from the sidebar (`BiliFlow 官网`). Daily Top 100 (`每日 Top 100`) starts with one screen of videos below the download input. Scroll to the end or select Load more (`加载更多`) to continue browsing. Select a cover or title to open the video in your browser, or use Parse for download (`解析下载`) to choose download settings. Sign in to view the Following ranking and followed channels in the live workspace. Their cards have buttons for recording the current broadcast or enabling monitoring.
 
 See the [user guide](docs/USER_GUIDE.md) for task states, output templates, and configuration locations, or [troubleshooting](docs/TROUBLESHOOTING.md) for startup, parsing, FFmpeg, and login issues.
 

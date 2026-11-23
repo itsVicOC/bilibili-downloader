@@ -69,7 +69,10 @@ class PageSelectionDialog(WorkflowDialog):
         self.selection.reset()
         self.results = QStackedWidget()
         self.results.addWidget(self.list)
-        self.results.addWidget(EmptyState("没有匹配的分 P", "保留已选分 P，可清除搜索或查看已选。", "清除搜索", self.search.clear))
+        self.results.addWidget(EmptyState(
+            "没有匹配的分 P", "保留已选分 P，可清除搜索或查看已选。", "清除搜索", self.search.clear,
+            scene="parts_filtered",
+        ))
         # An inactive empty state must not push the range control below the fold.
         self.results.widget(1).setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
         self.body.addWidget(self.results, 1)

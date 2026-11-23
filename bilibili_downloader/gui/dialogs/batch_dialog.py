@@ -237,7 +237,9 @@ class BatchDialog(AppDialog):
         self.select_unsaved.clicked.connect(self._select_unsaved)
         filters.addWidget(self.select_unsaved)
         self._preview_card.body.insertLayout(1, filters)
-        self._preview_stack.addWidget(EmptyState("没有匹配的作品", action="清除搜索", callback=self.search.clear))
+        self._preview_stack.addWidget(
+            EmptyState("没有匹配的作品", action="清除搜索", callback=self.search.clear, scene="batch_filtered")
+        )
         self._path_preview = ElidedLabel(elide_mode=Qt.ElideMiddle)
         self._path_preview.setObjectName("MetaLabel")
         self._preview_card.body.addWidget(self._path_preview)

@@ -1,10 +1,12 @@
 """Website navigation, discovery, and personalized view state."""
 
+import sys
 from datetime import timedelta
+from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QRect, Qt
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import QPoint, QPointF, QRect, Qt
+from PySide6.QtGui import QDesktopServices, QWheelEvent
 from PySide6.QtWidgets import QLabel
 
 from bilibili_downloader.core.daily_rankings import (
@@ -35,6 +37,7 @@ def test_sidebar_website_and_help_share_default_browser_action(platform, tmp_pat
     opened = []
     monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: opened.append(url.toString()) or True)
     assert button.isVisible() and button.text() == ""
+    assert button.objectName() == window._settings_nav.objectName() == "NavButton"
     assert button.toolTip() == button.accessibleName() == "BiliFlow 官网"
     assert button.y() > window._settings_nav.y()
     assert button.geometry().bottom() < window._mode_button.y()
@@ -43,11 +46,24 @@ def test_sidebar_website_and_help_share_default_browser_action(platform, tmp_pat
     qtbot.keyClick(button, Qt.Key_Space)
     window._actions["website"].trigger()
     assert opened == ["https://1008.si/", "https://1008.si/"]
+    window.resize(1320, 800)
+    assert button.text() == "BiliFlow 官网"
 
 
-def test_packaged_build_exposes_only_verified_source(monkeypatch):
-    monkeypatch.setattr(daily_rankings.sys, "frozen", True, raising=False)
-    assert daily_rankings.enabled_ranking_tabs() == ("public",)
+def test_packaged_build_exposes_both_following_views(qtbot, tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "_MEIPASS", str(Path(__file__).resolve().parents[1]), raising=False)
+    window = MainWindow(ConfigManager(tmp_path / "config.json"), startup_paused=True)
+    qtbot.addWidget(window)
+    assert tuple(window._ranking_panel._panes) == ("public", "following")
+    assert window._live_page.following is not None
+    window._api_client.sessdata = "test-expired"
+    window._on_login_status_result(window._login_status_request_id, {"isLogin": False})
+    assert "已失效" in window._ranking_panel._panes["following"].notice.text()
+    assert "已失效" in window._live_page.following.status.text()
+    window._set_discovery_account(None)
+    assert "已失效" not in window._ranking_panel._panes["following"].notice.text()
+    assert "已失效" not in window._live_page.following.status.text()
 
 
 @pytest.mark.parametrize("dark", [False, True])
@@ -99,15 +115,18 @@ def test_video_workspace_loads_on_first_show_with_independent_actions(workspace,
     panel._tabs.setCurrentIndex(0)
     draft = bvid(99)
     workspace._url_input.setText(draft)
-    pane.expand.click()
-    assert len(pane.grid._widgets) == 10
-    qapp.processEvents()
-    last = pane.grid._widgets[-1]
-    qtbot.waitUntil(lambda: last.video_button.height() > last.cover.height())
-    workspace._workspace_scroll.ensureWidgetVisible(last, 0, 4)
-    qtbot.waitUntil(lambda: viewport.rect().contains(QRect(
-        last.mapTo(viewport, last.rect().topLeft()), last.size(),
-    )))
+    first = pane.grid._widgets[0]
+    pane.grid.more.click()
+    qtbot.waitUntil(lambda: len(pane.grid._widgets) > 3)
+    assert first is pane.grid._widgets[0]
+    last = pane.grid._widgets[3]
+    def reveal_card():
+        if not last.isVisible() or last.video_button.height() <= last.cover.height():
+            return False
+        workspace._workspace_scroll.ensureWidgetVisible(last, 0, 4)
+        return viewport.rect().contains(QRect(last.mapTo(viewport, QPoint()), last.size()))
+
+    qtbot.waitUntil(reveal_card)
     scroll = workspace._workspace_scroll.verticalScrollBar()
     position = scroll.value()
     for child in (last.cover, last.title):
@@ -115,10 +134,10 @@ def test_video_workspace_loads_on_first_show_with_independent_actions(workspace,
         target = workspace.childAt(workspace.mapFromGlobal(point))
         assert target is last.video_button
         qtbot.mouseClick(target, Qt.LeftButton, pos=target.mapFromGlobal(point))
-    assert opened == [videos[-1].url] * 2
+    assert opened == [videos[3].url] * 2
     assert parsed == [] and workspace._url_input.text() == draft
-    assert scroll.value() == position and pane.expand.isChecked()
-    pane.expand.click()
+    assert scroll.value() == position
+    scroll.setValue(0)
     qapp.processEvents()
     row = pane.grid._widgets[0]
     qapp.setActiveWindow(workspace)
@@ -166,11 +185,69 @@ def test_video_workspace_loads_on_first_show_with_independent_actions(workspace,
     assert fetches == ["video-ranking.json"]
 
 
+def test_top_100_only_creates_the_first_screen_and_appends_on_scroll(workspace, qtbot, qapp, monkeypatch):
+    videos = tuple(
+        RankedVideo(bvid(n), f"作品 {n}", "作者", str(n), cover_url=f"https://i0.hdslb.com/{n}.jpg")
+        for n in range(1, 101)
+    )
+    fetches, requested_covers = [], set()
+
+    def load(path):
+        fetches.append(path)
+        return RankingResult(RankingSnapshot(TODAY, videos))
+
+    monkeypatch.setattr(daily_rankings, "beijing_now", lambda: TODAY)
+    monkeypatch.setattr(daily_rankings, "load_public_ranking", load)
+    monkeypatch.setattr(workspace._thumbnails, "resolve", lambda urls: requested_covers.update(urls))
+    workspace.menuBar().setNativeMenuBar(False)
+    workspace.menuBar().show()
+    workspace.resize(900, 640)
+    workspace.show()
+    grid = workspace._ranking_panel._panes["public"].grid
+    viewport = workspace._workspace_scroll.viewport()
+    scroll = workspace._workspace_scroll.verticalScrollBar()
+    qtbot.waitUntil(lambda: len(grid._widgets) == 3 and len(requested_covers) == 3)
+    qapp.processEvents()
+    assert [widget.card.badge for widget in grid._widgets] == ["#1", "#2", "#3"]
+    assert requested_covers == {video.cover_url for video in videos[:3]}
+    initial = tuple(grid._widgets)
+    # The first screen can fill the viewport without creating a scrollbar.
+    end_of_first_screen = scroll.maximum()
+    if end_of_first_screen:
+        scroll.setValue(end_of_first_screen)
+    else:
+        point = viewport.rect().center()
+        event = QWheelEvent(
+            QPointF(point), QPointF(viewport.mapToGlobal(point)), QPoint(), QPoint(0, -120),
+            Qt.NoButton, Qt.NoModifier, Qt.ScrollUpdate, False,
+        )
+        qapp.sendEvent(viewport, event)
+    qtbot.waitUntil(lambda: len(grid._widgets) > 3)
+    assert tuple(grid._widgets[:3]) == initial
+    assert scroll.value() == end_of_first_screen
+    assert len(grid._widgets) < 100
+    before = len(grid._widgets)
+    qtbot.waitUntil(lambda: scroll.maximum() > end_of_first_screen)
+    scroll.setValue(scroll.maximum())
+    qtbot.waitUntil(lambda: len(grid._widgets) > before)
+    qapp.setActiveWindow(workspace)
+    grid.more.setFocus(Qt.TabFocusReason)
+    qtbot.waitUntil(grid.more.hasFocus)
+    before = len(grid._widgets)
+    qtbot.keyClick(grid.more, Qt.Key_Return)
+    assert len(grid._widgets) > before
+    while grid.more.isVisible():
+        grid.more.click()
+    assert [widget.card.key for widget in grid._widgets] == [video.url for video in videos]
+    assert grid._widgets[-1].card.badge == "#100"
+    assert len(fetches) == 1
+
+
 def test_stale_ranking_offers_retry_without_displaying_a_timestamp(qtbot, tmp_path, monkeypatch):
     video = RankedVideo(bvid(1), "上次的作品", "作者", "123")
-    prior = RankingSnapshot(TODAY - timedelta(days=1), (video,))
+    prior = RankingSnapshot(TODAY, (video,))
     updated = RankingSnapshot(TODAY, (video,))
-    loads = iter((RankingResult(prior, "暂时无法读取榜单。"), RankingResult(updated)))
+    loads = iter((RankingResult(prior, "暂时无法读取榜单。", stale=True), RankingResult(updated)))
     monkeypatch.setattr(daily_rankings, "beijing_now", lambda: TODAY)
     monkeypatch.setattr(daily_rankings, "load_public_ranking", lambda path: next(loads))
     thumbnails = ThumbnailLoader()
@@ -227,6 +304,36 @@ def test_ranked_card_actions_fit_enlarged_type(workspace, qtbot, qapp, monkeypat
     assert scroll.horizontalScrollBar().maximum() == 0
 
 
+def test_following_sort_switch_reuses_fetched_video_list(qtbot, tmp_path, monkeypatch):
+    oldest = RankedVideo(bvid(1), "更早的视频", "作者", "2万", int((TODAY - timedelta(days=3)).timestamp()))
+    latest = RankedVideo(bvid(2), "最新的视频", "作者", "500", int(TODAY.timestamp()))
+    requests = []
+
+    def load(client, cancelled):
+        requests.append(client)
+        return RankingResult(RankingSnapshot(TODAY, (oldest, latest)))
+
+    monkeypatch.setattr(daily_rankings, "beijing_now", lambda: TODAY)
+    monkeypatch.setattr(daily_rankings, "load_following_ranking", load)
+    thumbnails = ThumbnailLoader()
+    panel = daily_rankings.DailyRankingsWidget(
+        ("following",), thumbnails.pool, tmp_path / "ranking.json", thumbnails,
+    )
+    qtbot.addWidget(panel)
+    account = object()
+    panel.set_account(account)
+    panel.set_loading_enabled(True)
+    panel.show()
+    pane = panel._panes["following"]
+    qtbot.waitUntil(lambda: pane.sort.isVisible())
+    assert pane.videos == (latest, oldest)
+    pane.sort.setCurrentIndex(1)
+    assert pane.videos == (oldest, latest)
+    pane.sort.setCurrentIndex(0)
+    assert pane.videos == (latest, oldest)
+    assert requests == [account]
+
+
 def test_following_ignores_in_flight_results_from_previous_account_and_day(qtbot, tmp_path, monkeypatch):
     now = TODAY
     monkeypatch.setattr(daily_rankings, "beijing_now", lambda: now)
@@ -235,7 +342,7 @@ def test_following_ignores_in_flight_results_from_previous_account_and_day(qtbot
 
     def load(client, _cancelled):
         videos = (video,) if client is old_client else ()
-        return RankingResult(RankingSnapshot(now, videos))
+        return RankingResult(RankingSnapshot(now, videos), "展示关注动态前 5 页内的结果。")
 
     class Pool:
         def __init__(self):
@@ -258,7 +365,8 @@ def test_following_ignores_in_flight_results_from_previous_account_and_day(qtbot
     panel.set_account(new_client)
     assert pool.jobs[0].request.is_set()
     pool.jobs[1].run()
-    qtbot.waitUntil(lambda: "还没有视频投稿" in pane.notice.text())
+    qtbot.waitUntil(lambda: "没有可上榜的视频投稿" in pane.notice.text())
+    assert "前 5 页" in pane.notice.text() and pane.refresh.text() == "刷新"
     assert not pane.videos
 
     pane.refresh.click()

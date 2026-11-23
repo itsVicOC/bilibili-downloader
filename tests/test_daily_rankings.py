@@ -1,5 +1,6 @@
 """Daily ranking data, request boundaries, and partial-feed behavior."""
 
+import json
 from datetime import datetime, timedelta, timezone
 from threading import Event
 from unittest.mock import Mock
@@ -35,12 +36,12 @@ def test_public_snapshot_keeps_upstream_order_and_rolls_over_at_beijing_midnight
     elapsed = datetime(2026, 11, 23, 15, 59, tzinfo=timezone.utc)
     monkeypatch.setattr(rankings, "beijing_now", lambda: elapsed.astimezone(rankings.BEIJING))
     fetch = Mock(return_value={"list": [
-        {"bvid": bvid(n), "title": f"作品 {n}", "stat": {"view": n}} for n in range(15)
+        {"bvid": bvid(n), "title": f"作品 {n}", "stat": {"view": n}} for n in range(105)
     ]})
     monkeypatch.setattr(BilibiliAPIClient, "get_video_ranking", fetch)
     path = tmp_path / "rankings.json"
     first = rankings.load_public_ranking(path)
-    assert [entry.bvid for entry in first.snapshot.videos] == [bvid(n) for n in range(10)]
+    assert [entry.bvid for entry in first.snapshot.videos] == [bvid(n) for n in range(100)]
     assert rankings.load_public_ranking(path) == first
     fetch.assert_called_once()
 
@@ -53,6 +54,7 @@ def test_public_snapshot_keeps_upstream_order_and_rolls_over_at_beijing_midnight
         fetch.side_effect = httpx.ReadTimeout("timed out")
     stale = rankings.load_public_ranking(path)
     assert stale.snapshot == first.snapshot
+    assert stale.stale
     assert "重试" in stale.message
     if failure == "rate_limit":
         assert "限制" in stale.message
@@ -63,6 +65,26 @@ def test_public_snapshot_keeps_upstream_order_and_rolls_over_at_beijing_midnight
     assert refreshed.snapshot.day == first.snapshot.day + timedelta(days=1)
     assert rankings.load_public_ranking(path) == refreshed
     assert fetch.call_count == 3
+
+
+def test_upgrade_refreshes_even_a_same_day_top_ten_cache(tmp_path, monkeypatch):
+    monkeypatch.setattr(rankings, "beijing_now", lambda: TODAY)
+    path = tmp_path / "rankings.json"
+    path.write_text(json.dumps({
+        "fetched_at": TODAY.isoformat(),
+        "videos": [{"bvid": bvid(1), "title": "旧快照", "author": "", "play_text": ""}],
+    }), encoding="utf-8")
+    fetch = Mock(side_effect=[
+        httpx.ReadTimeout("timed out"),
+        {"list": [{"bvid": bvid(2), "title": "新快照"}]},
+    ])
+    monkeypatch.setattr(BilibiliAPIClient, "get_video_ranking", fetch)
+    fallback = rankings.load_public_ranking(path)
+    assert fallback.stale and fallback.snapshot.videos[0].bvid == bvid(1)
+    updated = rankings.load_public_ranking(path)
+    assert not updated.stale and updated.snapshot.videos[0].bvid == bvid(2)
+    assert rankings.load_public_ranking(path) == updated
+    assert fetch.call_count == 2
 
 
 def test_api_separates_public_and_authenticated_requests(monkeypatch):
@@ -91,14 +113,14 @@ def test_api_separates_public_and_authenticated_requests(monkeypatch):
         api.close()
 
 
-def test_following_filters_current_day_and_sorts_displayed_play_counts(monkeypatch):
+def test_following_includes_older_videos_and_supports_both_sort_orders(monkeypatch):
     monkeypatch.setattr(rankings, "beijing_now", lambda: TODAY)
     client = Mock()
     client.get_following_video_feed.side_effect = [
         {"has_more": True, "offset": "next", "items": [
             video_item(0, "1亿", published_at=START - 1),
             video_item(1, "1.01万"),
-            video_item(2, "10100", published_at=START + 1),
+            video_item(2, "10100", published_at=str(START + 1)),
             video_item(3, "7.9万", followed=False),
             video_item(4, "2亿", kind="DYNAMIC_TYPE_FORWARD"),
         ]},
@@ -107,15 +129,37 @@ def test_following_filters_current_day_and_sorts_displayed_play_counts(monkeypat
             video_item(5, "0.1亿"),
             video_item(6, 9000),
             video_item(7, "--"),
-            video_item(8, "2亿", published_at=START + 86400),
+            video_item(8, "2亿", published_at=str(START + 86400)),
+            video_item(9, "3亿", published_at="刚刚"),
         ]},
     ]
     result = rankings.load_following_ranking(client, Event())
-    assert [(entry.bvid, entry.play_text) for entry in result.snapshot.videos] == [
-        (bvid(5), "0.1亿"), (bvid(2), "10100"), (bvid(1), "1.01万"), (bvid(6), "9000"),
+    videos = result.snapshot.videos
+    assert [entry.bvid for entry in rankings.rank_following_videos(videos)] == [
+        bvid(2), bvid(5), bvid(1), bvid(6), bvid(0),
     ]
-    assert "部分投稿" in result.message
+    assert [(entry.bvid, entry.play_text) for entry in rankings.rank_following_videos(videos, by_plays=True)] == [
+        (bvid(0), "1亿"), (bvid(5), "0.1亿"), (bvid(2), "10100"), (bvid(1), "1.01万"), (bvid(6), "9000"),
+    ]
+    assert "可用的播放量" in result.message and "可用的发布时间" in result.message
     assert [call.args[0] for call in client.get_following_video_feed.call_args_list] == ["", "next"]
+
+
+def test_following_ranks_across_all_five_pages_before_taking_top_100(monkeypatch):
+    monkeypatch.setattr(rankings, "beijing_now", lambda: TODAY)
+    client = Mock()
+    client.get_following_video_feed.side_effect = [
+        {"has_more": True, "offset": str(page), "items": [
+            video_item(n, n) for n in range(page * 21, (page + 1) * 21)
+        ]}
+        for page in range(5)
+    ]
+    result = rankings.load_following_ranking(client, Event())
+    assert [video.bvid for video in rankings.rank_following_videos(result.snapshot.videos, by_plays=True)] == [
+        bvid(n) for n in range(104, 4, -1)
+    ]
+    assert client.get_following_video_feed.call_count == 5
+    assert "前 5 页" in result.message
 
 
 @pytest.mark.parametrize("stop", ["last", "limit", "duplicate", "network", "rate_limit", "expired"])

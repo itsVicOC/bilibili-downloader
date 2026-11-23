@@ -47,9 +47,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from bilibili_downloader.core.builtin_backgrounds import BUILTIN_BACKGROUNDS
 from bilibili_downloader.gui.layout_policy import path_preferred_width
-from bilibili_downloader.gui.resources.paths import background_path
+from bilibili_downloader.gui.resources.paths import asset_path
 from bilibili_downloader.gui.resources.styles import (
     UI_METRICS,
     background_reading_alpha,
@@ -1131,41 +1130,33 @@ class Notice(QFrame):
         return super().event(event)
 
 
-class StarArt(QWidget):
-    """Small scalable brand illustration for all empty states."""
+class MascotIllustration(QWidget):
+    """Decorative, scene-specific pixel art for an empty state."""
 
-    def __init__(self, parent=None, *, workspace=None):
+    _WIDE_SCENES = {
+        "download_source", "live_empty", "downloads_empty",
+        "recordings_empty", "recording_history_empty", "files_empty",
+    }
+
+    def __init__(self, scene, parent=None):
         super().__init__(parent)
-        entry = next((item for item in BUILTIN_BACKGROUNDS if item.workspace == workspace and item.style == "anime"), None)
-        path = background_path(entry.reference, thumbnail=True) if entry is not None else None
-        self.art = QPixmap(str(path)) if path is not None else QPixmap()
-        self.setFixedSize(QSize(112, 72) if self.art.isNull() else QSize(176, 99))
+        self.scene = scene
+        self.art = QPixmap(asset_path(f"xiaoliu_state_{scene}.png"))
+        if self.art.size() != QSize(96, 54):
+            self.art = QPixmap(asset_path("xiaoliu.png"))
+        self.setFixedSize(QSize(176, 99) if scene in self._WIDE_SCENES else QSize(112, 72))
         self.setFocusPolicy(Qt.NoFocus)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
 
-    def paintEvent(self, event):
-        if not self.art.isNull() and wallpaper_active(self):
+    def paintEvent(self, _event):
+        if self.art.isNull():
             return
+        size = self.art.size().scaled(self.size(), Qt.KeepAspectRatio)
+        target = QRect(0, 0, size.width(), size.height())
+        target.moveCenter(self.rect().center())
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        p = palette()
-        if not self.art.isNull():
-            frame = QRectF(self.rect()).adjusted(.5, .5, -.5, -.5)
-            clip = QPainterPath()
-            clip.addRoundedRect(frame, 16, 16)
-            painter.save()
-            painter.setClipPath(clip)
-            painter.setRenderHint(QPainter.SmoothPixmapTransform)
-            painter.drawPixmap(frame, self.art, QRectF(self.art.rect()))
-            painter.restore()
-            painter.setPen(QPen(QColor(p.card_border), 1))
-            painter.drawPath(clip)
-            painter.end()
-            return
-        painter.setPen(QPen(QColor(p.border), 1))
-        painter.drawEllipse(8, 20, 96, 30)
-        painter.setPen(QPen(QColor(p.accent), 1.5))
-        painter.drawEllipse(28, 5, 56, 58)
-        painter.drawPixmap(40, 20, line_icon("star", p.accent, 32).pixmap(32, 32))
+        painter.setRenderHint(QPainter.SmoothPixmapTransform, False)
+        painter.drawPixmap(target, self.art)
         painter.end()
 
 
@@ -1198,13 +1189,13 @@ class InlineNotice(QWidget):
 
 
 class EmptyState(QWidget):
-    def __init__(self, title, description="", action="", callback=None, parent=None, *, workspace=None):
+    def __init__(self, title, description="", action="", callback=None, parent=None, *, scene):
         super().__init__(parent)
         column = QVBoxLayout(self)
         column.setContentsMargins(20, 20, 20, 20)
         column.setSpacing(8)
         column.addStretch()
-        column.addWidget(StarArt(workspace=workspace), alignment=Qt.AlignCenter)
+        column.addWidget(MascotIllustration(scene), alignment=Qt.AlignCenter)
         if title:
             title_label = QLabel(title)
             title_label.setObjectName("SectionTitle")

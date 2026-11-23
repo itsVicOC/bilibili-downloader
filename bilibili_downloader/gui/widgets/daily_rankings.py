@@ -1,6 +1,5 @@
 """On-demand video discovery for the download workspace."""
 
-import sys
 from datetime import timedelta
 from pathlib import Path
 from threading import Event
@@ -8,6 +7,7 @@ from threading import Event
 from PySide6.QtCore import Qt, QTimer, QUrl, Signal, Slot
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
+    QComboBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -18,25 +18,21 @@ from PySide6.QtWidgets import (
 
 from bilibili_downloader.api.endpoints import FOLLOWING_FEED_PAGE, VIDEO_RANKING_PAGE
 from bilibili_downloader.core.daily_rankings import (
+    RANKING_SIZE,
     RankingResult,
     beijing_now,
     load_following_ranking,
     load_public_ranking,
+    rank_following_videos,
 )
 from bilibili_downloader.gui.widgets.components import WorkspaceTabBar
 from bilibili_downloader.gui.widgets.discovery_cards import (
     DiscoveryCard,
-    DiscoveryGrid,
     DiscoveryJob,
+    ProgressiveDiscoveryGrid,
 )
 
-# Add a source to packaged builds after it passes live desktop verification.
-PACKAGED_RANKING_TABS = ("public",)
 TAB_TITLES = {"public": "全站榜", "following": "关注榜"}
-
-
-def enabled_ranking_tabs():
-    return PACKAGED_RANKING_TABS if getattr(sys, "frozen", False) else tuple(TAB_TITLES)
 
 
 class _RankingPane(QWidget):
@@ -53,11 +49,15 @@ class _RankingPane(QWidget):
         actions.setSpacing(6)
         self.refresh = QPushButton("刷新" if kind == "following" else "重试")
         self.login = QPushButton("登录 B 站")
-        self.expand = QPushButton("查看全部")
-        self.expand.setCheckable(True)
-        for button in (self.refresh, self.expand):
-            button.setObjectName("DiscoveryHeaderAction")
-            actions.addWidget(button)
+        self.sort = None
+        if kind == "following":
+            self.sort = QComboBox()
+            self.sort.setAccessibleName("关注榜排序")
+            self.sort.addItem("最新发布", False)
+            self.sort.addItem("播放最多", True)
+            actions.addWidget(self.sort)
+        self.refresh.setObjectName("DiscoveryHeaderAction")
+        actions.addWidget(self.refresh)
         self.notice_bar = QWidget()
         notice_layout = QHBoxLayout(self.notice_bar)
         notice_layout.setContentsMargins(0, 0, 0, 0)
@@ -77,11 +77,7 @@ class _RankingPane(QWidget):
         self.source.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(page)))
         notice_layout.addWidget(self.source)
         layout.addWidget(self.notice_bar)
-        self.grid = DiscoveryGrid(thumbnails)
-        self.grid.can_expand.connect(self.expand.setVisible)
-        self.expand.hide()
-        self.expand.toggled.connect(self.grid.set_expanded)
-        self.expand.toggled.connect(lambda expanded: self.expand.setText("收起" if expanded else "查看全部"))
+        self.grid = ProgressiveDiscoveryGrid(thumbnails)
         layout.addWidget(self.grid)
         self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Maximum)
 
@@ -110,6 +106,7 @@ class DailyRankingsWidget(QWidget):
         self._pool = pool
         self._cache_path = cache_path
         self._client = None
+        self._account_expired = False
         self._pending = {}
         self._results = {}
         self._day = beijing_now().date()
@@ -125,7 +122,7 @@ class DailyRankingsWidget(QWidget):
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(10)
-        heading = QLabel("每日 Top 10")
+        heading = QLabel(f"每日 Top {RANKING_SIZE}")
         heading.setObjectName("SectionTitle")
         header_layout.addWidget(heading)
         self._tabs = WorkspaceTabBar()
@@ -136,6 +133,8 @@ class DailyRankingsWidget(QWidget):
         for kind in tabs:
             pane = _RankingPane(kind, thumbnails)
             pane.refresh.clicked.connect(lambda _checked=False, tab=kind: self._request(tab, refresh=True))
+            if pane.sort is not None:
+                pane.sort.currentIndexChanged.connect(lambda _: self._present("following"))
             pane.login.clicked.connect(self.login_requested.emit)
             pane.grid.action_requested.connect(self.parse_requested.emit)
             pane.grid.video_requested.connect(self.open_video_requested.emit)
@@ -167,10 +166,11 @@ class DailyRankingsWidget(QWidget):
         super().showEvent(event)
         self._show_current_tab()
 
-    def set_account(self, client):
-        if client is self._client:
+    def set_account(self, client, *, expired=False):
+        if client is self._client and expired == self._account_expired:
             return
         self._client = client
+        self._account_expired = expired
         self._clear_following()
         if self.isVisible() and self._current_pane() is self._panes.get("following"):
             self._request("following")
@@ -224,7 +224,7 @@ class DailyRankingsWidget(QWidget):
         result = self._results.get(kind, RankingResult())
         if kind == "following" and (self._client is None or result.login_required):
             return
-        if result.snapshot and result.snapshot.day == self._day and not (refresh and kind == "following"):
+        if result.snapshot and result.snapshot.day == self._day and not result.stale and not refresh:
             return
 
         request = Event()
@@ -244,9 +244,9 @@ class DailyRankingsWidget(QWidget):
         if request is not self._pending.get(kind):
             return
         self._pending.pop(kind)
-        previous = self._results.get(kind, RankingResult()).snapshot
-        if not result.snapshot and not result.login_required and previous:
-            result = RankingResult(previous, result.message)
+        previous = self._results.get(kind, RankingResult())
+        if not result.snapshot and not result.login_required and previous.snapshot:
+            result = RankingResult(previous.snapshot, result.message, stale=previous.stale)
         self._results[kind] = result
         self._present(kind)
 
@@ -257,26 +257,33 @@ class DailyRankingsWidget(QWidget):
         following = kind == "following"
         login_required = following and (self._client is None or result.login_required)
         snapshot = result.snapshot
-        stale = snapshot is not None and snapshot.day != self._day
+        stale = snapshot is not None and (snapshot.day != self._day or result.stale)
         messages = []
         if stale:
             messages.append("显示上次榜单。")
-        if following and snapshot and not snapshot.videos and not result.message:
-            messages.append("今天的关注动态还没有视频投稿。")
+        if following and snapshot and not snapshot.videos and not pending:
+            messages.append("已读取的关注动态中没有可上榜的视频投稿。")
         if result.message and not pending:
             messages.append(result.message)
         if pending:
             messages.append("正在加载榜单…")
         elif login_required and not result.message:
-            messages.append("请登录 B 站后查看关注榜。")
+            messages.append(
+                "B 站登录已失效，请重新登录后查看关注榜。"
+                if self._account_expired else "请登录 B 站后查看关注榜。"
+            )
         pane.notice.setText("".join(messages))
         pane.notice_bar.setVisible(bool(messages))
         had_cards = bool(pane.videos)
-        pane.set_videos(snapshot.videos if snapshot else ())
+        videos = snapshot.videos if snapshot else ()
+        if pane.sort is not None:
+            pane.sort.setVisible(bool(videos))
+            videos = rank_following_videos(videos, by_plays=pane.sort.currentData())
+        pane.set_videos(videos)
         if had_cards != bool(pane.videos) and pane is self._current_pane():
             self.cards_changed.emit()
         pane.login.setVisible(login_required)
-        pane.refresh.setText("重试" if result.message or not following else "刷新")
+        pane.refresh.setText("刷新" if following and (snapshot or not result.message) else "重试")
         pane.refresh.setVisible(not login_required and (following or not snapshot or stale))
         pane.refresh.setEnabled(not pending)
         pane.source.setVisible(bool(result.message and not pending) or login_required)

@@ -1,4 +1,4 @@
-"""Retrieve a daily public snapshot and rank today's signed-in video feed."""
+"""Retrieve the daily public snapshot and the signed-in account's video feed."""
 
 import json
 import logging
@@ -18,7 +18,8 @@ from bilibili_downloader.utils.validators import extract_bvid
 logger = logging.getLogger(__name__)
 
 BEIJING = timezone(timedelta(hours=8))
-RANKING_SIZE = 10
+RANKING_SIZE = 100
+PUBLIC_CACHE_VERSION = 2
 MAX_FEED_PAGES = 5
 PLAY_COUNT = re.compile(r"([0-9]+(?:\.[0-9]+)?)([万亿]?)")
 PLAY_UNITS = {"": 1, "万": 10_000, "亿": 100_000_000}
@@ -54,6 +55,7 @@ class RankingResult:
     snapshot: RankingSnapshot | None = None
     message: str = ""
     login_required: bool = False
+    stale: bool = False
 
 
 def beijing_now() -> datetime:
@@ -90,6 +92,14 @@ def _duration_text(value) -> str:
     return _text(value)
 
 
+def rank_following_videos(videos: tuple[RankedVideo, ...], *, by_plays=False) -> tuple[RankedVideo, ...]:
+    def rank(video):
+        recent, plays = -video.published_at, -_play_count(video.play_text)
+        return (plays, recent, video.bvid) if by_plays else (recent, plays, video.bvid)
+
+    return tuple(sorted(videos, key=rank)[:RANKING_SIZE])
+
+
 def _error_result(error: Exception, *, following=False) -> RankingResult:
     if isinstance(error, BilibiliAPIError):
         code = error.code
@@ -98,18 +108,19 @@ def _error_result(error: Exception, *, following=False) -> RankingResult:
     else:
         code = None
     if following and code in (-101, 401):
-        return RankingResult(message="请登录 B 站后查看关注榜。", login_required=True)
+        return RankingResult(message="B 站登录已失效，请重新登录后查看关注榜。", login_required=True)
     if code in (403, 412, 429, -352, -412, -509):
         return RankingResult(message="B 站暂时限制了榜单请求，请稍后重试。")
     return RankingResult(message="暂时无法读取榜单，请重试或打开 B 站查看。")
 
 
-def _read_public_snapshot(path: Path) -> RankingSnapshot | None:
+def _read_public_snapshot(path: Path) -> tuple[RankingSnapshot | None, bool]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
         fetched_at = datetime.fromisoformat(payload["fetched_at"])
+        current_format = payload.get("version") == PUBLIC_CACHE_VERSION
         if fetched_at.tzinfo is None or not 1 <= len(payload["videos"]) <= RANKING_SIZE:
-            return None
+            return None, False
         videos = tuple(RankedVideo(**item) for item in payload["videos"])
         if any(
             extract_bvid(video.bvid) != video.bvid
@@ -121,16 +132,16 @@ def _read_public_snapshot(path: Path) -> RankingSnapshot | None:
             or video.published_at != 0
             for video in videos
         ):
-            return None
-        return RankingSnapshot(fetched_at, videos)
+            return None, False
+        return RankingSnapshot(fetched_at, videos), current_format
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
-        return None
+        return None, False
 
 
 def load_public_ranking(path: Path) -> RankingResult:
-    cached = _read_public_snapshot(path)
+    cached, current_format = _read_public_snapshot(path)
     today = beijing_now().date()
-    if cached is not None and cached.day == today:
+    if current_format and cached is not None and cached.day == today:
         return RankingResult(cached)
     try:
         entries = BilibiliAPIClient.get_video_ranking()["list"]
@@ -155,12 +166,13 @@ def load_public_ranking(path: Path) -> RankingResult:
         if not videos:
             raise ValueError("empty ranking")
     except (httpx.HTTPError, BilibiliAPIError, AttributeError, KeyError, TypeError, ValueError) as error:
-        stale = cached if cached is not None and cached.day < today else None
-        return RankingResult(stale, _error_result(error).message)
+        stale = cached if cached is not None and cached.day <= today else None
+        return RankingResult(stale, _error_result(error).message, stale=stale is not None)
 
     snapshot = RankingSnapshot(beijing_now(), tuple(videos))
     try:
         atomic_json(path, {
+            "version": PUBLIC_CACHE_VERSION,
             "fetched_at": snapshot.fetched_at.isoformat(),
             "videos": [asdict(video) for video in snapshot.videos],
         })
@@ -170,14 +182,14 @@ def load_public_ranking(path: Path) -> RankingResult:
 
 
 def load_following_ranking(client: BilibiliAPIClient, cancelled: Event) -> RankingResult:
-    start = beijing_now().replace(hour=0, minute=0, second=0, microsecond=0)
-    start_ts = int(start.timestamp())
-    end_ts = int((start + timedelta(days=1)).timestamp())
+    start = beijing_now()
+    newest_ts = int(start.timestamp())
     videos: dict[str, RankedVideo] = {}
     offset = ""
     seen_offsets = set()
     message = ""
     missing_counts = False
+    missing_timestamps = False
     for page in range(1, MAX_FEED_PAGES + 1):
         if cancelled.is_set():
             return RankingResult()
@@ -201,8 +213,13 @@ def load_following_ranking(client: BilibiliAPIClient, cancelled: Event) -> Ranki
                 continue
             modules = _object(item.get("modules"))
             author = _object(modules.get("module_author"))
+            if author.get("following") is not True:
+                continue
             pub_ts = author.get("pub_ts")
-            if author.get("following") is not True or type(pub_ts) is not int or not start_ts <= pub_ts < end_ts:
+            if isinstance(pub_ts, str) and re.fullmatch(r"[0-9]{1,12}", pub_ts):
+                pub_ts = int(pub_ts)
+            if type(pub_ts) is not int or not 0 < pub_ts <= newest_ts:
+                missing_timestamps = True
                 continue
             dynamic = _object(modules.get("module_dynamic"))
             archive = _object(_object(dynamic.get("major")).get("archive"))
@@ -231,11 +248,9 @@ def load_following_ranking(client: BilibiliAPIClient, cancelled: Event) -> Ranki
 
     if missing_counts:
         message = f"{message}部分投稿缺少可用的播放量。"
-    ranked = sorted(
-        videos.values(),
-        key=lambda video: (-_play_count(video.play_text), -video.published_at, video.bvid),
-    )
+    if missing_timestamps:
+        message = f"{message}部分投稿缺少可用的发布时间。"
     fetched_at = beijing_now()
     if fetched_at.date() != start.date():
         return RankingResult(message="北京时间已跨天，请刷新关注榜。")
-    return RankingResult(RankingSnapshot(fetched_at, tuple(ranked[:RANKING_SIZE])), message)
+    return RankingResult(RankingSnapshot(fetched_at, tuple(videos.values())), message)

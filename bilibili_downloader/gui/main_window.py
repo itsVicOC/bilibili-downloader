@@ -99,6 +99,7 @@ from bilibili_downloader.gui.widgets.components import (
     FieldRow,
     IconButton,
     InlineNotice,
+    MascotIllustration,
     MessageBox,
     Notice,
     OutputActionBar,
@@ -106,15 +107,14 @@ from bilibili_downloader.gui.widgets.components import (
     PopupMenu,
     ResponsiveFields,
     SectionCard,
-    StarArt,
     WindowDragSurface,
     help_text,
     repolish,
     scroll_area,
 )
 from bilibili_downloader.gui.widgets.daily_rankings import (
+    TAB_TITLES,
     DailyRankingsWidget,
-    enabled_ranking_tabs,
 )
 from bilibili_downloader.gui.widgets.discovery_cards import ThumbnailLoader
 from bilibili_downloader.gui.widgets.download_configuration import (
@@ -129,7 +129,6 @@ from bilibili_downloader.gui.widgets.download_options import (
 )
 from bilibili_downloader.gui.widgets.hero_panel import HeroPanel
 from bilibili_downloader.gui.widgets.library_page import LibraryPage
-from bilibili_downloader.gui.widgets.live_following import live_following_enabled
 from bilibili_downloader.gui.widgets.live_page import LivePage
 from bilibili_downloader.gui.widgets.pixel_mascot import MascotCard
 from bilibili_downloader.gui.widgets.task_page import TaskPage
@@ -201,7 +200,6 @@ class MainWindow(QMainWindow):
         self._account_state = "unknown"
         self._account_dialog = None
         self._ranking_panel = None
-        self._ranking_tabs = enabled_ranking_tabs()
         self._removed_task_records = []
         self._download_attempts = {}
         self._retry_pending = {}
@@ -334,7 +332,7 @@ class MainWindow(QMainWindow):
         self._settings_nav = IconButton("设置", "settings", "NavButton")
         self._settings_nav.clicked.connect(self._on_settings_triggered)
         self._side_layout.addWidget(self._settings_nav)
-        self._website_button = IconButton("BiliFlow 官网", "external", "SidebarAction")
+        self._website_button = IconButton("BiliFlow 官网", "external", "NavButton")
         self._side_layout.addWidget(self._website_button)
         self._side_layout.addStretch()
         self._mascot_card = MascotCard(self._sidebar)
@@ -372,7 +370,7 @@ class MainWindow(QMainWindow):
             self._confirm_copyright_acknowledgement,
             self,
             self._live_controller,
-            discovery_pool=self._service_pool if live_following_enabled() else None,
+            discovery_pool=self._service_pool,
             thumbnails=self._thumbnails,
         )
         if self._live_page.following is not None:
@@ -466,7 +464,7 @@ class MainWindow(QMainWindow):
         self._url_input.setAccessibleName("视频链接或作品编号")
         self._url_input.returnPressed.connect(self._on_resolve_clicked)
         self._url_input.textChanged.connect(self._source_changed)
-        self._empty_download = StarArt(workspace="download")
+        self._empty_download = MascotIllustration("download_source")
         self._empty_download.setFixedSize(112, 63)
         row.addWidget(self._empty_download)
         row.addWidget(self._url_input, 1)
@@ -495,7 +493,6 @@ class MainWindow(QMainWindow):
         self._return_to_rankings = QPushButton("返回榜单")
         self._return_to_rankings.setObjectName("TextButton")
         self._return_to_rankings.clicked.connect(self._reset_download_source)
-        self._return_to_rankings.setVisible(bool(self._ranking_tabs))
         summary.addWidget(self._return_to_rankings)
         self._workspace_layout.addWidget(self._resolved_source_row)
         self._resolve_notice = Notice(callback=self._route_current_source)
@@ -510,17 +507,16 @@ class MainWindow(QMainWindow):
         self._build_output_card()
         self._workspace_layout.addWidget(self._content_section)
         self._content_section.hide()
-        if self._ranking_tabs:
-            self._ranking_panel = DailyRankingsWidget(
-                self._ranking_tabs, self._service_pool,
-                self._config.data_dir / "video-ranking.json", self._thumbnails,
-            )
-            self._ranking_panel.set_account(self._api_client if self._api_client.sessdata else None)
-            self._ranking_panel.login_requested.connect(self._on_login_triggered)
-            self._ranking_panel.parse_requested.connect(self._parse_ranked_video)
-            self._ranking_panel.open_video_requested.connect(self._open_ranked_video)
-            self._ranking_panel.cards_changed.connect(self._sync_download_art)
-            self._workspace_layout.addWidget(self._ranking_panel)
+        self._ranking_panel = DailyRankingsWidget(
+            TAB_TITLES, self._service_pool,
+            self._config.data_dir / "video-ranking.json", self._thumbnails,
+        )
+        self._ranking_panel.set_account(self._api_client if self._api_client.sessdata else None)
+        self._ranking_panel.login_requested.connect(self._on_login_triggered)
+        self._ranking_panel.parse_requested.connect(self._parse_ranked_video)
+        self._ranking_panel.open_video_requested.connect(self._open_ranked_video)
+        self._ranking_panel.cards_changed.connect(self._sync_download_art)
+        self._workspace_layout.addWidget(self._ranking_panel)
         self._workspace_layout.addStretch()
         self._download_tabs.addTab(body, "单个解析")
         self._batch_page = BatchDialog(
@@ -1429,11 +1425,11 @@ class MainWindow(QMainWindow):
         if not QDesktopServices.openUrl(QUrl(WEBSITE_URL)):
             self._status_bar.showMessage("无法打开浏览器，请访问 1008.si。")
 
-    def _set_discovery_account(self, client):
+    def _set_discovery_account(self, client, *, expired=False):
         if self._ranking_panel is not None:
-            self._ranking_panel.set_account(client)
+            self._ranking_panel.set_account(client, expired=expired)
         if self._live_page.following is not None:
-            self._live_page.following.set_account(client)
+            self._live_page.following.set_account(client, expired=expired)
 
     def _parse_ranked_video(self, url):
         if self._resolve_btn.isEnabled() and self._show_workspace(0):
@@ -2777,7 +2773,7 @@ class MainWindow(QMainWindow):
         else:
             self._account_state = "expired"
             self._thumbnails.clear()
-            self._set_discovery_account(None)
+            self._set_discovery_account(None, expired=bool(self._api_client.sessdata))
             self._set_login_status_label("未登录", "MutedLabel")
         self._sync_account_dialog()
 

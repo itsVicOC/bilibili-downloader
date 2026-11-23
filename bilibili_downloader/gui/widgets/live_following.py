@@ -1,6 +1,5 @@
 """Account-scoped discovery for followed Bilibili live rooms."""
 
-import sys
 from dataclasses import dataclass
 from threading import Event
 
@@ -16,18 +15,12 @@ from bilibili_downloader.gui.widgets.discovery_cards import (
     DiscoveryJob,
 )
 
-# Open to packaged builds after verifying both live and offline pages with an account.
-PACKAGED_LIVE_FOLLOWING = False
 ACTIVE_STATES = {
     "preparing": "active", "queued": "warning", "recording": "active",
     "reconnecting": "warning", "finalizing": "active",
 }
 ROOM_STATUS = {-1: "状态未知", 0: "未开播", 1: "直播中", 2: "轮播"}
 ROOM_TONES = {-1: "warning", 0: "muted", 1: "active", 2: "warning"}
-
-
-def live_following_enabled():
-    return PACKAGED_LIVE_FOLLOWING or not getattr(sys, "frozen", False)
 
 
 @dataclass(frozen=True)
@@ -48,8 +41,8 @@ def load_followed_rooms(cookies, page):
             exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
         )
         if code in (-101, 401):
-            return FollowedRoomsPage(error="请登录 B 站后查看关注的 UP 主。", login_required=True)
-        if code in (-352, -412, -509, 412, 429):
+            return FollowedRoomsPage(error="B 站登录已失效，请重新登录后查看关注的 UP 主。", login_required=True)
+        if code in (-352, -412, -509, 403, 412, 429):
             return FollowedRoomsPage(error="B 站暂时限制了关注列表请求，请稍后重试。")
         return FollowedRoomsPage(error="无法读取关注列表，请重试。")
     finally:
@@ -67,6 +60,7 @@ class LiveFollowingWidget(QWidget):
         self._controller = controller
         self._pool = pool
         self._account = None
+        self._account_expired = False
         self._request = None
         self._loading_enabled = False
         self._page = 0
@@ -126,13 +120,14 @@ class LiveFollowingWidget(QWidget):
             self._request = None
             self._present()
 
-    def set_account(self, account):
-        if self._account is account:
+    def set_account(self, account, *, expired=False):
+        if self._account is account and expired == self._account_expired:
             return
         if self._request:
             self._request.set()
             self._request = None
         self._account = account
+        self._account_expired = expired
         self._page = 0
         had_rooms = bool(self._rooms)
         self._rooms.clear()
@@ -222,8 +217,11 @@ class LiveFollowingWidget(QWidget):
         message = self._error
         if self._request is not None:
             message = "正在读取关注的直播间…"
-        elif login:
-            message = "登录 B 站后查看关注的直播间。"
+        elif login and not message:
+            message = (
+                "B 站登录已失效，请重新登录后查看关注的 UP 主。"
+                if self._account_expired else "登录 B 站后查看关注的直播间。"
+            )
         elif self._page and not self._rooms and not message:
             message = "当前关注列表中没有直播间。"
         self.status.setText(message)

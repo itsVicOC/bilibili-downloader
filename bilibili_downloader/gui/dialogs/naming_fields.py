@@ -43,7 +43,10 @@ class NamingFieldDialog(WorkflowDialog):
             self.table.setItem(row, 1, QTableWidgetItem("{" + key + "}"))
         self.results = QStackedWidget()
         self.results.addWidget(self.table)
-        self.results.addWidget(EmptyState("没有匹配的字段", "可搜索作品名、作者、分 P 等中文关键词。", "清除搜索", self.search.clear))
+        self.results.addWidget(EmptyState(
+            "没有匹配的字段", "可搜索作品名、作者、分 P 等中文关键词。", "清除搜索", self.search.clear,
+            scene="naming_filtered",
+        ))
         self.body.addWidget(self.results, 1)
         self.search.textChanged.connect(self.filter)
         self.table.itemSelectionChanged.connect(self._selection)
