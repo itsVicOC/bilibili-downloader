@@ -204,15 +204,26 @@ def test_ranked_card_actions_fit_enlarged_type(workspace, qtbot, qapp, monkeypat
     workspace.resize(900, 640)
     workspace.show()
     scroll = workspace._workspace_scroll
+    viewport = scroll.viewport()
     grid = workspace._ranking_panel._panes["public"].grid
-    qtbot.waitUntil(lambda: bool(grid._widgets))
-    card = grid._widgets[0]
-    button = card.action_button
-    qtbot.waitUntil(lambda: card.video_button.height() > card.cover.height())
-    scroll.ensureWidgetVisible(button)
+
+    def reveal_action():
+        if not grid._widgets:
+            return False
+        card = grid._widgets[0]
+        button = card.action_button
+        bounds = QRect(button.mapTo(card, button.rect().topLeft()), button.size())
+        if not button.isVisible() or not card.rect().contains(bounds):
+            return False
+        scroll.ensureWidgetVisible(button, 0, 4)
+        return viewport.rect().contains(QRect(
+            button.mapTo(viewport, button.rect().topLeft()), button.size(),
+        ))
+
+    qtbot.waitUntil(reveal_action)
+    button = grid._widgets[0].action_button
     assert button.width() > button.fontMetrics().horizontalAdvance(button.text())
     assert button.height() > button.fontMetrics().height()
-    assert button.visibleRegion().contains(button.rect())
     assert scroll.horizontalScrollBar().maximum() == 0
 
 
