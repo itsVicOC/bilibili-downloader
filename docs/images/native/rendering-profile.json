@@ -4,6 +4,7 @@
   "backend": "cocoa",
   "logical_dpi": 72.0,
   "device_pixel_ratio": 2.0,
+  "scale_factor": "system",
   "available_screen": [
     0,
     30,
@@ -19,22 +20,23 @@
       ],
       "body_font": {
         "family": "PingFang SC",
-        "pixels": 14
+        "pixels": 14,
+        "line_height": 19.578125
       },
       "title_font": {
         "family": "PingFang SC",
-        "pixels": 24
+        "pixels": 18
       },
       "field": [
-        221,
-        517,
-        620,
+        185,
+        155,
+        290,
         40
       ],
       "popup": [
-        221,
-        561,
-        620,
+        185,
+        199,
+        290,
         334
       ],
       "inside_screen": true,
@@ -48,22 +50,23 @@
       ],
       "body_font": {
         "family": "PingFang SC",
-        "pixels": 14
+        "pixels": 14,
+        "line_height": 19.578125
       },
       "title_font": {
         "family": "PingFang SC",
-        "pixels": 24
+        "pixels": 18
       },
       "field": [
-        357,
-        637,
-        704,
+        321,
+        388,
+        332,
         40
       ],
       "popup": [
-        357,
-        299,
-        704,
+        321,
+        432,
+        332,
         334
       ],
       "inside_screen": true,
@@ -77,22 +80,23 @@
       ],
       "body_font": {
         "family": "PingFang SC",
-        "pixels": 14
+        "pixels": 14,
+        "line_height": 19.578125
       },
       "title_font": {
         "family": "PingFang SC",
-        "pixels": 24
+        "pixels": 18
       },
       "field": [
-        955,
-        503,
-        316,
+        1061,
+        279,
+        218,
         40
       ],
       "popup": [
-        955,
-        547,
-        316,
+        1061,
+        323,
+        218,
         334
       ],
       "inside_screen": true,
@@ -106,22 +110,23 @@
       ],
       "body_font": {
         "family": "PingFang SC",
-        "pixels": 14
+        "pixels": 14,
+        "line_height": 19.578125
       },
       "title_font": {
         "family": "PingFang SC",
-        "pixels": 24
+        "pixels": 18
       },
       "field": [
-        221,
-        517,
-        620,
+        185,
+        370,
+        290,
         40
       ],
       "popup": [
-        221,
-        561,
-        620,
+        185,
+        414,
+        290,
         334
       ],
       "inside_screen": true,
@@ -135,22 +140,23 @@
       ],
       "body_font": {
         "family": "PingFang SC",
-        "pixels": 14
+        "pixels": 14,
+        "line_height": 19.578125
       },
       "title_font": {
         "family": "PingFang SC",
-        "pixels": 24
+        "pixels": 18
       },
       "field": [
-        357,
-        637,
-        704,
+        321,
+        388,
+        332,
         40
       ],
       "popup": [
-        357,
-        299,
-        704,
+        321,
+        432,
+        332,
         334
       ],
       "inside_screen": true,
@@ -164,22 +170,23 @@
       ],
       "body_font": {
         "family": "PingFang SC",
-        "pixels": 14
+        "pixels": 14,
+        "line_height": 19.578125
       },
       "title_font": {
         "family": "PingFang SC",
-        "pixels": 24
+        "pixels": 18
       },
       "field": [
-        955,
-        503,
-        316,
+        1061,
+        279,
+        218,
         40
       ],
       "popup": [
-        955,
-        547,
-        316,
+        1061,
+        323,
+        218,
         334
       ],
       "inside_screen": true,

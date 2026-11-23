@@ -111,7 +111,8 @@ def _error_result(error: Exception, *, following=False) -> RankingResult:
         return RankingResult(message="B 站登录已失效，请重新登录后查看关注榜。", login_required=True)
     if code in (403, 412, 429, -352, -412, -509):
         return RankingResult(message="B 站暂时限制了榜单请求，请稍后重试。")
-    return RankingResult(message="暂时无法读取榜单，请重试或打开 B 站查看。")
+    message = "暂时无法读取关注榜，请重试。" if following else "暂时无法读取榜单，请重试或打开 B 站查看。"
+    return RankingResult(message=message)
 
 
 def _read_public_snapshot(path: Path) -> tuple[RankingSnapshot | None, bool]:
@@ -243,9 +244,6 @@ def load_following_ranking(client: BilibiliAPIClient, cancelled: Event) -> Ranki
             message = f"分页在第 {page} 页结束，展示已读取的结果。"
             break
         seen_offsets.add(offset)
-    else:
-        message = f"展示关注动态前 {MAX_FEED_PAGES} 页内的结果。"
-
     if missing_counts:
         message = f"{message}部分投稿缺少可用的播放量。"
     if missing_timestamps:

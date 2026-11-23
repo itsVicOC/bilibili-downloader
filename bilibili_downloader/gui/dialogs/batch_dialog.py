@@ -158,14 +158,10 @@ class BatchDialog(AppDialog):
         self._url_text.textChanged.connect(self._refresh_input_count)
         self._input_card.body.addWidget(self._url_text)
         input_row = QHBoxLayout()
-        hint = QLabel("")
-        self._input_hint = hint
-        hint.setObjectName("MetaLabel")
-        hint.hide()
-        input_row.addWidget(hint, 1)
-        self._resolve_btn = QPushButton("解析并预览")
+        input_row.addStretch()
+        self._resolve_btn = QPushButton("解析预览")
         self._resolve_btn.setObjectName("PrimaryButton")
-        self._resolve_btn.setProperty("batchAction", True)
+        self._resolve_btn.setToolTip("解析输入的来源并预览可导入的作品")
         self._resolve_btn.clicked.connect(self._start_resolve)
         input_row.addWidget(self._resolve_btn)
         self._input_card.body.addLayout(input_row)
@@ -319,7 +315,6 @@ class BatchDialog(AppDialog):
 
     def _toggle_input(self, collapsed):
         self._url_text.setVisible(not collapsed)
-        self._input_hint.hide()
         self._resolve_btn.setVisible(not collapsed)
         self._source_summary.setVisible(collapsed)
         self._count_label.setVisible(not collapsed)

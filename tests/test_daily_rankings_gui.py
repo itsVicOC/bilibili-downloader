@@ -342,7 +342,7 @@ def test_following_ignores_in_flight_results_from_previous_account_and_day(qtbot
 
     def load(client, _cancelled):
         videos = (video,) if client is old_client else ()
-        return RankingResult(RankingSnapshot(now, videos), "展示关注动态前 5 页内的结果。")
+        return RankingResult(RankingSnapshot(now, videos))
 
     class Pool:
         def __init__(self):
@@ -366,7 +366,8 @@ def test_following_ignores_in_flight_results_from_previous_account_and_day(qtbot
     assert pool.jobs[0].request.is_set()
     pool.jobs[1].run()
     qtbot.waitUntil(lambda: "没有可上榜的视频投稿" in pane.notice.text())
-    assert "前 5 页" in pane.notice.text() and pane.refresh.text() == "刷新"
+    assert pane.notice.text() == "已读取的关注动态中没有可上榜的视频投稿。"
+    assert pane.source is None and pane.refresh.text() == "刷新"
     assert not pane.videos
 
     pane.refresh.click()

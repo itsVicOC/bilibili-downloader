@@ -55,10 +55,11 @@ This README is available in English and Simplified Chinese. The current desktop 
 | Capability | What you can do |
 |---|---|
 | Multiple sources | Parse BV/AV IDs, bangumi `ep/ss/md` IDs, full Bilibili URLs, b23.tv short links, uploader collections/series, and favorites |
+| Daily rankings | Browse the sitewide Top 100, or sign in to sort followed creators' videos by date or views. Open a video or parse it for download |
 | Media quality and codecs | Select 240P–8K, HDR, Dolby Vision, AVC, HEVC, or AV1 when available, with a matching audio track |
 | Local archives | Save MP4, M4A, or Hi-Res FLAC, plus ASS danmaku, SRT subtitles, covers, and JSON metadata |
 | Persistent task center | Manage downloads, active recordings, and history; apply bulk actions to filtered or all tasks, undo record removal, and resume interrupted downloads after restarting |
-| Live recording | Monitor rooms, record automatically or manually, reconnect, merge a session into one MP4 automatically or on demand, and use global or per-room directories; see the [live recording guide](docs/LIVE_RECORDING.md) |
+| Live recording | Browse followed rooms a screen at a time, record the current stream, monitor for the next session, and merge recordings to MP4. See the [live recording guide](docs/LIVE_RECORDING.md) |
 | Batch and multi-part downloads | Search and check parts, add ranges, retain selections across filters, preview batches, track or cancel metadata imports, retry failed entries, read paginated sources, deduplicate tasks, and run 1–8 concurrent downloads |
 | Account login | Start with QR login or use the Cookie fallback; manage your account from the sidebar with username and avatar, retaining only allowed Cookie fields and preferring the system credential store |
 | Cross-platform desktop UI | A PySide6 interface with a responsive layout down to 900×640, manual light/dark modes, and automatic system theme switching |
@@ -76,13 +77,11 @@ Path actions now sit beside the download directory, task views highlight whole r
 
 ## Download and install
 
-**`v0.9.0b6` prerelease** expands the download page rankings to a Daily Top 100 with on-demand loading. Sign in to sort videos from followed creators by publication time or views and see followed channels in the live workspace. Existing installations can update through the channel that includes betas. [Download 0.9.0 Beta 6](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.9.0b6) · [Changelog](CHANGELOG.md#v090b6---2026-11-23)
-
-**Stable `v0.8.13`:** Fixes overseas CDN HTTP 403 download and resume failures, recording completion only after the entire stream is validated. Subtitle verification, 4:3 display copies, and the collection workspace remain available. [Download stable](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.13) · [Validation record](docs/BUILDING.md) (Chinese). Both update channels can upgrade.
+**BiliFlow `v0.9.0`** brings the Daily Top 100, on-demand loading for followed live channels, larger application icons on macOS and Windows, and a compact batch preview button. Both update channels can upgrade. [Download 0.9.0](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.9.0) · [Changelog](CHANGELOG.md#v090---2026-11-23)
 
 Includes durable media reuse, independent attachment repair, strict media matching, queue and batch search, custom part ranges, automatic network retries, media inspection, and directory relinking. Existing settings and queued output snapshots remain compatible. Checked items persist across filters with hidden selection counts; results separate media, specifications, and attachments, and naming fields support Chinese search. [User guide](docs/USER_GUIDE.md#下载与归档优化) · [Workflow validation](docs/WORKFLOW_POLISH_VALIDATION.md), including native comparisons, paired performance results, and the scope of the beta-stage checks.
 
-![Batch search and selection counts](docs/images/ui-feedback/after/archive-batch-light-900.png)
+![Batch search and selection counts](docs/images/archive/archive-batch-light-900.png)
 
 Visit the **[BiliFlow website · 1008.si](https://1008.si/)** or **[download the latest stable release from GitHub](https://github.com/itsVicOC/bilibili-downloader/releases/latest)**. To try beta features, browse [all releases](https://github.com/itsVicOC/bilibili-downloader/releases) and look for the `Pre-release` label.
 
@@ -137,7 +136,7 @@ Releases also include the pinned FFmpeg source archive, a CycloneDX SBOM for eac
 2. Paste a BV/AV/ep ID, video or bangumi episode URL, or b23.tv short link into the video workspace, then click Parse (`解析`).
 3. Choose the parts, quality, codec, video/audio output, and archive extras you want.
 4. Click Add to queue (`加入队列`). Use the task center to view progress, pause, resume, and open the output folder.
-5. For collections, favorites, and bangumi `ss/md` pages, open Batch import (`批量导入`), preview the source, and select the items to queue.
+5. For collections, favorites, and bangumi `ss/md` pages, open Batch import (`批量导入`), choose Preview (`解析预览`), and select the items to queue.
 6. Review the copyright notice when creating your first download task. Tasks and temporary media files are created only after confirmation.
 
 Single parsing and batch import use the same fixed output card, with media settings and the save directory on the left and Edit settings / Add to queue on the right. You can configure output before parsing; choices that remain available are preserved after parsing.
@@ -154,7 +153,7 @@ See the [user guide](docs/USER_GUIDE.md) for task states, output templates, and 
 
 ## Screenshots
 
-The development branch introduces shared download settings, a clearer content layout, and warmer welcome and empty states. The main screenshots below show this development UI; see the [detail comparisons and state atlas](docs/images/ui-detail/index.html) and [validation notes](docs/UI_DETAIL_POLISH.md).
+These screenshots show the 0.9.0 workspaces, sign-in, and settings with offline demo data. The download home and followed live channels both support light and dark modes.
 
 Xiao Liu follows five local time periods, playing a different action after 15–30 seconds of foreground idle time. Animations pause while the app is hidden, minimized, or inactive.
 
@@ -186,6 +185,8 @@ Video downloads and live recording share one workspace. Adding downloads keeps t
 All screenshot titles, tasks, and account states use offline demo data. They contain no real Cookies, download URLs, or media content.
 
 ![BiliFlow live recording workspace](docs/images/biliflow-live.png)
+
+![Followed live channels with the Load more button](docs/images/biliflow-live-following-light.png)
 
 See [UI design and validation](docs/UI_DESIGN.md) for both themes, 900×640 / 1120×760 / 1320×860 layouts, and key interface states.
 

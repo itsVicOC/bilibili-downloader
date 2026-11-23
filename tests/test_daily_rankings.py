@@ -159,7 +159,7 @@ def test_following_ranks_across_all_five_pages_before_taking_top_100(monkeypatch
         bvid(n) for n in range(104, 4, -1)
     ]
     assert client.get_following_video_feed.call_count == 5
-    assert "前 5 页" in result.message
+    assert not result.message
 
 
 @pytest.mark.parametrize("stop", ["last", "limit", "duplicate", "network", "rate_limit", "expired"])
@@ -175,7 +175,7 @@ def test_following_bounds_pagination_and_distinguishes_partial_results(stop, mon
             {"has_more": True, "offset": str(n), "items": [video_item(n, 10)]}
             for n in range(10)
         ]
-        expected_calls, message = 5, "前 5 页"
+        expected_calls, message = 5, ""
     else:
         next_page = {
             "duplicate": first,
@@ -189,7 +189,10 @@ def test_following_bounds_pagination_and_distinguishes_partial_results(stop, mon
         }[stop]
     result = rankings.load_following_ranking(client, Event())
     assert client.get_following_video_feed.call_count == expected_calls
-    assert message in result.message
+    if message:
+        assert message in result.message
+    else:
+        assert not result.message
     if stop == "expired":
         assert result.login_required and result.snapshot is None
     else:

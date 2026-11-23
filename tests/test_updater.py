@@ -11,7 +11,6 @@ from dataclasses import replace
 import httpx
 import pytest
 
-from bilibili_downloader import __version__
 from bilibili_downloader.core.update_protocol import (
     BUILD_INFO_FILENAME,
     BuildInfo,
@@ -34,6 +33,8 @@ from bilibili_downloader.core.updater import (
     UpdateService,
 )
 
+INSTALLED_VERSION = "0.8.13"
+
 
 def zip_bytes(build, *, extra=()):
     stream = io.BytesIO()
@@ -50,7 +51,7 @@ def zip_bytes(build, *, extra=()):
     return stream.getvalue()
 
 
-def installed_root(tmp_path, *, variant="lite", system="Windows", version=__version__):
+def installed_root(tmp_path, *, variant="lite", system="Windows", version=INSTALLED_VERSION):
     build = BuildInfo(version, system, "x86_64", variant)
     root = tmp_path / "installation with spaces" / build.archive_root
     (root / build.resource_dir).mkdir(parents=True)
@@ -121,6 +122,7 @@ def test_channel_and_version_ordering(tmp_path, channel, expected):
     ]
     service = UpdateService(
         tmp_path,
+        current_version=INSTALLED_VERSION,
         transport=httpx.MockTransport(lambda request: httpx.Response(200, json=rows)),
     )
     assert service.check(channel).version == expected
@@ -142,7 +144,7 @@ def test_pagination_never_follows_remote_link(tmp_path):
             )
         return httpx.Response(200, json=[release_row("v0.9.0")])
 
-    service = UpdateService(tmp_path, transport=httpx.MockTransport(handler))
+    service = UpdateService(tmp_path, current_version=INSTALLED_VERSION, transport=httpx.MockTransport(handler))
     assert service.check("stable").version == "0.9.0"
     assert pages == ["1", "2"]
 
@@ -160,7 +162,7 @@ def test_mirror_discovery_and_asset_validation(tmp_path):
             {"name": "SHA256SUMS.txt", "size": 100, "browser_download_url": original.rsplit("/", 1)[0] + "/SHA256SUMS.txt", "mirror_download_url": "https://evil.example/checksums"},
         ])], headers={"Link": '<https://evil.example/>; rel="next"'})
 
-    release = UpdateService(tmp_path, transport=httpx.MockTransport(handler)).check("stable")
+    release = UpdateService(tmp_path, current_version=INSTALLED_VERSION, transport=httpx.MockTransport(handler)).check("stable")
     assert calls == [MIRROR_RELEASES_URL]
     assert release.assets[0].url == original
     assert release.assets[0].mirror_download_url == mirror
@@ -175,7 +177,8 @@ def test_mirror_metadata_failure_uses_github(tmp_path, bad):
         calls.append(str(request.url))
         return bad if request.url.host == "dl.1008.si" else httpx.Response(200, json=[release_row("v0.9.0")])
 
-    assert UpdateService(tmp_path, transport=httpx.MockTransport(handler)).check("stable").version == "0.9.0"
+    service = UpdateService(tmp_path, current_version=INSTALLED_VERSION, transport=httpx.MockTransport(handler))
+    assert service.check("stable").version == "0.9.0"
     assert calls[0] == MIRROR_RELEASES_URL
     assert calls[1].startswith(RELEASES_URL)
 
@@ -217,7 +220,10 @@ def test_mirror_integrity_error_never_falls_back(tmp_path):
             return httpx.Response(200, content=f"{'0' * 64}  {release.assets[0].name}\n".encode())
         return httpx.Response(200, content=zip_bytes(replace(installation[1], version="0.9.0")))
 
-    service = UpdateService(tmp_path / "data", installation=installation, transport=httpx.MockTransport(handler))
+    service = UpdateService(
+        tmp_path / "data", current_version=INSTALLED_VERSION, installation=installation,
+        transport=httpx.MockTransport(handler),
+    )
     with pytest.raises(UpdateError, match="SHA-256"):
         service.prepare(release)
     assert len(calls) == 2
@@ -303,6 +309,7 @@ def test_checksum_mismatch_preserves_old_program(tmp_path):
     )
     service = UpdateService(
         tmp_path / "data",
+        current_version=INSTALLED_VERSION,
         installation=installation,
         transport=httpx.MockTransport(
             lambda request: httpx.Response(
@@ -326,7 +333,8 @@ def test_download_cancellation(tmp_path):
     event = threading.Event()
     event.set()
     service = UpdateService(
-        tmp_path / "data", installation=installation, transport=transport
+        tmp_path / "data", current_version=INSTALLED_VERSION, installation=installation,
+        transport=transport,
     )
     with pytest.raises(UpdateCancelled):
         service.prepare(release, event)
@@ -339,7 +347,8 @@ def test_unwritable_installation_keeps_download_for_manual_install(
     installation = installed_root(tmp_path)
     release, transport = release_fixture(replace(installation[1], version="0.9.0"))
     service = UpdateService(
-        tmp_path / "data", installation=installation, transport=transport
+        tmp_path / "data", current_version=INSTALLED_VERSION, installation=installation,
+        transport=transport,
     )
 
     def denied(*_args, **_kwargs):
@@ -357,6 +366,7 @@ def test_untrusted_redirect_rejected(tmp_path):
     release, _transport = release_fixture(replace(installation[1], version="0.9.0"))
     service = UpdateService(
         tmp_path / "data",
+        current_version=INSTALLED_VERSION,
         installation=installation,
         transport=httpx.MockTransport(
             lambda request: httpx.Response(
@@ -433,16 +443,17 @@ def test_missing_assets_or_source_installation_requires_manual_install(tmp_path)
     with pytest.raises(UpdateError, match="手动安装"):
         UpdateService(tmp_path).prepare(release)
     with pytest.raises(UpdateError, match="缺少"):
-        UpdateService(tmp_path / "data", installation=installed_root(tmp_path)).prepare(
-            release
-        )
+        UpdateService(
+            tmp_path / "data", current_version=INSTALLED_VERSION, installation=installed_root(tmp_path),
+        ).prepare(release)
 
 
 def test_cached_package_tampering_rejected_on_install(tmp_path):
     installation = installed_root(tmp_path)
     release, transport = release_fixture(replace(installation[1], version="0.9.0"))
     service = UpdateService(
-        tmp_path / "data", installation=installation, transport=transport
+        tmp_path / "data", current_version=INSTALLED_VERSION, installation=installation,
+        transport=transport,
     )
     prepared = service.prepare(release)
     prepared.archive.write_bytes(b"tampered")
@@ -469,7 +480,7 @@ def test_portable_install_with_downloads_inside_program_keeps_package_and_media(
     atomic_json(data / "config.json", {"output_dir": str(media.parent)})
     release, transport = release_fixture(replace(current, version="0.9.0"))
     prepared = UpdateService(
-        data, installation=installation, transport=transport
+        data, current_version=INSTALLED_VERSION, installation=installation, transport=transport,
     ).prepare(release)
     assert not prepared.installable and "程序目录内" in prepared.reason
     assert prepared.archive.is_file() and media.read_bytes() == b"keep media"

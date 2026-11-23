@@ -4,7 +4,8 @@ import io
 from types import SimpleNamespace
 
 from PIL import Image
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, QPointF, Qt
+from PySide6.QtGui import QWheelEvent
 
 from bilibili_downloader.api.live import FollowedLiveRoom
 from bilibili_downloader.gui.widgets import discovery_cards, live_following
@@ -39,9 +40,9 @@ def test_followed_live_cards_load_in_workspace_and_dispatch_by_state(workspace, 
     ]
     assert follow.grid._cards[2].badge == "轮播"
     assert [card.badge_tone for card in follow.grid._cards] == ["active", "muted", "warning"]
-    follow.expand.click()
-    assert follow.more.isVisible()
-    follow.more.click()
+    assert follow.grid.more.isVisible()
+    follow.grid.more.setFocus(Qt.TabFocusReason)
+    qtbot.keyClick(follow.grid.more, Qt.Key_Space)
     qtbot.waitUntil(lambda: len(follow.grid._cards) == 4)
     assert [card.key for card in follow.grid._cards] == ["2", "4", "1", "3"]
 
@@ -80,6 +81,61 @@ def test_followed_live_cards_load_in_workspace_and_dispatch_by_state(workspace, 
     assert page._room_id() == 2
     follow.set_account(None)
     assert not follow.grid._cards and follow.login.isVisible()
+
+
+def test_followed_live_scroll_renders_current_page_before_fetching_another(workspace, qtbot, qapp, monkeypatch):
+    requests = []
+    covers = set()
+
+    def load(_cookies, page):
+        requests.append(page)
+        return live_following.FollowedRoomsPage(tuple(
+            FollowedLiveRoom(i, f"作者 {i}", f"直播间 {i}", 0, f"cover-{i}", "")
+            for i in (range(1, 9) if page == 1 else [9])
+        ), has_more=page == 1)
+
+    monkeypatch.setattr(live_following, "load_followed_rooms", load)
+    monkeypatch.setattr(workspace._thumbnails, "resolve", lambda urls: covers.add(urls[0]))
+    page = workspace._live_page
+    follow = page.following
+    follow.set_account(SimpleNamespace(auth_cookies={"SESSDATA": "fixture"}))
+    workspace.resize(900, 640)
+    workspace.show()
+    workspace._show_workspace(1)
+    qtbot.waitUntil(lambda: len(follow.grid._cards) == 8)
+    grid = follow.grid
+    qtbot.waitUntil(lambda: len(grid._widgets) == grid._columns())
+    first_row = grid._widgets.copy()
+    qtbot.waitUntil(lambda: len(covers) == len(first_row))
+    bar = page._scroll.verticalScrollBar()
+    previous_maximum = bar.maximum()
+    if previous_maximum:
+        bar.setValue(previous_maximum)
+    else:
+        viewport = page._scroll.viewport()
+        point = viewport.rect().center()
+        event = QWheelEvent(
+            QPointF(point), QPointF(viewport.mapToGlobal(point)), QPoint(), QPoint(0, -120),
+            Qt.NoButton, Qt.NoModifier, Qt.ScrollUpdate, False,
+        )
+        qapp.sendEvent(viewport, event)
+    qtbot.waitUntil(lambda: len(grid._widgets) > len(first_row) and bar.maximum() > previous_maximum)
+    assert requests == [1]
+    assert grid._widgets[:len(first_row)] == first_row
+    assert bar.value() == previous_maximum
+
+    while len(grid._widgets) < 8:
+        previous_count = len(grid._widgets)
+        previous_maximum = bar.maximum()
+        bar.setValue(previous_maximum)
+        qtbot.waitUntil(lambda: len(grid._widgets) > previous_count and bar.maximum() > previous_maximum)
+        assert requests == [1]
+
+    bar.setValue(bar.maximum())
+    qtbot.waitUntil(lambda: len(grid._widgets) == 9)
+    assert requests == [1, 2]
+    assert grid._widgets[:len(first_row)] == first_row
+    assert not grid.more.isVisible()
 
 
 def test_followed_live_discards_response_after_account_change(workspace, qtbot, monkeypatch):

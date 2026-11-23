@@ -115,6 +115,8 @@ Fluent 精修的完整矩阵支持 `--color-theme star_trail`（默认）和 `--
 
 脚本会更新 `docs/images/` 中九个工作区页签的深浅主题 × 三种尺寸截图，以及登录、房间设置、空状态、解析失败、直播重连与收尾、导出状态等截图。完整索引见[视觉规范与验证](UI_DESIGN.md)。小流动作与五个时段的专项截图可使用 `python scripts/capture_docs_screenshots.py --mascot-only --output-dir docs/images/mascot/offscreen`；macOS 原生后端追加 `--native` 并将输出目录改为 `docs/images/mascot/native`。任务、作品、路径与账号状态均为演示数据；不得改为真实 Cookie、账号标识、带签名播放 URL、个人目录或受版权保护的媒体内容。
 
+首页榜单、直播关注卡片和批量预览使用固定的离线参照数据。直播导出矩阵由 `python -m scripts.capture_live_export_screenshots` 更新，归档矩阵由 `python -m scripts.capture_docs_screenshots --archive-only --output-dir docs/images/archive` 更新。按版本归档的验收和前后对照图保留各自的版本记录。
+
 提交截图前应人工检查：
 
 - 日间和夜间主界面没有裁切、重叠或意外滚动条。
@@ -156,6 +158,7 @@ pyinstaller --noconfirm --clean BiliFlowUpdater.spec
 - Windows：生成 `dist/BilibiliDownloader/BilibiliDownloader.exe`。
 - 视觉素材会收集到冻结应用中；运行时路径统一由 `gui/resources/paths.py` 解析。
 - spec 根据平台选择 `app_icon.icns`、`app_icon.ico` 或 `app_icon.png`。
+- macOS 的 ICNS 和通用 PNG 使用同一版 1024 像素画稿。Windows ICO 使用专用的 16–32 像素简化图稿，并对 48–256 像素版本缩减透明留白。
 - 修改 `design/branding/` 中的图标源稿后，运行 `python -m scripts.build_app_icons` 更新三种格式。使用 `--output-dir` 可将生成结果写到单独的目录以供比较。
 - `packaging_hooks/hook-keyring.py` 只收集目标系统的凭据库后端，避免携带其他平台实现。
 
