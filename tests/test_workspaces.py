@@ -161,10 +161,8 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
         batch._on_resolved([VideoInfo(bvid="BV1GJ411x7h7", title="作品")], [])
         flush()
         assert contained(batch._add_btn, window._download_footers)
-        assert not batch._input_card.geometry().intersects(
-            batch._preview_card.geometry()
-        )
-        assert not batch._preview.geometry().intersects(batch._result_label.geometry())
+        assert not batch._input_card.isVisible() and batch._preview.isVisible()
+        assert contained(batch._preview, batch)
         assert batch._preview.horizontalScrollBar().maximum() == 0
         assert batch._action_bar.width() == single_size.width()
         batch_position = batch._action_bar.mapTo(window._workspace_pages.currentWidget(), QPoint())
@@ -335,12 +333,12 @@ def test_batch_partial_failure_fits_the_small_workspace(workspace):
     assert contained(panel._issue_btn, panel._preview_card)
     assert panel._issue_btn.isVisible()
     assert "成功" not in panel._result_label.text()
-    assert panel._issue_btn.text() == "未解析（1）"
+    assert panel._issue_btn.text() == "问题详情（1）"
     if panel._result_label.isVisible():
         assert not panel._preview.geometry().intersects(panel._result_label.geometry())
     panel._url_text.setPlainText("BV1Q541167Qg")
     flush()
-    assert contained(panel._preview, panel._preview_card)
+    assert not panel._preview.isVisible() and panel._url_text.isVisible()
     assert panel._add_btn.isEnabled() and panel._add_btn.text() == "预览 1 个来源"
 
 
@@ -872,9 +870,9 @@ def test_output_cards_allow_preconfiguration_and_keep_available_choices(workspac
     assert window._codec_combo.currentData() == 12
     window._download_tabs.setCurrentIndex(1)
     batch = window._batch_page
-    window._show_output_options()
     assert window._download_tabs.currentIndex() == 1
-    assert window._configuration.content.isVisible()
+    assert not window._configuration.isVisible()
+    assert not batch._action_bar.edit_button.isVisible()
     assert window._download_footers.currentWidget() is batch._action_bar
 
 
@@ -1024,22 +1022,21 @@ def test_batch_progress_keeps_compact_input_and_disables_stale_selection(workspa
     panel._begin_resolve(["BV1GJ411x7h7"])
     flush()
     assert panel._source_summary.isVisible() and panel._source_summary.height() < 40
-    assert panel._preview_card.isHidden()
+    assert not panel._preview.isVisible() and panel._progress_area.isVisible()
     assert panel._selected_label.text() == "正在解析来源"
-    assert not panel._add_btn.isEnabled()
+    assert panel._add_btn.isEnabled() and panel._add_btn.text() == "取消解析"
     assert contained(panel._progress_area, panel)
-    assert contained(panel._cancel_btn, panel)
-    panel.cancel_resolution()
+    panel._add_btn.click()
     from bilibili_downloader.gui.threads.batch_worker import ImportIssue, ImportReport
     panel._on_report(ImportReport([], [ImportIssue("BV1GJ411x7h7", "离线演示失败", "BV1GJ411x7h7")]))
     flush()
-    assert panel._preview_card.isHidden()
-    assert "成功 0 项" in panel._notice.label.text()
-    assert contained(panel._notice, panel)
+    assert panel._empty_result.isVisible() and not panel._preview.isVisible()
+    assert "离线演示失败" in panel._empty_result.text()
+    assert contained(panel._issue_btn, panel)
     assert (window.width(), window.height()) == (900, 640)
 
 
-@pytest.mark.parametrize("size,min_rows", [((900, 640), 2), ((1120, 760), 5), ((1320, 860), 7)])
+@pytest.mark.parametrize("size,min_rows", [((900, 640), 6), ((1120, 760), 7), ((1320, 860), 9)])
 def test_large_favorite_import_prioritizes_results_and_preserves_edits(workspace, size, min_rows):
     from bilibili_downloader.gui.threads.batch_worker import ImportIssue, ImportReport
 
@@ -1057,7 +1054,7 @@ def test_large_favorite_import_prioritizes_results_and_preserves_edits(workspace
     ]
     panel._on_report(ImportReport(items, [ImportIssue(source, "失效作品", source, kind="item")] * 28))
     flush()
-    assert panel._collapse_btn.isChecked() and panel._url_text.isHidden()
+    assert panel._collapse_btn.isChecked() and not panel._url_text.isVisible()
     assert panel._source_summary.toolTip() == source
     assert "演示收藏夹" in panel._source_summary._full_text
     assert panel._preview.isColumnHidden(3)
@@ -1067,18 +1064,25 @@ def test_large_favorite_import_prioritizes_results_and_preserves_edits(workspace
     assert contained(panel._action_bar, window._download_footers)
     assert contained(panel._add_btn, panel._action_bar)
     panel._selectors[0].setChecked(False)
+    panel.search.setText("收藏作品")
+    panel._preview.setCurrentCell(40, 1)
+    scrolled = panel._preview.verticalScrollBar().value()
+    assert scrolled > 0
     panel._collapse_btn.setChecked(False)
     flush()
     assert panel._url_text.isVisible()
     assert len(panel.get_video_infos()) == 129
     panel._url_text.appendPlainText("BV1GJ411x7h7")
     assert panel._add_btn.isEnabled() and panel._add_btn.text() == "预览 2 个来源"
-    panel._collapse_btn.setChecked(True)
-    assert panel._source_summary._full_text.endswith("等 2 个来源")
-    assert "BV1GJ411x7h7" in panel._source_summary.toolTip()
+    assert not panel.preview_ready
+    assert panel._source_summary._full_text == "批量预览 · 2 个来源"
     panel._url_text.setPlainText(source)
-    assert panel._add_btn.isEnabled() and len(panel.get_video_infos()) == 129
+    assert panel._add_btn.text() == "查看上次预览" and len(panel.get_video_infos()) == 129
+    panel._add_btn.click()
+    flush()
+    assert panel.search.text() == "收藏作品"
+    assert panel._preview.currentRow() == 40 and panel._preview.verticalScrollBar().value() == scrolled
     items[1].collection_title = "另一个来源"
     panel._on_report(ImportReport(items))
-    assert not panel._preview.isColumnHidden(3)
+    assert panel._preview.isColumnHidden(3) == (panel.width() < 900)
     assert panel._issue_btn.isHidden()

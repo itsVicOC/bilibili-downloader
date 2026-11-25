@@ -446,7 +446,7 @@ def test_batch_search_keeps_hidden_selection_and_reports_scope(workspace):
     batch.search.setText("乙")
     batch._set_all_checked(True)
     assert [i.bvid for i in batch.get_video_infos()] == ["BV1", "BV2"]
-    assert "筛选外 1 项" in batch.selection_bar.summary.text()
+    assert "筛选外已选 1 个" in batch.selection_bar.summary.text()
     batch.selection_bar.review_button.click()
     assert not any(batch._preview.isRowHidden(row) for row in range(2))
     batch.selection_bar.review_button.click()

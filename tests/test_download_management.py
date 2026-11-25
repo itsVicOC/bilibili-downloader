@@ -891,7 +891,7 @@ def test_batch_summary_counts_expanded_pages(workspace):
     batch._url_text.setPlainText("BVdemo")
     batch._on_resolved([multipart()], [])
     assert batch._selected_label.text() == "已选 1 个作品 · 110 个任务"
-    assert "已选 1 项" in batch.selection_bar.summary.text()
+    assert "共 1 个作品" in batch.selection_bar.summary.text()
     assert batch._path_preview.isHidden()
     assert batch._output_directory.toolTip() == workspace._settings.output_dir
     assert batch._path_preview.toolTip().endswith(".mp4")

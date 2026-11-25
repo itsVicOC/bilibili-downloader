@@ -523,7 +523,9 @@ class MainWindow(QMainWindow):
         self._ranking_panel.cards_changed.connect(self._sync_download_art)
         self._workspace_layout.addWidget(self._ranking_panel)
         self._workspace_layout.addStretch()
-        self._download_tabs.addTab(body, "单个解析")
+        self._output_sections = DownloadWorkspace(body, self._configuration)
+        self._workspace_scroll = scroll_area(self._output_sections, scroll_edge=True)
+        self._download_tabs.addTab(self._workspace_scroll, "单个解析")
         self._batch_sources = BatchSourcesWidget(self._service_pool, self._thumbnails)
         self._batch_sources.set_account(self._api_client if self._api_client.sessdata else None)
         self._batch_sources.login_requested.connect(self._on_login_triggered)
@@ -536,7 +538,7 @@ class MainWindow(QMainWindow):
         )
         self._batch_page.enqueue_requested.connect(self._enqueue_batch_from_page)
         self._batch_page._action_bar.review_requested.connect(lambda: self._show_download_configuration(batch=True))
-        self._batch_page._action_bar.edit_requested.connect(self._show_output_options)
+        self._batch_page._action_bar.edit_requested.connect(self._show_batch_output_options)
         self._batch_page._action_bar.directory_requested.connect(lambda: self._show_settings_tab(SettingsSection.DOWNLOAD))
         self._download_tabs.addTab(self._batch_page, "批量导入")
         self._source_surface = SectionCard()
@@ -544,21 +546,17 @@ class MainWindow(QMainWindow):
         self._source_surface.set_plain()
         self._source_surface.body.setContentsMargins(0, 0, 0, 0)
         self._source_surface.body.addWidget(self._download_tabs)
-        self._output_sections = DownloadWorkspace(self._source_surface, self._configuration)
         self._configuration.preview_requested.connect(
             lambda: self._show_download_configuration(batch=self._download_tabs.currentIndex() == 1)
         )
-        self._workspace_scroll = scroll_area(self._output_sections, scroll_edge=True)
         if self._ranking_panel is not None:
             self._ranking_panel.set_scroll_area(self._workspace_scroll)
-        self._batch_sources.set_scroll_area(self._workspace_scroll)
-        self._batch_page.set_scroll_area(self._workspace_scroll)
-        layout.addWidget(self._workspace_scroll, 1)
+        layout.addWidget(self._source_surface, 1)
         self._download_footers = ActionBarStack()
         self._download_footers.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._batch_page.layout().removeWidget(self._batch_page._action_bar)
+        self._download_actions.set_compact_output()
         for bar in (self._download_actions, self._batch_page._action_bar):
-            bar.set_compact_output()
             self._download_footers.addWidget(bar)
         layout.addWidget(self._download_footers)
         for card in (self._batch_page._input_card, self._batch_page._preview_card):
@@ -714,6 +712,35 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(0, self, lambda: self._workspace_scroll.ensureWidgetVisible(self._output_card, 0, 12))
         (self._audio_combo if self._output_mode_combo.currentData() == OutputMode.AUDIO else self._quality_combo).setFocus()
 
+    def _show_batch_output_options(self, field=None, message="", control=None):
+        from bilibili_downloader.gui.dialogs.workflow import WorkflowDialog
+
+        dialog = WorkflowDialog("下载设置", parent=self, confirm="完成")
+        dialog.cancel_button.hide()
+        dialog.resize(640, min(540, self.height() - 48))
+        configuration = self._configuration
+        previously_open = configuration._preconfigured
+        self._batch_settings_dialog = dialog
+        self._output_sections.set_configuration_host(dialog.body)
+        self._sync_download_presentation()
+
+        def focus_field():
+            if field is not None:
+                configuration.reveal_error(field, message, control)
+            elif self._output_mode_combo.currentData() == OutputMode.AUDIO:
+                self._audio_combo.setFocus()
+            else:
+                self._quality_combo.setFocus()
+
+        QTimer.singleShot(0, dialog, focus_field)
+        try:
+            dialog.exec()
+        finally:
+            self._batch_settings_dialog = None
+            configuration._preconfigured = previously_open
+            self._output_sections.set_configuration_host()
+            self._sync_download_presentation()
+
     def _sync_download_presentation(self, *_args):
         if not hasattr(self, "_download_footers"):
             return
@@ -724,7 +751,12 @@ class MainWindow(QMainWindow):
         self._batch_parts.setVisible(batch)
         ready = self._batch_page.preview_ready if batch else self._current_video is not None
         self._configuration.set_summary_host(None if batch else self._hero_layout)
-        self._configuration.set_context(ready)
+        batch_settings_open = batch and getattr(self, "_batch_settings_dialog", None) is not None
+        self._configuration.set_context(batch_settings_open if batch else ready)
+        if batch:
+            self._configuration.setVisible(batch_settings_open)
+            if batch_settings_open:
+                self._configuration._title.hide()
         editable = ready or self._configuration._preconfigured
         self._subtitle_check.setEnabled(editable)
         self._all_subtitles_check.setEnabled(editable and self._subtitle_check.isChecked())
@@ -2105,7 +2137,7 @@ class MainWindow(QMainWindow):
         self._status_bar.show_feedback(message, "查看任务", lambda: self._show_tasks(0))
         self._refresh_activity()
 
-    def _validate_download_configuration(self):
+    def _validate_download_configuration(self, *, batch=False):
         """Validate the active output fields before either source can enqueue."""
         self._configuration.clear_error()
         video = self._output_mode_combo.currentData() == OutputMode.VIDEO
@@ -2123,7 +2155,10 @@ class MainWindow(QMainWindow):
         ])
         for field, control, message in fields:
             if control.currentData() is None:
-                self._configuration.reveal_error(field, message, control)
+                if batch:
+                    self._show_batch_output_options(field, message, control)
+                else:
+                    self._configuration.reveal_error(field, message, control)
                 return False
         return True
 
@@ -2832,7 +2867,7 @@ class MainWindow(QMainWindow):
             )
 
     def _enqueue_batch_from_page(self, infos):
-        if infos and self._validate_download_configuration() and self._confirm_copyright_acknowledgement():
+        if infos and self._validate_download_configuration(batch=True) and self._confirm_copyright_acknowledgement():
             self._enqueue_batch_infos(infos)
 
     def _confirm_copyright_acknowledgement(self) -> bool:

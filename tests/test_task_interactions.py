@@ -77,8 +77,14 @@ def test_directory_button_follows_text_and_long_path_preserves_selection(workspa
     workspace.show()
     for index, bar in enumerate((workspace._download_actions, workspace._batch_page._action_bar)):
         workspace._download_tabs.setCurrentIndex(index)
+        if index == 1:
+            batch = workspace._batch_page
+            assert not bar.directory_button.isVisible()
+            batch._url_text.setPlainText("BV1GJ411x7h7")
+            batch._on_resolved([VideoInfo(bvid="BV1GJ411x7h7", title="离线批量预览")], [])
         bar.directory.set_full_text('保存至 ~/Downloads/BiliFlow')
         flush()
+        assert bar.directory_button.isVisible()
         assert bar.directory_button.x() - (bar.directory.x() + bar.directory.width()) == 8
         assert bar.directory.width() <= bar.directory.sizeHint().width()
         short_button_x = bar.directory_button.x()

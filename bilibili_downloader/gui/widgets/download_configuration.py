@@ -191,10 +191,22 @@ class DownloadWorkspace(QWidget):
             self.row.setStretch(0, 1 if wide else 0)
             self.row.setStretch(2, 0 if wide else 1)
             self.space.setVisible(not wide)
-            self.configuration.setMaximumWidth(rail_width if wide else 16777215)
-            self.configuration.setMinimumWidth(rail_width if wide else 0)
+            if self.configuration.parentWidget() is self:
+                self.configuration.setMaximumWidth(rail_width if wide else 16777215)
+                self.configuration.setMinimumWidth(rail_width if wide else 0)
             self.setProperty("wide", wide)
             repolish(self)
+
+    def set_configuration_host(self, host=None):
+        if host is not None:
+            self.row.removeWidget(self.configuration)
+            host.addWidget(self.configuration)
+            self.configuration.setMinimumWidth(0)
+            self.configuration.setMaximumWidth(16777215)
+        else:
+            self.row.insertWidget(1, self.configuration, 0, Qt.AlignTop)
+            self._rail_width = None
+            self._reflow()
 
     def event(self, event):
         if event.type() in (QEvent.LayoutRequest, QEvent.FontChange, QEvent.StyleChange) and hasattr(self, "_rail_width"):

@@ -136,7 +136,7 @@ Releases also include the pinned FFmpeg source archive, a CycloneDX SBOM for eac
 2. Paste a BV/AV/ep ID, video or bangumi episode URL, or b23.tv short link into the video workspace, then click Parse (`解析`).
 3. Choose the parts, quality, codec, video/audio output, and archive extras you want.
 4. Click Add to queue (`加入队列`). Use the task center to view progress, pause, resume, and open the output folder.
-5. For collections, favorites, and bangumi `ss/md` pages, open Batch import (`批量导入`), choose Preview (`解析预览`), and select the items to queue.
+5. For collections, favorites, and bangumi `ss/md` pages, open Batch import (`批量导入`), add your sources, click Preview N sources (`预览 N 个来源`), and select the items to queue.
 6. Review the copyright notice when creating your first download task. Tasks and temporary media files are created only after confirmation.
 
 Single parsing and batch import use the same fixed output card, with media settings and the save directory on the left and Edit settings / Add to queue on the right. You can configure output before parsing; choices that remain available are preserved after parsing.

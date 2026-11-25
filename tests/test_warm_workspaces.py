@@ -1,7 +1,7 @@
 """Shared settings, truthful feedback and disclosure behavior after the redesign."""
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication
 
 from bilibili_downloader.core.models import (
@@ -21,6 +21,22 @@ def flush():
         QApplication.processEvents()
 
 
+def inspect_batch_settings(window, open_dialog, inspect):
+    opened = []
+
+    def capture():
+        dialog = window._batch_settings_dialog
+        opened.append(dialog)
+        try:
+            inspect(dialog)
+        finally:
+            dialog.accept()
+
+    QTimer.singleShot(100, window, capture)
+    open_dialog()
+    assert opened
+
+
 def test_shared_settings_preserve_both_sources_and_audio_roundtrip(workspace):
     window = workspace
     settings = window._settings.model_dump()
@@ -35,22 +51,24 @@ def test_shared_settings_preserve_both_sources_and_audio_roundtrip(workspace):
     batch._url_text.setPlainText("BVbatch")
     batch._on_resolved([VideoInfo(bvid="BVbatch", cid=2)], [])
     window._download_tabs.setCurrentIndex(1)
-    window._show_output_options()
-    flush()
-    assert window._download_tabs.currentIndex() == 1
-    assert window._configuration.content.isVisible()
-    assert window._parts_row.isHidden() and window._batch_parts.isVisible()
-    assert "4:3" in window._configuration.advanced_summary._full_text
-    assert "严格匹配" in window._configuration.advanced_summary._full_text
-    item = window._make_download_item(batch.get_video_infos()[0])
-    assert item.display_aspect_ratio == "4:3" and item.strict_match
     audio = window._audio_combo
-    window._output_mode_combo.setCurrentIndex(window._output_mode_combo.findData(OutputMode.AUDIO))
-    flush()
-    assert audio.isVisible() and audio.parentWidget() is window._audio_common_host
-    assert window._aspect_row.isHidden() and window._codec_row.isHidden()
-    assert "4:3" not in window._configuration.advanced_summary._full_text
-    assert window._make_download_item(batch.get_video_infos()[0]).display_aspect_ratio == "original"
+
+    def verify_shared_options(dialog):
+        assert window._download_tabs.currentIndex() == 1
+        assert dialog.isAncestorOf(window._configuration) and window._configuration.content.isVisible()
+        assert window._parts_row.isHidden() and window._batch_parts.isVisible()
+        assert "4:3" in window._configuration.advanced_summary._full_text
+        assert "严格匹配" in window._configuration.advanced_summary._full_text
+        item = window._make_download_item(batch.get_video_infos()[0])
+        assert item.display_aspect_ratio == "4:3" and item.strict_match
+        window._output_mode_combo.setCurrentIndex(window._output_mode_combo.findData(OutputMode.AUDIO))
+        flush()
+        assert audio.isVisible() and audio.parentWidget() is window._audio_common_host
+        assert window._aspect_row.isHidden() and window._codec_row.isHidden()
+        assert "4:3" not in window._configuration.advanced_summary._full_text
+        assert window._make_download_item(batch.get_video_infos()[0]).display_aspect_ratio == "original"
+
+    inspect_batch_settings(window, batch._action_bar.edit_button.click, verify_shared_options)
     window._download_tabs.setCurrentIndex(0)
     window._output_mode_combo.setCurrentIndex(window._output_mode_combo.findData(OutputMode.VIDEO))
     flush()
@@ -99,13 +117,20 @@ def test_enqueue_reveals_invalid_advanced_fields_and_recovers(workspace, monkeyp
     control.setCurrentIndex(-1)
     window._configuration.advanced.set_expanded(False)
     enqueue = (lambda: window._enqueue_batch_from_page([info])) if batch else window._on_download_clicked
-    enqueue()
-    flush()
-    assert not queued and not confirmations
-    assert window._configuration.advanced.toggle.isChecked()
-    assert field.error.isVisible() and control.property("invalid")
-    assert window.focusWidget() is control
-    assert field.visibleRegion().boundingRect().contains(field.rect())
+
+    def verify_error(owner):
+        assert not queued and not confirmations
+        assert window._configuration.advanced.toggle.isChecked()
+        assert field.error.isVisible() and control.property("invalid")
+        assert owner.focusWidget() is control
+        assert field.visibleRegion().boundingRect().contains(field.rect())
+
+    if batch:
+        inspect_batch_settings(window, enqueue, verify_error)
+    else:
+        enqueue()
+        flush()
+        verify_error(window)
     control.setCurrentIndex(0)
     assert not field.error.isVisible() and not control.property("invalid")
     enqueue()
@@ -131,11 +156,18 @@ def test_audio_enqueue_validates_audio_and_ignores_inactive_video_fields(workspa
     monkeypatch.setattr(window, "_enqueue_download", lambda item: queued.append(item) or True)
     enqueue = (lambda: window._enqueue_batch_from_page([info])) if batch else window._on_download_clicked
     window._audio_combo.setCurrentIndex(-1)
-    enqueue()
-    flush()
-    assert not queued
-    assert window._audio_row.error.isVisible() and window._audio_combo.property("invalid")
-    assert window.focusWidget() is window._audio_combo
+
+    def verify_error(owner):
+        assert not queued
+        assert window._audio_row.error.isVisible() and window._audio_combo.property("invalid")
+        assert owner.focusWidget() is window._audio_combo
+
+    if batch:
+        inspect_batch_settings(window, enqueue, verify_error)
+    else:
+        enqueue()
+        flush()
+        verify_error(window)
     window._audio_combo.setCurrentIndex(0)
     enqueue()
     assert len(queued) == 1 and queued[0].output_mode == OutputMode.AUDIO
@@ -149,7 +181,7 @@ def test_empty_source_does_not_reserve_height_for_hidden_batch_results(workspace
     flush()
     resolve = window._batch_page._add_btn
     assert resolve.text() == "预览来源" and resolve.isVisible() and not resolve.isEnabled()
-    assert window._batch_page._url_text.isHidden()
+    assert window._batch_page._url_text.isVisible()
     window._batch_page._url_text.setPlainText("BVbatch")
     window._batch_page._on_resolved([VideoInfo(bvid=f"BV{n}", cid=n + 1) for n in range(130)], [])
     window._download_tabs.setCurrentIndex(0)

@@ -481,6 +481,7 @@ class OutputActionBar(ActionBar):
         self.specs = ElidedLabel()
         self.specs.setObjectName("MetaLabel")
         self._compact_output = False
+        self._batch_output_visible = None
         self.specs.full_text_changed.connect(lambda text: self.specs.setVisible(bool(text) and not self._compact_output))
         self.specs.hide()
         heading.addWidget(self.specs, 1)
@@ -534,6 +535,18 @@ class OutputActionBar(ActionBar):
         self.review_button.hide()
         self.action_strip.schedule()
 
+    def set_batch_output_visible(self, visible):
+        if self._batch_output_visible is visible:
+            return
+        self._batch_output_visible = visible
+        self._compact_output = not visible
+        self.specs.setVisible(visible and bool(self.specs._full_text))
+        self.directory.setVisible(visible)
+        self.directory_button.setVisible(visible)
+        self.edit_button.setVisible(visible)
+        self.review_button.hide()
+        self._schedule_layout()
+
     def _reflow(self):
         if not hasattr(self, "action_strip"):
             return
@@ -546,7 +559,8 @@ class OutputActionBar(ActionBar):
         margins = self.row.contentsMargins()
         available = self.width() - margins.left() - margins.right()
         status_width = self.status.fontMetrics().horizontalAdvance(self.status.text()) + 8
-        copy_width = max(self.directory_button.sizeHint().width() + 96, min(320, status_width))
+        directory_width = self.directory_button.sizeHint().width() + 96 if self._batch_output_visible is not False else 0
+        copy_width = max(directory_width, min(320, status_width))
         minimum = copy_width + self.primary_button.sizeHint().width() + self.action_strip.more.sizeHint().width() + 24
         stacked = available < minimum
         self.row.setDirection(QBoxLayout.TopToBottom if stacked else QBoxLayout.LeftToRight)

@@ -688,6 +688,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QPushButton#OutputPrimaryButton:pressed {{ background: {primary_pressed}; }}
     QPushButton#OutputPrimaryButton:disabled {{ background: {p.surface_raised}; color: {p.disabled}; border-color: {p.divider}; }}
     QDialog#BatchImport[embedded="true"] {{ background: transparent; }}
+    QDialog#BatchDraftPopup {{ border: 1px solid {p.popup_border}; background: {p.surface}; }}
     #BatchImport QPushButton#TableSubtleButton {{ background: transparent; color: {p.muted}; }}
     #BatchImport QPushButton#TableSubtleButton:hover {{ background: {p.surface_raised}; color: {p.text}; }}
     #BatchImport QPushButton#TableSubtleButton[warningAction="true"] {{ color: {p.warning}; min-height: 22px; max-height: 22px; }}

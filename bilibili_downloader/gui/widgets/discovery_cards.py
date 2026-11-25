@@ -30,7 +30,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from bilibili_downloader.gui.widgets.components import PreviewTitle, palette
+from bilibili_downloader.gui.widgets.components import (
+    ElidedLabel,
+    PreviewTitle,
+    palette,
+)
 from bilibili_downloader.utils.network import BILIBILI_RESOURCE_HOSTS, trusted_https_url
 
 
@@ -176,10 +180,14 @@ class _CardButton(QPushButton):
 
 
 class _Cover(QWidget):
-    def __init__(self, card, parent):
+    def __init__(self, card, parent, *, compact=False):
         super().__init__(parent)
         self.card = card
         self.image = None
+        self._compact = compact
+        if compact:
+            self.setFixedSize(80, 45)
+            return
         policy = QSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         policy.setHeightForWidth(True)
         self.setSizePolicy(policy)
@@ -191,7 +199,8 @@ class _Cover(QWidget):
         return max(70, round(width * 9 / 16))
 
     def resizeEvent(self, event):
-        self.setFixedHeight(self.heightForWidth(event.size().width()))
+        if not self._compact:
+            self.setFixedHeight(self.heightForWidth(event.size().width()))
         super().resizeEvent(event)
 
     def eventFilter(self, watched, event):
@@ -270,18 +279,22 @@ class _Cover(QWidget):
 
 
 class _CardWidget(QWidget):
-    def __init__(self, card, act, open_video, secondary_act):
+    def __init__(self, card, act, open_video, secondary_act, *, compact=False):
         super().__init__()
         self.card = card
         self.setObjectName("DiscoveryCard")
         self.setAttribute(Qt.WA_StyledBackground)
         self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Maximum)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(1, 1, 1, 1)
-        layout.setSpacing(0)
+        self._compact = compact
         self.video_button = None
         self.action_button = None
         self.secondary_button = None
+        if compact:
+            self._build_compact(card, act, secondary_act)
+            return
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(1, 1, 1, 1)
+        layout.setSpacing(0)
         if card.opens_video:
             content = self.video_button = _CardButton()
             content.setObjectName("DiscoveryVideo")
@@ -347,6 +360,46 @@ class _CardWidget(QWidget):
             actions.addWidget(action)
         layout.addLayout(footer)
 
+    def _build_compact(self, card, act, secondary_act):
+        row = QHBoxLayout(self)
+        row.setContentsMargins(10, 8, 10, 8)
+        row.setSpacing(10)
+        self.cover = _Cover(card, self, compact=True)
+        row.addWidget(self.cover, 0, Qt.AlignVCenter)
+        content = QVBoxLayout()
+        content.setSpacing(2)
+        self.title = ElidedLabel()
+        self.title.setObjectName("DiscoveryTitle")
+        self.title.set_full_text(card.title)
+        self.title.setAccessibleName(card.title)
+        content.addWidget(self.title)
+        if card.author:
+            author = ElidedLabel()
+            author.setObjectName("MetaLabel")
+            author.set_full_text(card.author)
+            content.addWidget(author)
+        actions = QHBoxLayout()
+        actions.addStretch(1)
+        for text, name, callback in (
+            (card.secondary_action, "DiscoveryHeaderAction", secondary_act),
+            (card.action, "DiscoveryAction", act),
+        ):
+            if not text:
+                continue
+            button = _CardButton(text)
+            button.setObjectName(name)
+            button.setAccessibleName(f"{text} · {card.title}")
+            button.setAutoDefault(False)
+            button.clicked.connect(lambda _checked=False, run=callback: run(card.key))
+            if name == "DiscoveryAction":
+                self.action_button = button
+                button.setEnabled(card.enabled)
+            else:
+                self.secondary_button = button
+            actions.addWidget(button)
+        content.addLayout(actions)
+        row.addLayout(content, 1)
+
     def update_action(self, card):
         self.card = card
         self.action_button.setText(card.action)
@@ -354,6 +407,8 @@ class _CardWidget(QWidget):
         self.action_button.setEnabled(card.enabled)
 
     def row_height(self, width):
+        if self._compact:
+            return self.layout().sizeHint().height()
         return (
             self.cover.heightForWidth(width - 4) + self.title.heightForWidth(width - 18)
             + self._footer_layout.sizeHint().height() + 8
@@ -367,10 +422,11 @@ class DiscoveryGrid(QWidget):
     cover_missing = Signal(str)
     viewport_changed = Signal()
 
-    def __init__(self, thumbnails, parent=None, *, images_for=None):
+    def __init__(self, thumbnails, parent=None, *, images_for=None, compact=False):
         super().__init__(parent)
         self._thumbnails = thumbnails
         self._images_for = images_for
+        self._compact = compact
         thumbnails.changed.connect(self._load_visible)
         self._layout = QGridLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
@@ -411,6 +467,9 @@ class DiscoveryGrid(QWidget):
         return super().focusNextPrevChild(forward)
 
     def _columns(self):
+        if self._compact:
+            card_width = max(325, 120 + self.fontMetrics().horizontalAdvance("预览 加入待解析") * 2)
+            return 2 if self.width() >= card_width * 2 + self._layout.horizontalSpacing() else 1
         return 4 if self.width() >= 970 else 3 if self.width() >= 695 else 2
 
     def _visible_cards(self, columns):
@@ -441,7 +500,10 @@ class DiscoveryGrid(QWidget):
                 self._layout.removeWidget(widget)
                 self._layout.addWidget(widget, index // columns, index % columns)
         for index, card in enumerate(visible[keep:], keep):
-            widget = _CardWidget(card, self.action_requested.emit, self.video_requested.emit, self.secondary_action_requested.emit)
+            widget = _CardWidget(
+                card, self.action_requested.emit, self.video_requested.emit,
+                self.secondary_action_requested.emit, compact=self._compact,
+            )
             self._layout.addWidget(widget, index // columns, index % columns)
             self._widgets.append(widget)
         for index in range(4):
@@ -487,13 +549,14 @@ class ProgressiveDiscoveryGrid(DiscoveryGrid):
 
     next_page_requested = Signal()
 
-    def __init__(self, thumbnails, parent=None, *, images_for=None, prefetch_next_row=False):
-        super().__init__(thumbnails, parent, images_for=images_for)
+    def __init__(self, thumbnails, parent=None, *, images_for=None, prefetch_next_row=False, compact=False):
+        super().__init__(thumbnails, parent, images_for=images_for, compact=compact)
         self._prefetch_next_row = prefetch_next_row
         self._limit = None
         self._bar = None
         self._scroll_value = 0
         self._scroll_target = None
+        self._append_position = None
         self._footer_position = None
         self._has_next_page = False
         self._append_timer = QTimer(self)
@@ -519,6 +582,7 @@ class ProgressiveDiscoveryGrid(DiscoveryGrid):
         if not keep_limit and cards != self._cards:
             self._limit = None
             self._scroll_target = None
+            self._append_position = None
             self._append_timer.stop()
         if visible_count is not None:
             self._limit = visible_count
@@ -596,10 +660,12 @@ class ProgressiveDiscoveryGrid(DiscoveryGrid):
 
     def _queue_append(self):
         if self.more.isVisible() and self.more.isEnabled():
+            self._append_position = self._bar.value()
             self._append_timer.start(0)
 
     def _append_screen(self):
         self._append_timer.stop()
+        scroll_position, self._append_position = self._append_position, None
         if not self.more.isVisible() or not self.more.isEnabled():
             return
         previous_count = len(self._widgets)
@@ -617,6 +683,8 @@ class ProgressiveDiscoveryGrid(DiscoveryGrid):
                 if button is not None and button.isEnabled():
                     button.setFocus(Qt.TabFocusReason)
                     break
+        elif scroll_position is not None and self._bar.value() < scroll_position:
+            self.restore_scroll(scroll_position)
 
     def eventFilter(self, watched, event):
         if watched is self._viewport:

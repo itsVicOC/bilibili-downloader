@@ -21,7 +21,11 @@ from bilibili_downloader.core.batch_discovery import (
     load_batch_cover,
     load_batch_sources,
 )
-from bilibili_downloader.gui.widgets.components import ElidedLabel, WorkspaceTabBar
+from bilibili_downloader.gui.widgets.components import (
+    ElidedLabel,
+    WorkspaceTabBar,
+    scroll_area,
+)
 from bilibili_downloader.gui.widgets.discovery_cards import (
     DiscoveryCard,
     DiscoveryJob,
@@ -47,9 +51,9 @@ class _SourceList:
 class BatchSourcesWidget(QWidget):
     source_requested = Signal(object)
     preview_requested = Signal(object)
-    view_changed = Signal()
     login_requested = Signal()
     account_check_requested = Signal()
+    account_changed = Signal()
 
     def __init__(self, pool, thumbnails):
         super().__init__()
@@ -63,7 +67,6 @@ class BatchSourcesWidget(QWidget):
         self._request_offset = ""
         self._lists = {}
         self._creator = None
-        self._scroll = None
         self._following_scroll = (None, 0)
         self._browse_position = (None, 0)
         self._selected_keys = set()
@@ -72,24 +75,25 @@ class BatchSourcesWidget(QWidget):
         self._cover_requests = {}
         self._cover_limited = False
         self._view_generation = 0
-        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Maximum)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
+        self._link_editor = None
 
         layout = QVBoxLayout(self)
+        self._source_layout = layout
         layout.setContentsMargins(16, 0, 16, 0)
         layout.setSpacing(6)
         header = QHBoxLayout()
         self.tabs = WorkspaceTabBar()
         self.tabs.setAccessibleName("切换批量导入来源")
-        self.tabs.setTabData(self.tabs.addTab("我的收藏夹"), "favorites")
-        self.tabs.setTabData(self.tabs.addTab("找合集"), "collections")
         self._links_tab = self.tabs.addTab("粘贴链接")
         self.tabs.setTabData(self._links_tab, "links")
+        self.tabs.setTabData(self.tabs.addTab("我的收藏夹"), "favorites")
+        self.tabs.setTabData(self.tabs.addTab("找合集"), "collections")
         header.addWidget(self.tabs)
         header.addStretch(1)
         self.refresh = QPushButton("刷新")
         self.refresh.setObjectName("DiscoveryHeaderAction")
         self.refresh.clicked.connect(self._refresh)
-        header.addWidget(self.refresh)
         self.login = QPushButton("登录 B 站")
         self.login.setObjectName("SubtleButton")
         self.login.clicked.connect(self.login_requested.emit)
@@ -127,6 +131,7 @@ class BatchSourcesWidget(QWidget):
         self.search_action.setObjectName("DiscoveryHeaderAction")
         self.search_action.clicked.connect(self._search_clicked)
         search_row.addWidget(self.search_action)
+        search_row.addWidget(self.refresh)
         layout.addWidget(self.search_bar)
 
         self.status = QLabel()
@@ -135,20 +140,32 @@ class BatchSourcesWidget(QWidget):
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
 
-        self.grid = ProgressiveDiscoveryGrid(thumbnails, images_for=self._images_for, prefetch_next_row=True)
+        self.grid = ProgressiveDiscoveryGrid(
+            thumbnails, images_for=self._images_for, prefetch_next_row=True, compact=True,
+        )
         self.grid.action_requested.connect(self._activate)
         self.grid.secondary_action_requested.connect(self._preview)
         self.grid.next_page_requested.connect(self._next_page)
         self.grid.viewport_changed.connect(self._load_if_needed)
         self.grid.cover_missing.connect(self._request_cover)
-        layout.addWidget(self.grid)
+        results = QWidget()
+        results_layout = QVBoxLayout(results)
+        results_layout.setContentsMargins(0, 0, 0, 0)
+        results_layout.addWidget(self.grid)
+        results_layout.addStretch()
+        self._scroll = scroll_area(results)
+        self._scroll.setMinimumHeight(0)
+        self._scroll.setAccessibleName("批量导入来源列表")
+        self.grid.set_scroll_area(self._scroll)
+        layout.addWidget(self._scroll, 1)
         self.tabs.currentChanged.connect(self._change_tab)
         self.collection_tabs.currentChanged.connect(self._change_tab)
         self._present()
 
-    def set_scroll_area(self, scroll):
-        self._scroll = scroll
-        self.grid.set_scroll_area(scroll)
+    def set_link_editor(self, editor):
+        self._link_editor = editor
+        self._source_layout.addWidget(editor, 1)
+        self._present()
 
     def set_loading_enabled(self, enabled):
         self._loading_enabled = enabled
@@ -173,6 +190,7 @@ class BatchSourcesWidget(QWidget):
         self._cover_limited = False
         self._present(reset_grid=True)
         self._load_if_needed()
+        self.account_changed.emit()
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -227,13 +245,13 @@ class BatchSourcesWidget(QWidget):
 
     def _change_tab(self):
         self._cancel()
+        self._scroll.verticalScrollBar().setValue(0)
         self._present(reset_grid=True)
-        self.view_changed.emit()
         self._load_if_needed()
 
     def _load_if_needed(self):
         state = self._current()
-        if not self.editing_links and not state.pages and not state.error and not state.search_paused and self.grid.in_viewport(self.tabs):
+        if not self.editing_links and not state.pages and not state.error and not state.search_paused:
             self._fetch("")
 
     def _refresh(self):
@@ -259,6 +277,7 @@ class BatchSourcesWidget(QWidget):
             self._cancel()
         state = self._current()
         state.query, state.search_paused = query, False
+        self._scroll.verticalScrollBar().setValue(0)
         self._present(reset_grid=True)
         self._load_if_needed()
 
@@ -314,13 +333,17 @@ class BatchSourcesWidget(QWidget):
             return
         key = self._list_key()
         state = self._lists[key]
+        restarting_search = not offset and state.pages > 0 and self._search_key == key
         if page.error:
             state.error = page.error
             state.failed_offset = offset
             self._search_key = None
         else:
             if not offset:
-                state = self._lists[key] = _SourceList(query=state.query, search_paused=state.search_paused)
+                state = self._lists[key] = _SourceList(
+                    sources=state.sources if restarting_search else {},
+                    query=state.query, search_paused=state.search_paused,
+                )
             for source in page.sources:
                 previous = state.sources.get(source.url)
                 if previous is None or source.updated_at > previous.updated_at:
@@ -346,7 +369,7 @@ class BatchSourcesWidget(QWidget):
                 state.offsets.add(state.next_offset)
             elif self._search_key is not None:
                 self._search_key = None
-        self._present(reset_grid=not offset and not page.error)
+        self._present(reset_grid=not offset and not restarting_search and not page.error)
         if self._search_key is not None:
             QTimer.singleShot(0, self, self._continue_search)
 
@@ -359,17 +382,20 @@ class BatchSourcesWidget(QWidget):
         kind = self._kind()
         author_list = kind == "following"
         browsing = kind != "links"
-        self.collection_tabs.setVisible(kind in ("collections", "following", "space"))
+        self.collection_tabs.setVisible(kind in ("collections", "following"))
         self.creator_bar.setVisible(kind == "space")
         if kind == "space":
             self.creator_name.set_full_text(self._creator.title)
         login = self._account is None or self._expired
         self.login.setVisible(browsing and login)
-        self.refresh.setVisible(browsing and not login)
+        self.refresh.setVisible(browsing and not login and not (state.query.strip() and state.error))
         self.refresh.setEnabled(self._request is None)
         self.refresh.setText("检查账号" if self._mid is None else "重试" if state.error else "刷新")
-        self.search_bar.setVisible(browsing and not login and self._mid is not None)
-        self.grid.setVisible(browsing)
+        self.search_bar.setVisible(browsing and not login)
+        self.search.setVisible(self._mid is not None)
+        self._scroll.setVisible(browsing)
+        if self._link_editor is not None:
+            self._link_editor.setVisible(not browsing)
         if self.search.text() != state.query:
             with QSignalBlocker(self.search):
                 self.search.setText(state.query)
@@ -380,8 +406,9 @@ class BatchSourcesWidget(QWidget):
         searching = self._search_key is not None
         query = state.query.strip().casefold()
         self.search_action.setText("停止搜索" if searching else "重试搜索" if state.error or state.paging_incomplete
-                                   else "继续搜索" if state.search_paused else "搜索")
-        self.search_action.setEnabled(searching or (bool(query) and self._can_search_more(state)))
+                                   else "继续搜索" if state.search_paused else "搜索更多")
+        self.search_action.setVisible(bool(self._mid is not None and (searching or self._can_search_more(state))))
+        self.search_action.setEnabled(searching or bool(query))
 
         message = state.error or state.notice
         if self._request is not None and not state.sources:
@@ -452,8 +479,9 @@ class BatchSourcesWidget(QWidget):
         self._cancel()
         self._following_scroll = self._current_position()
         self._creator = source
+        self._scroll.verticalScrollBar().setValue(0)
         self._present(reset_grid=True)
-        self._reveal_creator_list(self._view_generation)
+        self._load_if_needed()
 
     def _preview(self, url):
         if (source := self._current().sources.get(url)) is not None:
@@ -468,16 +496,6 @@ class BatchSourcesWidget(QWidget):
 
     def restore_position(self):
         self._restore_position(self._browse_position)
-
-    def _reveal_creator_list(self, generation):
-        def reveal():
-            if generation != self._view_generation or not self.isVisible():
-                return
-            if self._scroll is not None:
-                self._scroll.ensureWidgetVisible(self.tabs, 0, 8)
-            self._load_if_needed()
-
-        QTimer.singleShot(0, self, reveal)
 
     def _return_to_following(self):
         self._cancel()
