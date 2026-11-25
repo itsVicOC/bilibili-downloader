@@ -222,12 +222,11 @@ def test_top_100_only_creates_the_first_screen_and_appends_on_scroll(workspace, 
             Qt.NoButton, Qt.NoModifier, Qt.ScrollUpdate, False,
         )
         qapp.sendEvent(viewport, event)
-    qtbot.waitUntil(lambda: len(grid._widgets) > 3)
+    qtbot.waitUntil(lambda: len(grid._widgets) > 3 and scroll.maximum() > end_of_first_screen)
     assert tuple(grid._widgets[:3]) == initial
     assert scroll.value() == end_of_first_screen
     assert len(grid._widgets) < 100
     before = len(grid._widgets)
-    qtbot.waitUntil(lambda: scroll.maximum() > end_of_first_screen)
     scroll.setValue(scroll.maximum())
     qtbot.waitUntil(lambda: len(grid._widgets) > before)
     qapp.setActiveWindow(workspace)

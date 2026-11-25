@@ -594,14 +594,18 @@ class ProgressiveDiscoveryGrid(DiscoveryGrid):
     def materialized_count(self):
         return len(self._widgets)
 
-    def restore_scroll(self, value):
-        self._scroll_target = value
+    def restore_scroll(self, value, *, after_maximum=None):
+        self._scroll_target = value, after_maximum
         self._restore_scroll_if_ready()
 
     def _restore_scroll_if_ready(self, *_args):
-        if self._bar is None or self._scroll_target is None or self._scroll_target > self._bar.maximum():
+        if self._bar is None or self._scroll_target is None:
             return
-        value, self._scroll_target = self._scroll_target, None
+        value, after_maximum = self._scroll_target
+        maximum = self._bar.maximum()
+        if value > maximum or (after_maximum is not None and maximum <= after_maximum):
+            return
+        self._scroll_target = None
         self._bar.setValue(value)
         self._append_timer.stop()
 
@@ -655,12 +659,12 @@ class ProgressiveDiscoveryGrid(DiscoveryGrid):
             self._prefetch_next_row and self._widgets
             and self.more.mapTo(self._viewport, QPoint()).y() <= self._viewport.height() + self._widgets[-1].height()
         )
-        if value == self._bar.maximum() or near_footer:
-            self._queue_append()
+        if value >= self._bar.maximum() or near_footer:
+            self._queue_append(value)
 
-    def _queue_append(self):
+    def _queue_append(self, value):
         if self.more.isVisible() and self.more.isEnabled():
-            self._append_position = self._bar.value()
+            self._append_position = value, max(value, self._bar.maximum())
             self._append_timer.start(0)
 
     def _append_screen(self):
@@ -683,8 +687,12 @@ class ProgressiveDiscoveryGrid(DiscoveryGrid):
                 if button is not None and button.isEnabled():
                     button.setFocus(Qt.TabFocusReason)
                     break
-        elif scroll_position is not None and self._bar.value() < scroll_position:
-            self.restore_scroll(scroll_position)
+        elif scroll_position is not None:
+            value, previous_maximum = scroll_position
+            if value:
+                # Qt can briefly clamp the value while it lays out the appended
+                # rows. Restore the reading position once the scroll range grows.
+                self.restore_scroll(value, after_maximum=previous_maximum)
 
     def eventFilter(self, watched, event):
         if watched is self._viewport:
@@ -693,5 +701,5 @@ class ProgressiveDiscoveryGrid(DiscoveryGrid):
             elif event.type() == QEvent.Wheel and self._bar.value() == self._bar.maximum():
                 delta = event.pixelDelta().y() or event.angleDelta().y()
                 if delta < 0:
-                    self._queue_append()
+                    self._queue_append(self._bar.value())
         return super().eventFilter(watched, event)
