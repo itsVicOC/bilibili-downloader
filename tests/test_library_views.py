@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QDesktopServices, QImage
 from PySide6.QtWidgets import QAbstractItemView
 
-from bilibili_downloader.core.library import LibraryRepository
+from bilibili_downloader.core.library import LibraryRepository, absolute_path
 from bilibili_downloader.core.models import (
     ContentKind,
     DownloadItem,
@@ -76,18 +76,20 @@ def test_search_and_file_selection_survive_view_switches(qtbot, tmp_path, monkey
     assert page.table.currentIndex().data(Qt.UserRole) == second
     assert page.table.currentIndex().data(Qt.CheckStateRole) == Qt.Checked
     index = page.table.currentIndex()
+    expected_media = absolute_path(tmp_path / "第二段 演示.mp4")
     assert index.data().splitlines() == ["002 - 细节 · 城市徒步", "甲 · 散步合集"]
-    assert str(tmp_path / "第二段 演示.mp4") in index.data(Qt.ToolTipRole)
+    assert expected_media == absolute_path(index.data(Qt.ToolTipRole).splitlines()[-1])
     assert "第二段 演示.mp4" not in index.data()
     assert page.table.item(page._table_rows[variant], 1).text().startswith("仅音频")
     opened = []
-    monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: opened.append(url.toLocalFile()) or True)
+    monkeypatch.setattr(QDesktopServices, "openUrl",
+                        lambda url: opened.append(absolute_path(url.toLocalFile())) or True)
     qtbot.keyClick(page.table, Qt.Key_Return)
-    assert opened == [str(tmp_path / "第二段 演示.mp4")]
+    assert opened == [expected_media]
     position = page.table.visualRect(index).center()
     qtbot.mouseClick(page.table.viewport(), Qt.LeftButton, pos=position)
     qtbot.mouseDClick(page.table.viewport(), Qt.LeftButton, pos=position)
-    assert opened == [str(tmp_path / "第二段 演示.mp4")] * 2
+    assert opened == [expected_media] * 2
     page.search.setText("ep6 春季 两只猫")
     assert page.visible_ids() == [later]
     assert page.table.item(page._table_rows[later], 0).text().splitlines() == ["第2话 · 两只猫", "春季"]
