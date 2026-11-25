@@ -36,7 +36,7 @@
 
 Windows、macOS、Linux で動作します。Windows と Apple Silicon Mac 向けにはビルド済みパッケージが用意されており、Linux ではソースから実行できます。プロジェクトのコードは MIT ライセンスです。
 
-この README は英語と簡体字中国語で提供されています。現在のデスクトップインターフェースと詳細なドキュメントは主に簡体字中国語で書かれており、以下のリンクは該当する場合それらのガイドを指しています。
+この README の簡体字中国語版と英語版もあります。現在のデスクトップインターフェースと詳細なドキュメントは主に簡体字中国語で書かれており、以下のリンクは該当する場合それらのガイドを指しています。
 
 <p align="center">
   <picture>
@@ -76,13 +76,11 @@ Windows、macOS、Linux で動作します。Windows と Apple Silicon Mac 向�
 
 ## ダウンロードとインストール
 
-**`v0.9.0b6` プレリリース**では、ダウンロードページのランキングがオンデマンド読み込みに対応した Daily Top 100 に拡張されました。ログインすると、フォロー中のクリエイターの動画を公開日時または再生数で並べ替えたり、ライブワークスペースでフォロー中のチャンネルを確認したりできます。既存のインストールは、ベータ版を含むチャンネルから更新できます。[0.9.0 Beta 6 をダウンロード](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.9.0b6) · [変更履歴](CHANGELOG.md#v090b6---2026-11-23)
-
-**安定版 `v0.8.13`:** 海外 CDN での HTTP 403 によるダウンロードと再開の失敗を修正し、ストリーム全体が検証された後にのみ録画を完了とするようにしました。字幕の検証、4:3 表示用のコピー、コレクションワークスペースは引き続き利用できます。[安定版をダウンロード](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.13) · [検証記録](docs/BUILDING.md)（中国語）。どちらの更新チャンネルからもアップグレードできます。
+**安定版 `v0.9.0`** では、Daily Top 100 とフォロー中のライブ配信の段階的な読み込みに対応しました。macOS と Windows のアプリアイコンを更新し、バッチ取り込みのプレビューボタンをコンパクトにしました。安定版チャンネルとベータ版を含むチャンネルのどちらからも更新できます。 [安定版 0.9.0 をダウンロード](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.9.0) · [変更履歴](CHANGELOG.md#v090---2026-11-23)
 
 永続的なメディアの再利用、添付ファイルの個別修復、厳密なメディア照合、キューとバッチの検索、カスタムのパート範囲、ネットワークの自動再試行、メディアの検査、ディレクトリの再リンクを含みます。既存の設定とキューに入った出力のスナップショットの互換性は維持されています。チェックした項目は絞り込みをまたいで保持され、非表示の選択数も表示されます。結果はメディア、仕様、添付ファイルに分けて表示され、命名フィールドは中国語での検索に対応しています。[ユーザーガイド](docs/USER_GUIDE.md#下载与归档优化) · [ワークフローの検証](docs/WORKFLOW_POLISH_VALIDATION.md)（ネイティブとの比較、ペアでのパフォーマンス結果、ベータ段階のチェック範囲を含む）。
 
-![バッチ検索と選択数](docs/images/ui-feedback/after/archive-batch-light-900.png)
+![バッチ検索と選択数](docs/images/archive/archive-batch-light-900.png)
 
 **[BiliFlow 公式サイト · 1008.si](https://1008.si/)** にアクセスするか、**[GitHub から最新の安定版をダウンロード](https://github.com/itsVicOC/bilibili-downloader/releases/latest)** してください。ベータ機能を試すには、[すべてのリリース](https://github.com/itsVicOC/bilibili-downloader/releases)を開き、`Pre-release` ラベルの付いたものを探してください。
 
@@ -92,10 +90,10 @@ Windows、macOS、Linux で動作します。Windows と Apple Silicon Mac 向�
 
 | プラットフォーム | リリースファイル | 備考 |
 |---|---|---|
-| macOS 12+ · Apple Silicon | `BilibiliDownloader-macOS-full-<version>.dmg` | v0.8.1 から。開く前に Applications にドラッグしてください |
+| macOS 13+ · Apple Silicon | `BilibiliDownloader-macOS-full-<version>.dmg` | v0.8.1 から。開く前に Applications にドラッグしてください |
 | Windows 10/11 · x64 | `BilibiliDownloader-Windows-full-<version>-setup.exe` | v0.8.1 から。管理者権限なしのユーザー単位のインストールです |
-| macOS 12+ · Apple Silicon | `BilibiliDownloader-macOS-full-<version>.zip` | ポータブルアーカイブ。アプリを Applications に移動してください |
-| macOS 12+ · Apple Silicon | `BilibiliDownloader-macOS-lite-<version>.zip` | FFmpeg を別途インストールしてください |
+| macOS 13+ · Apple Silicon | `BilibiliDownloader-macOS-full-<version>.zip` | ポータブルアーカイブ。アプリを Applications に移動してください |
+| macOS 13+ · Apple Silicon | `BilibiliDownloader-macOS-lite-<version>.zip` | FFmpeg を別途インストールしてください |
 | Windows 10/11 · x64 | `BilibiliDownloader-Windows-full-<version>.zip` | ポータブルアーカイブ。実行前にアーカイブ全体を展開してください |
 | Windows 10/11 · x64 | `BilibiliDownloader-Windows-lite-<version>.zip` | FFmpeg を別途インストールしてください |
 | Linux | ビルド済みパッケージはまだありません | [ソースから実行](#ソースから実行)に従ってください |
@@ -350,7 +348,7 @@ pyinstaller --noconfirm --clean BilibiliDownloader.spec
 BiliFlow が役に立ったら、[GitHub](https://github.com/itsVicOC/bilibili-downloader) で Star を付けるか、デスクトップでのメディアのダウンロードやアーカイブを探している人に[サイト](https://1008.si/)とリポジトリを紹介してください。
 
 - **バグの報告や機能の提案:** [トラブルシューティング](docs/TROUBLESHOOTING.md)と[既存の Issue](https://github.com/itsVicOC/bilibili-downloader/issues) を確認してから、[Issue を作成](https://github.com/itsVicOC/bilibili-downloader/issues/new)してください。バージョン、プラットフォーム、再現手順を記載し、Cookie、署名付きの再生 URL、個人情報は削除してください。
-- **コード、ドキュメント、翻訳の改善:** [コントリビューションガイド](CONTRIBUTING.md)を読んでから、プルリクエストを送ってください。機能、インストール手順、リンクは両方の README で同期させてください。
+- **コード、ドキュメント、翻訳の改善:** [コントリビューションガイド](CONTRIBUTING.md)を読んでから、プルリクエストを送ってください。機能、インストール手順、リンクは各言語版の README で同期させてください。
 - **脆弱性の報告:** [セキュリティポリシー](SECURITY.md)に記載された非公開の報告窓口に従ってください。
 
 [PySide6 / Qt](https://doc.qt.io/qtforpython-6/)、[FFmpeg](https://ffmpeg.org/)、[Mesio / rust-srec](https://github.com/hua0512/rust-srec)、その他のオープンソースの依存関係のコントリビューターに感謝します。アートワークとライセンスについては、[サードパーティに関する通知](THIRD_PARTY_NOTICES.md)を参照してください。
