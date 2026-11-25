@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <a href="README.md">简体中文</a> · <strong>English</strong>
+  <a href="README.md">简体中文</a> · <strong>English</strong> · <a href="README.ja.md">日本語</a>
 </p>
 
 <p align="center">
@@ -91,10 +91,10 @@ Live recording is included in stable releases from `v0.8.0`. Configure engine pa
 
 | Platform | Release file | Notes |
 |---|---|---|
-| macOS 12+ · Apple Silicon | `BilibiliDownloader-macOS-full-<version>.dmg` | From v0.8.1; drag into Applications before opening |
+| macOS 13+ · Apple Silicon | `BilibiliDownloader-macOS-full-<version>.dmg` | From v0.8.1; drag into Applications before opening |
 | Windows 10/11 · x64 | `BilibiliDownloader-Windows-full-<version>-setup.exe` | From v0.8.1; per-user installation without administrator rights |
-| macOS 12+ · Apple Silicon | `BilibiliDownloader-macOS-full-<version>.zip` | Portable archive; move the app into Applications |
-| macOS 12+ · Apple Silicon | `BilibiliDownloader-macOS-lite-<version>.zip` | Install FFmpeg separately |
+| macOS 13+ · Apple Silicon | `BilibiliDownloader-macOS-full-<version>.zip` | Portable archive; move the app into Applications |
+| macOS 13+ · Apple Silicon | `BilibiliDownloader-macOS-lite-<version>.zip` | Install FFmpeg separately |
 | Windows 10/11 · x64 | `BilibiliDownloader-Windows-full-<version>.zip` | Portable archive; extract the entire archive before running |
 | Windows 10/11 · x64 | `BilibiliDownloader-Windows-lite-<version>.zip` | Install FFmpeg separately |
 | Linux | No prebuilt package yet | Follow [Run from source](#run-from-source) |
