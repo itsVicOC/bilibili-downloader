@@ -119,7 +119,10 @@ def test_controller_blocks_runtime_owners_of_target_session(controller, tmp_path
     session = recording(tmp_path / 'media')
     controller.repository.save_session(session)
     if owner == 'recording':
-        controller.service.snapshot = lambda: [{'active_output_dir': session.directory}]
+        controller.service.snapshot = lambda: [
+            {'room_id': session.room.room_id, 'active_output_dir': session.directory}
+        ]
+        controller.refresh()
     else:
         controller._export = Future()
         if owner == 'session-export':
