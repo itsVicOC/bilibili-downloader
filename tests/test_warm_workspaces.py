@@ -100,7 +100,7 @@ def test_advanced_error_opens_and_scrolls_to_the_actual_field(workspace):
     ("_aspect_combo", "_aspect_row"),
     ("_match_policy", "_match_policy_row"),
 ])
-def test_enqueue_reveals_invalid_advanced_fields_and_recovers(workspace, monkeypatch, batch, name, row):
+def test_enqueue_reveals_invalid_advanced_fields_and_recovers(workspace, monkeypatch, qtbot, batch, name, row):
     window = workspace
     info = VideoInfo(bvid="BVvalidate", cid=1)
     window._url_input.setText(info.bvid)
@@ -120,10 +120,10 @@ def test_enqueue_reveals_invalid_advanced_fields_and_recovers(workspace, monkeyp
 
     def verify_error(owner):
         assert not queued and not confirmations
+        qtbot.waitUntil(lambda: field.visibleRegion().boundingRect().contains(field.rect()))
         assert window._configuration.advanced.toggle.isChecked()
         assert field.error.isVisible() and control.property("invalid")
         assert owner.focusWidget() is control
-        assert field.visibleRegion().boundingRect().contains(field.rect())
 
     if batch:
         inspect_batch_settings(window, enqueue, verify_error)

@@ -1336,7 +1336,10 @@ class _FieldReveal(QObject):
         scroll.verticalScrollBar().sliderPressed.connect(self.cancel)
         scroll.verticalScrollBar().rangeChanged.connect(self.schedule)
         scroll.verticalScrollBar().valueChanged.connect(self.schedule)
-        self.schedule()
+        if field.isVisible():
+            self.locate()
+        else:
+            self.schedule()
 
     def cancel(self):
         self.active = False
