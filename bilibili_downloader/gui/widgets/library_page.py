@@ -5,12 +5,25 @@ import threading
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, QUrl, Signal
-from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetrics
+from PySide6.QtCore import (
+    QEvent,
+    QModelIndex,
+    QObject,
+    QRunnable,
+    QSignalBlocker,
+    Qt,
+    QThreadPool,
+    QTimer,
+    QUrl,
+    Signal,
+)
+from PySide6.QtGui import QDesktopServices, QImage
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QButtonGroup,
     QDialog,
+    QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
@@ -18,9 +31,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QStackedWidget,
-    QStyle,
-    QStyledItemDelegate,
-    QStyleOptionViewItem,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -28,12 +38,6 @@ from PySide6.QtWidgets import (
 )
 
 from bilibili_downloader.core.library import FILE_STATES
-from bilibili_downloader.core.models import (
-    AUDIO_CODEC_MAP,
-    VIDEO_CODEC_MAP,
-    OutputMode,
-    VideoQuality,
-)
 from bilibili_downloader.gui.dialogs.file_picker import file_picker
 from bilibili_downloader.gui.dialogs.workflow import WorkflowDialog
 from bilibili_downloader.gui.widgets.combo_box import ComboBox
@@ -44,46 +48,28 @@ from bilibili_downloader.gui.widgets.components import (
     Notice,
     PopupMenu,
     TaskDetailPanel,
-    palette,
 )
-from bilibili_downloader.gui.widgets.file_table import FileTable
+from bilibili_downloader.gui.widgets.file_table import (
+    DIRECTORY_COLUMN,
+    SIZE_COLUMN,
+    STATE_COLUMN,
+    FileTable,
+)
 from bilibili_downloader.gui.widgets.glass_surface import ItemViewSurface
-from bilibili_downloader.gui.widgets.row_hover import row_option
+from bilibili_downloader.gui.widgets.library_records import LibraryRecord, normalize
+from bilibili_downloader.gui.widgets.library_records import file_size as _size
+from bilibili_downloader.gui.widgets.library_records import media_state as _media_state
+from bilibili_downloader.gui.widgets.library_thumbnails import (
+    LibraryThumbnails,
+    ThumbnailFile,
+    ThumbnailSource,
+)
+from bilibili_downloader.gui.widgets.library_views import (
+    FileLabelDelegate,
+    LibraryGrid,
+    handle_browse_key,
+)
 from bilibili_downloader.gui.widgets.selection import SelectionBar, TableSelection
-
-
-class _FileLabelDelegate(QStyledItemDelegate):
-    """Keep the filename and secondary context readable within a compact row."""
-
-    def paint(self, painter, option, index):
-        opt = QStyleOptionViewItem(option)
-        self.initStyleOption(opt, index)
-        opt.features &= ~QStyleOptionViewItem.HasCheckIndicator
-        lines, opt.text = opt.text.splitlines()[:2], ""
-        if index.column() != 0:
-            style = opt.widget.style() if opt.widget else QApplication.style()
-            style.drawControl(QStyle.CE_ItemViewItem, row_option(opt, index), painter, opt.widget)
-        painter.save()
-        painter.setClipRect(opt.rect)
-        secondary = QFont(opt.font)
-        if secondary.pixelSize() > 0:
-            secondary.setPixelSize(max(1, round(secondary.pixelSize() * .9)))
-        else:
-            secondary.setPointSizeF(secondary.pointSizeF() * .9)
-        fonts = (opt.font, secondary)
-        metrics = [QFontMetrics(font, painter.device()) for font in fonts[:len(lines)]]
-        top = opt.rect.center().y() - sum(font.height() for font in metrics) // 2
-        colors = palette(opt.widget)
-        for number, (line, font_metrics) in enumerate(zip(lines, metrics)):
-            painter.setFont(fonts[number])
-            painter.setPen(QColor(colors.text if number == 0 else colors.muted))
-            painter.drawText(
-                opt.rect.left() + 10,
-                top + font_metrics.ascent(),
-                font_metrics.elidedText(line, Qt.ElideRight, max(1, opt.rect.width() - 20)),
-            )
-            top += font_metrics.height()
-        painter.restore()
 
 
 class OperationDialog(WorkflowDialog):
@@ -141,28 +127,12 @@ class _LibraryJob(QRunnable):
         self.signals.finished.emit(result)
 
 
-def _size(value):
-    if value is None:
-        return "未知"
-    for unit in ("B", "KB", "MB", "GB", "TB"):
-        if value < 1024:
-            return f"{value:.1f} {unit}"
-        value /= 1024
-    return f"{value:.1f} PB"
-
-
-def _media_state(media, outcome):
-    state = media["state"] if media else "unchecked"
-    if state not in {"missing", "inaccessible", "recycled"} and outcome.media_verification.get("valid") is False:
-        return "媒体异常"
-    return FILE_STATES.get(state, "待检查")
-
-
 class LibraryPage(QWidget):
     download_requested = Signal()
     reuse_requested = Signal(object)
+    preferences_changed = Signal(str, str)
 
-    def __init__(self, parent=None, *, pool=None):
+    def __init__(self, parent=None, *, pool=None, view_mode="grid", sort_mode="recent"):
         super().__init__(parent)
         self.repository = None
         self.record_provider = lambda: []
@@ -172,6 +142,14 @@ class LibraryPage(QWidget):
         self._read_generation = 0
         self._cancel = threading.Event()
         self._assets = []
+        self._records = {}
+        self._ordered = []
+        self._table_rows = {}
+        self._table_visible = set()
+        self._table_needs_refresh = True
+        self._updating_view = False
+        self._positions = {}
+        self.view_mode, self.sort_mode = view_mode, sort_mode
         self._removed_ids = []
         self._load_error = False
         self._details = ""
@@ -186,8 +164,9 @@ class LibraryPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         self.tools = CommandBar()
         self.search = QLineEdit()
-        self.search.setPlaceholderText("搜索文件、作品或作者")
-        self.search.setToolTip("支持分 P、作者、合集及完整路径")
+        self.search.setPlaceholderText("搜索文件、作品、作者或编号")
+        self.search.setToolTip("支持分 P、合集、番剧、BV/AV/EP 号和完整路径，可用空格分隔关键词")
+        self.search.setAccessibleName("搜索下载文件")
         self.search.setMinimumWidth(160)
         self.search.setClearButtonEnabled(True)
         self.search.textChanged.connect(self._filter)
@@ -205,6 +184,30 @@ class LibraryPage(QWidget):
         self.state_filter.setFixedWidth(112)
         self.state_filter.currentIndexChanged.connect(self._filter)
         self.tools.filters.addWidget(self.state_filter)
+        self.sort = ComboBox()
+        self.sort.setAccessibleName("下载文件排序")
+        for key, label in (("recent", "最近下载"), ("title", "标题"), ("size", "文件大小")):
+            self.sort.addItem(label, key)
+        self.sort.setCurrentIndex(self.sort.findData(self.sort_mode))
+        self.sort.setMinimumWidth(112)
+        self.tools.filters.addWidget(self.sort)
+        view_switcher = QWidget()
+        view_layout = QHBoxLayout(view_switcher)
+        view_layout.setContentsMargins(0, 0, 0, 0)
+        view_layout.setSpacing(2)
+        view_group = QButtonGroup(view_switcher)
+        self.view_buttons = {}
+        for mode, label in (("grid", "网格"), ("list", "列表")):
+            button = QPushButton(label)
+            button.setObjectName("SegmentButton")
+            button.setAccessibleName(f"下载文件 · {label}")
+            button.setCheckable(True)
+            button.setChecked(mode == self.view_mode)
+            button.clicked.connect(lambda checked, mode=mode: self.set_view_mode(mode) if checked else None)
+            view_group.addButton(button)
+            view_layout.addWidget(button)
+            self.view_buttons[mode] = button
+        self.tools.filters.addWidget(view_switcher)
         self.open_action = ActionButton("打开文件")
         self.folder_action = ActionButton("打开文件夹")
         self.check_button = ActionButton("检查文件")
@@ -247,40 +250,44 @@ class LibraryPage(QWidget):
         more.setMenu(menu)
         self.tools.actions.addWidget(more)
         layout.addWidget(self.tools)
+        toolbar_status = QWidget()
+        status_layout = QVBoxLayout(toolbar_status)
+        status_layout.setContentsMargins(0, 0, 0, 0)
         self.selection_bar = SelectionBar(contextual=True)
-        layout.addWidget(self.selection_bar)
+        status_layout.addWidget(self.selection_bar)
         self.count_label = QLabel()
         self.count_label.setObjectName("MetaLabel")
+        status_layout.addWidget(self.count_label)
+        self.tools.set_status(toolbar_status)
         self.progress_label = QLabel()
         self.progress_label.setObjectName("MetaLabel")
         self.progress_label.setWordWrap(True)
         self.count_label.hide()
         self.progress_label.hide()
         layout.addWidget(self.progress_label, alignment=Qt.AlignRight)
+        self._thumbnails = LibraryThumbnails(self)
+        self._thumbnails.changed.connect(self._thumbnail_changed)
+        self._painted_records = set()
+        self._thumbnail_timer = QTimer(self)
+        self._thumbnail_timer.setSingleShot(True)
+        self._thumbnail_timer.timeout.connect(self._load_visible_thumbnails)
         self.table = FileTable()
         self.table.setAccessibleName("下载文件列表")
-        self.table.setHorizontalHeaderLabels(
-            [
-                "文件 / 作品",
-                "作者 / 合集",
-                "类型 / 规格",
-                "大小",
-                "文件状态",
-                "所在目录",
-            ]
-        )
+        self.table.setHorizontalHeaderLabels(["作品", "规格", "大小", "状态", "所在目录"])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        for column, width in ((1, 120), (2, 132), (4, 100), (5, 190)):
+        for column, width in ((1, 128), (STATE_COLUMN, 100), (DIRECTORY_COLUMN, 190)):
             self.table.setColumnWidth(column, width)
         self.table.verticalHeader().hide()
-        for column in (1, 2):
-            self.table.setItemDelegateForColumn(column, _FileLabelDelegate(self.table))
+        self._resize_columns()
+        for column in (1, STATE_COLUMN, DIRECTORY_COLUMN):
+            self.table.setItemDelegateForColumn(column, FileLabelDelegate(self.table))
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.selection = TableSelection(self.table, _FileLabelDelegate(self.table), paint_only=True, distinguish_focus=True)
+        self.selection = TableSelection(
+            self.table, FileLabelDelegate(self.table, self._thumbnail_for), paint_only=True, distinguish_focus=True,
+        )
         self.selection.changed.connect(self._checked_changed)
-        self.selection.focus_changed.connect(self._selection)
+        self.selection.focus_changed.connect(self._table_focus_changed)
         self.selection_bar.select_visible.connect(self.select_visible)
         self.selection_bar.clear_requested.connect(self._clear_selection)
         self.selection_bar.review_requested.connect(self._toggle_selection_review)
@@ -289,12 +296,25 @@ class LibraryPage(QWidget):
         self.table.select_all_requested.connect(self.select_visible)
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._context_menu)
+        self.grid = LibraryGrid(self.selection, self._thumbnail_for)
+        self._views = {"grid": self.grid, "list": self.table}
+        self.browser = QStackedWidget()
+        for view in self._views.values():
+            view.installEventFilter(self)
+            view.viewport().installEventFilter(self)
+            view.verticalScrollBar().valueChanged.connect(self._load_visible_thumbnails)
+            self.browser.addWidget(view)
+        self.grid.selectionModel().currentChanged.connect(self._browse_focus_changed)
+        self.grid.doubleClicked.connect(self._browse_open)
+        self.grid.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.grid.customContextMenuRequested.connect(lambda point: self._context_menu(point, self.grid))
+        self.browser.setCurrentWidget(self._views[self.view_mode])
         self.stack = QStackedWidget()
         # Empty-state hints must not prevent the file table from shrinking when
         # the attachment panel is expanded in a compact window.
         self.stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
         self.stack.setMinimumHeight(60)
-        self.stack.addWidget(self.table)
+        self.stack.addWidget(self.browser)
         self.stack.addWidget(
             EmptyState(
                 "暂无文件记录", action="去下载", callback=self.download_requested.emit, scene="files_empty",
@@ -340,6 +360,7 @@ class LibraryPage(QWidget):
         layout.addWidget(self.detail)
         self.notice = Notice(callback=self._activate_notice)
         layout.addWidget(self.notice)
+        self.sort.currentIndexChanged.connect(self._sort_changed)
         self._actions()
 
     def _feedback(self, text, tone="info", *, action="", callback=None, details=""):
@@ -408,12 +429,7 @@ class LibraryPage(QWidget):
             self.stack.setCurrentIndex(3)
             self._actions()
             return
-        scroll = (
-            self.table.verticalScrollBar().value(),
-            self.table.horizontalScrollBar().value(),
-        )
-        attachment = self.files.currentItem()
-        attachment_id = attachment.data(0, Qt.UserRole)["id"] if attachment else None
+        position = self._view_position()
         try:
             assets = self.repository.list_assets() if assets is None else assets
         except (OSError, ValueError, sqlite3.Error) as exc:
@@ -425,96 +441,129 @@ class LibraryPage(QWidget):
             return
         self._load_error = False
         self._assets = assets
-        self.table.setUpdatesEnabled(False)
-        self.table.blockSignals(True)
-        rows = []
-        titles, search_text, media_index = [], {}, {}
-        quality_names = {q.value: q.label for q in VideoQuality}
-        for row, asset in enumerate(assets):
-            item, outcome = asset["item"], asset["outcome"]
-            media = self._media(asset)
-            media_index[asset["id"]] = media or {}
-            quality = quality_names.get(outcome.actual_quality, "规格未知")
-            spec = (
-                f"仅音频\n{AUDIO_CODEC_MAP.get(outcome.actual_audio_quality, '规格未知')}"
-                if item.output_mode == OutputMode.AUDIO
-                else f"视频 · {quality}\n{VIDEO_CODEC_MAP.get(outcome.actual_video_codec, '编码未知')}"
-            )
-            path = Path(media["path"] if media else asset["path"])
-            filename = path.name
-            values = [
-                f"{filename}\n{item.video_info.title}",
-                "\n".join(
-                    v
-                    for v in (
-                        item.video_info.author or item.video_info.owner_name,
-                        item.video_info.collection_title
-                        or item.video_info.series_title
-                        or item.video_info.season_title,
-                    )
-                    if v
-                ),
-                spec,
-                _size(media["size"] if media else None),
-                _media_state(media, outcome),
-                str(path.parent),
-            ]
-            rows.append(values)
-            title = item.display_title
-            titles.append(title)
-            info = item.video_info
-            search_text[asset["id"]] = " ".join((title, info.author, info.owner_name, info.collection_title, info.series_title, *(f["path"] for f in asset["files"]))).casefold()
-        self._search_text, self._media_index = search_text, media_index
-        self.table.replace_rows(rows, [a["id"] for a in assets], titles)
-        self.table.blockSignals(False)
-        self.table.setUpdatesEnabled(True)
-        self.selection.reset([a["id"] for a in assets])
-        focused = self.selection.state.focused
-        if focused is not None:
-            self.table.blockSignals(True)
-            self.table.setCurrentCell(self.selection.state.order.index(focused), 0)
-            self.table.blockSignals(False)
-        self._filter()
-        self._selection(attachment_id=attachment_id)
-        self.table.verticalScrollBar().setValue(scroll[0])
-        self.table.horizontalScrollBar().setValue(scroll[1])
+        self._records = {asset["id"]: LibraryRecord(asset) for asset in assets}
+        self._sort_records()
+        self._filter(position=position)
         self._resize_columns()
         self._last_refresh_ms = (time.perf_counter() - refresh_started) * 1000
 
     def _apply_file_updates(self, updates):
-        """A check only changes file facts; avoid decoding/rebuilding the library."""
+        """Update file facts while retaining the loaded records and session selection."""
         started = time.perf_counter()
         self._read_generation += 1
-        entries = {entry["id"]: (row, entry) for row, asset in enumerate(self._assets) for entry in asset["files"]}
-        self.table.blockSignals(True)
-        self.table.setUpdatesEnabled(False)
+        entries = {entry["id"]: (asset["id"], entry) for asset in self._assets for entry in asset["files"]}
+        model = self.table.model()
         changed_rows = []
-        try:
-            for update in updates:
-                current = entries.get(update["id"])
-                if current is None or current[1]["path"] != update["path"]:
-                    continue
-                row, entry = current
-                entry.update(update)
-                if entry["kind"] != "media":
-                    continue
-                outcome = self._assets[row]["outcome"]
-                state = _media_state(entry, outcome)
-                for column, value in ((3, _size(entry["size"])), (4, state)):
-                    if self.table.model().rows[row][column] != value:
-                        self.table.model().rows[row][column] = value
-                        changed_rows.append(row)
-            if changed_rows:
-                model = self.table.model()
-                model.dataChanged.emit(model.index(min(changed_rows), 3), model.index(max(changed_rows), 4), [Qt.DisplayRole, Qt.ToolTipRole])
-        finally:
-            self.table.blockSignals(False)
-            self.table.setUpdatesEnabled(True)
-        if self.state_filter.currentData() != "all":
-            self._filter()
+        size_changed = False
+        for update in updates:
+            current = entries.get(update["id"])
+            if current is None or current[1]["path"] != update["path"]:
+                continue
+            asset_id, entry = current
+            size_changed |= entry["kind"] == "media" and entry["size"] != update["size"]
+            entry.update(update)
+            if entry["kind"] != "media" or self._table_needs_refresh:
+                continue
+            record = self._records[asset_id]
+            row = self._table_rows[asset_id]
+            for column, value in ((SIZE_COLUMN, _size(record.size)), (STATE_COLUMN, record.state)):
+                if model.rows[row][column] != value:
+                    model.rows[row][column] = value
+                    changed_rows.append(row)
+        if changed_rows:
+            model.dataChanged.emit(model.index(min(changed_rows), SIZE_COLUMN), model.index(max(changed_rows), STATE_COLUMN),
+                                   [Qt.DisplayRole, Qt.ToolTipRole])
+        resort = size_changed and self.sort_mode == "size"
+        if resort:
+            self._sort_records()
+        if resort or self.view_mode != "list" or self.state_filter.currentData() != "all":
+            self._filter(position=self._view_position())
         else:
+            self._reset_thumbnails()
+            self.table.viewport().update()
             self._selection()
         self._last_refresh_ms = (time.perf_counter() - started) * 1000
+
+    def _sort_records(self):
+        self._ordered = sorted(self._records.values(), key=lambda record: record.order_key(self.sort_mode))
+        self.selection.reset([record.id for record in self._ordered])
+        self._table_needs_refresh = True
+
+    def _sort_changed(self):
+        self.sort_mode = self.sort.currentData()
+        self._sort_records()
+        self._filter(reveal=True)
+        self.preferences_changed.emit(self.view_mode, self.sort_mode)
+
+    def _view_position(self):
+        view = self._views[self.view_mode]
+        return (view.verticalScrollBar().value(), view.horizontalScrollBar().value(),
+                self.selection.state.focused)
+
+    def _projection_key(self):
+        return (self.search.text(), self.type_filter.currentData(), self.state_filter.currentData(),
+                self.sort_mode, self.selection.state.reviewing)
+
+    def set_view_mode(self, mode):
+        if mode == self.view_mode:
+            return
+        projection = self._projection_key()
+        self._positions[self.view_mode] = (projection, self._view_position())
+        self.view_mode = mode
+        self.view_buttons[mode].setChecked(True)
+        saved_projection, position = self._positions.get(mode, (None, None))
+        if saved_projection != projection:
+            position = None
+        self._filter(position=position, reveal=position is None or position[2] != self.selection.state.focused)
+        self.preferences_changed.emit(mode, self.sort_mode)
+
+    def _update_list(self, visible):
+        if self._table_needs_refresh:
+            records = self._ordered
+            ids = [record.id for record in records]
+            self.table.replace_rows([record.table_row() for record in records], ids,
+                                    [record.table_tooltip() for record in records])
+            self._table_rows = {asset_id: row for row, asset_id in enumerate(ids)}
+            for asset_id, row in self._table_rows.items():
+                self.table.setRowHidden(row, asset_id not in visible)
+            self._table_needs_refresh = False
+        else:
+            for asset_id in self._table_visible ^ visible:
+                self.table.setRowHidden(self._table_rows[asset_id], asset_id not in visible)
+        self._table_visible = visible
+
+    def _present_results(self, matched, position, reveal):
+        state = self.selection.state
+        view = self._views[self.view_mode]
+        had_focus = self.browser.currentWidget().hasFocus()
+        self._updating_view = True
+        self.table.blockSignals(True)
+        self._reset_thumbnails()
+        try:
+            self.browser.setCurrentWidget(view)
+            if view is self.table:
+                self._update_list(state.visible)
+                index = self.table.model().index(self._table_rows.get(state.focused, -1), 0)
+            else:
+                view.model().replace(matched)
+                index = view.model().index_for(state.focused)
+            if state.focused not in state.visible:
+                index = QModelIndex()
+            if index.isValid() and view.currentIndex() != index:
+                view.setCurrentIndex(index)
+            elif not index.isValid() and view.currentIndex().isValid():
+                view.setCurrentIndex(QModelIndex())
+            if reveal and index.isValid():
+                view.scrollTo(index)
+            elif position is not None:
+                view.verticalScrollBar().setValue(position[0])
+                view.horizontalScrollBar().setValue(position[1])
+            if had_focus and view.isVisible():
+                view.setFocus()
+        finally:
+            self.table.blockSignals(False)
+            self._updating_view = False
+        view.viewport().update()
 
     @staticmethod
     def _media(asset):
@@ -542,9 +591,10 @@ class LibraryPage(QWidget):
 
     def clear_filters(self):
         self.selection.state.reviewing = False
-        self.search.clear()
-        self.type_filter.setCurrentIndex(0)
-        self.state_filter.setCurrentIndex(0)
+        with QSignalBlocker(self.search), QSignalBlocker(self.type_filter), QSignalBlocker(self.state_filter):
+            self.search.clear()
+            self.type_filter.setCurrentIndex(0)
+            self.state_filter.setCurrentIndex(0)
         self._filter()
 
     def _toggle_selection_review(self):
@@ -556,43 +606,110 @@ class LibraryPage(QWidget):
             self._filter()
         else:
             self.selection_bar.update_state(self.selection.state)
+            self.browser.currentWidget().viewport().update()
             self._selection()
 
-    def _filter(self, *_):
-        query = self.search.text().strip().casefold()
+    def _filter(self, *_, position=None, reveal=False):
+        terms = normalize(self.search.text()).split()
         mode, state = self.type_filter.currentData(), self.state_filter.currentData()
         reviewing = self.selection.state.reviewing
         for control in (self.search, self.type_filter, self.state_filter):
             control.setEnabled(not reviewing)
-        visible_ids = []
-        self.table.blockSignals(True)
-        for row, asset in enumerate(self._assets):
-            media = self._media_index[asset["id"]]
-            visible = (
-                (mode == "all" or asset["item"].output_mode.value == mode)
-                and (state == "all" or media.get("state", "unchecked") == state)
-                and query in self._search_text[asset["id"]]
-            )
-            if reviewing:
-                visible = asset["id"] in self.selection.state.selected
-            self.table.setRowHidden(row, not visible)
-            if visible:
-                visible_ids.append(asset["id"])
-        self.table.blockSignals(False)
+        if reviewing:
+            matched = [record for record in self._ordered if record.id in self.selection.state.selected]
+        else:
+            matched = [
+                record for record in self._ordered
+                if (mode == "all" or record.asset["item"].output_mode.value == mode)
+                and (state == "all" or record.media.get("state", "unchecked") == state)
+                and all(term in record.search_text for term in terms)
+            ]
+        self.selection.set_visible(record.id for record in matched)
         if not self._load_error and self.repository is not None:
-            self.stack.setCurrentIndex(
-                1 if not self._assets else 0 if visible_ids else 2
-            )
-        self.selection.set_visible(visible_ids)
+            self.stack.setCurrentIndex(1 if not self._assets else 0 if matched else 2)
+        self._present_results(matched, position, reveal)
         self.selection_bar.update_state(self.selection.state)
         self._selection()
 
+    def _table_focus_changed(self):
+        if not self._updating_view and self.view_mode == "list":
+            self._selection()
+
+    def _browse_focus_changed(self, index, _previous):
+        if not self._updating_view and self.view_mode != "list":
+            self.selection.state.focused = index.data(Qt.UserRole)
+            self.browser.currentWidget().viewport().update()
+            self._selection()
+
+    def _browse_open(self, index):
+        if index.data(Qt.UserRole) is not None:
+            self.open_file(False)
+
+    def _reset_thumbnails(self):
+        self._thumbnail_timer.stop()
+        self._painted_records.clear()
+        self._thumbnails.reset()
+
+    def _thumbnail_source(self, record):
+        return ThumbnailSource(
+            ThumbnailFile.from_entry(record.cover),
+            None if record.audio else ThumbnailFile.from_entry(record.media),
+            record.duration, self.ffmpeg_path,
+        )
+
+    def _thumbnail_for(self, asset_id):
+        record = self._records.get(asset_id)
+        if record is None:
+            return False, QImage()
+        self._painted_records.add(asset_id)
+        return record.audio, self._thumbnails.image(self._thumbnail_source(record))
+
+    def _load_visible_thumbnails(self, *_):
+        view = self._views[self.view_mode]
+        if self._updating_view or not view.isVisible():
+            return
+        model = view.model()
+        rows = self._table_rows if view is self.table else model.rows_by_id
+        viewport = view.viewport().rect()
+        visible = {}
+        painted = set()
+        for asset_id in sorted(self._painted_records.intersection(rows), key=rows.__getitem__):
+            index = model.index(rows[asset_id], 0)
+            if viewport.intersects(view.visualRect(index)):
+                painted.add(asset_id)
+                source = self._thumbnail_source(self._records[asset_id])
+                visible.setdefault(source, []).append(asset_id)
+        self._painted_records = painted
+        self._thumbnails.show(visible)
+
+    def _thumbnail_changed(self, _ids):
+        self._views[self.view_mode].viewport().update()
+
+    def eventFilter(self, target, event):
+        kind = event.type()
+        if kind in (QEvent.Resize, QEvent.Paint, QEvent.Hide, QEvent.KeyPress) and hasattr(self, "_views"):
+            active = self._views[self.view_mode]
+            if target is self.table.viewport() and kind == QEvent.Resize:
+                self._resize_columns()
+            if target is active.viewport() and kind == QEvent.Paint:
+                self._thumbnail_timer.start(0)
+            if target is active:
+                if kind == QEvent.Hide:
+                    self._reset_thumbnails()
+                elif kind == QEvent.KeyPress and handle_browse_key(
+                    active, event, self.select_visible, lambda: self.open_file(False),
+                ):
+                    return True
+        return super().eventFilter(target, event)
+
     def _selection(self, *_args, attachment_id=None):
         ids = self._focused_ids()
+        if ids and ids[0] == self._detail_asset and (attachment := self.files.currentItem()):
+            attachment_id = attachment.data(0, Qt.UserRole)["id"]
         self.files.blockSignals(True)
         self.files.clear()
         if len(ids) == 1 and not self._load_error:
-            asset = next(a for a in self._assets if a["id"] == ids[0])
+            asset = self._records[ids[0]].asset
             if self._detail_asset != ids[0]:
                 self.attachments_toggle.setChecked(False)
             self._detail_asset = ids[0]
@@ -675,6 +792,7 @@ class LibraryPage(QWidget):
             f"显示 {len(visible)} / {len(self._assets)} 项"
             + (f" · 已选 {len(ids)} 项" if ids else "")
         )
+        self.count_label.setVisible(ready and bool(self._assets) and not ids and not self.selection.state.reviewing)
         for button in (self.open_action, self.folder_action):
             button.setEnabled(ready and bool(self._focused_ids()))
             button.setToolTip("请选择一个文件" if len(ids) != 1 else button.text())
@@ -686,15 +804,10 @@ class LibraryPage(QWidget):
             action.setEnabled(ready and bool(self._focused_ids()) and not self._jobs)
         self.detail_relocate.setEnabled(not self._jobs)
         self.hide_action.setEnabled(ready and bool(ids) and not self._jobs)
-        selected_set = set(ids)
-        candidates = [
-            f
-            for a in self._assets
-            if a["id"] in selected_set
-            for f in a["files"]
-            if f["state"] != "recycled"
-        ]
-        self.recycle_action.setEnabled(ready and bool(candidates) and not self._jobs)
+        self.recycle_action.setEnabled(ready and not self._jobs and any(
+            entry["state"] != "recycled" for asset_id in ids
+            for entry in self._records[asset_id].asset["files"]
+        ))
         self.undo_action.setEnabled(
             bool(self._removed_ids) and not self._jobs and ready
         )
@@ -724,7 +837,7 @@ class LibraryPage(QWidget):
         ids = self._focused_ids()
         if len(ids) != 1:
             return None
-        return self._media(next(a for a in self._assets if a["id"] == ids[0]))
+        return self._records[ids[0]].media or None
 
     @staticmethod
     def _presented_outcome(asset):
@@ -740,7 +853,7 @@ class LibraryPage(QWidget):
         ids = self._focused_ids()
         if len(ids) != 1:
             return
-        asset = next(a for a in self._assets if a["id"] == ids[0])
+        asset = self._records[ids[0]].asset
         media = self._media(asset)
         item = asset["item"]
         if not force_new:
@@ -830,14 +943,15 @@ class LibraryPage(QWidget):
             selected,
         )
 
-    def _context_menu(self, point):
-        index = self.table.indexAt(point)
-        if not index.isValid():
+    def _context_menu(self, point, view=None):
+        view = self.table if view is None else view
+        index = view.indexAt(point).siblingAtColumn(0)
+        focused_id = index.data(Qt.UserRole)
+        if focused_id is None:
             return
-        self.table.setCurrentCell(index.row(), 0)
-        focused_id = self.table.item(index.row(), 0).data(Qt.UserRole)
+        view.setCurrentIndex(index)
         selected_count = len(self.selected_ids())
-        menu = PopupMenu(self.table)
+        menu = PopupMenu(view)
         for title, callback, enabled in (
             ("打开文件", lambda: self.open_file(False), self.open_action.isEnabled()),
             (
@@ -853,7 +967,7 @@ class LibraryPage(QWidget):
             (f"将所选 {selected_count} 项移入回收站…", self.recycle_selected, self.recycle_action.isEnabled()),
         ):
             menu.addAction(title, callback).setEnabled(enabled)
-        menu.exec(self.table.viewport().mapToGlobal(point))
+        menu.exec(view.viewport().mapToGlobal(point))
 
     def _attachment_menu(self, point):
         item = self.files.itemAt(point)
@@ -1058,17 +1172,13 @@ class LibraryPage(QWidget):
                 kind="recycle",
             )
 
-    def _resize_columns(self, width=None):
-        if hasattr(self, "table"):
-            width = self.width() if width is None else width
-            self.table.setColumnHidden(5, width < 1000)
-            self.table.setColumnHidden(1, width < 700)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._resize_columns(event.size().width())
+    def _resize_columns(self):
+        hidden = self.table.viewport().width() < 1000
+        if self.table.isColumnHidden(DIRECTORY_COLUMN) != hidden:
+            self.table.setColumnHidden(DIRECTORY_COLUMN, hidden)
 
     def cancel_work(self):
         self._cancel.set()
         self._read_generation += 1
         self._refresh_timer.stop()
+        self._reset_thumbnails()

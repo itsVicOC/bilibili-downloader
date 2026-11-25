@@ -81,6 +81,17 @@ def test_resolve_bv_url():
     assert client.calls == [("bvid", "BV1GJ411x7h7")]
 
 
+def test_batch_deduplicates_matching_collection_links_across_entry_points():
+    season = "https://space.bilibili.com/42/lists/7?type=season"
+    legacy = "https://space.bilibili.com/42/channel/collectiondetail?sid=7&spm_id_from=333"
+    video = "https://www.bilibili.com/video/BV1GJ411x7h7?season_id=7"
+    favorite = "https://space.bilibili.com/42/favlist?fid=10042"
+    medialist = "https://www.bilibili.com/medialist/detail/ml10042"
+    series = "https://space.bilibili.com/42/lists/7?type=series"
+    valid, invalid = classify_batch_inputs("\n".join((season, legacy, video, favorite, medialist, series)))
+    assert valid == [season, favorite, series] and invalid == []
+
+
 def test_resolve_av_url():
     client = FakeClient()
     info = BatchResolver(client).resolve_one("https://www.bilibili.com/video/av123456")

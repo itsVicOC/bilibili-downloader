@@ -112,6 +112,7 @@ def test_queue_scopes_remain_explicit_across_search_and_actions(workspace):
 def test_file_click_focus_is_separate_from_batch_checkboxes(workspace, qtbot, tmp_path):
     library, item, outcome = stored(tmp_path)
     page = workspace._library_page
+    page.set_view_mode("list")
     page.set_repository(library)
     page.refresh()
     workspace._show_tasks(3)
@@ -259,6 +260,7 @@ def test_directory_preview_failure_keeps_its_reason_visible(qtbot, tmp_path):
 def test_check_updates_rows_without_loading_the_whole_library(workspace, qtbot, tmp_path, monkeypatch):
     library, _, outcome = stored(tmp_path)
     page = workspace._library_page
+    page.set_view_mode("list")
     page.repository = library
     page.refresh()
     page.table.selectRow(0)
@@ -279,15 +281,16 @@ def test_media_anomaly_and_missing_file_agree_in_row_and_details(workspace, qtbo
     outcome.media_verification = {"valid": False, "message": "缺少音轨"}
     library.record_download(item, outcome)
     page = workspace._library_page
+    page.set_view_mode("list")
     page.repository = library
     page.refresh()
     page.table.setCurrentCell(0, 0)
-    assert page.table.item(0, 4).text() == "媒体异常"
+    assert page.table.item(0, 3).text() == "媒体异常"
     assert page.detail.result_badges[0].text() == "媒体异常"
     Path(outcome.video_path).unlink()
     page.check()
     qtbot.waitUntil(lambda: not page._jobs)
-    assert page.table.item(0, 4).text() == page.detail.result_badges[0].text() == "文件缺失"
+    assert page.table.item(0, 3).text() == page.detail.result_badges[0].text() == "文件缺失"
 
 
 def test_file_context_menu_preserves_checks_and_names_bulk_scope(workspace, tmp_path, monkeypatch):
@@ -299,6 +302,7 @@ def test_file_context_menu_preserves_checks_and_names_bulk_scope(workspace, tmp_
     other.write_bytes(b"other")
     library.record_download(second, outcome.model_copy(update={"video_path": str(other)}))
     page = workspace._library_page
+    page.set_view_mode("list")
     page.repository = library
     page.refresh()
     page.table.selectRow(0)
@@ -320,7 +324,7 @@ def test_file_model_exposes_unvisited_rows_and_checked_state(qtbot):
     from bilibili_downloader.gui.widgets.selection import TableSelection
     table = FileTable()
     qtbot.addWidget(table)
-    table.replace_rows([[f"文件 {n}", "作者", "1080P", "1 B", "待检查", "/目录"] for n in range(10000)], list(range(10000)), ["作品"] * 10000)
+    table.replace_rows([[f"文件 {n}", "1080P", "1 B", "待检查", "/目录"] for n in range(10000)], list(range(10000)), ["作品"] * 10000)
     binding = TableSelection(table, paint_only=True)
     binding.reset()
     binding.set_visible(range(10000))
@@ -471,7 +475,7 @@ def test_stale_library_load_preserves_newer_rows_and_selection(qtbot, tmp_path, 
         assert release.wait(5)
         return snapshot
     pool = QThreadPool()
-    page = LibraryPage(pool=pool)
+    page = LibraryPage(pool=pool, view_mode="list")
     qtbot.addWidget(page)
     page.repository = library
     monkeypatch.setattr(library, 'list_assets', delayed)
@@ -497,6 +501,7 @@ def test_file_check_exposes_missing_attachment_in_context(workspace, qtbot, tmp_
     library.record_download(item, outcome)
     subtitle.unlink()
     page = workspace._library_page
+    page.set_view_mode("list")
     page.set_repository(library)
     page.refresh()
     page.table.selectRow(0)

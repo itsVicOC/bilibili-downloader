@@ -555,7 +555,7 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     QWidget[readingView="true"] QHeaderView::section, QWidget[readingView="true"] QTableCornerButton::section {{
         background: transparent; border-color: transparent;
     }}
-    QTableView#FileInventory QHeaderView::section:first {{ padding-left: 40px; }}
+    QTableView#FileInventory QHeaderView::section:first {{ padding-left: 114px; }}
     QWidget[customBackground="true"] QWidget[readingView="true"] QHeaderView::section {{ color: {wallpaper_palette(p, is_dark, clear=False).muted}; }}
     QTableView[readingView="true"]::item, QTreeWidget[readingView="true"]::item {{
         border-bottom: 1px solid {translucent(p.text, TABLE_DIVIDER_OPACITY)};
@@ -663,8 +663,8 @@ def build_component_overrides(is_dark: bool, theme_id: str = "star_trail") -> st
     #DownloadSource[sectionStyle="plain"] {{ background: transparent; border: none; }}
     #DownloadSource QTabWidget::pane {{ padding-top: 8px; }}
     #DownloadSource QTabBar {{ margin: 8px 12px 0; }}
-    #DownloadSource #DailyRankingHeader QTabBar {{ margin: 0; }}
-    #DailyRankingHeader QTabBar::tab {{ min-height: 26px; margin: 2px; padding: 0 10px; }}
+    #DownloadSource #DailyRankingHeader QTabBar, #DownloadSource #BatchSourceDiscovery QTabBar {{ margin: 0; }}
+    #DailyRankingHeader QTabBar::tab, #BatchSourceDiscovery QTabBar::tab {{ min-height: 26px; margin: 2px; padding: 0 10px; }}
     #SettingsForm {{ background: transparent; border: none; }}
     #SettingsForm #SectionCard {{ background: transparent; border: none; border-radius: 0; }}
     #SettingsForm #SectionCard[settingsDivider="true"], #SettingsForm #SettingsField[settingsDivider="true"] {{

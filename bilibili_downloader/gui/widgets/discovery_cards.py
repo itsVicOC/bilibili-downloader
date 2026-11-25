@@ -2,7 +2,7 @@
 
 import io
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import httpx
 from PIL import Image, ImageOps
@@ -35,7 +35,7 @@ from bilibili_downloader.utils.network import BILIBILI_RESOURCE_HOSTS, trusted_h
 
 
 def _thumbnail(url):
-    url = trusted_https_url(url, BILIBILI_RESOURCE_HOSTS, upgrade_http=True)
+    url = trusted_https_url(url, (*BILIBILI_RESOURCE_HOSTS, "archive.biliimg.com"), upgrade_http=True)
     content = bytearray()
     with httpx.stream("GET", url, timeout=5.0, follow_redirects=False) as response:
         response.raise_for_status()
@@ -122,6 +122,9 @@ class ThumbnailLoader(QObject):
             break
         return None
 
+    def exhausted(self, urls):
+        return all(url in self._cache and self._cache[url] is None for url in urls if url)
+
     @Slot(str, int, bytes)
     def _store(self, url, generation, data):
         if generation != self._generation:
@@ -147,6 +150,7 @@ class DiscoveryCard:
     opens_video: bool = False
     enabled: bool = True
     badge_tone: str = "muted"
+    secondary_action: str = ""
 
 
 class _CardButton(QPushButton):
@@ -266,7 +270,7 @@ class _Cover(QWidget):
 
 
 class _CardWidget(QWidget):
-    def __init__(self, card, act, open_video):
+    def __init__(self, card, act, open_video, secondary_act):
         super().__init__()
         self.card = card
         self.setObjectName("DiscoveryCard")
@@ -277,6 +281,7 @@ class _CardWidget(QWidget):
         layout.setSpacing(0)
         self.video_button = None
         self.action_button = None
+        self.secondary_button = None
         if card.opens_video:
             content = self.video_button = _CardButton()
             content.setObjectName("DiscoveryVideo")
@@ -307,7 +312,7 @@ class _CardWidget(QWidget):
                 child.setAttribute(Qt.WA_TransparentForMouseEvents)
         layout.addWidget(content)
 
-        footer = QHBoxLayout()
+        footer = QVBoxLayout() if card.secondary_action else QHBoxLayout()
         self._footer_layout = footer
         footer.setContentsMargins(8, 0, 6, 4)
         footer.setSpacing(6)
@@ -316,7 +321,19 @@ class _CardWidget(QWidget):
         author.setObjectName("MetaLabel")
         author.setToolTip(card.author)
         author.setAccessibleName(card.author)
-        footer.addWidget(author, 1)
+        footer.addWidget(author, 0 if card.secondary_action else 1)
+        actions = footer
+        if card.secondary_action:
+            actions = QHBoxLayout()
+            actions.setSpacing(6)
+            actions.addStretch(1)
+            secondary = self.secondary_button = _CardButton(card.secondary_action)
+            secondary.setObjectName("DiscoveryAction")
+            secondary.setAccessibleName(f"{card.secondary_action} · {card.title}")
+            secondary.setAutoDefault(False)
+            secondary.clicked.connect(lambda: secondary_act(card.key))
+            actions.addWidget(secondary)
+            footer.addLayout(actions)
         if card.action:
             action = self.action_button = _CardButton(card.action)
             action.setObjectName("DiscoveryAction")
@@ -327,8 +344,14 @@ class _CardWidget(QWidget):
             action.setAutoDefault(False)
             action.setEnabled(card.enabled)
             action.clicked.connect(lambda: act(card.key))
-            footer.addWidget(action)
+            actions.addWidget(action)
         layout.addLayout(footer)
+
+    def update_action(self, card):
+        self.card = card
+        self.action_button.setText(card.action)
+        self.action_button.setAccessibleName(f"{card.action} · {card.title}")
+        self.action_button.setEnabled(card.enabled)
 
     def row_height(self, width):
         return (
@@ -339,11 +362,15 @@ class _CardWidget(QWidget):
 
 class DiscoveryGrid(QWidget):
     action_requested = Signal(str)
+    secondary_action_requested = Signal(str)
     video_requested = Signal(str)
+    cover_missing = Signal(str)
+    viewport_changed = Signal()
 
-    def __init__(self, thumbnails, parent=None):
+    def __init__(self, thumbnails, parent=None, *, images_for=None):
         super().__init__(parent)
         self._thumbnails = thumbnails
+        self._images_for = images_for
         thumbnails.changed.connect(self._load_visible)
         self._layout = QGridLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
@@ -368,7 +395,7 @@ class DiscoveryGrid(QWidget):
 
     def _focus_controls(self):
         return [
-            button for card in self._widgets for button in (card.video_button, card.action_button)
+            button for card in self._widgets for button in (card.video_button, card.secondary_button, card.action_button)
             if button is not None and button.isEnabled() and button.isVisible()
         ]
 
@@ -400,7 +427,9 @@ class DiscoveryGrid(QWidget):
         keep = 0
         for widget, card in zip(self._widgets, visible):
             if widget.card != card:
-                break
+                if not card.secondary_action or replace(widget.card, action=card.action, enabled=card.enabled) != card:
+                    break
+                widget.update_action(card)
             keep += 1
         for widget in self._widgets[keep:]:
             self._layout.removeWidget(widget)
@@ -412,7 +441,7 @@ class DiscoveryGrid(QWidget):
                 self._layout.removeWidget(widget)
                 self._layout.addWidget(widget, index // columns, index % columns)
         for index, card in enumerate(visible[keep:], keep):
-            widget = _CardWidget(card, self.action_requested.emit, self.video_requested.emit)
+            widget = _CardWidget(card, self.action_requested.emit, self.video_requested.emit, self.secondary_action_requested.emit)
             self._layout.addWidget(widget, index // columns, index % columns)
             self._widgets.append(widget)
         for index in range(4):
@@ -421,18 +450,28 @@ class DiscoveryGrid(QWidget):
 
     def _settle_layout(self):
         self._reflow()
-        self._load_visible()
+        self.refresh_images()
 
-    def _load_visible(self, *_args):
+    def in_viewport(self, widget):
+        return widget.isVisible() and (self._viewport is None or QRect(
+            widget.mapTo(self._viewport, QPoint()), widget.size()
+        ).intersects(self._viewport.rect()))
+
+    def refresh_images(self):
         if self.isVisible():
             for widget in self._widgets:
                 cover = widget.cover
-                if self._viewport is not None and not QRect(
-                    cover.mapTo(self._viewport, QPoint()), cover.size()
-                ).intersects(self._viewport.rect()):
+                if not self.in_viewport(cover):
                     continue
-                cover.image = self._thumbnails.resolve(widget.card.images)
+                images = self._images_for(widget.card) if self._images_for is not None else widget.card.images
+                cover.image = self._thumbnails.resolve(images)
                 cover.update()
+                if self._images_for is not None and cover.image is None and self._thumbnails.exhausted(images):
+                    self.cover_missing.emit(widget.card.key)
+            self.viewport_changed.emit()
+
+    def _load_visible(self, *_args):
+        self.refresh_images()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -448,11 +487,13 @@ class ProgressiveDiscoveryGrid(DiscoveryGrid):
 
     next_page_requested = Signal()
 
-    def __init__(self, thumbnails, parent=None):
-        super().__init__(thumbnails, parent)
+    def __init__(self, thumbnails, parent=None, *, images_for=None, prefetch_next_row=False):
+        super().__init__(thumbnails, parent, images_for=images_for)
+        self._prefetch_next_row = prefetch_next_row
         self._limit = None
         self._bar = None
         self._scroll_value = 0
+        self._scroll_target = None
         self._footer_position = None
         self._has_next_page = False
         self._append_timer = QTimer(self)
@@ -471,15 +512,34 @@ class ProgressiveDiscoveryGrid(DiscoveryGrid):
         self._bar = scroll.verticalScrollBar()
         self._scroll_value = self._bar.value()
         self._bar.valueChanged.connect(self._on_scroll)
+        self._bar.rangeChanged.connect(self._restore_scroll_if_ready)
 
-    def set_cards(self, cards, *, keep_limit=False, has_next_page=False):
+    def set_cards(self, cards, *, keep_limit=False, has_next_page=False, visible_count=None):
         cards = tuple(cards)
         if not keep_limit and cards != self._cards:
             self._limit = None
+            self._scroll_target = None
             self._append_timer.stop()
+        if visible_count is not None:
+            self._limit = visible_count
         self._has_next_page = has_next_page
         self._cards = cards
         self._reflow()
+
+    @property
+    def materialized_count(self):
+        return len(self._widgets)
+
+    def restore_scroll(self, value):
+        self._scroll_target = value
+        self._restore_scroll_if_ready()
+
+    def _restore_scroll_if_ready(self, *_args):
+        if self._bar is None or self._scroll_target is None or self._scroll_target > self._bar.maximum():
+            return
+        value, self._scroll_target = self._scroll_target, None
+        self._bar.setValue(value)
+        self._append_timer.stop()
 
     def _screen_size(self, columns, *, initial=False):
         if self._viewport is None or not self._widgets:
@@ -525,7 +585,13 @@ class ProgressiveDiscoveryGrid(DiscoveryGrid):
     def _on_scroll(self, value):
         previous = self._scroll_value
         self._scroll_value = value
-        if value > previous and value == self._bar.maximum():
+        if value <= previous or not self.more.isVisible():
+            return
+        near_footer = (
+            self._prefetch_next_row and self._widgets
+            and self.more.mapTo(self._viewport, QPoint()).y() <= self._viewport.height() + self._widgets[-1].height()
+        )
+        if value == self._bar.maximum() or near_footer:
             self._queue_append()
 
     def _queue_append(self):
@@ -547,7 +613,7 @@ class ProgressiveDiscoveryGrid(DiscoveryGrid):
         self._reflow()
         if keyboard:
             for widget in self._widgets[previous_count:]:
-                button = widget.video_button or widget.action_button
+                button = widget.video_button or widget.secondary_button or widget.action_button
                 if button is not None and button.isEnabled():
                     button.setFocus(Qt.TabFocusReason)
                     break

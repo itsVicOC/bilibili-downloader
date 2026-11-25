@@ -147,9 +147,9 @@ def test_empty_source_does_not_reserve_height_for_hidden_batch_results(workspace
     window.show()
     window._download_tabs.setCurrentIndex(1)
     flush()
-    resolve = window._batch_page._resolve_btn
-    assert resolve.text() == "解析预览"
-    assert resolve.width() < window._batch_page._url_text.width() // 2
+    resolve = window._batch_page._add_btn
+    assert resolve.text() == "预览来源" and resolve.isVisible() and not resolve.isEnabled()
+    assert window._batch_page._url_text.isHidden()
     window._batch_page._url_text.setPlainText("BVbatch")
     window._batch_page._on_resolved([VideoInfo(bvid=f"BV{n}", cid=n + 1) for n in range(130)], [])
     window._download_tabs.setCurrentIndex(0)

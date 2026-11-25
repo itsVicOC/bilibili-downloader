@@ -6,14 +6,16 @@ from PySide6.QtWidgets import QHeaderView, QStyle, QTableView
 from bilibili_downloader.gui.widgets.glass_surface import ItemViewSurface
 from bilibili_downloader.gui.widgets.row_hover import RowDelegate, RowHover
 
-_SIZE_COLUMN = 3
+SIZE_COLUMN = 2
+STATE_COLUMN = 3
+DIRECTORY_COLUMN = 4
 
 
 class _FileModel(QAbstractTableModel):
     def __init__(self, view):
         super().__init__(view)
         self.view = view
-        self.rows, self.ids, self.titles, self.headers = [], [], [], [""] * 6
+        self.rows, self.ids, self.tooltips, self.headers = [], [], [], [""] * 5
 
     def rowCount(self, parent=QModelIndex()):
         return 0 if parent.isValid() else len(self.rows)
@@ -30,7 +32,7 @@ class _FileModel(QAbstractTableModel):
         if role == Qt.TextAlignmentRole:
             return self.alignment(col)
         if role == Qt.ToolTipRole:
-            return self.rows[row][col] + ("\n" + self.titles[row] if col == 0 else "")
+            return self.tooltips[row] if col == 0 else self.rows[row][col]
         if col == 0:
             if role == Qt.UserRole:
                 return self.ids[row]
@@ -48,7 +50,7 @@ class _FileModel(QAbstractTableModel):
 
     @staticmethod
     def alignment(column):
-        return Qt.AlignVCenter | (Qt.AlignRight if column == _SIZE_COLUMN else Qt.AlignLeft)
+        return Qt.AlignVCenter | (Qt.AlignRight if column == SIZE_COLUMN else Qt.AlignLeft)
 
     def flags(self, index):
         if not index.isValid():
@@ -117,7 +119,7 @@ class FileTable(QTableView):
         self._cells = {}
         self.setObjectName("FileInventory")
         self.setModel(_FileModel(self))
-        self.horizontalHeader().setSectionResizeMode(_SIZE_COLUMN, QHeaderView.Fixed)
+        self.horizontalHeader().setSectionResizeMode(SIZE_COLUMN, QHeaderView.Fixed)
         self.model().dataChanged.connect(self._fit_updated_columns)
         self.model().modelReset.connect(self._fit_size_column)
         self._reading_surface = ItemViewSurface(self)
@@ -130,23 +132,23 @@ class FileTable(QTableView):
         self._fit_size_column()
 
     def _fit_row_height(self):
-        self.verticalHeader().setDefaultSectionSize(max(54, self.fontMetrics().height() * 2 + 16))
+        self.verticalHeader().setDefaultSectionSize(max(48, self.fontMetrics().height() * 2 + 12))
 
     def _fit_size_column(self):
         model = self.model()
-        if model.columnCount() <= _SIZE_COLUMN:
+        if model.columnCount() <= SIZE_COLUMN:
             return
         metrics = self.fontMetrics()
-        sizes = {row[_SIZE_COLUMN] for row in model.rows}
-        sizes.add(model.headers[_SIZE_COLUMN])
+        sizes = {row[SIZE_COLUMN] for row in model.rows}
+        sizes.add(model.headers[SIZE_COLUMN])
         item_padding = 16
         native_margin = 2 * (self.style().pixelMetric(QStyle.PM_FocusFrameHMargin, None, self) + 1)
         header_padding = 20
         width = max(metrics.horizontalAdvance(size) for size in sizes)
-        self.setColumnWidth(_SIZE_COLUMN, width + max(item_padding + native_margin, header_padding) + 4)
+        self.setColumnWidth(SIZE_COLUMN, width + max(item_padding + native_margin, header_padding) + 4)
 
     def _fit_updated_columns(self, start, end, _roles):
-        if start.column() <= _SIZE_COLUMN <= end.column():
+        if start.column() <= SIZE_COLUMN <= end.column():
             self._fit_size_column()
 
     def changeEvent(self, event):
@@ -155,16 +157,16 @@ class FileTable(QTableView):
             self._fit_row_height()
             self._fit_size_column()
 
-    def replace_rows(self, rows, ids, titles):
+    def replace_rows(self, rows, ids, tooltips):
         model = self.model()
         if ids == model.ids:
-            model.rows, model.titles = rows, titles
+            model.rows, model.tooltips = rows, tooltips
             if rows:
-                model.dataChanged.emit(model.index(0, 0), model.index(len(rows) - 1, 5), [])
+                model.dataChanged.emit(model.index(0, 0), model.index(len(rows) - 1, model.columnCount() - 1), [])
         else:
             model.beginResetModel()
             self._cells.clear()
-            model.rows, model.ids, model.titles = rows, ids, titles
+            model.rows, model.ids, model.tooltips = rows, ids, tooltips
             model.endResetModel()
 
     def setHorizontalHeaderLabels(self, labels):

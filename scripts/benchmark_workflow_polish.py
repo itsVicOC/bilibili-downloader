@@ -50,6 +50,7 @@ def main():
         'batch_search_p95_ms': 300, 'batch_selection_p95_ms': 300,
         'queue_population_ms': 2000, 'batch_population_ms': 2000,
         'file_search_p95_ms': 300, 'file_selection_p95_ms': 300,
+        'file_grid_search_p95_ms': 300, 'file_grid_selection_p95_ms': 300,
         'steady_heartbeat_max_ms': 250, 'file_population_ms': 2000,
         'final_refresh_ms': 2000, 'cancel_finish_ms': 1000, 'cancel_feedback_ms': 100,
     }

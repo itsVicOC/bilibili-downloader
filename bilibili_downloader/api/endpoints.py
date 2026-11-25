@@ -29,9 +29,12 @@ PGC_PLAYURL_ENDPOINT = "/pgc/player/web/v2/playurl"
 PAGELIST_ENDPOINT = "/x/player/pagelist"
 
 # Collections and personal media lists
+CREATED_FAVORITE_FOLDERS_ENDPOINT = "/x/v3/fav/folder/created/list-all"
 FAVORITE_LIST_ENDPOINT = "/x/v3/fav/resource/list"
 SERIES_ARCHIVES_ENDPOINT = "/x/series/archives"
 SEASON_ARCHIVES_ENDPOINT = "/x/polymer/web-space/seasons_archives_list"
+SPACE_COLLECTIONS_ENDPOINT = "/x/polymer/web-space/seasons_series_list"
+FOLLOWING_ACCOUNTS_ENDPOINT = "/x/relation/followings"
 
 # Public video rankings and the signed-in account's video feed
 VIDEO_RANKING_ENDPOINT = "/x/web-interface/ranking/v2"

@@ -73,6 +73,9 @@ jobs:
           install: >-
             base-devel
             mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-meson
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-pkgconf
 
       - name: Install dependencies
         run: |
@@ -138,18 +141,18 @@ jobs:
             dist/BilibiliDownloader/BilibiliDownloader --help
           fi
 
-      - name: Download pinned FFmpeg source
-        run: >-
-          python scripts/prepare_bundled_ffmpeg.py download-source
-          --output ffmpeg-build/FFmpeg-7.1-source.tar.gz
+      - name: Download pinned FFmpeg and dav1d sources
+        shell: bash
+        run: |
+          python scripts/prepare_bundled_ffmpeg.py download-source --output ffmpeg-build/FFmpeg-7.1-source.tar.gz
+          python scripts/prepare_bundled_ffmpeg.py download-dav1d-source --output ffmpeg-build/dav1d-source.tar.xz
 
       - name: Build minimal FFmpeg on macOS
         if: runner.os == 'macOS'
         shell: bash
-        run: >-
-          bash scripts/build_bundled_ffmpeg.sh
-          ffmpeg-build/FFmpeg-7.1-source.tar.gz
-          ffmpeg-build/output
+        run: |
+          brew install meson ninja pkgconf
+          bash scripts/build_bundled_ffmpeg.sh ffmpeg-build/FFmpeg-7.1-source.tar.gz ffmpeg-build/dav1d-source.tar.xz ffmpeg-build/output
 
       - name: Build minimal FFmpeg on Windows
         if: runner.os == 'Windows'
@@ -157,6 +160,7 @@ jobs:
         run: >-
           bash scripts/build_bundled_ffmpeg.sh
           ffmpeg-build/FFmpeg-7.1-source.tar.gz
+          ffmpeg-build/dav1d-source.tar.xz
           ffmpeg-build/output
 
       - name: Generate base dependency SBOM
@@ -228,6 +232,7 @@ jobs:
             --base-sbom ffmpeg-build/base.cdx.json \
             --lite-sbom "${{ matrix.archive_name }}-lite-${RELEASE_ID}.cdx.json" \
             --full-sbom "${{ matrix.archive_name }}-full-${RELEASE_ID}.cdx.json" \
+            --dav1d-license ffmpeg-build/output/DAV1D-LICENSE.txt \
             --notice ffmpeg-build/output/FFMPEG-NOTICE.txt
 
       - name: Prepare recorder notice and Rust dependency SBOM
@@ -268,6 +273,16 @@ jobs:
           Copy-Item "ffmpeg-build/output/FFMPEG-LICENSE.md" "$resources/FFMPEG-LICENSE.md"
           Copy-Item "native/recorder/target/release/biliflow-recorder.exe" "$resources/biliflow-recorder.exe"
           Copy-Item "native/recorder/target/RECORDER-NOTICE.txt" "$resources/RECORDER-NOTICE.txt"
+
+      - name: Verify video thumbnails with the full package
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            ffmpeg_binary="dist/variants/full/BilibiliDownloader.app/Contents/Resources/ffmpeg"
+          else
+            ffmpeg_binary="dist/variants/full/BilibiliDownloader/ffmpeg.exe"
+          fi
+          python -m scripts.prepare_bundled_ffmpeg verify-thumbnails --binary "$ffmpeg_binary"
 
       - name: Verify bundled Windows FFmpeg is self-contained
         if: runner.os == 'Windows'
@@ -347,6 +362,7 @@ jobs:
               --base-sbom ffmpeg-build/base.cdx.json \
               --lite-sbom "${{ matrix.archive_name }}-lite-${RELEASE_ID}.cdx.json" \
               --full-sbom "${{ matrix.archive_name }}-full-${RELEASE_ID}.cdx.json" \
+              --dav1d-license ffmpeg-build/output/DAV1D-LICENSE.txt \
               --notice "$resources/FFMPEG-NOTICE.txt"
             python scripts/prepare_bundled_recorder.py \
               --binary "$resources/biliflow-recorder" \

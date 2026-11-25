@@ -100,6 +100,32 @@ class FFmpegManager:
                 return p
         return None
 
+    @staticmethod
+    def thumbnail_frame(source: Path, executable: Path, duration: int) -> bytes:
+        """Decode one reduced-size image from a local video."""
+        deadline = time.monotonic() + 5
+        for offset in (1, 0) if duration >= 3 else (0,):
+            try:
+                result = subprocess.run(
+                    [
+                        str(executable), "-nostdin", "-hide_banner", "-loglevel", "error",
+                        "-filter_threads", "1", "-ss", str(offset), "-threads", "1",
+                        "-protocol_whitelist", "file", "-i", str(source.resolve()),
+                        "-map", "0:V:0", "-frames:v", "1",
+                        "-vf", "scale=480:270:force_original_aspect_ratio=decrease:force_divisible_by=2",
+                        "-c:v", "mjpeg", "-threads", "1", "-f", "image2pipe", "pipe:1",
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    timeout=max(.01, deadline - time.monotonic()),
+                    **_subprocess_window_kwargs(),
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                break
+            if result.returncode == 0 and result.stdout:
+                return result.stdout
+        return b""
+
     @classmethod
     def check_available(cls, custom_path: Optional[str] = None) -> tuple[bool, str]:
         """Check if FFmpeg is available and return version info.

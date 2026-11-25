@@ -288,14 +288,15 @@ def test_inventory_ui_survives_clearing_tasks_and_background_check(
     window = workspace
     window._library.record_download(item, outcome)
     page = window._library_page
+    page.set_view_mode("list")
     page.refresh()
     assert page.table.rowCount() == 1
     page.table.selectRow(0)
     assert page.selected_ids()
     page.check()
     qtbot.waitUntil(lambda: not page._jobs)
-    assert page.table.item(0, 4).text() == "文件存在"
-    assert page.table.item(0, 3).text() == "5.0 B"
+    assert page.table.item(0, 3).text() == "文件存在"
+    assert page.table.item(0, 2).text() == "5.0 B"
     page.search.setText("no match")
     assert len(page.selected_ids()) == 1
     assert page.recycle_action.isEnabled()
@@ -603,6 +604,7 @@ def test_file_list_database_failure_preserves_selection_and_files(
 ):
     item, outcome = saved(tmp_path)
     page = workspace._library_page
+    page.set_view_mode("list")
     page.repository.record_download(item, outcome)
     page.refresh()
     page.table.selectRow(0)
@@ -689,6 +691,7 @@ def test_library_empty_filtered_and_loading_states(workspace, tmp_path, qtbot):
 
 def test_file_record_undo_survives_notice_replacement(workspace, tmp_path):
     page = workspace._library_page
+    page.set_view_mode("list")
     item, outcome = saved(tmp_path)
     asset_id = page.repository.record_download(item, outcome)
     page.refresh()
@@ -708,6 +711,7 @@ def test_file_inventory_has_no_column_grid_and_keeps_size_units_visible(workspac
     from PySide6.QtWidgets import QStyle, QStyleOptionViewItem
 
     page = workspace._library_page
+    page.set_view_mode("list")
     item, outcome = saved(tmp_path)
     page.repository.record_download(item, outcome)
     page.refresh()
@@ -716,10 +720,10 @@ def test_file_inventory_has_no_column_grid_and_keeps_size_units_visible(workspac
     workspace.show()
     table = page.table
     model = table.model()
-    index = model.index(0, 3)
+    index = model.index(0, 2)
     for value in ("391.5 MB", "1023.9 GB"):
-        table.item(0, 3).setText(value)
-        qtbot.waitUntil(lambda: table.columnWidth(3) >= table.fontMetrics().horizontalAdvance(value) + 16)
+        table.item(0, 2).setText(value)
+        qtbot.waitUntil(lambda: table.columnWidth(2) >= table.fontMetrics().horizontalAdvance(value) + 16)
         option = QStyleOptionViewItem()
         option.rect = table.visualRect(index)
         option.widget = table
@@ -729,7 +733,7 @@ def test_file_inventory_has_no_column_grid_and_keeps_size_units_visible(workspac
         assert content.width() - margin >= table.fontMetrics().horizontalAdvance(value)
     assert not table.showGrid()
     assert model.headerData(0, Qt.Horizontal, Qt.TextAlignmentRole) & Qt.AlignLeft
-    assert model.headerData(3, Qt.Horizontal, Qt.TextAlignmentRole) & Qt.AlignRight
+    assert model.headerData(2, Qt.Horizontal, Qt.TextAlignmentRole) & Qt.AlignRight
     assert model.data(index, Qt.TextAlignmentRole) & Qt.AlignRight
     assert page.progress_label.isHidden()
 
@@ -741,6 +745,7 @@ def test_refresh_preserves_attachment_and_main_actions_target_media(
     from PySide6.QtGui import QDesktopServices
 
     page = workspace._library_page
+    page.set_view_mode("list")
     item, outcome = saved(tmp_path)
     page.repository.record_download(item, outcome)
     page.refresh()
@@ -773,6 +778,7 @@ def test_check_can_cancel_while_open_and_search_remain_available(
     workspace, tmp_path, monkeypatch, qtbot
 ):
     page = workspace._library_page
+    page.set_view_mode("list")
     item, outcome = saved(tmp_path)
     page.repository.record_download(item, outcome)
     page.refresh()
@@ -814,6 +820,7 @@ def test_recycle_summary_stays_short_with_long_errors_and_lists(
     from bilibili_downloader.gui.widgets.library_page import OperationDialog
 
     page = workspace._library_page
+    page.set_view_mode("list")
     item, outcome = saved(tmp_path)
     page.repository.record_download(item, outcome)
     page.refresh()
@@ -883,7 +890,7 @@ def test_batch_summary_counts_expanded_pages(workspace):
     batch = workspace._batch_page
     batch._url_text.setPlainText("BVdemo")
     batch._on_resolved([multipart()], [])
-    assert batch._selected_label.text() == "110 个任务"
+    assert batch._selected_label.text() == "已选 1 个作品 · 110 个任务"
     assert "已选 1 项" in batch.selection_bar.summary.text()
     assert batch._path_preview.isHidden()
     assert batch._output_directory.toolTip() == workspace._settings.output_dir
@@ -895,6 +902,7 @@ def test_batch_summary_counts_expanded_pages(workspace):
 
 def test_expanded_attachment_first_row_fits_compact_window(workspace, tmp_path, qtbot):
     page = workspace._library_page
+    page.set_view_mode("list")
     item, outcome = saved(tmp_path)
     page.repository.record_download(item, outcome)
     page.refresh()
@@ -909,13 +917,14 @@ def test_expanded_attachment_first_row_fits_compact_window(workspace, tmp_path, 
     visible = page.files.viewport().visibleRegion().boundingRect()
     assert visible.top() <= row.top() and row.bottom() <= visible.bottom()
     assert not page.table.isColumnHidden(0)
-    assert page.table.isColumnHidden(5)
+    assert page.table.isColumnHidden(4)
 
 
 def test_file_select_all_shortcut_respects_filter(workspace, tmp_path, qtbot):
     from PySide6.QtGui import QKeySequence
 
     page = workspace._library_page
+    page.set_view_mode("list")
     item, outcome = saved(tmp_path)
     page.repository.record_download(item, outcome)
     other = tmp_path / "other.mp4"
@@ -996,6 +1005,7 @@ def test_responsive_columns_preserve_file_and_attachment_selection(
 ):
     from PySide6.QtWidgets import QApplication
     page = workspace._library_page
+    page.set_view_mode("list")
     item, outcome = saved(tmp_path)
     asset_id = page.repository.record_download(item, outcome)
     page.refresh()

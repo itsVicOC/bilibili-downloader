@@ -195,16 +195,18 @@ GUI 的原生验收单独执行：macOS 检查系统菜单、红黄绿按钮、�
 
 更新协议使用用户配置目录下 `updates/<事务 ID>/transaction.json`、启动确认和提交文件。主程序确认新版窗口及数据库初始化成功之前，不启动下载或直播后台服务；独立更新程序等待最多 60 秒，失败时恢复旧程序及配置、SQLite 数据快照。程序生命周期使用共享锁，安装使用独占锁；不要删除运行中的锁文件。
 
-Release 的 full 变体还会从锁定的 FFmpeg 7.1 提交构建最小 LGPL 可执行文件。下载脚本会先核对源码 SHA-256。构建启用本地文件协议、MOV/MP4、FLV、MPEG-TS 输入和 MP4、M4A、FLAC 输出，包含 H.264/AAC parser、AAC 解码器（用于 MPEG-TS 音频参数探测）及转封装所需 bitstream filters；导出始终使用 `-c copy`，不启用网络协议、编码器、GPL 或 nonfree 组件。macOS 编译和链接部署目标固定为 12.0：
+Release 的 full 变体从锁定的 FFmpeg 7.1 源码构建 LGPL 可执行文件，并静态链接 dav1d 1.5.5。下载脚本核对两份源码的 SHA-256。FFmpeg 支持本地无损封装和 H.264、HEVC、AV1 视频取帧，新增的 MJPEG 编码器用于输出缩略图。构建禁用网络协议、GPL 和 nonfree 组件，macOS 编译和链接部署目标固定为 12.0。构建机需安装 Meson、Ninja 和 pkgconf。
 
 ```bash
 python scripts/prepare_bundled_ffmpeg.py download-source \
   --output /tmp/FFmpeg-7.1-source.tar.gz
+python scripts/prepare_bundled_ffmpeg.py download-dav1d-source \
+  --output /tmp/dav1d-source.tar.xz
 bash scripts/build_bundled_ffmpeg.sh \
-  /tmp/FFmpeg-7.1-source.tar.gz /tmp/biliflow-ffmpeg
+  /tmp/FFmpeg-7.1-source.tar.gz /tmp/dav1d-source.tar.xz /tmp/biliflow-ffmpeg
 ```
 
-`prepare_bundled_ffmpeg.py prepare` 会验证版本、构建参数和 LGPL 声明，再生成构建通知及 full/lite SBOM。不要用未经该检查的预编译 FFmpeg 替换发布输入。
+`prepare_bundled_ffmpeg.py prepare` 会验证版本、构建参数和 LGPL 声明，读取 `--dav1d-license` 指定的构建输出 `DAV1D-LICENSE.txt`，再生成构建通知及 full/lite SBOM。发布工作流用 full 包中的实际二进制验证三种编码均可取帧。
 
 full 构建还包含 `biliflow-recorder`。使用 Rust 1.96.0 和 `cargo build --release --locked --manifest-path native/recorder/Cargo.toml` 构建；Windows 设置 `RUSTFLAGS=-C target-feature=+crt-static`，macOS 设置 `MACOSX_DEPLOYMENT_TARGET=12.0`。源码与所有 crate 版本已固定。运行 `scripts/prepare_bundled_recorder.py` 为 full SBOM 添加 Rust 依赖图、二进制/锁文件摘要，并从实际依赖源收集 `RECORDER-NOTICE.txt`。具体命令和验收状态见[直播录制](LIVE_RECORDING.md)。
 

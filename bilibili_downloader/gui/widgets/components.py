@@ -79,6 +79,7 @@ _ICON_PATHS = {
     "appearance": '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z"/>',
     "download": '<path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/>',
     "live": '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="m9 9 6 3-6 3z"/>',
+    "audio": '<path d="M9 17V5l11-2v12M9 8l11-2"/><ellipse cx="6" cy="17" rx="3" ry="2"/><ellipse cx="17" cy="15" rx="3" ry="2"/>',
     "tasks": '<rect x="4" y="3" width="16" height="18" rx="3"/><path d="m7 8 1 1 2-2m2 1h5m-10 6 1 1 2-2m2 1h5"/>',
     "settings": '<path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/>',
     "account": '<circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>',
@@ -725,6 +726,7 @@ class CommandBar(QWidget):
         self._grid.setSpacing(8)
         self._filters = QWidget()
         self._actions = ResponsiveActions()
+        self._status = None
         self.compact_actions = ()
         self.filters = FlowLayout(self._filters)
         self.actions = self._actions.row
@@ -739,6 +741,22 @@ class CommandBar(QWidget):
     def set_context(self, widget):
         self._grid.addWidget(widget, 2, 0, 1, 2)
 
+    def set_status(self, widget):
+        self._status = widget
+        self._place_controls(self.wrapped)
+
+    def _place_controls(self, wrapped):
+        self._grid.removeWidget(self._actions)
+        if self._status is None:
+            self._grid.addWidget(self._actions, 1 if wrapped else 0, 0 if wrapped else 1,
+                                 1, 2 if wrapped else 1, Qt.AlignRight)
+        else:
+            self._grid.removeWidget(self._filters)
+            self._grid.removeWidget(self._status)
+            self._grid.addWidget(self._filters, 0, 0, 1, 2 if wrapped else 1)
+            self._grid.addWidget(self._actions, 1 if wrapped else 0, 1, Qt.AlignRight)
+            self._grid.addWidget(self._status, 1, 0, 1, 1 if wrapped else 2)
+
     def _reflow(self, width):
         for button in self.compact_actions:
             self._actions.force_overflow(button, width < 880)
@@ -746,9 +764,7 @@ class CommandBar(QWidget):
         wrapped = width < max(UI_METRICS.toolbar_wrap_width, required)
         if self.wrapped != wrapped:
             self.wrapped = wrapped
-            self._grid.removeWidget(self._actions)
-            self._grid.addWidget(self._actions, 1 if wrapped else 0, 0 if wrapped else 1,
-                                 1, 2 if wrapped else 1, Qt.AlignRight)
+            self._place_controls(wrapped)
 
     def event(self, event):
         if event.type() == QEvent.LayoutRequest and hasattr(self, "wrapped"):

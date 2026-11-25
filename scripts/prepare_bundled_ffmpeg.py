@@ -4,7 +4,9 @@ import argparse
 import hashlib
 import json
 import platform
+import shutil
 import subprocess
+import tempfile
 import urllib.request
 from pathlib import Path
 
@@ -16,6 +18,10 @@ FFMPEG_SOURCE_URL = (
     "https://github.com/FFmpeg/FFmpeg/archive/"
     f"{FFMPEG_COMMIT}.tar.gz"
 )
+DAV1D_VERSION = "1.5.5"
+DAV1D_SOURCE_URL = f"https://download.videolan.org/pub/videolan/dav1d/{DAV1D_VERSION}/dav1d-{DAV1D_VERSION}.tar.xz"
+DAV1D_SOURCE_SHA256 = "ca96b1d0ba3f01f55de7231d775892b64994ba061aaeeaaa4f662a390b3abf9e"
+
 CONFIGURE_ARGS = (
     "--disable-everything",
     "--disable-autodetect",
@@ -27,19 +33,28 @@ CONFIGURE_ARGS = (
     "--disable-ffprobe",
     "--enable-ffmpeg",
     "--enable-protocol=file",
+    "--enable-protocol=pipe",
     "--enable-demuxer=mov",
     "--enable-demuxer=flv",
     "--enable-demuxer=mpegts",
     "--enable-demuxer=concat",
     "--enable-parser=h264",
     "--enable-parser=aac",
+    "--enable-parser=hevc,av1",
     "--enable-decoder=aac",
+    "--enable-decoder=h264,hevc,libdav1d",
+    "--enable-libdav1d",
+    "--pkg-config-flags=--static",
+    "--enable-encoder=mjpeg",
+    "--enable-swscale",
+    "--enable-filter=scale,format,transpose,hflip,vflip,rotate",
     "--enable-bsf=aac_adtstoasc",
     "--enable-bsf=extract_extradata",
     "--enable-bsf=h264_mp4toannexb",
     "--enable-muxer=mp4",
     "--enable-muxer=ipod",
     "--enable-muxer=flac",
+    "--enable-muxer=image2pipe",
 )
 MACOS_CONFIGURE_ARGS = (
     "--extra-cflags=-mmacosx-version-min=12.0",
@@ -60,11 +75,11 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def download_source(output: Path) -> None:
+def download_source(output: Path, url=FFMPEG_SOURCE_URL, expected_sha256=FFMPEG_SOURCE_SHA256) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_suffix(f"{output.suffix}.part")
     request = urllib.request.Request(
-        FFMPEG_SOURCE_URL,
+        url,
         headers={"User-Agent": "BiliFlow release builder"},
     )
     try:
@@ -74,11 +89,8 @@ def download_source(output: Path) -> None:
             while chunk := response.read(1024 * 1024):
                 stream.write(chunk)
         actual = sha256(temporary)
-        if actual != FFMPEG_SOURCE_SHA256:
-            raise ValueError(
-                f"FFmpeg source SHA-256 mismatch: expected {FFMPEG_SOURCE_SHA256}, "
-                f"got {actual}"
-            )
+        if actual != expected_sha256:
+            raise ValueError(f"Source SHA-256 mismatch: expected {expected_sha256}, got {actual}")
         temporary.replace(output)
     finally:
         temporary.unlink(missing_ok=True)
@@ -109,10 +121,35 @@ def inspect_binary(binary: Path) -> tuple[str, str]:
     return version_text, license_text
 
 
+def verify_thumbnails(binary: Path) -> None:
+    from PySide6.QtGui import QImage
+
+    from bilibili_downloader.core.ffmpeg import FFmpegManager
+
+    fixture_ffmpeg = shutil.which("ffmpeg")
+    if not fixture_ffmpeg:
+        raise RuntimeError("The FFmpeg fixture encoder is unavailable")
+    encoders = subprocess.check_output([fixture_ffmpeg, "-hide_banner", "-encoders"], timeout=10, text=True)
+    av1_encoder = "libsvtav1" if "libsvtav1" in encoders else "libaom-av1"
+    with tempfile.TemporaryDirectory(prefix="biliflow-thumbnails-") as temporary:
+        for codec, encoder in (("H.264", "libx264"), ("HEVC", "libx265"), ("AV1", av1_encoder)):
+            video = Path(temporary) / "视频样本.mp4"
+            subprocess.run([
+                fixture_ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
+                "-f", "lavfi", "-i", "testsrc2=size=352x198:rate=12",
+                "-t", "1", "-c:v", encoder, "-threads", "1", str(video),
+            ], check=True, timeout=30)
+            frame = QImage.fromData(FFmpegManager.thumbnail_frame(video, binary.resolve(), 1))
+            if frame.isNull() or frame.width() > 480 or frame.height() > 270:
+                raise ValueError(f"Bundled FFmpeg failed to extract a thumbnail from {codec}")
+            print(f"{codec}: {frame.width()} x {frame.height()}")
+
+
 def validate_binary_output(version_text: str, license_text: str) -> None:
     if f"ffmpeg version {FFMPEG_VERSION}" not in version_text:
         raise ValueError(f"bundled executable is not FFmpeg {FFMPEG_VERSION}")
-    missing_args = [arg for arg in CONFIGURE_ARGS if arg not in version_text]
+    normalized_version = version_text.replace("'", "").replace('"', "")
+    missing_args = [arg for arg in CONFIGURE_ARGS if arg not in normalized_version]
     if missing_args:
         raise ValueError(f"bundled FFmpeg is missing configure args: {missing_args}")
     normalized_license = " ".join(license_text.split())
@@ -145,6 +182,7 @@ def prepare_release_metadata(
     lite_sbom: Path,
     full_sbom: Path,
     notice: Path,
+    dav1d_license: Path,
 ) -> None:
     version_text, license_text = inspect_binary(binary)
     binary_sha256 = sha256(binary)
@@ -163,13 +201,19 @@ def prepare_release_metadata(
                 f"Binary SHA-256: {binary_sha256}",
                 "License: LGPL-2.1-or-later",
                 "",
-                "The bundled executable is a separate FFmpeg program built only for",
-                "local, lossless FLV/TS/MP4/M4A/FLAC stream packaging. The matching source",
-                "archive is published beside the BiliFlow full downloads.",
+                "The bundled executable is a separate FFmpeg program for local lossless",
+                "stream packaging and video thumbnails. The FFmpeg source archive is",
+                "published beside the BiliFlow full downloads.",
                 "",
                 version_text,
                 "",
                 license_text,
+                "",
+                f"Statically linked component: dav1d {DAV1D_VERSION} (BSD-2-Clause)",
+                f"Source URL: {DAV1D_SOURCE_URL}",
+                f"Source SHA-256: {DAV1D_SOURCE_SHA256}",
+                "",
+                dav1d_license.read_text(encoding="utf-8").strip(),
                 "",
             ]
         ),
@@ -186,15 +230,17 @@ def prepare_release_metadata(
     components = payload.setdefault("components", [])
     if any(component.get("name") == "FFmpeg" for component in components):
         raise ValueError("base SBOM already contains FFmpeg")
+    ffmpeg_ref = f"pkg:generic/ffmpeg@{FFMPEG_VERSION}"
+    dav1d_ref = f"pkg:generic/dav1d@{DAV1D_VERSION}"
     components.append(
         {
             "type": "application",
-            "bom-ref": f"pkg:generic/ffmpeg@{FFMPEG_VERSION}",
+            "bom-ref": ffmpeg_ref,
             "name": "FFmpeg",
             "version": FFMPEG_VERSION,
             "licenses": [{"license": {"id": "LGPL-2.1-or-later"}}],
             "hashes": [{"alg": "SHA-256", "content": binary_sha256}],
-            "purl": f"pkg:generic/ffmpeg@{FFMPEG_VERSION}",
+            "purl": ffmpeg_ref,
             "externalReferences": [
                 {
                     "type": "vcs",
@@ -204,6 +250,17 @@ def prepare_release_metadata(
             ],
         }
     )
+    components.append({
+        "type": "library",
+        "bom-ref": dav1d_ref,
+        "name": "dav1d",
+        "version": DAV1D_VERSION,
+        "licenses": [{"license": {"id": "BSD-2-Clause"}}],
+        "purl": dav1d_ref,
+        "externalReferences": [{"type": "distribution", "url": DAV1D_SOURCE_URL,
+                                "hashes": [{"alg": "SHA-256", "content": DAV1D_SOURCE_SHA256}]}],
+    })
+    payload.setdefault("dependencies", []).append({"ref": ffmpeg_ref, "dependsOn": [dav1d_ref]})
     full_sbom.parent.mkdir(parents=True, exist_ok=True)
     full_sbom.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
@@ -217,6 +274,10 @@ def main(argv: list[str] | None = None) -> int:
 
     download_parser = subparsers.add_parser("download-source")
     download_parser.add_argument("--output", type=Path, required=True)
+    dav1d_parser = subparsers.add_parser("download-dav1d-source")
+    dav1d_parser.add_argument("--output", type=Path, required=True)
+    thumbnail_parser = subparsers.add_parser("verify-thumbnails")
+    thumbnail_parser.add_argument("--binary", type=Path, required=True)
 
     prepare_parser = subparsers.add_parser("prepare")
     prepare_parser.add_argument("--binary", type=Path, required=True)
@@ -224,10 +285,15 @@ def main(argv: list[str] | None = None) -> int:
     prepare_parser.add_argument("--lite-sbom", type=Path, required=True)
     prepare_parser.add_argument("--full-sbom", type=Path, required=True)
     prepare_parser.add_argument("--notice", type=Path, required=True)
+    prepare_parser.add_argument("--dav1d-license", type=Path, required=True)
 
     args = parser.parse_args(argv)
     if args.command == "download-source":
         download_source(args.output)
+    elif args.command == "download-dav1d-source":
+        download_source(args.output, DAV1D_SOURCE_URL, DAV1D_SOURCE_SHA256)
+    elif args.command == "verify-thumbnails":
+        verify_thumbnails(args.binary)
     else:
         prepare_release_metadata(
             args.binary,
@@ -235,6 +301,7 @@ def main(argv: list[str] | None = None) -> int:
             args.lite_sbom,
             args.full_sbom,
             args.notice,
+            args.dav1d_license,
         )
     return 0
 

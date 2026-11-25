@@ -505,6 +505,18 @@ class AppSettings(BaseModel):
     update_channel: UpdateChannel = UpdateChannel.STABLE
     skipped_update_versions: list[str] = Field(default_factory=list)
     windows_close_action: WindowCloseAction = WindowCloseAction.ASK
+    library_view_mode: Literal["grid", "list"] = "grid"
+    library_sort_mode: Literal["recent", "title", "size"] = "recent"
+
+    @field_validator("library_view_mode", mode="before")
+    @classmethod
+    def valid_library_view_mode(cls, value):
+        return value if value in ("grid", "list") else "grid"
+
+    @field_validator("library_sort_mode", mode="before")
+    @classmethod
+    def valid_library_sort_mode(cls, value):
+        return value if value in ("recent", "title", "size") else "recent"
 
     @field_validator("windows_close_action", mode="before")
     @classmethod

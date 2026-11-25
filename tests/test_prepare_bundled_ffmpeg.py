@@ -24,6 +24,13 @@ def test_validate_binary_output_accepts_minimal_lgpl_build() -> None:
     )
 
 
+def test_validate_binary_output_accepts_quoted_configure_lists() -> None:
+    version = _version_output().replace(
+        "--enable-decoder=h264,hevc,libdav1d", "--enable-decoder='h264,hevc,libdav1d'",
+    )
+    prepare_bundled_ffmpeg.validate_binary_output(version, "GNU Lesser General Public License")
+
+
 @pytest.mark.parametrize("forbidden", ["--enable-gpl", "--enable-nonfree"])
 def test_validate_binary_output_rejects_non_lgpl_build(forbidden: str) -> None:
     with pytest.raises(ValueError, match="GPL or nonfree"):
@@ -78,9 +85,11 @@ def test_prepare_release_metadata_adds_ffmpeg_only_to_full_sbom(
     lite_sbom = tmp_path / "lite.cdx.json"
     full_sbom = tmp_path / "full.cdx.json"
     notice = tmp_path / "FFMPEG-NOTICE.txt"
+    dav1d_license = tmp_path / "DAV1D-LICENSE.txt"
+    dav1d_license.write_text("dav1d BSD license text", encoding="utf-8")
 
     prepare_bundled_ffmpeg.prepare_release_metadata(
-        binary, base_sbom, lite_sbom, full_sbom, notice
+        binary, base_sbom, lite_sbom, full_sbom, notice, dav1d_license
     )
 
     lite_components = json.loads(lite_sbom.read_text())["components"]
@@ -89,8 +98,13 @@ def test_prepare_release_metadata_adds_ffmpeg_only_to_full_sbom(
     assert [component["name"] for component in full_components] == [
         "BiliFlow",
         "FFmpeg",
+        "dav1d",
     ]
-    assert full_components[-1]["hashes"][0]["content"] == (
+    assert full_components[1]["hashes"][0]["content"] == (
         prepare_bundled_ffmpeg.sha256(binary)
     )
+    assert json.loads(full_sbom.read_text())["dependencies"] == [{
+        "ref": full_components[1]["bom-ref"], "dependsOn": [full_components[2]["bom-ref"]],
+    }]
     assert prepare_bundled_ffmpeg.FFMPEG_SOURCE_SHA256 in notice.read_text()
+    assert "dav1d BSD license text" in notice.read_text()

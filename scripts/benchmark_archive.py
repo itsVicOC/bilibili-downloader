@@ -84,7 +84,7 @@ def main():
                 table.add_item(record.item, download_id=record.id, status=record.status)
             table.blockSignals(False)
         _, queue_load = timed(load_tasks)
-        page = LibraryPage()
+        page = LibraryPage(view_mode="list")
         page.repository = repository
         page.resize(1120, 760)
         page.show()
@@ -117,17 +117,26 @@ def main():
         check_ms = (time.perf_counter() - started) * 1000
         timer.stop()
         final_refresh = page._last_refresh_ms
-        search_samples, selection_samples = [], []
-        for n in range(30):
-            _, elapsed = timed(lambda n=n: (page.search.setText(f"{9999 - n:05d}"), settle_events(app)))
-            search_samples.append(elapsed)
-        page.search.clear()
-        settle_events(app)
-        for _ in range(10):
-            _, elapsed = timed(lambda: (page.select_visible(), settle_events(app)))
-            selection_samples.append(elapsed)
-            _, elapsed = timed(lambda: (page._clear_selection(), settle_events(app)))
-            selection_samples.append(elapsed)
+        file_views = {}
+        for view in ("list", "grid"):
+            page.set_view_mode(view)
+            settle_events(app)
+            search_samples, selection_samples = [], []
+            for n in range(30):
+                query = "演示文件" if n % 5 == 0 else f"{9999 - n:05d}"
+                _, elapsed = timed(lambda: (page.search.setText(query), settle_events(app)))
+                search_samples.append(elapsed)
+            page.search.clear()
+            settle_events(app)
+            for _ in range(10):
+                for action in (page.select_visible, page._clear_selection):
+                    _, elapsed = timed(lambda: (action(), settle_events(app)))
+                    selection_samples.append(elapsed)
+            file_views[view] = {
+                "search_p95_ms": percentile(search_samples),
+                "selection_p95_ms": percentile(selection_samples),
+            }
+        page.set_view_mode("list")
         cancel = {}
         def cancel_check():
             cancel["started"] = time.perf_counter()
@@ -192,8 +201,10 @@ def main():
                   "max_background_heartbeat_gap_ms": round(max(heartbeat_gaps, default=0), 1),
                   "steady_heartbeat_max_ms": round(max(steady_gaps, default=0), 1),
                   "steady_heartbeat_p95_ms": percentile(steady_gaps),
-                  "file_search_p95_ms": percentile(search_samples),
-                  "file_selection_p95_ms": percentile(selection_samples),
+                  "file_search_p95_ms": file_views["list"]["search_p95_ms"],
+                  "file_selection_p95_ms": file_views["list"]["selection_p95_ms"],
+                  "file_grid_search_p95_ms": file_views["grid"]["search_p95_ms"],
+                  "file_grid_selection_p95_ms": file_views["grid"]["selection_p95_ms"],
                   "final_refresh_ms": round(final_refresh, 1),
                   "cancel_feedback_ms": round(cancel.get("feedback_ms", 0), 1),
                   "cancel_finish_ms": round(cancel_finish_ms, 1),

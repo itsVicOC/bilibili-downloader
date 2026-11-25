@@ -20,7 +20,7 @@ Release 中名称带 `full` 的 macOS 与 Windows 包包含独立的 FFmpeg 7.1 
 - 许可证：LGPL 2.1 or later
 - 对应源码：每个 Release 中的 `FFmpeg-7.1-source.tar.gz`
 
-发布构建禁用 GPL、nonfree、外部库、网络协议与编码器，启用本地 MOV/MP4、FLV、MPEG-TS 读取和 MP4/M4A/FLAC 封装，以及 H.264/AAC parser、用于参数探测的 AAC 解码器和必要的 bitstream filters。每个 full 包内的 `FFMPEG-NOTICE.txt`、`COPYING.LGPLv2.1` 和 `FFMPEG-LICENSE.md` 分别记录实际构建信息、许可证全文和上游许可说明。FFmpeg 是由 BiliFlow 作为子进程调用的独立程序，不适用本项目的 MIT License。
+发布构建禁用 GPL、nonfree 和网络协议，支持本地 MOV/MP4、FLV、MPEG-TS 读取、MP4/M4A/FLAC 封装以及 H.264、HEVC、AV1 单帧缩略图。AV1 解码静态链接 VideoLAN 的 **dav1d 1.5.5**，采用 BSD-2-Clause，源码和版本见 [VideoLAN 发布目录](https://download.videolan.org/pub/videolan/dav1d/1.5.5/)。每个 full 包的 `FFMPEG-NOTICE.txt` 记录实际构建信息、dav1d 源码哈希和许可证全文，full SBOM 记录 FFmpeg 对 dav1d 的依赖。FFmpeg 的 LGPL 全文和上游许可说明分别保存在 `COPYING.LGPLv2.1` 和 `FFMPEG-LICENSE.md`。
 
 ## Mesio / Rust live recorder
 

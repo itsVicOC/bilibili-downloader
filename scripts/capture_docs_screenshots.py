@@ -1821,6 +1821,7 @@ def _capture_download_management(app, theme, window, temp_root):
                                        progress=1 if state == TaskStatus.COMPLETED else .35,
                                        output_path=str(output) if state == TaskStatus.COMPLETED else None,
                                        warnings=warnings)
+    window._library_page.set_view_mode("list")
     window._library_page.refresh()
     for theme_id in ("star_trail", "bilibili_blue"):
         window._settings.appearance.theme = theme_id
@@ -1928,6 +1929,7 @@ def _capture_lightweight(app, theme, window, temp_root, *, smoke=False):
     _populate_main_window(window)
     _populate_live_page(window, temp_root / "lightweight-live")
     library = window._library_page
+    library.set_view_mode("list")
     files = library.table
     titles = ("城市夜航", "数据整理与可视化", "连续拍摄的幕后", "从需求到实现的完整课程")
     for index in range(20):
@@ -2074,6 +2076,7 @@ def _capture_workflow_polish(app, theme, window, temp_root):
     window._task_repository.update(record.id, outcome=outcome, output_path=str(media))
     window._download_list.mark_done(record.id, outcome)
     page = window._library_page
+    page.set_view_mode("list")
     page.refresh()
     waiting = item.model_copy(deep=True)
     waiting.video_info = item.video_info.model_copy(update={"bvid": "BVRETRYDEMO", "cid": 9999, "title": "网络恢复中的课程"})

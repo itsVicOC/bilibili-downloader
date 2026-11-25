@@ -156,6 +156,7 @@ def test_all_workspaces_fit_and_fixed_actions_remain_visible(
         single_size = single_bar.size()
         window._download_tabs.setCurrentIndex(1)
         batch = window._batch_page
+        batch.show_link_editor()
         batch._url_text.setPlainText("BV1GJ411x7h7")
         batch._on_resolved([VideoInfo(bvid="BV1GJ411x7h7", title="作品")], [])
         flush()
@@ -340,7 +341,7 @@ def test_batch_partial_failure_fits_the_small_workspace(workspace):
     panel._url_text.setPlainText("BV1Q541167Qg")
     flush()
     assert contained(panel._preview, panel._preview_card)
-    assert not panel._add_btn.isEnabled()
+    assert panel._add_btn.isEnabled() and panel._add_btn.text() == "预览 1 个来源"
 
 
 def test_many_live_rooms_use_one_scroll_area_when_details_are_stacked(workspace, qtbot):
@@ -1022,9 +1023,9 @@ def test_batch_progress_keeps_compact_input_and_disables_stale_selection(workspa
     panel._on_resolved([VideoInfo(bvid="BV1GJ411x7h7")], [])
     panel._begin_resolve(["BV1GJ411x7h7"])
     flush()
-    assert panel._count_label.height() < 40
+    assert panel._source_summary.isVisible() and panel._source_summary.height() < 40
     assert panel._preview_card.isHidden()
-    assert panel._selected_label.text() == "0 个任务"
+    assert panel._selected_label.text() == "正在解析来源"
     assert not panel._add_btn.isEnabled()
     assert contained(panel._progress_area, panel)
     assert contained(panel._cancel_btn, panel)
@@ -1047,6 +1048,7 @@ def test_large_favorite_import_prioritizes_results_and_preserves_edits(workspace
     window.show()
     window._download_tabs.setCurrentIndex(1)
     panel = window._batch_page
+    panel.show_link_editor()
     source = "https://space.bilibili.com/123/favlist?fid=456"
     panel._url_text.setPlainText(source)
     items = [
@@ -1070,7 +1072,7 @@ def test_large_favorite_import_prioritizes_results_and_preserves_edits(workspace
     assert panel._url_text.isVisible()
     assert len(panel.get_video_infos()) == 129
     panel._url_text.appendPlainText("BV1GJ411x7h7")
-    assert not panel._add_btn.isEnabled()
+    assert panel._add_btn.isEnabled() and panel._add_btn.text() == "预览 2 个来源"
     panel._collapse_btn.setChecked(True)
     assert panel._source_summary._full_text.endswith("等 2 个来源")
     assert "BV1GJ411x7h7" in panel._source_summary.toolTip()

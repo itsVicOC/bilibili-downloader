@@ -89,6 +89,7 @@ from bilibili_downloader.gui.threads.login_status_worker import (
 )
 from bilibili_downloader.gui.threads.resolve_worker import ResolveRunner, ResolveWorker
 from bilibili_downloader.gui.update_controller import UpdateController
+from bilibili_downloader.gui.widgets.batch_sources import BatchSourcesWidget
 from bilibili_downloader.gui.widgets.check_box import CheckBox
 from bilibili_downloader.gui.widgets.chinese_input import ChineseLineEdit
 from bilibili_downloader.gui.widgets.combo_box import ComboBox
@@ -399,11 +400,15 @@ class MainWindow(QMainWindow):
         self._task_page.undo_remove_requested.connect(self._undo_removed_tasks)
         self._task_page.remove_selected_requested.connect(lambda: self._request_remove_tasks(self._download_list.selected_ids()))
         self._task_page.remove_all_requested.connect(lambda: self._request_remove_tasks(list(self._download_list._states), all_tasks=True))
-        self._library_page = LibraryPage(pool=self._service_pool)
+        self._library_page = LibraryPage(
+            pool=self._service_pool,
+            view_mode=self._settings.library_view_mode, sort_mode=self._settings.library_sort_mode,
+        )
         self._library_page.record_provider = self._task_repository.list_tasks
         self._task_page.tabs.addTab(self._library_page, "下载文件")
         self._library_page.download_requested.connect(lambda: self._show_workspace(0))
         self._library_page.reuse_requested.connect(self._enqueue_library_item)
+        self._library_page.preferences_changed.connect(self._save_library_preferences)
         self._workspace_pages.addWidget(self._task_page)
         settings_page = QWidget()
         settings_layout = QVBoxLayout(settings_page)
@@ -519,10 +524,15 @@ class MainWindow(QMainWindow):
         self._workspace_layout.addWidget(self._ranking_panel)
         self._workspace_layout.addStretch()
         self._download_tabs.addTab(body, "单个解析")
+        self._batch_sources = BatchSourcesWidget(self._service_pool, self._thumbnails)
+        self._batch_sources.set_account(self._api_client if self._api_client.sessdata else None)
+        self._batch_sources.login_requested.connect(self._on_login_triggered)
+        self._batch_sources.account_check_requested.connect(self._update_login_status)
         self._batch_page = BatchDialog(
             api_client=self._api_client,
             existing_content_identities=self._task_repository.known_content_identities(),
             embedded=True,
+            source_discovery=self._batch_sources,
         )
         self._batch_page.enqueue_requested.connect(self._enqueue_batch_from_page)
         self._batch_page._action_bar.review_requested.connect(lambda: self._show_download_configuration(batch=True))
@@ -541,6 +551,8 @@ class MainWindow(QMainWindow):
         self._workspace_scroll = scroll_area(self._output_sections, scroll_edge=True)
         if self._ranking_panel is not None:
             self._ranking_panel.set_scroll_area(self._workspace_scroll)
+        self._batch_sources.set_scroll_area(self._workspace_scroll)
+        self._batch_page.set_scroll_area(self._workspace_scroll)
         layout.addWidget(self._workspace_scroll, 1)
         self._download_footers = ActionBarStack()
         self._download_footers.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -552,6 +564,7 @@ class MainWindow(QMainWindow):
         for card in (self._batch_page._input_card, self._batch_page._preview_card):
             card.set_plain()
         self._batch_page.selection.changed.connect(self._sync_download_presentation)
+        self._batch_page.presentation_changed.connect(self._sync_download_presentation)
         self._sync_output_mode_controls()
         self._download_tabs.currentChanged.connect(self._sync_download_presentation)
         for combo in (self._page_combo, self._quality_combo, self._codec_combo, self._audio_combo, self._output_mode_combo, self._aspect_combo):
@@ -709,7 +722,7 @@ class MainWindow(QMainWindow):
         self._download_footers.currentWidget()._reflow()
         self._download_fields.set_field_visible(self._parts_row, not batch)
         self._batch_parts.setVisible(batch)
-        ready = bool(self._batch_page._resolved_items) if batch else self._current_video is not None
+        ready = self._batch_page.preview_ready if batch else self._current_video is not None
         self._configuration.set_summary_host(None if batch else self._hero_layout)
         self._configuration.set_context(ready)
         editable = ready or self._configuration._preconfigured
@@ -892,7 +905,9 @@ class MainWindow(QMainWindow):
     def _show_download_configuration(self, _checked=False, *, batch=False):
         from bilibili_downloader.gui.dialogs.workflow import WorkflowDialog
         from bilibili_downloader.gui.widgets.components import ReadOnlyPath
-        infos = self._batch_page.get_video_infos() if batch else self._selected_video_infos()
+        infos = self._selected_video_infos() if not batch else []
+        if batch and self._batch_page.preview_ready:
+            infos = self._batch_page.get_video_infos()
         dialog = WorkflowDialog("输出预览", parent=self, confirm="关闭")
         dialog.cancel_button.hide()
         dialog.confirm_button.setObjectName("OutputSecondaryButton")
@@ -1031,6 +1046,7 @@ class MainWindow(QMainWindow):
         self._shell_enabled = enabled
         if self._ranking_panel is not None:
             self._ranking_panel.set_loading_enabled(enabled)
+        self._batch_sources.set_loading_enabled(enabled)
         if self._live_page.following is not None:
             self._live_page.following.set_loading_enabled(enabled)
         if not enabled:
@@ -1425,9 +1441,10 @@ class MainWindow(QMainWindow):
         if not QDesktopServices.openUrl(QUrl(WEBSITE_URL)):
             self._status_bar.showMessage("无法打开浏览器，请访问 1008.si。")
 
-    def _set_discovery_account(self, client, *, expired=False):
+    def _set_discovery_account(self, client, *, mid=None, expired=False):
         if self._ranking_panel is not None:
             self._ranking_panel.set_account(client, expired=expired)
+        self._batch_sources.set_account(client, mid=mid, expired=expired)
         if self._live_page.following is not None:
             self._live_page.following.set_account(client, expired=expired)
 
@@ -1824,8 +1841,8 @@ class MainWindow(QMainWindow):
             return False
         if candidate.target == "batch":
             self._download_tabs.setCurrentIndex(1)
+            self._batch_page.show_link_editor()
             self._batch_page._url_text.setPlainText("\n".join(candidate.sources))
-            self._batch_page._collapse_btn.setChecked(False)
             self._batch_page._start_resolve()
         else:
             self._download_tabs.setCurrentIndex(0)
@@ -1915,11 +1932,9 @@ class MainWindow(QMainWindow):
         source = self._source_route_url or self._url_input.text().strip()
         if self._source_route_target == "batch":
             self._on_batch_clicked()
-            existing = self._batch_page._url_text.toPlainText().strip()
-            if source not in existing.splitlines():
-                self._batch_page._url_text.setPlainText("\n".join(part for part in (existing, source) if part))
-            self._batch_page._collapse_btn.setChecked(False)
-            self._batch_page._url_text.setFocus()
+            if not self._batch_page.show_link_editor():
+                return
+            self._batch_page.add_source_link(source)
         elif self._show_workspace(1):
             self._live_page.source.setText(source)
             self._live_page.source.setFocus()
@@ -2600,6 +2615,18 @@ class MainWindow(QMainWindow):
     def _on_settings_triggered(self):
         self._show_workspace(3)
 
+    def _save_library_preferences(self, view_mode, sort_mode):
+        settings = self._config.load().model_copy(update={
+            "library_view_mode": view_mode, "library_sort_mode": sort_mode,
+        })
+        try:
+            self._config.save(settings)
+        except OSError:
+            logger.warning("Could not save download file view preferences", exc_info=True)
+            self._status_bar.showMessage("暂时无法保存下载文件的视图偏好。", 8000)
+        else:
+            self._settings = settings
+
     def _settings_applied(self, ok, message):
         if ok:
             self._settings_page._notice.set_message("")
@@ -2754,7 +2781,7 @@ class MainWindow(QMainWindow):
             if previous_uid and previous_uid != nav_info.get("mid"):
                 self._thumbnails.clear()
                 self._set_discovery_account(None)
-            self._set_discovery_account(self._api_client)
+            self._set_discovery_account(self._api_client, mid=nav_info.get("mid"))
             if self._user_profile.get("mid") != nav_info.get("mid") or self._user_face != nav_info.get("face", ""):
                 self._header_login.set_avatar()
             self._user_profile = {key: nav_info.get(key) for key in ("uname", "mid", "vipStatus", "vip")}

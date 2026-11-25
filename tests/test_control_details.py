@@ -183,7 +183,7 @@ def test_checkbox_space_cycles_three_states_and_table_enum_state_is_painted(qtbo
         qtbot.keyClick(check, Qt.Key_Space)
         assert check.checkState() == state
     table = FileTable()
-    table.replace_rows([["作品", "", "", "", "", ""]], [1], ["作品"])
+    table.replace_rows([["作品", "", "", "", ""]], [1], ["作品"])
     binding = TableSelection(table, paint_only=True)
     binding.reset([1])
     qtbot.addWidget(table)

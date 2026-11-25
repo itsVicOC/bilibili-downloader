@@ -1,8 +1,10 @@
 """Preview-first dialog for importing videos, collections and favorites."""
 
 from collections import Counter
+from dataclasses import dataclass
 
-from PySide6.QtCore import QObject, Qt, QThreadPool, QTimer, Signal
+from PySide6.QtCore import QObject, QSignalBlocker, Qt, QThreadPool, QTimer, Signal
+from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -10,6 +12,8 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
@@ -20,7 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from bilibili_downloader.core.batch import classify_batch_inputs
+from bilibili_downloader.core.batch import batch_source_key, classify_batch_inputs
 from bilibili_downloader.gui.resources.styles import UI_METRICS
 from bilibili_downloader.gui.threads.batch_worker import (
     ImportIssue,
@@ -40,6 +44,15 @@ from bilibili_downloader.gui.widgets.components import (
 from bilibili_downloader.gui.widgets.dialog_shell import AppDialog
 from bilibili_downloader.gui.widgets.row_hover import RowHoverTable
 from bilibili_downloader.gui.widgets.selection import SelectionBar, TableSelection
+
+
+@dataclass
+class _BatchPreview:
+    report: ImportReport
+    source_text: str | None
+    choices: dict[str, bool]
+    filter_text: str
+    reviewing: bool
 
 
 class _ItemSelector(QObject):
@@ -67,6 +80,7 @@ class BatchDialog(AppDialog):
     """Reusable import content, also available in a standalone dialog."""
 
     enqueue_requested = Signal(list)
+    presentation_changed = Signal()
 
     def __init__(
         self,
@@ -75,9 +89,18 @@ class BatchDialog(AppDialog):
         existing_content_identities: set[str] | None = None,
         parent=None,
         embedded=False,
+        *,
+        source_discovery=None,
     ):
         super().__init__(parent)
         self._embedded = embedded
+        self._source_discovery = source_discovery
+        self._scroll_area = None
+        self._source_names = {}
+        self._quick_source = None
+        self._saved_batch_preview = None
+        self._last_quick_preview = None
+        self._run_sources = []
         self.setProperty("embedded", embedded)
         self._resolved_source = None
         self._request_source = None
@@ -165,6 +188,11 @@ class BatchDialog(AppDialog):
         self._resolve_btn.clicked.connect(self._start_resolve)
         input_row.addWidget(self._resolve_btn)
         self._input_card.body.addLayout(input_row)
+        if self._source_discovery is not None:
+            self._source_discovery.source_requested.connect(self._append_discovered_source)
+            self._source_discovery.preview_requested.connect(self._preview_discovered_source)
+            self._source_discovery.view_changed.connect(self._sync_source_discovery)
+            layout.addWidget(self._source_discovery)
         layout.addWidget(self._input_card)
         self._progress_area = QWidget()
         self._progress_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -257,24 +285,40 @@ class BatchDialog(AppDialog):
         self._preview_card.hide()
         self._empty_space = QWidget()
         self._empty_space.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        layout.addWidget(self._empty_space, 1)
         self._notice = Notice(action="查看详情", callback=self._show_errors)
         self._notice.action.hide()
         layout.addWidget(self._notice)
+        layout.addWidget(self._empty_space, 1)
         self._action_bar = OutputActionBar("0 个任务")
         self._selected_label = self._action_bar.status
         self._output_specs = self._action_bar.specs
         self._output_directory = self._action_bar.directory
         self._footer_actions = self._action_bar.actions
         self._add_btn = self._action_bar.primary_button
-        self._action_bar.submit_requested.connect(self.accept)
+        self._action_bar.submit_requested.connect(self._submit_footer)
         self._action_bar.edit_button.setVisible(self._embedded)
+        if self._source_discovery is not None:
+            self._draft_button = ActionButton("待解析清单")
+            self._draft_button.setObjectName("OutputSecondaryButton")
+            self._draft_button.setProperty("actionPriority", 80)
+            self._draft_button.clicked.connect(self._show_draft)
+            self._footer_actions.insertWidget(0, self._draft_button)
         if not self._embedded:
             cancel = ActionButton("取消")
             cancel.setProperty("alwaysVisible", True)
             cancel.clicked.connect(self.reject)
             self._footer_actions.insertWidget(0, cancel)
         layout.addWidget(self._action_bar)
+        self._sync_source_discovery()
+        self._refresh_input_count()
+
+    def set_scroll_area(self, scroll):
+        self._scroll_area = scroll
+
+    @property
+    def preview_ready(self):
+        visible = self._source_discovery is None or self._collapse_btn.isChecked()
+        return bool(visible and not self._busy and self._resolved_items and self._resolved_source == self._active_source_text())
 
     def set_output_summary(self, specs, directory):
         self._output_specs.set_full_text(specs)
@@ -310,23 +354,165 @@ class BatchDialog(AppDialog):
                 first, full = first or relative, full or absolute
         self._path_preview.set_full_text(f"路径示例：{first}" if count else "选择作品后预览保存路径")
         self._path_preview.setToolTip(full)
-        self._selected_label.setText(f"{count} 个任务")
-        self._add_btn.setText(f"加入队列（{count} 项）" if count else "加入队列")
 
     def _toggle_input(self, collapsed):
+        if self._source_discovery is not None:
+            if not collapsed and not self._busy:
+                self._restore_batch_preview()
+            self._sync_source_discovery()
+            self._update_footer()
+            if not collapsed and not self._busy:
+                self._sync_result_feedback()
+                self._source_discovery.restore_position()
+            self.presentation_changed.emit()
+            return
         self._url_text.setVisible(not collapsed)
         self._resolve_btn.setVisible(not collapsed)
         self._source_summary.setVisible(collapsed)
         self._count_label.setVisible(not collapsed)
         self._compact_resolve.setVisible(collapsed)
         self._collapse_btn.setText("编辑来源" if collapsed else "收起编辑")
+        self._sync_source_discovery()
         if self._resolved_items:
             visible = collapsed or self.height() >= 540
             self._preview_card.setVisible(visible)
             self._empty_space.setVisible(not visible)
 
+    def _sync_source_discovery(self):
+        if self._source_discovery is None:
+            return
+        previewing = not self._busy and self._collapse_btn.isChecked()
+        browsing = not (self._busy or previewing)
+        editing_links = browsing and self._source_discovery.editing_links
+        self._source_discovery.setVisible(browsing)
+        self._input_card.setVisible(editing_links or previewing or self._busy)
+        self._url_text.setVisible(editing_links)
+        self._count_label.setVisible(editing_links)
+        self._resolve_btn.hide()
+        self._source_summary.setVisible(previewing or self._busy)
+        self._compact_resolve.setVisible(previewing and bool(self._resolved_items))
+        self._collapse_btn.setText("返回来源")
+        self._collapse_btn.setVisible(previewing)
+        self._preview_card.setVisible(previewing and bool(self._resolved_items))
+        self._empty_space.setVisible(not self._preview_card.isVisibleTo(self))
+
+    def show_link_editor(self):
+        if self._busy:
+            return False
+        self._collapse_btn.setChecked(False)
+        if self._source_discovery is not None:
+            self._source_discovery.show_link_editor()
+        self._url_text.setFocus()
+        return True
+
+    def _active_source_text(self):
+        return self._quick_source.url if self._quick_source is not None else self._url_text.toPlainText()
+
+    def _append_discovered_source(self, source):
+        if self._busy or self._collapse_btn.isChecked():
+            return
+        url, key = source.url, batch_source_key(source.url)
+        self._source_names[key] = source.title
+        self.add_source_link(url)
+
+    def add_source_link(self, url):
+        draft = self._url_text.toPlainText()
+        key = batch_source_key(url)
+        if url in draft.splitlines() or (key is not None and any(batch_source_key(line) == key for line in self._inputs)):
+            return
+        cursor = self._url_text.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        cursor.insertText(("\n" if draft and not draft.endswith("\n") else "") + url)
+
+    def _preview_discovered_source(self, source):
+        if self._busy or self._api_client is None or self._collapse_btn.isChecked():
+            return
+        self._saved_batch_preview = self._snapshot_preview()
+        self._quick_source = source
+        self._resolved_source = None
+        last = self._last_quick_preview
+        if last is not None and last.source_text == source.url:
+            self._source_discovery.remember_position()
+            self._restore_preview(last, reveal=True)
+            return
+        with QSignalBlocker(self.search):
+            self.search.clear()
+        self._begin_resolve([source.url])
+
+    def _selection_choices(self):
+        return {info.content_identity: selector.isChecked() for info, selector in zip(self._resolved_items, self._selectors)}
+
+    def _snapshot_preview(self):
+        return _BatchPreview(
+            self._report, self._resolved_source, self._selection_choices(),
+            self.search.text(), self.selection.state.reviewing,
+        )
+
+    def _restore_batch_preview(self):
+        if self._quick_source is None:
+            return
+        self._last_quick_preview = self._snapshot_preview()
+        saved, self._saved_batch_preview = self._saved_batch_preview, None
+        self._quick_source = None
+        self._request_source = None
+        self._restore_preview(saved, reveal=False)
+
+    def _restore_preview(self, saved, *, reveal):
+        with QSignalBlocker(self.search):
+            self.search.setText(saved.filter_text)
+        self.selection.state.reviewing = saved.reviewing
+        self._render_report(saved.report, saved.source_text, saved.choices, reveal=reveal)
+
+    def _source_title(self, url):
+        if self._quick_source is not None and self._quick_source.url == url:
+            return self._quick_source.title
+        return self._source_names.get(batch_source_key(url), url)
+
+    def _show_draft(self):
+        from bilibili_downloader.gui.dialogs.workflow import WorkflowDialog
+
+        self._source_names.update(self._source_discovery.known_source_titles(self._inputs))
+        dialog = WorkflowDialog("待解析清单", parent=self, confirm="关闭", width=580)
+        dialog.cancel_button.hide()
+        dialog.resize(580, 360)
+        sources = QListWidget()
+        sources.setAccessibleName("待解析来源")
+        sources.setMinimumHeight(150)
+        dialog.body.addWidget(sources)
+        remove = ActionButton("移除所选来源")
+        remove.setObjectName("OutputSecondaryButton")
+        dialog.footer_actions.row.insertWidget(0, remove)
+
+        def refresh():
+            row = max(0, sources.currentRow())
+            sources.clear()
+            for url in self._inputs:
+                item = QListWidgetItem()
+                item.setData(Qt.DisplayRole, self._source_title(url))
+                item.setData(Qt.UserRole, url)
+                item.setToolTip(url)
+                sources.addItem(item)
+            sources.setCurrentRow(min(row, sources.count() - 1))
+            dialog.footer_hint.setText(f"{sources.count()} 个来源" if sources.count() else "待解析清单为空")
+            remove.setEnabled(sources.currentItem() is not None)
+
+        def remove_selected():
+            if (item := sources.currentItem()) is None:
+                return
+            key = batch_source_key(item.data(Qt.UserRole))
+            remaining = "".join(line for line in self._url_text.toPlainText().splitlines(keepends=True)
+                                if batch_source_key(line) != key)
+            cursor = self._url_text.textCursor()
+            cursor.select(QTextCursor.Document)
+            cursor.insertText(remaining)
+            refresh()
+
+        remove.clicked.connect(remove_selected)
+        refresh()
+        dialog.exec()
+
     def resizeEvent(self, event):
-        if self._resolved_items:
+        if self._resolved_items and self._source_discovery is None:
             self._toggle_input(self._collapse_btn.isChecked())
         header = self._preview.horizontalHeader()
         header.resizeSection(2, 112 if self.width() < 900 else 152)
@@ -334,12 +520,7 @@ class BatchDialog(AppDialog):
         super().resizeEvent(event)
 
     def _selection_updated(self):
-        count = len(self.get_video_infos())
-        valid = self._resolved_source == self._url_text.toPlainText()
-        task_count = sum(len(info.pages) if info.is_multi_part else 1 for info in self.get_video_infos())
-        self._selected_label.setText(f"{task_count} 个任务")
-        self._add_btn.setText(f"加入队列（{task_count} 项）" if task_count else "加入队列")
-        self._add_btn.setEnabled(count > 0 and valid and not self._busy)
+        self._update_footer()
         self.update_path_previews()
         if self._inventory_results:
             from bilibili_downloader.gui.threads.inventory_worker import (
@@ -351,9 +532,53 @@ class BatchDialog(AppDialog):
             self._result_label.setText("")
         self._result_label.setVisible(bool(self._result_label.text()))
 
+    def _update_footer(self):
+        selected = self.get_video_infos()
+        task_count = sum(len(info.pages) if info.is_multi_part else 1 for info in selected)
+        if self._source_discovery is None:
+            status = f"{task_count} 个任务"
+            action = f"加入队列（{task_count} 项）" if task_count else "加入队列"
+            enabled = bool(selected) and self.preview_ready
+        else:
+            count = len(self._inputs)
+            self._draft_button.setVisible(not self._busy and not self._collapse_btn.isChecked())
+            self._draft_button.setEnabled(bool(count))
+            if self._busy:
+                status, action, enabled = "正在解析来源", "解析中…", False
+            elif self.preview_ready:
+                status = f"已选 {len(selected)} 个作品 · {task_count} 个任务"
+                action = f"加入队列（{task_count} 项）" if task_count else "加入队列"
+                enabled = bool(selected)
+            elif self._collapse_btn.isChecked() and self._resolved_source == self._active_source_text():
+                status, action = "暂无可预览作品", "重新预览"
+                enabled = self._quick_source is not None or bool(count)
+            else:
+                status = f"{count} 个来源待解析" if count else "尚未添加来源"
+                action = f"预览 {count} 个来源" if count else "预览来源"
+                enabled = bool(count) and self._api_client is not None
+        self._selected_label.setText(status)
+        self._add_btn.setText(action)
+        self._add_btn.setEnabled(enabled)
+
+    def _submit_footer(self):
+        if self._source_discovery is None or self.preview_ready:
+            self.accept()
+        elif (not self._collapse_btn.isChecked() and self._resolved_items
+                and self._resolved_source == self._active_source_text()):
+            self._source_discovery.remember_position()
+            self._collapse_btn.setChecked(True)
+            self._sync_result_feedback()
+            self._reveal(self._input_card)
+        else:
+            self._start_resolve()
+
     def _refresh_input_count(self):
+        valid, invalid = classify_batch_inputs(self._url_text.toPlainText())
+        self._inputs = valid
+        if self._source_discovery is not None:
+            self._source_discovery.set_selected_sources(valid)
         if self._resolved_source is not None:
-            stale = self._resolved_source != self._url_text.toPlainText()
+            stale = self._resolved_source != self._active_source_text()
             if stale:
                 self._inventory_timer.stop()
                 if self._inventory_job is not None:
@@ -361,20 +586,22 @@ class BatchDialog(AppDialog):
             self._sync_result_feedback()
             self._result_label.setVisible(not stale)
             self._selection_updated()
+        else:
+            self._update_footer()
         self._refresh_source_summary()
-        valid, invalid = classify_batch_inputs(self._url_text.toPlainText())
-        self._inputs = valid
         if invalid:
             self._count_label.setText(
                 f"{len(valid)} 个来源 · {len(invalid)} 行无法识别"
             )
         else:
             self._count_label.setText(f"{len(valid)} 个来源")
+        if self._source_discovery is not None and self._collapse_btn.isChecked():
+            self.presentation_changed.emit()
 
     def _refresh_source_summary(self):
-        raw = self._url_text.toPlainText()
+        raw = self._active_source_text()
         lines = [line.strip() for line in raw.splitlines() if line.strip()]
-        source = lines[0] if lines else "尚未添加来源"
+        source = self._source_title(lines[0]) if lines else "尚未添加来源"
         if len(lines) > 1:
             source += f" 等 {len(lines)} 个来源"
         names = {
@@ -392,16 +619,24 @@ class BatchDialog(AppDialog):
         if self._busy:
             return
         self._refresh_input_count()
-        if not self._inputs:
+        sources = [self._quick_source.url] if self._quick_source is not None else self._inputs
+        if not sources:
             self._notice.set_message("没有可解析的 B 站来源", "warning")
             return
         if self._api_client is None:
             self._notice.set_message("当前没有可用的 API 客户端", "danger")
             return
-        self._begin_resolve(self._inputs)
+        self._begin_resolve(sources)
 
     def _begin_resolve(self, sources, *, retry=False):
+        if self._source_discovery is not None:
+            self._source_names.update(self._source_discovery.known_source_titles(sources))
+            if not self._collapse_btn.isChecked():
+                self._source_discovery.remember_position()
         self._busy = True
+        self._sync_source_discovery()
+        self._update_footer()
+        self._run_sources = list(sources)
         self._retry_base = self._report if retry else None
         self._retry_urls = sources if retry else []
         self._checked_before_retry = (
@@ -412,7 +647,8 @@ class BatchDialog(AppDialog):
             if retry
             else {}
         )
-        self._request_source = self._url_text.toPlainText()
+        self._request_source = self._active_source_text()
+        self._refresh_source_summary()
         self._notice.set_message("")
         self._notice.action.hide()
         self._issue_btn.hide()
@@ -427,6 +663,9 @@ class BatchDialog(AppDialog):
         self._cancel_btn.setText("取消解析")
         self._cancel_btn.setEnabled(True)
         if not retry:
+            if self._resolved_source != self._request_source:
+                with QSignalBlocker(self.search):
+                    self.search.clear()
             self._resolved_items = []
             self._selectors = []
             self._preview.setRowCount(0)
@@ -446,6 +685,13 @@ class BatchDialog(AppDialog):
             self._resolve_worker, self._api_client, sources
         )
         QThreadPool.globalInstance().start(self._resolve_runner)
+        self._reveal(self._progress_area)
+        self.presentation_changed.emit()
+
+    def _reveal(self, widget):
+        if self._scroll_area is not None:
+            QTimer.singleShot(0, self, lambda: self._scroll_area.ensureWidgetVisible(widget, 0, 8)
+                              if widget.isVisible() else None)
 
     def _on_progress(self, progress):
         if not self._busy:
@@ -455,8 +701,12 @@ class BatchDialog(AppDialog):
         if total:
             self._progress_bar.setValue(completed)
         number = f" · {completed}/{total}" if total else ""
+        index = progress["source_index"]
+        source = self._run_sources[index - 1] if 0 < index <= len(self._run_sources) else ""
+        name = self._source_title(source)
         self._progress_label.setText(
-            f"来源 {progress['source_index']}/{progress['sources']} · {progress['stage']}{number} · 已解析 {progress['items']} 项"
+            f"来源 {index}/{progress['sources']} · {name if name != source else progress['source']}\n"
+            f"{progress['stage']}{number} · 已解析 {progress['items']} 个作品"
         )
         self._progress_label.setToolTip(progress["source"])
 
@@ -483,8 +733,8 @@ class BatchDialog(AppDialog):
         )
 
     def _on_report(self, report):
-        same_source = self._resolved_source == (self._request_source if self._request_source is not None else self._url_text.toPlainText())
-        previous_choices = {info.content_identity: selector.isChecked() for info, selector in zip(self._resolved_items, self._selectors)} if same_source else {}
+        source_text = self._request_source if self._request_source is not None else self._active_source_text()
+        previous_choices = self._selection_choices() if self._resolved_source == source_text else {}
         if self._retry_base is not None:
             base = self._retry_base
             original_issues = {
@@ -544,17 +794,20 @@ class BatchDialog(AppDialog):
                 report.completed_sources,
             )
         self._retry_base = None
+        choices = {**previous_choices, **self._checked_before_retry}
+        self._checked_before_retry = {}
+        self._request_source = None
+        self._render_report(report, source_text, choices)
+
+    def _render_report(self, report, source_text, choices, *, reveal=True):
         self._report = report
         self._busy = False
         self._progress_area.hide()
         self._resolve_btn.setEnabled(True)
         self._compact_resolve.setEnabled(True)
+        self._compact_resolve.setText("重新预览" if self._source_discovery is not None else "重新解析")
         self._resolve_btn.setText("重新解析")
-        self._resolved_source = (
-            self._request_source
-            if self._request_source is not None
-            else self._url_text.toPlainText()
-        )
+        self._resolved_source = source_text
         self._errors = [
             f"{issue.title or issue.source}：{issue.message}" for issue in report.issues
         ]
@@ -573,11 +826,7 @@ class BatchDialog(AppDialog):
             duplicate = (
                 info.content_identity.lower() in self._existing_content_identities
             )
-            selector.setChecked(
-                self._checked_before_retry.get(
-                    info.content_identity, previous_choices.get(info.content_identity, info.is_main_section)
-                )
-            )
+            selector.setChecked(choices.get(info.content_identity, info.is_main_section))
             if duplicate:
                 duplicate_count += 1
                 selector.setToolTip("任务中心已有同源作品，将按当前规格进一步去重")
@@ -617,19 +866,24 @@ class BatchDialog(AppDialog):
         self._result_label.setText(self._report_summary())
         self._result_label.setToolTip("\n".join(self._errors))
         self._result_label.setVisible(
-            self._resolved_source == self._url_text.toPlainText()
+            self._resolved_source == self._active_source_text()
         )
         self._preview_card.setVisible(bool(items))
         self._empty_space.setVisible(not bool(items))
         self._collapse_btn.setVisible(bool(items))
         self._collapse_btn.setChecked(
-            bool(items) and self._resolved_source == self._url_text.toPlainText()
+            reveal and (bool(items) or self._source_discovery is not None)
+            and self._resolved_source == self._active_source_text()
         )
+        self._sync_source_discovery()
         self._selection_updated()
         self._refresh_source_summary()
         self._sync_result_feedback()
         self._filter_results()
         self.schedule_inventory()
+        self.presentation_changed.emit()
+        if reveal:
+            self._reveal(self._input_card)
 
     def _filter_results(self, *_):
         query = self.search.text().strip().casefold()
@@ -663,13 +917,13 @@ class BatchDialog(AppDialog):
             InventoryMatchRunner,
         )
         factory = getattr(self, "output_item_factory", None)
-        if factory is None or self.library_repository is None or not self._resolved_items or self._resolved_source != self._url_text.toPlainText():
+        if factory is None or self.library_repository is None or not self._resolved_items or self._resolved_source != self._active_source_text():
             return
         if self._inventory_job is not None:
             self._inventory_timer.start(150)
             return
         snapshot = self._resolved_items
-        source_snapshot = self._url_text.toPlainText()
+        source_snapshot = self._active_source_text()
         groups = [[factory(info.for_page(page)) for page in info.pages] or [factory(info)] for info in snapshot]
         fingerprints = [[item.fingerprint for item in group] for group in groups]
         job = InventoryMatchRunner(self.library_repository, groups)
@@ -684,7 +938,7 @@ class BatchDialog(AppDialog):
             if not isValid(self):
                 return
             self.select_unsaved.setEnabled(True)
-            if snapshot is not self._resolved_items or source_snapshot != self._url_text.toPlainText():
+            if snapshot is not self._resolved_items or source_snapshot != self._active_source_text():
                 return
             current = [[factory(info.for_page(page)) for page in info.pages] or [factory(info)] for info in snapshot]
             if fingerprints != [[item.fingerprint for item in group] for group in current]:
@@ -725,17 +979,22 @@ class BatchDialog(AppDialog):
         self._issue_btn.setText(f"未解析（{len(self._errors)}）")
         self._issue_btn.setAccessibleName(f"查看 {len(self._errors)} 项未解析内容及重试入口")
         self._issue_btn.setToolTip(self._report_summary())
-        if self._resolved_source != self._url_text.toPlainText():
+        if self._resolved_source is not None and self._resolved_source != self._active_source_text():
             self._issue_btn.hide()
             self._notice.set_message("来源已改，请重新解析后加入任务。", "warning")
             self._notice.action.setVisible(bool(self._errors))
+        elif self._source_discovery is not None and not self._collapse_btn.isChecked():
+            self._notice.set_message("")
         elif self._errors and not items:
             self._notice.set_message(self._report_summary(), "warning")
             self._notice.action.show()
         else:
-            self._notice.set_message(
-                ("解析已取消，保留已有结果。" if items else "解析已取消。") if self._report.cancelled else ""
-            )
+            message = ""
+            if self._report.cancelled:
+                message = f"解析已取消，保留 {len(items)} 个作品。" if items else "解析已取消。"
+            elif not items and self._resolved_source is not None:
+                message = "所选来源没有可解析的作品。"
+            self._notice.set_message(message)
             self._notice.action.hide()
 
     def _report_summary(self):
@@ -767,7 +1026,7 @@ class BatchDialog(AppDialog):
         if (
             self._busy
             or self._api_client is None
-            or self._resolved_source != self._url_text.toPlainText()
+            or self._resolved_source != self._active_source_text()
         ):
             return
         sources, _ = classify_batch_inputs("\n".join(self._failed_urls()))
@@ -839,7 +1098,7 @@ class BatchDialog(AppDialog):
             bool(self._failed_urls())
             and self._api_client is not None
             and not self._busy
-            and self._resolved_source == self._url_text.toPlainText()
+            and self._resolved_source == self._active_source_text()
         )
 
         def retry_failed():
@@ -856,8 +1115,10 @@ class BatchDialog(AppDialog):
             self.selection.clear()
 
     def accept(self):
-        if self._resolved_source != self._url_text.toPlainText():
+        if self._resolved_source != self._active_source_text():
             self._notice.set_message("来源已改，请先重新解析", "warning")
+            return
+        if self._source_discovery is not None and not self._collapse_btn.isChecked():
             return
         if not self._resolved_items:
             MessageBox(

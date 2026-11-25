@@ -64,7 +64,7 @@ jobs:
         env:
           QT_QPA_PLATFORM: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
         run: |
-          python -X faulthandler -m pytest -vv -s --maxfail=1 tests/test_download_management.py tests/test_issue_regressions.py tests/test_archive_workflow.py tests/test_workflow_polish.py tests/test_ui_feedback.py tests/test_dialog_placement.py tests/test_control_details.py tests/test_warm_workspaces.py
+          python -X faulthandler -m pytest -vv -s --maxfail=1 tests/test_download_management.py tests/test_library_views.py tests/test_issue_regressions.py tests/test_archive_workflow.py tests/test_workflow_polish.py tests/test_ui_feedback.py tests/test_dialog_placement.py tests/test_control_details.py tests/test_warm_workspaces.py
 
       - name: Upload native pytest UI evidence
         if: always() && runner.os != 'Linux' && matrix.python-version == '3.12'

@@ -186,10 +186,17 @@ class BilibiliAPIClient:
 
     def get_following_video_feed(self, offset: str = "") -> dict:
         """Read one page of the signed-in account's video feed."""
+        return self._get_following_feed("video", offset)
+
+    def get_following_feed(self, offset: str = "") -> dict:
+        """Read updates and submissions from the signed-in account's feed."""
+        return self._get_following_feed("all", offset)
+
+    def _get_following_feed(self, feed_type: str, offset: str) -> dict:
         if not self.sessdata:
             raise BilibiliAPIError(-101, "请先登录 B 站")
         params = {
-            "type": "video",
+            "type": feed_type,
             "web_location": "333.1365",
             "features": "itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote,decorationCard,onlyfansAssetsV2,forwardListHidden,ugcDelete",
         }
@@ -202,6 +209,40 @@ class BilibiliAPIClient:
             timeout=6.0,
         )
         return self._parse_response(response)
+
+    def get_created_favorite_folders(self, mid: int) -> dict:
+        if not self.sessdata:
+            raise BilibiliAPIError(-101, "请先登录 B 站")
+        response = self._client.get(
+            ep.CREATED_FAVORITE_FOLDERS_ENDPOINT,
+            params={"up_mid": mid},
+            headers={"Referer": f"https://space.bilibili.com/{mid}/favlist"},
+        )
+        return self._parse_response(response)
+
+    def get_following_accounts(self, mid: int, page: int, page_size: int) -> dict:
+        if not self.sessdata:
+            raise BilibiliAPIError(-101, "请先登录 B 站")
+        response = self._client.get(
+            ep.FOLLOWING_ACCOUNTS_ENDPOINT,
+            params={"vmid": mid, "pn": page, "ps": page_size, "order": "desc", "order_type": "attention"},
+            headers={"Referer": f"https://space.bilibili.com/{mid}/relation/follow"},
+        )
+        return self._parse_response(response)
+
+    def get_space_collections(self, mid: int, page: int, page_size: int) -> dict:
+        response = self._client.get(
+            ep.SPACE_COLLECTIONS_ENDPOINT,
+            params={"mid": mid, "page_num": page, "page_size": page_size},
+            headers={"Referer": f"https://space.bilibili.com/{mid}/lists"},
+        )
+        return self._parse_response(response)
+
+    def get_video_season_metadata(self, *, bvid: str = "", aid: int = 0) -> tuple[object, object]:
+        """Read the owner and embedded UGC season without resolving its episodes."""
+        data = self._get_view_data({"bvid": bvid} if bvid else {"aid": aid})
+        owner = data.get("owner")
+        return (owner.get("mid") if isinstance(owner, dict) else None), data.get("ugc_season")
 
     def get_video_info(self, bvid: str) -> VideoInfo:
         """Fetch video metadata by BV number from /x/web-interface/view."""
@@ -287,6 +328,16 @@ class BilibiliAPIClient:
         data = payload.get("result") or payload.get("data") or {}
         return data if isinstance(data, dict) else {}
 
+    def get_favorite_page(self, media_id: int, page: int = 1, page_size: int = 20) -> dict:
+        response = self._client.get(
+            ep.FAVORITE_LIST_ENDPOINT,
+            params={
+                "media_id": media_id, "pn": page, "ps": page_size,
+                "order": "mtime", "type": 0, "platform": "web",
+            },
+        )
+        return self._parse_response(response)
+
     def get_favorite_collection(
         self,
         media_id: int,
@@ -298,18 +349,7 @@ class BilibiliAPIClient:
         page = 1
         while True:
             self._resolve_control.checkpoint(f"读取收藏夹第 {page} 页", len(entries))
-            response = self._client.get(
-                ep.FAVORITE_LIST_ENDPOINT,
-                params={
-                    "media_id": media_id,
-                    "pn": page,
-                    "ps": 20,
-                    "order": "mtime",
-                    "type": 0,
-                    "platform": "web",
-                },
-            )
-            data = self._parse_response(response)
+            data = self.get_favorite_page(media_id, page)
             info = data.get("info") or {}
             title = info.get("title") or title
             entries.extend(data.get("medias") or [])
@@ -359,6 +399,16 @@ class BilibiliAPIClient:
         title = (data.get("meta") or {}).get("name") or f"系列 {series_id}"
         return self._collection_from_entries(title, "series", source_url, entries)
 
+    def get_season_page(self, mid: int, season_id: int, page: int = 1, page_size: int = 30) -> dict:
+        response = self._client.get(
+            ep.SEASON_ARCHIVES_ENDPOINT,
+            params={
+                "mid": mid, "season_id": season_id, "page_num": page,
+                "page_size": page_size, "sort_reverse": "false",
+            },
+        )
+        return self._parse_response(response)
+
     def get_season_collection(
         self,
         mid: int,
@@ -370,17 +420,7 @@ class BilibiliAPIClient:
         page = 1
         while True:
             self._resolve_control.checkpoint(f"读取合集第 {page} 页", len(entries))
-            response = self._client.get(
-                ep.SEASON_ARCHIVES_ENDPOINT,
-                params={
-                    "mid": mid,
-                    "season_id": season_id,
-                    "page_num": page,
-                    "page_size": 30,
-                    "sort_reverse": "false",
-                },
-            )
-            data = self._parse_response(response)
+            data = self.get_season_page(mid, season_id, page)
             batch = data.get("archives") or []
             entries.extend(batch)
             page_info = data.get("page") or {}

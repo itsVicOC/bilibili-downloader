@@ -124,49 +124,73 @@ class ContentSourceResolver:
                 items=[info],
             )
 
-        parsed = urlparse(source)
-        query = parse_qs(parsed.query)
-        path = parsed.path
+        kind, source_id, owner = _collection_reference(source)
+        if kind == "favorite":
+            return self._client.get_favorite_collection(source_id, source)
+        if kind == "video_season":
+            return self._client.get_video_season_collection(owner, source)
+        if kind == "series":
+            return self._client.get_series_collection(owner, source_id, source)
+        return self._client.get_season_collection(owner, source_id, source)
 
-        media_match = MEDIA_LIST_PATH_PATTERN.search(path)
-        if media_match:
-            return self._client.get_favorite_collection(
-                int(media_match.group(1)), source
-            )
 
-        space_match = SPACE_LIST_PATTERN.match(path)
-        if space_match:
-            mid = int(space_match.group(1))
-            list_id = space_match.group(2)
-            if "/favlist" in path:
-                favorite_id = _first_int(query, "fid", "media_id")
-                if favorite_id is None:
-                    raise BatchResolveError("收藏夹链接缺少 fid")
-                return self._client.get_favorite_collection(favorite_id, source)
-            source_id = (
-                int(list_id)
-                if list_id
-                else _first_int(query, "sid", "series_id")
-            )
-            if source_id is None:
-                raise BatchResolveError("空间列表链接缺少列表编号")
-            source_type = (query.get("type") or ["season"])[0].lower()
-            if source_type == "series" or "seriesdetail" in path:
-                return self._client.get_series_collection(mid, source_id, source)
-            return self._client.get_season_collection(mid, source_id, source)
-
-        bvid = extract_bvid(source)
-        if bvid and _first_int(query, "sid", "season_id") is not None:
-            return self._client.get_video_season_collection(bvid, source)
-
-        favorite_id = _first_int(query, "fid", "media_id", "mlid")
-        if favorite_id is not None and "medialist" in path:
-            return self._client.get_favorite_collection(favorite_id, source)
-        raise BatchResolveError("无法从该合集链接识别列表编号")
+def _collection_reference(source: str) -> tuple[str, int, int | str | None]:
+    parsed = urlparse(source)
+    query = parse_qs(parsed.query)
+    path = parsed.path.lower()
+    media = MEDIA_LIST_PATH_PATTERN.search(path)
+    if media:
+        return "favorite", int(media.group(1)), None
+    space = SPACE_LIST_PATTERN.match(path)
+    if space:
+        mid = int(space.group(1))
+        if "/favlist" in path:
+            favorite = _first_int(query, "fid", "media_id")
+            if favorite is None:
+                raise BatchResolveError("收藏夹链接缺少 fid")
+            return "favorite", favorite, None
+        source_id = int(space.group(2)) if space.group(2) else _first_int(query, "sid", "series_id")
+        if source_id is None:
+            raise BatchResolveError("空间列表链接缺少列表编号")
+        source_type = (query.get("type") or ["season"])[0].lower()
+        kind = "series" if source_type == "series" or "seriesdetail" in path else "season"
+        return kind, source_id, mid
+    bvid, season = extract_bvid(source), _first_int(query, "sid", "season_id")
+    if bvid and season is not None:
+        return "video_season", season, bvid
+    favorite = _first_int(query, "fid", "media_id", "mlid")
+    if favorite is not None and "medialist" in path:
+        return "favorite", favorite, None
+    raise BatchResolveError("无法从该合集链接识别列表编号")
 
 
 def _split_inputs(text: str) -> list[str]:
     return [line.strip() for line in text.strip().splitlines() if line.strip()]
+
+
+def batch_source_key(source: str) -> tuple | None:
+    """Return a stable identity for a supported batch source, without a network request."""
+    source = source.strip()
+    if is_collection_source(source):
+        bangumi = extract_bangumi_id(source)
+        if bangumi:
+            return bangumi
+        try:
+            kind, source_id, owner = _collection_reference(source)
+        except (BatchResolveError, ValueError):
+            return "collection", source.lower()
+        if kind == "series":
+            return kind, source_id, owner
+        return ("season" if kind == "video_season" else kind), source_id
+    if bvid := extract_bvid(source):
+        return "bvid", bvid.lower()
+    if aid := extract_aid(source):
+        return "aid", aid
+    if bangumi := extract_bangumi_id(source):
+        return bangumi
+    if is_short_link(source):
+        return "short", source.lower()
+    return None
 
 
 def classify_batch_inputs(text: str) -> tuple[list[str], list[str]]:
@@ -175,26 +199,8 @@ def classify_batch_inputs(text: str) -> tuple[list[str], list[str]]:
     invalid = []
     seen = set()
     for source in _split_inputs(text):
-        collection_source = is_collection_source(source)
-        if collection_source:
-            identity = ("collection", source.lower())
-            bvid = None
-            aid = None
-        else:
-            bvid = extract_bvid(source)
-            aid = extract_aid(source)
-            bangumi = extract_bangumi_id(source)
-        if collection_source:
-            pass
-        elif bvid:
-            identity = ("bvid", bvid.lower())
-        elif aid:
-            identity = ("aid", aid)
-        elif bangumi:
-            identity = bangumi
-        elif is_short_link(source):
-            identity = ("short", source.lower())
-        else:
+        identity = batch_source_key(source)
+        if identity is None:
             invalid.append(source)
             continue
 
