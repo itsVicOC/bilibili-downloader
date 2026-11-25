@@ -42,9 +42,10 @@
     </linearGradient>
   </defs>
 
-  <rect x="80" y="80" width="864" height="864" rx="202" fill="url(#tile)"/>
-  <rect x="83" y="83" width="858" height="858" rx="199" fill="none" stroke="url(#tile-rim)" stroke-width="6"/>
+  <rect x="56" y="56" width="912" height="912" rx="210" fill="url(#tile)"/>
+  <rect x="59" y="59" width="906" height="906" rx="207" fill="none" stroke="url(#tile-rim)" stroke-width="6"/>
 
+  <g transform="translate(512 515) scale(1.22) translate(-512 -515)">
   <!-- The lower edge gives the rounded plate a shallow profile. -->
   <rect x="255" y="483" width="514" height="295" rx="59" fill="#151424" opacity=".41"/>
   <rect x="255" y="477" width="514" height="287" rx="56" fill="url(#body-edge)"/>
@@ -62,5 +63,6 @@
     <path d="M 440,332 H 539 L 467,432 H 368 Z" fill="url(#stripe)" opacity=".86"/>
     <path d="M 259,357 Q 261,336 284,336 H 430" fill="none" stroke="url(#light)"
           stroke-width="4" stroke-linecap="round"/>
+  </g>
   </g>
 </svg>

@@ -12,9 +12,11 @@
     </linearGradient>
   </defs>
 
-  <rect x="1" y="1" width="14" height="14" rx="3.35" fill="url(#tile)"/>
+  <rect x=".5" y=".5" width="15" height="15" rx="3.55" fill="url(#tile)"/>
+  <g transform="translate(8 8) scale(1.14) translate(-8 -8)">
   <rect x="3.65" y="8.2" width="8.7" height="4.3" rx="1" fill="url(#body)"/>
   <path d="M 4.15,7 L 3.8,5.52 Q 3.67,4.91 4.29,4.76 L 11.53,3.06 Q 12.11,2.91 12.25,3.52
            L 12.53,4.7 Q 12.67,5.31 12.03,5.46 L 4.79,7.16 Q 4.23,7.29 4.15,7 Z" fill="url(#body)"/>
   <path d="M 6.47,4.24 L 8.13,3.85 L 7.33,6.56 L 5.67,6.94 Z" fill="#F3E3F3"/>
+  </g>
 </svg>

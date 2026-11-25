@@ -1,8 +1,8 @@
 {
-  "backend": "cocoa",
+  "backend": "offscreen",
   "qt": "6.11.2",
-  "dpr": 2.0,
-  "physical_pixels": true,
+  "dpr": 1.0,
+  "physical_pixels": false,
   "sections": [
     "download",
     "live",

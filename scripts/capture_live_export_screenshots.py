@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QApplication
 
 from bilibili_downloader.core.live_models import LiveExport, RecordingSegment
 from bilibili_downloader.gui.resources.theme import ThemeManager
+from bilibili_downloader.gui.settings_sections import SettingsSection
 from scripts import capture_docs_screenshots as capture
 
 
@@ -126,7 +127,7 @@ def main():
                     app, window, f"{theme_id}-{mode}-directory-900.png"
                 )
                 window._settings_page.set_live_rooms(rows)
-                window._show_settings_tab(1)
+                window._show_settings_tab(SettingsSection.LIVE)
                 capture._save_widget(app, window, f"{theme_id}-{mode}-settings-900.png")
                 window._settings_page.tabs.widget(1).ensureWidgetVisible(
                     window._settings_page._directory_review

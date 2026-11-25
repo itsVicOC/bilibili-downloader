@@ -250,7 +250,7 @@ python scripts/capture_docs_screenshots.py --native --physical-pixels --ui-refre
 | 入口 | 内容 | 主要操作 |
 |---|---|---|
 | 视频下载 / 单个解析 | 链接输入、作品资料、输出规格与归档附加项 | 开始解析、加入下载队列 |
-| 视频下载 / 批量导入 | 来源输入、解析预览、作品勾选 | 解析并预览、加入下载队列 |
+| 视频下载 / 批量导入 | 来源输入、解析预览、作品勾选 | 解析预览、加入下载队列 |
 | 直播录制 | 房间监控列表与选中房间详情 | 添加并监控、立即开始 / 停止本场、自动监控 |
 | 任务中心 / 下载队列 | 状态筛选、下载进度、行操作与完整详情 | 暂停、继续、重试、打开、移除记录 |
 | 任务中心 / 当前录制 | 准备、排队、录制、重连、收尾与异常房间 | 停止本场、查看房间 |
@@ -384,8 +384,8 @@ Windows 构建机桌面的物理分辨率有限，较大逻辑窗口可能超出
 | 设置错误 | [字段校验](images/biliflow-state-settings-invalid.png) |
 | 小窗口下方内容 | [输出规格](images/biliflow-state-download-specs-small.png)、[房间详情](images/biliflow-state-live-details-small.png)、[下载默认值](images/biliflow-state-settings-download-small.png)、[直播并发与空间](images/biliflow-state-settings-live-small.png)、[缓存工具](images/biliflow-state-settings-tools-small.png) |
 | 登录与房间设置 | [手动登录](images/biliflow-login.png)、[扫码登录](images/biliflow-login-qr.png)、[过期刷新](images/biliflow-state-login-expired.png)、[房间设置](images/biliflow-room-settings.png) |
-| 辅助提示与确认 | [版权](images/biliflow-dialog-copyright.png)、[设置离开](images/biliflow-dialog-settings-leave.png)、[退出](images/biliflow-dialog-quit.png)、[缓存](images/biliflow-dialog-cache.png)、[错误](images/biliflow-dialog-error.png)、[关于](images/biliflow-dialog-about.png) |
-| 浅色辅助弹窗 | [版权](images/biliflow-dialog-copyright-light.png)、[设置离开](images/biliflow-dialog-settings-leave-light.png)、[退出](images/biliflow-dialog-quit-light.png)、[缓存](images/biliflow-dialog-cache-light.png)、[错误](images/biliflow-dialog-error-light.png)、[关于](images/biliflow-dialog-about-light.png) |
+| 辅助提示与确认 | [版权](images/biliflow-dialog-copyright.png)、[设置离开](images/biliflow-dialog-settings-leave.png)、[退出](images/biliflow-dialog-quit.png)、[缓存](images/biliflow-dialog-cache.png)、[错误](images/biliflow-dialog-error.png)、[关于与更新](images/biliflow-about-updates.png) |
+| 浅色辅助界面 | [版权](images/biliflow-dialog-copyright-light.png)、[设置离开](images/biliflow-dialog-settings-leave-light.png)、[退出](images/biliflow-dialog-quit-light.png)、[缓存](images/biliflow-dialog-cache-light.png)、[错误](images/biliflow-dialog-error-light.png)、[关于与更新](images/biliflow-about-updates-light.png) |
 
 ## 验证范围
 

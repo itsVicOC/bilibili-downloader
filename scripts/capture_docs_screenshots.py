@@ -44,6 +44,7 @@ from PySide6.QtWidgets import (
     QToolTip,
 )
 
+from bilibili_downloader.api.live import FollowedLiveRoom
 from bilibili_downloader.core.appearance import prepare_background
 from bilibili_downloader.core.daily_rankings import PUBLIC_CACHE_VERSION, beijing_now
 from bilibili_downloader.core.live_models import (
@@ -75,27 +76,35 @@ from bilibili_downloader.gui.resources.paths import asset_path
 from bilibili_downloader.gui.resources.theme import ThemeManager
 from bilibili_downloader.gui.settings_sections import SettingsSection
 from bilibili_downloader.gui.widgets.components import ElidedLabel
+from bilibili_downloader.gui.widgets.live_following import FollowedRoomsPage
 from bilibili_downloader.gui.widgets.pixel_mascot import PixelMascot
 from bilibili_downloader.utils.config import ConfigManager
 
 OUTPUT_DIR = PROJECT_ROOT / "docs" / "images"
-DEMO_RELEASE_NOTES = """## Fluent 界面精修
+DEMO_DISCOVERY = (
+    ("云站短片：给旅途一个暂停键", "云站放映室", "8.4万", "07:42", "download-pixel-station.png"),
+    ("蓝色海岸 · 周末水彩手帐", "海边画室", "6.1万", "12:08", "download-watercolor-sea.webp"),
+    ("在云层上方度过一个午后", "天空观测所", "4.9万", "05:36", "download-anime-cloud.webp"),
+    ("微光花园 · 夜间生物观察", "微光自然课", "3.3万", "10:24", "live-watercolor-firefly.webp"),
+    ("胶片日记：小屋的一天", "小屋日记", "2.5万", "08:51", "settings-pixel-cottage.png"),
+    ("星轨漫游：城市入夜之后", "城市漫游", "1.2万", "14:28", "live-anime-neon.webp"),
+)
+DEMO_RELEASE_NOTES = """## 0.9.0 正式版
 
-- **统一材质与交互**：保留粉紫／青蓝品牌，让内容更清晰。
-- 修复 Windows 窗口按钮的色差、悬停与图标对齐。
-- 更新说明支持标题、列表、表格与 `行内代码`。
-
-### 兼容与验证
-
-| 项目 | 说明 |
-| --- | --- |
-| 用户数据 | 保留账号、任务、录制历史和外观设置 |
-| 窗口行为 | 保留拖动、缩放和关闭流程 |
+- **每日 Top 100**：浏览全站榜和关注榜，按需加载下一屏。
+- **关注直播间**：逐屏查看，支持立即录制和添加监控。
+- 应用图标更醒目，批量导入使用紧凑的「解析预览」按钮。
 
 > 此处为离线演示数据，不会执行更新。
 
-[查看发布说明](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.8.9b1)
+[查看发布说明](https://github.com/itsVicOC/bilibili-downloader/releases/tag/v0.9.0)
 """
+
+
+def _demo_update_dialog(window):
+    with patch("bilibili_downloader.gui.dialogs.update_dialog.__version__", "0.9.0b6"):
+        return UpdateDialog(UpdateRelease("0.9.0", "v0.9.0", "2026-11-23", DEMO_RELEASE_NOTES, ()), window)
+
 
 
 def _flush_events(app: QApplication) -> None:
@@ -227,12 +236,9 @@ def _make_main_window(workdir: Path, *, desktop_platform=None) -> MainWindow:
         "version": PUBLIC_CACHE_VERSION,
         "fetched_at": beijing_now().isoformat(),
         "videos": [
-            {"bvid": f"BV{index:010}", "title": title, "author": "示例 UP 主", "play_text": views}
-            for index, (title, views) in enumerate((
-                ("城市夜航 · 星轨旅记", "12.8万"),
-                ("海边的午后 · 影像手记", "9.4万"),
-                ("云上列车 · 周末漫游", "6.8万"),
-            ), 1)
+            {"bvid": f"BV{index:010}", "title": title, "author": author, "play_text": views,
+             "cover_url": cover, "duration_text": duration}
+            for index, (title, author, views, duration, cover) in enumerate(DEMO_DISCOVERY, 1)
         ],
     }, ensure_ascii=False), encoding="utf-8")
     repository = TaskRepository(workdir / "tasks.sqlite3")
@@ -241,6 +247,8 @@ def _make_main_window(workdir: Path, *, desktop_platform=None) -> MainWindow:
         config_manager=config, task_repository=repository, live_controller=controller,
         desktop_platform=desktop_platform, remember_window=False,
     )
+    for *_, cover in DEMO_DISCOVERY:
+        window._thumbnails._cache[cover] = QPixmap(asset_path(f"backgrounds/{cover}"))
     controller.timer.stop()
     window.resize(1320, 860)
     return window
@@ -262,7 +270,7 @@ def _demo_video() -> VideoInfo:
     )
 
 
-def _populate_main_window(window: MainWindow) -> None:
+def _populate_resolved_video(window: MainWindow) -> VideoInfo:
     info = _demo_video()
     video_streams = [
         StreamInfo(id=120, codecid=12),
@@ -278,7 +286,11 @@ def _populate_main_window(window: MainWindow) -> None:
     window._metadata_check.setChecked(True)
     cover = QPixmap(asset_path("nebula.jpg"))
     window._video_info._cover_label.set_source_pixmap(cover, expand=True)
+    return info
 
+
+def _populate_main_window(window: MainWindow) -> None:
+    info = _populate_resolved_video(window)
     tasks = [
         (
             DownloadItem(
@@ -444,6 +456,29 @@ def _populate_live_page(window: MainWindow, workdir: Path) -> None:
     page.rooms.selectRow(0)
     window._task_page.history.expandAll()
     window._show_workspace(1)
+
+
+def _demo_followed_rooms(_cookies, page):
+    rooms = (
+        FollowedLiveRoom(100005, "夜行电台", "值班电台 · 深夜点歌", 1, "live-pixel-radio.png", ""),
+        FollowedLiveRoom(100001, "城市漫游（演示）", "夜间散步", 1, "live-anime-neon.webp", ""),
+        FollowedLiveRoom(100006, "微光自然课", "下次直播：夜间生物观察", 0, "live-watercolor-firefly.webp", ""),
+        FollowedLiveRoom(100007, "云站放映室", "周末短片放映", 2, "download-pixel-station.png", ""),
+        FollowedLiveRoom(100002, "星轨电台（演示）", "音乐与日常", 0, "settings-pixel-cottage.png", ""),
+    )
+    return FollowedRoomsPage(rooms if page == 1 else (), has_more=False)
+
+
+def _show_demo_followed_rooms(app, window):
+    window._thumbnails._cache["live-pixel-radio.png"] = QPixmap(
+        asset_path("backgrounds/live-pixel-radio.png")
+    )
+    window._set_login_status_label("已登录 · 离线演示", "StatusPill", account_name="星海漫游")
+    window._live_page.following.set_account(SimpleNamespace(auth_cookies={"SESSDATA": "offline-docs"}))
+    window.show()
+    _flush_events(app)
+    window._service_pool.waitForDone(5000)
+    _flush_events(app)
 
 
 def _capture_dropdowns(app, theme, window):
@@ -1018,7 +1053,7 @@ def _capture_output_actions(app, theme, temp_root):
                 batch._url_text.clear()
                 batch._on_report(ImportReport())
                 batch._resolved_source = None
-                batch._resolve_btn.setText("解析并预览")
+                batch._resolve_btn.setText("解析预览")
                 _save_widget(app, window, f"biliflow-output-{theme_id}-batch-empty-{mode}-{width}.png")
                 batch._url_text.setPlainText(source)
                 batch._on_report(ImportReport([
@@ -1296,6 +1331,7 @@ def _capture_ui_refresh(app, theme, window):
 
     _populate_main_window(window)
     _populate_live_page(window, Path(app.property("docsTempRoot")) / "ui-live")
+    _show_demo_followed_rooms(app, window)
     batch = _make_batch_dialog()
     window._batch_page._url_text.setPlainText(batch._url_text.toPlainText())
     window._batch_page._on_resolved(batch._resolved_items, [])
@@ -1379,9 +1415,7 @@ def _capture_ui_refresh(app, theme, window):
                     dialog._tabs.setCurrentIndex(0)
                     _save_widget(app, dialog, f"ui-{theme_id}-switch-cookie-{mode}.png")
                 dialog.deleteLater()
-            update = UpdateDialog(UpdateRelease(
-                "0.9.0", "v0.9.0", "2026-10-21T00:00:00Z", DEMO_RELEASE_NOTES, (),
-            ), window)
+            update = _demo_update_dialog(window)
             _save_widget(app, update, f"ui-{theme_id}-update-{mode}.png")
             update.deleteLater()
             for sample, account in (
@@ -2362,6 +2396,9 @@ def main(argv=None) -> int:
             _capture_lifecycle(app, theme, temp_root)
             return 0
         window = _make_main_window(temp_root / "workspace")
+        cleanup.enter_context(patch(
+            "bilibili_downloader.gui.widgets.live_following.load_followed_rooms", _demo_followed_rooms,
+        ))
         window._settings.appearance.theme = args.color_theme
         theme.set_color_theme(args.color_theme)
         cleanup.callback(window._live_controller.shutdown)
@@ -2515,10 +2552,7 @@ def main(argv=None) -> int:
                     )
         for dark in (True, False):
             theme.apply_theme(dark)
-            dialog = UpdateDialog(UpdateRelease(
-                "0.9.0b1", "v0.9.0b1", "2026-10-14T00:00:00Z",
-                DEMO_RELEASE_NOTES, (),
-            ), window)
+            dialog = _demo_update_dialog(window)
             _save_widget(app, dialog, f"biliflow-dialog-update{'-light' if not dark else ''}.png")
             dialog.hide()
         if args.updates_only:
@@ -2530,13 +2564,30 @@ def main(argv=None) -> int:
             return 0
         window.resize(1320, 860)
         theme.apply_theme(True)
-        for name in ("live", "tasks", "batch", "settings"):
+        pages["live"]()
+        _show_demo_followed_rooms(app, window)
+        _save_widget(app, window, "biliflow-live.png")
+        page = window._live_page
+        for dark in (False, True):
+            theme.apply_theme(dark)
+            mode = "dark" if dark else "light"
+            page._scroll.ensureWidgetVisible(page.following.grid, 0, 10)
+            _save_widget(app, window, f"biliflow-live-following-{mode}.png")
+        page._scroll.verticalScrollBar().setValue(0)
+        page.following.set_account(None)
+        window._set_login_status_label("未登录", "MutedLabel")
+        for name in ("tasks", "batch", "settings"):
             pages[name]()
             _save_widget(app, window, f"biliflow-{name}.png")
         pages["download"]()
+        window._reset_download_source()
+        _flush_events(app)
+        window._service_pool.waitForDone(5000)
+        _flush_events(app)
         _save_widget(app, window, "biliflow-dark.png")
         theme.apply_theme(False)
         _save_widget(app, window, "biliflow-light.png")
+        _populate_resolved_video(window)
         _capture_dropdowns(app, theme, window)
         theme.apply_theme(True)
         login_dialog = LoginDialog(None)

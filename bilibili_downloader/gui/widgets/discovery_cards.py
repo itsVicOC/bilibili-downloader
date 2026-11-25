@@ -340,7 +340,6 @@ class _CardWidget(QWidget):
 class DiscoveryGrid(QWidget):
     action_requested = Signal(str)
     video_requested = Signal(str)
-    can_expand = Signal(bool)
 
     def __init__(self, thumbnails, parent=None):
         super().__init__(parent)
@@ -353,7 +352,6 @@ class DiscoveryGrid(QWidget):
         self._widgets = []
         self._shape = None
         self._viewport = None
-        self._expanded = False
         self._layout_timer = QTimer(self)
         self._layout_timer.setSingleShot(True)
         self._layout_timer.timeout.connect(self._settle_layout)
@@ -367,10 +365,6 @@ class DiscoveryGrid(QWidget):
         if cards != self._cards:
             self._cards = cards
             self._reflow(force=True)
-
-    def set_expanded(self, expanded):
-        self._expanded = expanded
-        self._reflow()
 
     def _focus_controls(self):
         return [
@@ -393,7 +387,7 @@ class DiscoveryGrid(QWidget):
         return 4 if self.width() >= 970 else 3 if self.width() >= 695 else 2
 
     def _visible_cards(self, columns):
-        return self._cards if self._expanded else self._cards[:columns]
+        return self._cards
 
     def _reflow(self, *, force=False):
         columns = self._columns()
@@ -423,7 +417,6 @@ class DiscoveryGrid(QWidget):
             self._widgets.append(widget)
         for index in range(4):
             self._layout.setColumnStretch(index, int(index < columns))
-        self.can_expand.emit(len(self._cards) > columns)
         self._layout_timer.start(0)
 
     def _settle_layout(self):
@@ -433,12 +426,13 @@ class DiscoveryGrid(QWidget):
     def _load_visible(self, *_args):
         if self.isVisible():
             for widget in self._widgets:
+                cover = widget.cover
                 if self._viewport is not None and not QRect(
-                    widget.mapTo(self._viewport, widget.rect().topLeft()), widget.size()
+                    cover.mapTo(self._viewport, QPoint()), cover.size()
                 ).intersects(self._viewport.rect()):
                     continue
-                widget.cover.image = self._thumbnails.resolve(widget.card.images)
-                widget.cover.update()
+                cover.image = self._thumbnails.resolve(widget.card.images)
+                cover.update()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -452,12 +446,15 @@ class DiscoveryGrid(QWidget):
 class ProgressiveDiscoveryGrid(DiscoveryGrid):
     """Materialize a viewport of cards at a time while keeping the earlier rows."""
 
+    next_page_requested = Signal()
+
     def __init__(self, thumbnails, parent=None):
         super().__init__(thumbnails, parent)
         self._limit = None
         self._bar = None
         self._scroll_value = 0
         self._footer_position = None
+        self._has_next_page = False
         self._append_timer = QTimer(self)
         self._append_timer.setSingleShot(True)
         self._append_timer.timeout.connect(self._append_screen)
@@ -475,12 +472,14 @@ class ProgressiveDiscoveryGrid(DiscoveryGrid):
         self._scroll_value = self._bar.value()
         self._bar.valueChanged.connect(self._on_scroll)
 
-    def set_cards(self, cards):
+    def set_cards(self, cards, *, keep_limit=False, has_next_page=False):
         cards = tuple(cards)
-        if cards != self._cards:
+        if not keep_limit and cards != self._cards:
             self._limit = None
             self._append_timer.stop()
-        super().set_cards(cards)
+        self._has_next_page = has_next_page
+        self._cards = cards
+        self._reflow()
 
     def _screen_size(self, columns, *, initial=False):
         if self._viewport is None or not self._widgets:
@@ -504,7 +503,7 @@ class ProgressiveDiscoveryGrid(DiscoveryGrid):
         super()._reflow(force=force)
         columns = self._columns()
         count = len(self._widgets)
-        has_more = 0 < count < len(self._cards)
+        has_more = self._has_next_page or 0 < count < len(self._cards)
         position = ((count + columns - 1) // columns, columns)
         if has_more and position != self._footer_position:
             self._layout.removeWidget(self.more)
@@ -530,21 +529,28 @@ class ProgressiveDiscoveryGrid(DiscoveryGrid):
             self._queue_append()
 
     def _queue_append(self):
-        if self.more.isVisible():
+        if self.more.isVisible() and self.more.isEnabled():
             self._append_timer.start(0)
 
     def _append_screen(self):
         self._append_timer.stop()
-        if not self.more.isVisible():
+        if not self.more.isVisible() or not self.more.isEnabled():
             return
         previous_count = len(self._widgets)
         keyboard = self.more.hasFocus() and self.more.property("keyboardFocus")
         columns = self._columns()
         next_row = ((previous_count + columns - 1) // columns) * columns
         self._limit = next_row + self._screen_size(columns)
+        if previous_count >= len(self._cards):
+            self.next_page_requested.emit()
+            return
         self._reflow()
         if keyboard:
-            self._widgets[previous_count].video_button.setFocus(Qt.TabFocusReason)
+            for widget in self._widgets[previous_count:]:
+                button = widget.video_button or widget.action_button
+                if button is not None and button.isEnabled():
+                    button.setFocus(Qt.TabFocusReason)
+                    break
 
     def eventFilter(self, watched, event):
         if watched is self._viewport:

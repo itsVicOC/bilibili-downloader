@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from bilibili_downloader.api.endpoints import FOLLOWING_FEED_PAGE, VIDEO_RANKING_PAGE
+from bilibili_downloader.api.endpoints import VIDEO_RANKING_PAGE
 from bilibili_downloader.core.daily_rankings import (
     RANKING_SIZE,
     RankingResult,
@@ -68,14 +68,12 @@ class _RankingPane(QWidget):
         notice_layout.addWidget(self.notice, 1)
         self.login.setObjectName("SubtleButton")
         notice_layout.addWidget(self.login)
-        label, page = (
-            ("打开 B 站关注动态", FOLLOWING_FEED_PAGE) if kind == "following"
-            else ("打开 B 站排行榜", VIDEO_RANKING_PAGE)
-        )
-        self.source = QPushButton(label)
-        self.source.setObjectName("TextButton")
-        self.source.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(page)))
-        notice_layout.addWidget(self.source)
+        self.source = None
+        if kind == "public":
+            self.source = QPushButton("打开 B 站排行榜")
+            self.source.setObjectName("TextButton")
+            self.source.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(VIDEO_RANKING_PAGE)))
+            notice_layout.addWidget(self.source)
         layout.addWidget(self.notice_bar)
         self.grid = ProgressiveDiscoveryGrid(thumbnails)
         layout.addWidget(self.grid)
@@ -286,4 +284,5 @@ class DailyRankingsWidget(QWidget):
         pane.refresh.setText("刷新" if following and (snapshot or not result.message) else "重试")
         pane.refresh.setVisible(not login_required and (following or not snapshot or stale))
         pane.refresh.setEnabled(not pending)
-        pane.source.setVisible(bool(result.message and not pending) or login_required)
+        if pane.source is not None:
+            pane.source.setVisible(bool(result.message and not pending))
